@@ -15,6 +15,7 @@
  *           WS2812B LED strip (serpentine layout).
  *
  * Requires: Adafruit NeoPixel library (install via Arduino IDE Library Manager).
+ * Random change
  */
 
 #include <Adafruit_NeoPixel.h>
