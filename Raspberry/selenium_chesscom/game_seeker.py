@@ -271,6 +271,12 @@ def run(first_login=False):
         pi.stop()
         return
 
+    # Pre-initialize so the finally block can always call .set()
+    stop_idle = threading.Event()
+    stop_anim = threading.Event()
+    idle_thread = None
+    anim_thread = None
+
     try:
         # ---- Check login ----
         print("Checking session...")
@@ -354,6 +360,13 @@ def run(first_login=False):
     except KeyboardInterrupt:
         print("\nExiting...")
     finally:
+        # Stop any running LED animation threads
+        stop_idle.set()
+        stop_anim.set()
+        if idle_thread:
+            idle_thread.join(timeout=2)
+        if anim_thread:
+            anim_thread.join(timeout=2)
         all_leds_off(strip)
         cb.cancel()
         pi.stop()
