@@ -3,7 +3,7 @@
 game_seeker.py
 
 Main entry point for the chess.com game seeker (Phase 1).
-Wires together: GPIO button → Playwright browser → WS2812B LED feedback.
+Wires together: GPIO button -> Selenium browser -> WS2812B LED feedback.
 
 Press the button to seek a game on chess.com.
 LEDs flash to indicate the result (white/black/cancelled/error).
@@ -11,13 +11,16 @@ LEDs flash to indicate the result (white/black/cancelled/error).
 Usage:
   sudo pigpiod
   sudo python3 game_seeker.py               # normal (headless browser)
-  sudo python3 game_seeker.py --first-login  # first time (shows browser via X11)
+  sudo python3 game_seeker.py --first-login  # first time (shows browser on display)
 
-Requires: sudo pip3 install pigpio rpi-ws281x playwright
+Requires:
+  sudo apt install chromium-chromedriver
+  sudo pip3 install selenium pigpio rpi-ws281x
 """
 
 import sys
-import asyncio
+import time
+import threading
 import pigpio
 from rpi_ws281x import PixelStrip, Color
 
@@ -68,86 +71,78 @@ def all_leds_color(strip, rgb):
 def get_perimeter_indices():
     """
     Get LED indices for the board perimeter in order (clockwise).
-    For a 4x4 board: top row L→R, right col top→bottom,
-    bottom row R→L, left col bottom→top.
+    For a 4x4 board: top row L->R, right col top->bottom,
+    bottom row R->L, left col bottom->top.
     """
     indices = []
-
-    # Top row (row 0): left to right
     for col in range(BOARD_COLS):
         indices.append(get_led_index(0, col))
-
-    # Right column (col BOARD_COLS-1): top+1 to bottom
     for row in range(1, BOARD_ROWS):
         indices.append(get_led_index(row, BOARD_COLS - 1))
-
-    # Bottom row (row BOARD_ROWS-1): right-1 to left
     for col in range(BOARD_COLS - 2, -1, -1):
         indices.append(get_led_index(BOARD_ROWS - 1, col))
-
-    # Left column (col 0): bottom-1 to top+1
     for row in range(BOARD_ROWS - 2, 0, -1):
         indices.append(get_led_index(row, 0))
-
     return indices
 
 
 # =============================================================================
-# LED ANIMATIONS (async — use asyncio.sleep so they don't block)
+# LED ANIMATIONS
 # =============================================================================
 
-async def animate_search(strip):
+def animate_search(strip, stop_event):
     """
     Blue chase around the board perimeter while searching.
-    Runs as a cancellable asyncio task.
+    Runs in a background thread. Stops when stop_event is set.
     """
     perimeter = get_perimeter_indices()
     r, g, b = COLOR_SEARCHING
 
-    try:
-        while True:
-            for idx in perimeter:
-                all_leds_off(strip)
-                strip.setPixelColor(idx, Color(r, g, b))
-                strip.show()
-                await asyncio.sleep(SEARCH_CHASE_DELAY_S)
-    except asyncio.CancelledError:
-        all_leds_off(strip)
+    while not stop_event.is_set():
+        for idx in perimeter:
+            if stop_event.is_set():
+                break
+            all_leds_off(strip)
+            strip.setPixelColor(idx, Color(r, g, b))
+            strip.show()
+            stop_event.wait(SEARCH_CHASE_DELAY_S)  # Sleep but wake on stop
+
+    all_leds_off(strip)
 
 
-async def flash_leds(strip, rgb, count):
+def flash_leds(strip, rgb, count):
     """Flash all LEDs a given color a given number of times."""
     for _ in range(count):
         all_leds_color(strip, rgb)
-        await asyncio.sleep(FLASH_ON_S)
+        time.sleep(FLASH_ON_S)
         all_leds_off(strip)
-        await asyncio.sleep(FLASH_OFF_S)
+        time.sleep(FLASH_OFF_S)
 
 
-async def signal_game_found(strip, color):
+def signal_game_found(strip, color):
     """Flash LEDs to indicate game found and assigned color."""
     if color == "white":
-        await flash_leds(strip, COLOR_FOUND_WHITE, FLASH_COUNT_FOUND)
+        flash_leds(strip, COLOR_FOUND_WHITE, FLASH_COUNT_FOUND)
     else:
-        await flash_leds(strip, COLOR_FOUND_BLACK, FLASH_COUNT_FOUND)
+        flash_leds(strip, COLOR_FOUND_BLACK, FLASH_COUNT_FOUND)
 
 
-async def signal_cancelled(strip):
+def signal_cancelled(strip):
     """Flash LEDs to indicate search cancelled."""
-    await flash_leds(strip, COLOR_CANCELLED, FLASH_COUNT_CANCEL)
+    flash_leds(strip, COLOR_CANCELLED, FLASH_COUNT_CANCEL)
 
 
-async def signal_error(strip):
+def signal_error(strip):
     """Flash LEDs to indicate an error."""
-    await flash_leds(strip, COLOR_ERROR, FLASH_COUNT_ERROR)
+    flash_leds(strip, COLOR_ERROR, FLASH_COUNT_ERROR)
 
 
 # =============================================================================
-# STATE MACHINE
+# MAIN
 # =============================================================================
 
-async def run(first_login=False):
-    """Main state machine: IDLE → SEEKING → GAME_FOUND → IDLE."""
+def run(first_login=False):
+    """Main state machine: IDLE -> SEEKING -> GAME_FOUND -> IDLE."""
 
     # ---- pigpio setup ----
     pi = pigpio.pi()
@@ -158,18 +153,16 @@ async def run(first_login=False):
     pi.set_mode(BUTTON_PIN, pigpio.INPUT)
     pi.set_pull_up_down(BUTTON_PIN, pigpio.PUD_UP)
 
-    # Bridge pigpio button callback into asyncio
-    loop = asyncio.get_event_loop()
-    button_event = asyncio.Event()
+    # Button event — set by pigpio callback, consumed by main loop
+    button_event = threading.Event()
     last_press_tick = [0]
 
     def on_button_press(gpio, level, tick):
-        # Simple debounce: ignore if too soon after last press
         dt = pigpio.tickDiff(last_press_tick[0], tick)
         if dt < BUTTON_DEBOUNCE_MS * 1000:  # tickDiff is in microseconds
             return
         last_press_tick[0] = tick
-        loop.call_soon_threadsafe(button_event.set)
+        button_event.set()
 
     cb = pi.callback(BUTTON_PIN, pigpio.FALLING_EDGE, on_button_press)
 
@@ -181,22 +174,23 @@ async def run(first_login=False):
 
     # ---- Browser setup ----
     headless = not first_login
-    print("Launching browser" + (" (visible for login)..." if first_login else " (headless)..."))
-    pw, context, page = await launch(headless=headless)
+    print("Launching browser"
+          + (" (visible for login)..." if first_login else " (headless)..."))
+    driver = launch(headless=headless)
 
     try:
         # ---- Check login ----
-        logged_in = await is_logged_in(page)
+        logged_in = is_logged_in(driver)
 
         if not logged_in:
             if first_login:
-                logged_in = await prompt_login(page)
+                logged_in = prompt_login(driver)
                 if not logged_in:
-                    await signal_error(strip)
+                    signal_error(strip)
                     return
             else:
                 print("ERROR: Not logged in. Run with --first-login to log in.")
-                await signal_error(strip)
+                signal_error(strip)
                 return
 
         print()
@@ -208,65 +202,50 @@ async def run(first_login=False):
         while True:
             # IDLE — wait for button press
             button_event.clear()
-            await button_event.wait()
+            button_event.wait()
 
             # CHECK_LOGIN
-            if not await is_logged_in(page):
+            if not is_logged_in(driver):
                 print("Session expired! Re-run with --first-login.")
-                await signal_error(strip)
+                signal_error(strip)
                 continue
 
             # SEEKING
-            success = await seek_game(page)
+            success = seek_game(driver)
             if not success:
-                await signal_error(strip)
+                signal_error(strip)
                 continue
 
-            # Start search animation alongside game wait
-            search_anim = asyncio.create_task(animate_search(strip))
-
-            # Also listen for a second button press (cancel)
-            button_event.clear()
-            cancel_task = asyncio.create_task(button_event.wait())
-
-            # Wait for either: game found OR button pressed (cancel)
-            game_wait = asyncio.create_task(wait_for_game(page))
-
-            done, pending = await asyncio.wait(
-                [game_wait, cancel_task],
-                return_when=asyncio.FIRST_COMPLETED,
+            # Start search LED animation in background thread
+            stop_anim = threading.Event()
+            anim_thread = threading.Thread(
+                target=animate_search, args=(strip, stop_anim), daemon=True
             )
+            anim_thread.start()
 
-            # Stop search animation
-            search_anim.cancel()
-            try:
-                await search_anim
-            except asyncio.CancelledError:
-                pass
+            # Wait for game, allowing cancellation via button
+            button_event.clear()
+            result = wait_for_game(driver, cancel_event=button_event)
 
-            # Cancel remaining tasks
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            # Stop LED animation
+            stop_anim.set()
+            anim_thread.join(timeout=2)
 
-            if game_wait in done and game_wait.result():
+            if result is True:
                 # GAME_FOUND
-                color = await detect_my_color(page)
-                await signal_game_found(strip, color)
+                color = detect_my_color(driver)
+                signal_game_found(strip, color)
                 print(f"Game started — playing as {color.upper()}.")
                 print("(Phase 2 will add move sync. For now, play on chess.com.)")
                 print()
                 print("Press button to seek another game when this one ends.")
-            elif cancel_task in done:
-                # CANCELLING
-                await cancel_search(page)
-                await signal_cancelled(strip)
+            elif result is None:
+                # CANCELLED (button pressed during search)
+                cancel_search(driver)
+                signal_cancelled(strip)
             else:
                 # TIMEOUT / ERROR
-                await signal_error(strip)
+                signal_error(strip)
 
     except KeyboardInterrupt:
         print("\nExiting...")
@@ -274,7 +253,7 @@ async def run(first_login=False):
         all_leds_off(strip)
         cb.cancel()
         pi.stop()
-        await close(pw, context)
+        close(driver)
         print("Cleanup complete.")
 
 
@@ -284,4 +263,4 @@ async def run(first_login=False):
 
 if __name__ == "__main__":
     first_login = "--first-login" in sys.argv
-    asyncio.run(run(first_login=first_login))
+    run(first_login=first_login)

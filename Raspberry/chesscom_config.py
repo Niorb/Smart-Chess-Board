@@ -1,12 +1,12 @@
 """
 chesscom_config.py
 
-Centralized configuration for the chess.com browser integration.
+Centralized configuration for the chess.com browser integration (Selenium).
 All DOM selectors, GPIO pins, LED colors, and timing constants live here.
 
 When chess.com updates their UI, only this file needs editing.
 To find new selectors: open chess.com in a browser, press F12 (DevTools),
-right-click elements → Inspect, and note their CSS selectors.
+right-click elements -> Inspect, and note their CSS selectors.
 """
 
 # =============================================================================
@@ -48,13 +48,14 @@ FLASH_COUNT_ERROR    = 3      # Number of flashes on error
 FLASH_COUNT_CANCEL   = 1      # Number of flashes on cancel
 
 # =============================================================================
-# PLAYWRIGHT / BROWSER
+# SELENIUM / BROWSER
 # =============================================================================
 
 USER_DATA_DIR       = "./chesscom_session"
 CHESS_COM_PLAY_URL  = "https://www.chess.com/play/online"
-BROWSER_VIEWPORT    = {"width": 1280, "height": 720}
-GAME_SEARCH_TIMEOUT = 120_000  # 2 minutes max wait for a match (milliseconds)
+WINDOW_SIZE         = "1280,720"
+GAME_SEARCH_TIMEOUT = 120   # 2 minutes max wait for a match (seconds)
+POLL_INTERVAL       = 0.5   # How often to check for game found (seconds)
 
 # =============================================================================
 # TIME CONTROL
@@ -70,8 +71,7 @@ TIME_CONTROL = "10 min"
 # These MUST be filled in by manually inspecting chess.com's DOM.
 # Open chess.com → F12 → Inspect the elements below.
 #
-# Use CSS selectors (e.g., "div.board", "#board-vs-personalities")
-# or Playwright text selectors (e.g., "text=Play").
+# Use CSS selectors (e.g., "div.board", "#board-vs-personalities").
 #
 # How to inspect:
 #   1. Log in to chess.com in any browser

@@ -1,30 +1,39 @@
 """
 chesscom_browser.py
 
-Playwright-based browser automation for chess.com.
+Selenium-based browser automation for chess.com.
 Handles session persistence, login detection, game seeking, and color detection.
 
-This module is purely async and has no GPIO/LED knowledge.
+This module is synchronous and has no GPIO/LED knowledge.
 It is imported by game_seeker.py (and later by smart_chess_board.py for Phase 2).
 
 Usage (standalone test on any machine):
-    import asyncio
     from chesscom_browser import launch, is_logged_in, close
-    async def test():
-        pw, ctx, page = await launch(headless=False)
-        print("Logged in:", await is_logged_in(page))
-        await close(pw, ctx)
-    asyncio.run(test())
+    driver = launch(headless=False)
+    print("Logged in:", is_logged_in(driver))
+    close(driver)
+
+Requires: sudo apt install chromium-chromedriver && pip3 install selenium
 """
 
-import asyncio
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+import os
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import (
+    TimeoutException, NoSuchElementException, WebDriverException,
+)
 
 from chesscom_config import (
     USER_DATA_DIR,
     CHESS_COM_PLAY_URL,
-    BROWSER_VIEWPORT,
+    WINDOW_SIZE,
     GAME_SEARCH_TIMEOUT,
+    POLL_INTERVAL,
     TIME_CONTROL,
     SELECTORS,
 )
@@ -33,40 +42,54 @@ from chesscom_config import (
 # BROWSER LIFECYCLE
 # =============================================================================
 
-async def launch(headless=True):
+def launch(headless=True):
     """
-    Launch a persistent Chromium browser context.
-    Cookies, localStorage, and sessionStorage are saved in USER_DATA_DIR
-    and reused on subsequent runs (no re-login needed).
+    Launch a Chromium browser with a persistent user profile.
+    Cookies and localStorage are saved in USER_DATA_DIR and reused
+    on subsequent runs (no re-login needed).
 
-    Returns: (playwright_instance, browser_context, page)
+    Returns: webdriver.Chrome instance
     """
-    pw = await async_playwright().start()
+    # Resolve to absolute path so Chromium doesn't get confused
+    user_data_dir = os.path.abspath(USER_DATA_DIR)
 
-    context = await pw.chromium.launch_persistent_context(
-        user_data_dir=USER_DATA_DIR,
-        headless=headless,
-        viewport=BROWSER_VIEWPORT,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-        ],
-    )
+    options = Options()
+    options.add_argument(f"--user-data-dir={user_data_dir}")
+    options.add_argument(f"--window-size={WINDOW_SIZE}")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    # Use existing page if the context restored one, otherwise create new
-    page = context.pages[0] if context.pages else await context.new_page()
+    # RPi-friendly flags — prevent white screen / GPU stalls
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-translate")
+    options.add_argument("--no-first-run")
+    options.add_argument("--ignore-certificate-errors")
 
-    return pw, context, page
+    if headless:
+        options.add_argument("--headless=new")
+
+    # Suppress "Chrome is being controlled by automated software" bar
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+
+    # Use the system chromedriver (installed via apt)
+    service = Service("/usr/bin/chromedriver")
+
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.implicitly_wait(2)  # Short implicit wait for find_element calls
+
+    return driver
 
 
-async def close(pw, context):
-    """Clean shutdown: close context (saves session) and stop Playwright."""
+def close(driver):
+    """Clean shutdown: close browser and free resources."""
     try:
-        await context.close()
-    except Exception:
-        pass
-    try:
-        await pw.stop()
+        driver.quit()
     except Exception:
         pass
 
@@ -74,7 +97,7 @@ async def close(pw, context):
 # LOGIN
 # =============================================================================
 
-async def is_logged_in(page):
+def is_logged_in(driver):
     """
     Check if the user is currently logged in to chess.com.
     Navigates to the play page if not already there, then looks for the
@@ -82,48 +105,46 @@ async def is_logged_in(page):
 
     Returns: True if logged in, False otherwise.
     """
-    current_url = page.url
-    if "chess.com" not in current_url:
-        await page.goto(CHESS_COM_PLAY_URL, wait_until="domcontentloaded")
+    if "chess.com" not in driver.current_url:
+        driver.get(CHESS_COM_PLAY_URL)
 
     try:
-        await page.wait_for_selector(
-            SELECTORS["logged_in_indicator"],
-            state="visible",
-            timeout=5000,
+        WebDriverWait(driver, 5).until(
+            EC.visibility_of_element_located(
+                (By.CSS_SELECTOR, SELECTORS["logged_in_indicator"])
+            )
         )
         return True
-    except PlaywrightTimeout:
+    except TimeoutException:
         return False
 
 
-async def prompt_login(page):
+def prompt_login(driver):
     """
     Navigate to chess.com and wait for the user to log in manually.
-    The user sees the browser window (via X11 forwarding or local display)
-    and enters their credentials. Once done, they press Enter in the terminal.
+    The user sees the browser window on the RPi's display and enters
+    their credentials. Once done, they press Enter in the terminal.
 
     Returns: True if login succeeded after user confirmation, False otherwise.
     """
-    await page.goto(CHESS_COM_PLAY_URL, wait_until="domcontentloaded")
+    driver.get(CHESS_COM_PLAY_URL)
 
     print()
     print("=" * 50)
     print("  FIRST-TIME LOGIN")
     print("=" * 50)
     print()
-    print("A browser window should be visible.")
+    print("A browser window should be visible on your display.")
     print("Please log in to chess.com manually.")
     print()
     print("Once you are logged in, come back here")
     print("and press ENTER to continue...")
     print()
 
-    # Wait for Enter without blocking the event loop
-    await asyncio.get_event_loop().run_in_executor(None, input)
+    input()  # Block until user presses Enter
 
     # Verify login succeeded
-    logged_in = await is_logged_in(page)
+    logged_in = is_logged_in(driver)
     if logged_in:
         print("Login successful! Session saved.")
     else:
@@ -136,14 +157,17 @@ async def prompt_login(page):
 # GAME SEEKING
 # =============================================================================
 
-async def navigate_to_play(page):
+def navigate_to_play(driver):
     """Navigate to the chess.com play page if not already there."""
-    if "/play" not in page.url:
-        await page.goto(CHESS_COM_PLAY_URL, wait_until="domcontentloaded")
-        await page.wait_for_load_state("networkidle")
+    if "/play" not in driver.current_url:
+        driver.get(CHESS_COM_PLAY_URL)
+        # Wait for page to be reasonably loaded
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
 
 
-async def seek_game(page):
+def seek_game(driver):
     """
     Start searching for a game on chess.com.
     Navigates to the play page, selects the time control, and clicks Play.
@@ -151,22 +175,32 @@ async def seek_game(page):
     Returns: True if the search was initiated, False on error.
     """
     try:
-        await navigate_to_play(page)
+        navigate_to_play(driver)
 
         # Select time control (if the selector is configured)
         if SELECTORS["time_control_button"] != "PLACEHOLDER":
             try:
-                await page.click(SELECTORS["time_control_button"], timeout=5000)
-            except PlaywrightTimeout:
+                btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable(
+                        (By.CSS_SELECTOR, SELECTORS["time_control_button"])
+                    )
+                )
+                btn.click()
+            except TimeoutException:
                 print("WARNING: Could not find time control button, "
                       "proceeding with default.")
 
         # Click Play
-        await page.click(SELECTORS["play_button"], timeout=10000)
+        play_btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, SELECTORS["play_button"])
+            )
+        )
+        play_btn.click()
         print("Searching for a game...")
         return True
 
-    except PlaywrightTimeout:
+    except TimeoutException:
         print("ERROR: Could not find the Play button on chess.com.")
         return False
     except Exception as e:
@@ -174,34 +208,53 @@ async def seek_game(page):
         return False
 
 
-async def wait_for_game(page, timeout_ms=None):
+def wait_for_game(driver, timeout=None, cancel_event=None):
     """
     Wait for a game to start (board container becomes visible).
+    Polls at POLL_INTERVAL. Can be cancelled by setting cancel_event.
 
-    Returns: True if a game was found, False on timeout.
+    Args:
+        driver: Selenium WebDriver instance
+        timeout: Max seconds to wait (default: GAME_SEARCH_TIMEOUT)
+        cancel_event: threading.Event — if set, stop waiting and return None
+
+    Returns: True if game found, False if timeout, None if cancelled.
     """
-    if timeout_ms is None:
-        timeout_ms = GAME_SEARCH_TIMEOUT
+    if timeout is None:
+        timeout = GAME_SEARCH_TIMEOUT
 
-    try:
-        await page.wait_for_selector(
-            SELECTORS["board_container"],
-            state="visible",
-            timeout=timeout_ms,
-        )
-        return True
-    except PlaywrightTimeout:
-        print("Search timed out — no game found.")
-        return False
+    deadline = time.time() + timeout
+    selector = SELECTORS["board_container"]
+
+    while time.time() < deadline:
+        # Check for cancellation
+        if cancel_event and cancel_event.is_set():
+            return None
+
+        try:
+            driver.find_element(By.CSS_SELECTOR, selector)
+            return True
+        except NoSuchElementException:
+            pass
+
+        time.sleep(POLL_INTERVAL)
+
+    print("Search timed out — no game found.")
+    return False
 
 
-async def cancel_search(page):
+def cancel_search(driver):
     """Cancel an active game search by clicking the cancel button."""
     try:
-        await page.click(SELECTORS["cancel_search"], timeout=5000)
+        btn = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, SELECTORS["cancel_search"])
+            )
+        )
+        btn.click()
         print("Search cancelled.")
         return True
-    except PlaywrightTimeout:
+    except TimeoutException:
         print("WARNING: Could not find cancel button.")
         return False
 
@@ -209,7 +262,7 @@ async def cancel_search(page):
 # GAME STATE DETECTION
 # =============================================================================
 
-async def detect_my_color(page):
+def detect_my_color(driver):
     """
     Detect whether the player is White or Black in the current game.
     Checks if the board element has ALL the classes listed in board_flipped_class
@@ -222,14 +275,9 @@ async def detect_my_color(page):
     board_selector = SELECTORS["board_container"]
 
     try:
-        # Pass data as arguments to avoid f-string injection issues
-        is_flipped = await page.evaluate("""
-            ([selector, classes]) => {
-                const board = document.querySelector(selector);
-                if (!board) return false;
-                return classes.every(cls => board.classList.contains(cls));
-            }
-        """, [board_selector, flipped_classes])
+        board = driver.find_element(By.CSS_SELECTOR, board_selector)
+        element_classes = board.get_attribute("class").split()
+        is_flipped = all(cls in element_classes for cls in flipped_classes)
         color = "black" if is_flipped else "white"
         print(f"Game found! Playing as {color.upper()}.")
         return color

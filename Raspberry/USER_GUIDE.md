@@ -17,16 +17,14 @@ Before using the chess.com integration, make sure you have:
 Run these commands on the Raspberry Pi:
 
 ```bash
-# 1. Install Python libraries
-sudo pip3 install pigpio rpi-ws281x playwright
+# 1. Install Chromium and its matching chromedriver
+sudo apt update
+sudo apt install chromium-browser chromium-chromedriver
 
-# 2. Install Chromium for Playwright (downloads the ARM64 build)
-sudo python3 -m playwright install chromium
+# 2. Install Python libraries
+sudo pip3 install selenium pigpio rpi-ws281x
 
-# 3. Install system dependencies for Chromium
-sudo python3 -m playwright install-deps
-
-# 4. Enable the pigpio daemon to start on boot
+# 3. Enable the pigpio daemon to start on boot
 sudo systemctl enable pigpiod
 sudo systemctl start pigpiod
 ```
@@ -35,8 +33,9 @@ Verify everything works:
 
 ```bash
 sudo python3 -c "import pigpio; pi = pigpio.pi(); print('pigpio OK:', pi.connected); pi.stop()"
-sudo python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
+sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
 sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+chromedriver --version
 ```
 
 ---
@@ -113,10 +112,9 @@ Session expired! Re-run with --first-login.
 
 Plus 3 red LED flashes. To fix:
 
-1. Connect via SSH with X11 forwarding (see Section 3)
-2. Run: `sudo python3 game_seeker.py --first-login`
-3. Log in again in the browser window
-4. Press Enter
+1. Run on the RPi: `sudo python3 game_seeker.py --first-login`
+2. Log in again in the browser window
+3. Press Enter
 
 ---
 
@@ -159,7 +157,7 @@ Chess.com updated their website. You need to re-inspect the DOM and update `ches
 
 ## 9. Updating Selectors (When Chess.com Changes)
 
-The file `chesscom_config.py` contains CSS selectors that tell Playwright where to find buttons and elements on chess.com. If chess.com updates their website, these may break.
+The file `chesscom_config.py` contains CSS selectors that tell Selenium where to find buttons and elements on chess.com. If chess.com updates their website, these may break.
 
 **How to find new selectors:**
 
@@ -185,7 +183,7 @@ The file `chesscom_config.py` contains CSS selectors that tell Playwright where 
 | `board_container` | The chess board element (appears when a game starts) |
 | `board_flipped_class` | The CSS class name added to the board when you play as Black |
 
-**Tip:** Use Playwright's text selectors for resilience: `"text=Play"` matches any element containing the text "Play". These survive CSS class changes.
+**Tip:** Prefer shorter, ID-based selectors (e.g. `#board-single`) over long nth-child chains — they are more resilient to layout changes.
 
 ---
 
@@ -195,7 +193,7 @@ The file `chesscom_config.py` contains CSS selectors that tell Playwright where 
 |------|---------|
 | `game_seeker.py` | Run this — button + browser + LEDs |
 | `chesscom_config.py` | All settings and DOM selectors — edit this when chess.com changes |
-| `chesscom_browser.py` | Playwright automation (session, seek, detect) |
+| `chesscom_browser.py` | Selenium automation (session, seek, detect) |
 | `smart_chess_board.py` | Standalone board scanner with piece tracking (not used by game seeker yet) |
 | `hardware_test.py` | LED and sensor test script |
-| `chesscom_session/` | Auto-created — stores your chess.com login cookies |
+| `chesscom_session/` | Auto-created by Chromium — stores your login cookies and profile |
