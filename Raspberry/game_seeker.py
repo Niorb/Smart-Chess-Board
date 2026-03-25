@@ -173,25 +173,22 @@ def run(first_login=False):
     all_leds_off(strip)
 
     # ---- Browser setup ----
-    headless = not first_login
-    print("Launching browser"
-          + (" (visible for login)..." if first_login else " (headless)..."))
-    driver = launch(headless=headless)
+    if first_login:
+        # Let the user log in via a plain Chromium session first
+        prompt_login()
+
+    print("Launching browser (headless)...")
+    driver = launch(headless=True)
 
     try:
         # ---- Check login ----
         logged_in = is_logged_in(driver)
 
         if not logged_in:
-            if first_login:
-                logged_in = prompt_login(driver)
-                if not logged_in:
-                    signal_error(strip)
-                    return
-            else:
-                print("ERROR: Not logged in. Run with --first-login to log in.")
-                signal_error(strip)
-                return
+            print("ERROR: Not logged in.")
+            print("Run with --first-login and follow the instructions.")
+            signal_error(strip)
+            return
 
         print()
         print("Ready! Press the button to seek a game.")

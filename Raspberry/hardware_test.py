@@ -49,8 +49,8 @@ LED_INVERT     = False
 LED_CHANNEL    = 0
 
 # Timing
-MUX_SETTLE_S       = 0.1   # Settle after MUX switch (tune as needed)
-SCAN_INTERVAL_S    = 3     # Between full board scans
+MUX_SETTLE_S       = 0.001   # Settle after MUX switch (tune as needed)
+SCAN_INTERVAL_S    = 0.021     # Between full board scans
 DEBOUNCE_THRESHOLD = 1     # Consecutive matching reads to accept change
 
 # =============================================================================

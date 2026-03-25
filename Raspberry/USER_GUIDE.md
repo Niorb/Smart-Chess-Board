@@ -42,20 +42,24 @@ chromedriver --version
 
 ## 3. First-Time Login
 
-You only need to do this once (or when your session expires). Since the RPi has a monitor, a Chromium browser window will open directly on screen.
+You only need to do this once (or when your session expires). The idea is to open a regular Chromium browser that shares the same profile folder as the game seeker, so the cookies you get by logging in are reused by Selenium later.
+
+**Step 1:** Start the game seeker with the `--first-login` flag:
 
 ```bash
 sudo pigpiod          # if not already running
 sudo python3 game_seeker.py --first-login
 ```
 
-A Chromium browser window will appear on the RPi's display. Log in to chess.com as you normally would. Once you see your dashboard/play page:
+It will print a `chromium-browser ...` command for you.
 
-1. Go back to the terminal
-2. Press **Enter**
-3. You'll see "Login successful! Session saved."
+**Step 2:** Open a **second terminal** (or SSH session) and run that command. A Chromium window opens — navigate to chess.com and log in normally.
 
-**Done!** The session is now saved in the `chesscom_session/` folder. All subsequent runs use headless mode (no browser window) and reuse the saved cookies.
+**Step 3:** Once logged in, **close the browser**, go back to the first terminal and press **Enter**.
+
+The script verifies the session and launches headless. You're all set!
+
+**Why this way?** Running Chromium directly (not through Selenium) avoids the white-screen issues on RPi. The `--user-data-dir` flag ensures the login cookies are stored in the same `chesscom_session/` folder that Selenium reads from.
 
 ---
 
@@ -112,9 +116,9 @@ Session expired! Re-run with --first-login.
 
 Plus 3 red LED flashes. To fix:
 
-1. Run on the RPi: `sudo python3 game_seeker.py --first-login`
-2. Log in again in the browser window
-3. Press Enter
+1. Run: `sudo python3 game_seeker.py --first-login`
+2. Follow the instructions — open Chromium in a second terminal, log in, close it
+3. Press Enter in the first terminal
 
 ---
 

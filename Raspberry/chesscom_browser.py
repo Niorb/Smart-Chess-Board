@@ -59,6 +59,7 @@ def launch(headless=True):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--shm-size=1gb")
 
     # RPi-friendly flags — prevent white screen / GPU stalls
     options.add_argument("--disable-gpu")
@@ -119,39 +120,32 @@ def is_logged_in(driver):
         return False
 
 
-def prompt_login(driver):
+def prompt_login():
     """
-    Navigate to chess.com and wait for the user to log in manually.
-    The user sees the browser window on the RPi's display and enters
-    their credentials. Once done, they press Enter in the terminal.
+    Instruct the user to log in via a plain Chromium session (not Selenium).
+    The user runs Chromium manually with the same --user-data-dir so the
+    session cookies are saved in the shared profile folder.
 
-    Returns: True if login succeeded after user confirmation, False otherwise.
+    Returns: None (the user must restart game_seeker.py after logging in).
     """
-    driver.get(CHESS_COM_PLAY_URL)
+    user_data_dir = os.path.abspath(USER_DATA_DIR)
 
     print()
     print("=" * 50)
     print("  FIRST-TIME LOGIN")
     print("=" * 50)
     print()
-    print("A browser window should be visible on your display.")
-    print("Please log in to chess.com manually.")
+    print("Open a SECOND terminal (or SSH session) and run:")
     print()
-    print("Once you are logged in, come back here")
-    print("and press ENTER to continue...")
+    print(f"  chromium-browser --user-data-dir={user_data_dir} https://www.chess.com")
+    print()
+    print("Log in to chess.com in that browser window.")
+    print("Once logged in, CLOSE the browser, then come back")
+    print("here and press ENTER to continue...")
     print()
 
     input()  # Block until user presses Enter
-
-    # Verify login succeeded
-    logged_in = is_logged_in(driver)
-    if logged_in:
-        print("Login successful! Session saved.")
-    else:
-        print("WARNING: Login could not be verified.")
-        print("Check the browser window and try again.")
-
-    return logged_in
+    print("Session should now be saved. Verifying...")
 
 # =============================================================================
 # GAME SEEKING
