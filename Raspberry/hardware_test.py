@@ -8,13 +8,15 @@ Runs two tests in sequence:
   2. Live sensor monitor — scans the Hall sensor matrix and mirrors
      sensor state onto the LED strip in real time.
 
-Usage: sudo python3 hardware_test.py
+Usage:
+  sudo pigpiod          # start the pigpio daemon (once)
+  sudo python3 hardware_test.py
 
-Requires: sudo pip3 install RPi.GPIO rpi-ws281x
+Requires: sudo pip3 install pigpio rpi-ws281x
 """
 
 import time
-import RPi.GPIO as GPIO
+import pigpio
 from rpi_ws281x import PixelStrip, Color
 
 # =============================================================================
@@ -47,19 +49,19 @@ LED_INVERT     = False
 LED_CHANNEL    = 0
 
 # Timing
-MUX_SETTLE_S       = 0.001   # 1ms settle after MUX switch
-SCAN_INTERVAL_S    = 0.1     # 100ms between full board scans
-DEBOUNCE_THRESHOLD = 1       # Consecutive matching reads to accept change
+MUX_SETTLE_S       = 0.1   # Settle after MUX switch (tune as needed)
+SCAN_INTERVAL_S    = 3     # Between full board scans
+DEBOUNCE_THRESHOLD = 1     # Consecutive matching reads to accept change
 
 # =============================================================================
 # SHARED HELPERS
 # =============================================================================
 
-def set_mux_channel(s0, s1, s2, channel):
+def set_mux_channel(pi, s0, s1, s2, channel):
     """Set the 3 address pins of a CD74HC4067 to select a channel (0-7)."""
-    GPIO.output(s0, (channel     ) & 1)
-    GPIO.output(s1, (channel >> 1) & 1)
-    GPIO.output(s2, (channel >> 2) & 1)
+    pi.write(s0, (channel     ) & 1)
+    pi.write(s1, (channel >> 1) & 1)
+    pi.write(s2, (channel >> 2) & 1)
 
 
 def get_led_index(row, col):
@@ -70,23 +72,18 @@ def get_led_index(row, col):
         return row * BOARD_COLS + (BOARD_COLS - 1 - col)
 
 
-def scan_board(raw_state):
+def scan_board(pi, raw_state):
     """Scan every cell in the matrix and store results in raw_state[][]."""
     for row in range(BOARD_ROWS):
-        set_mux_channel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, row)
-        time.sleep(MUX_SETTLE_S)
-        GPIO.input(MUX_READ_PIN)  # Dummy read for settling
+        set_mux_channel(pi, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, row)
+        pi.read(MUX_READ_PIN)  # Dummy read for settling
         time.sleep(MUX_SETTLE_S)
 
         for col in range(BOARD_COLS):
-            set_mux_channel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, col)
+            set_mux_channel(pi, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, col)
             time.sleep(MUX_SETTLE_S)
-            # LOW = magnet detected = piece present (active-low sensor)
-            raw_state[row][col] = (GPIO.input(MUX_READ_PIN) == GPIO.LOW)
-
-    # Deselect both MUXes to an unused channel after scan
-    set_mux_channel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, 5)
-    set_mux_channel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, 5)
+            # LOW (0) = magnet detected = piece present (active-low sensor)
+            raw_state[row][col] = (pi.read(MUX_READ_PIN) == 0)
 
 
 def apply_debounce(raw_state, sensor_state, stable_count):
@@ -188,17 +185,19 @@ def update_leds_from_sensors(strip, sensor_state):
 # =============================================================================
 
 def main():
-    # GPIO setup
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
+    # Connect to pigpio daemon
+    pi = pigpio.pi()
+    if not pi.connected:
+        print("ERROR: Could not connect to pigpiod. Run: sudo pigpiod")
+        return
 
-    GPIO.setup(ROW_MUX_S0, GPIO.OUT)
-    GPIO.setup(ROW_MUX_S1, GPIO.OUT)
-    GPIO.setup(ROW_MUX_S2, GPIO.OUT)
-    GPIO.setup(COL_MUX_S0, GPIO.OUT)
-    GPIO.setup(COL_MUX_S1, GPIO.OUT)
-    GPIO.setup(COL_MUX_S2, GPIO.OUT)
-    GPIO.setup(MUX_READ_PIN, GPIO.IN)
+    # Configure MUX select pins as outputs
+    for pin in [ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2,
+                COL_MUX_S0, COL_MUX_S1, COL_MUX_S2]:
+        pi.set_mode(pin, pigpio.OUTPUT)
+
+    # Configure read pin as input
+    pi.set_mode(MUX_READ_PIN, pigpio.INPUT)
 
     # LED strip setup
     strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
@@ -213,7 +212,7 @@ def main():
     print()
     print("========================================")
     print("  Smart Chess Board — Hardware Test")
-    print("  (Raspberry Pi 4)")
+    print("  (Raspberry Pi 4 + pigpio)")
     print("========================================")
     print()
     print("Pin assignments (BCM):")
@@ -238,7 +237,7 @@ def main():
     print()
 
     # Initial scan
-    scan_board(raw_state)
+    scan_board(pi, raw_state)
     for r in range(BOARD_ROWS):
         for c in range(BOARD_COLS):
             sensor_state[r][c] = raw_state[r][c]
@@ -246,12 +245,20 @@ def main():
     print_sensor_grid(sensor_state)
 
     # Main loop
-    while True:
-        scan_board(raw_state)
-        if apply_debounce(raw_state, sensor_state, stable_count):
-            update_leds_from_sensors(strip, sensor_state)
-            print_sensor_grid(sensor_state)
-        time.sleep(SCAN_INTERVAL_S)
+    try:
+        while True:
+            scan_board(pi, raw_state)
+            if apply_debounce(raw_state, sensor_state, stable_count):
+                update_leds_from_sensors(strip, sensor_state)
+                print_sensor_grid(sensor_state)
+            time.sleep(SCAN_INTERVAL_S)
+    finally:
+        # Turn off all LEDs
+        for i in range(NUM_LEDS):
+            strip.setPixelColor(i, Color(0, 0, 0))
+        strip.show()
+        pi.stop()
+        print("pigpio connection closed.")
 
 
 if __name__ == "__main__":
@@ -259,16 +266,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\nExiting...")
-    finally:
-        # Turn off all LEDs
-        try:
-            strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
-                               LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
-            strip.begin()
-            for i in range(NUM_LEDS):
-                strip.setPixelColor(i, Color(0, 0, 0))
-            strip.show()
-        except Exception:
-            pass
-        GPIO.cleanup()
-        print("GPIO cleaned up.")
