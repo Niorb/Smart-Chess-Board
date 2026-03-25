@@ -212,20 +212,24 @@ async def cancel_search(page):
 async def detect_my_color(page):
     """
     Detect whether the player is White or Black in the current game.
-    Checks if the board element has the "flipped" class (= playing as Black).
+    Checks if the board element has ALL the classes listed in board_flipped_class
+    (space-separated). For example "board flipped" checks that the element has
+    both the "board" class AND the "flipped" class.
 
     Returns: "white" or "black"
     """
-    flipped_class = SELECTORS["board_flipped_class"]
+    flipped_classes = SELECTORS["board_flipped_class"].split()
+    board_selector = SELECTORS["board_container"]
 
     try:
-        is_flipped = await page.evaluate(f"""
-            () => {{
-                const board = document.querySelector('{SELECTORS["board_container"]}');
+        # Pass data as arguments to avoid f-string injection issues
+        is_flipped = await page.evaluate("""
+            ([selector, classes]) => {
+                const board = document.querySelector(selector);
                 if (!board) return false;
-                return board.classList.contains('{flipped_class}');
-            }}
-        """)
+                return classes.every(cls => board.classList.contains(cls));
+            }
+        """, [board_selector, flipped_classes])
         color = "black" if is_flipped else "white"
         print(f"Game found! Playing as {color.upper()}.")
         return color

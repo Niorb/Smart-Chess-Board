@@ -43,52 +43,20 @@ sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
 
 ## 3. First-Time Login
 
-Since the Raspberry Pi is headless (no monitor), you need to use **SSH X11 forwarding** to see the browser window on your laptop for the first login.
-
-### Windows
-
-1. Install **VcXsrv** (https://sourceforge.net/projects/vcxsrv/) or **Xming**
-2. Start VcXsrv with default settings (click Next → Next → Finish)
-3. Connect via SSH with X11 forwarding enabled:
-   - **PuTTY:** Connection → SSH → X11 → check "Enable X11 forwarding"
-   - **Windows Terminal / PowerShell:**
-     ```bash
-     ssh -X robin@<your-rpi-ip>
-     ```
-
-### macOS
-
-1. Install **XQuartz** (https://www.xquartz.org/)
-2. Log out and back in after installation
-3. Connect via SSH:
-   ```bash
-   ssh -X robin@<your-rpi-ip>
-   ```
-
-### Linux
-
-No extra software needed. Just connect:
-
-```bash
-ssh -X robin@<your-rpi-ip>
-```
-
-### Run the first login
-
-Once connected via SSH with X11 forwarding:
+You only need to do this once (or when your session expires). Since the RPi has a monitor, a Chromium browser window will open directly on screen.
 
 ```bash
 sudo pigpiod          # if not already running
 sudo python3 game_seeker.py --first-login
 ```
 
-A Chromium browser window will appear **on your laptop screen**. Log in to chess.com as you normally would. Once you see your dashboard/play page:
+A Chromium browser window will appear on the RPi's display. Log in to chess.com as you normally would. Once you see your dashboard/play page:
 
-1. Come back to the terminal
+1. Go back to the terminal
 2. Press **Enter**
 3. You'll see "Login successful! Session saved."
 
-**Done!** The session is now saved. You won't need to log in again unless the session expires.
+**Done!** The session is now saved in the `chesscom_session/` folder. All subsequent runs use headless mode (no browser window) and reuse the saved cookies.
 
 ---
 
@@ -165,17 +133,11 @@ sudo systemctl enable pigpiod
 sudo systemctl start pigpiod
 ```
 
-### X11 forwarding not working (no browser window appears)
+### Browser window doesn't appear with `--first-login`
 
-- Make sure your SSH connection uses `-X` flag
-- On the RPi, check that X11 forwarding is enabled:
-  ```bash
-  grep X11Forwarding /etc/ssh/sshd_config
-  # Should show: X11Forwarding yes
-  ```
-  If not, edit the file and restart SSH: `sudo systemctl restart sshd`
-- On Windows, make sure VcXsrv/Xming is running **before** you SSH in
-- On macOS, make sure XQuartz is installed and you logged out/in after install
+- Make sure the RPi's display is on and the desktop environment is running
+- Try running from the RPi's own terminal (not SSH) if the display server isn't forwarding
+- Check `DISPLAY` environment variable: `echo $DISPLAY` (should be `:0` or similar)
 
 ### Chromium crashes on Raspberry Pi
 
