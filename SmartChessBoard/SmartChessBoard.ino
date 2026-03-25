@@ -39,7 +39,7 @@
 #define COL_MUX_S2 18
 
 // Read pin — column MUX SIG output
-#define MUX_READ_PIN 35
+#define MUX_READ_PIN 34
 
 // Timing
 #define SCAN_INTERVAL_MS  100   // Full board scan interval (milliseconds)
