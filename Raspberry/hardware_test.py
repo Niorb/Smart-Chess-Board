@@ -50,8 +50,8 @@ LED_CHANNEL    = 0
 
 # Timing
 MUX_SETTLE_S       = 0.001   # Settle after MUX switch (tune as needed)
-SCAN_INTERVAL_S    = 0.021     # Between full board scans
-DEBOUNCE_THRESHOLD = 1     # Consecutive matching reads to accept change
+SCAN_INTERVAL_S    = 0.03     # Between full board scans
+DEBOUNCE_THRESHOLD = 3     # Consecutive matching reads to accept change
 
 # =============================================================================
 # SHARED HELPERS

@@ -34,18 +34,22 @@ LED_CHANNEL    = 0
 # LED PATTERNS — (R, G, B) tuples
 # =============================================================================
 
+COLOR_CONNECTING    = (255, 80, 0)       # Orange pulse while browser launches
+COLOR_CONNECTED     = (0, 255, 0)       # Green flash — connected & logged in
 COLOR_SEARCHING     = (0, 0, 255)       # Blue chase while seeking a game
 COLOR_FOUND_WHITE   = (255, 255, 255)   # White flash — you play White
 COLOR_FOUND_BLACK   = (0, 255, 0)       # Green flash — you play Black
 COLOR_CANCELLED     = (255, 0, 0)       # Red flash — search cancelled
 COLOR_ERROR         = (255, 0, 0)       # Red flash — error occurred
 
-SEARCH_CHASE_DELAY_S = 0.15   # Delay between LED chase steps during search
-FLASH_ON_S           = 0.3    # Duration of LED on during flash
-FLASH_OFF_S          = 0.3    # Duration of LED off during flash
-FLASH_COUNT_FOUND    = 3      # Number of flashes when game found
-FLASH_COUNT_ERROR    = 3      # Number of flashes on error
-FLASH_COUNT_CANCEL   = 1      # Number of flashes on cancel
+CONNECT_PULSE_STEP_S = 0.03  # Delay between brightness steps during pulse
+SEARCH_CHASE_DELAY_S = 0.15  # Delay between LED chase steps during search
+FLASH_ON_S           = 0.3   # Duration of LED on during flash
+FLASH_OFF_S          = 0.3   # Duration of LED off during flash
+FLASH_COUNT_FOUND    = 3     # Number of flashes when game found
+FLASH_COUNT_ERROR    = 3     # Number of flashes on error
+FLASH_COUNT_CANCEL   = 1     # Number of flashes on cancel
+FLASH_COUNT_CONNECT  = 2     # Number of flashes on successful connection
 
 # =============================================================================
 # SELENIUM / BROWSER
@@ -88,13 +92,13 @@ SELECTORS = {
     "logged_in_indicator": "#sidebar-main-menu > a:nth-child(9)",
 
     # The time control button/option matching TIME_CONTROL text
-    "time_control_button": "#board-layout-sidebar > div.sidebar-content > div.new-game-component > div.new-game-primary > div > div:nth-child(4) > div:nth-child(3) > div.time-selector-field-component > button.cc-button-component.cc-button-secondary.cc-button-medium.cc-bg-secondary.cc-selected-border",
+    "time_control_button": "#board-layout-sidebar > div.sidebar-content > div.new-game-component > div.new-game-primary > div > div:nth-child(4) > div:nth-child(2) > div.time-selector-field-component > button:nth-child(1)",
 
     # The main "Play" button that starts matchmaking
     "play_button": "#board-layout-sidebar > div.sidebar-content > div.new-game-component > div.new-game-primary > button",
 
     # Indicator visible while searching for an opponent
-    "searching_indicator": "#board-layout-player-top > div.player-playerContent > div.player-tagline > div > div > span.animated-text-visible",
+    "searching_indicator": "#toaster-center > div > div > div.toaster-controller-toast-body > div > div.composable-toast-content-container",
 
     # Button to cancel matchmaking (appears during search)
     "cancel_search": "#board-layout-sidebar > div.sidebar-content > div > div.outgoing-challenges-content > div > button",
@@ -104,5 +108,5 @@ SELECTORS = {
 
     # CSS class on the board element when you play as Black (board is flipped)
     # This is a CLASS NAME, not a full selector (e.g., "flipped")
-    "board_flipped_class": "board flipped",
+    "board_flipped_class": "flipped",
 }

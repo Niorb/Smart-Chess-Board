@@ -31,10 +31,12 @@ from chesscom_config import (
     BOARD_ROWS, BOARD_COLS, LED_PIN, NUM_LEDS, LED_BRIGHTNESS,
     LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_CHANNEL,
     # LED patterns
+    COLOR_CONNECTING, COLOR_CONNECTED,
     COLOR_SEARCHING, COLOR_FOUND_WHITE, COLOR_FOUND_BLACK,
     COLOR_CANCELLED, COLOR_ERROR,
-    SEARCH_CHASE_DELAY_S, FLASH_ON_S, FLASH_OFF_S,
-    FLASH_COUNT_FOUND, FLASH_COUNT_ERROR, FLASH_COUNT_CANCEL,
+    CONNECT_PULSE_STEP_S, SEARCH_CHASE_DELAY_S,
+    FLASH_ON_S, FLASH_OFF_S,
+    FLASH_COUNT_FOUND, FLASH_COUNT_ERROR, FLASH_COUNT_CANCEL, FLASH_COUNT_CONNECT,
 )
 from chesscom_browser import (
     launch, close, is_logged_in, prompt_login,
@@ -89,6 +91,45 @@ def get_perimeter_indices():
 # =============================================================================
 # LED ANIMATIONS
 # =============================================================================
+
+def animate_connecting(strip, stop_event):
+    """
+    Orange breathing pulse on all LEDs while the browser launches.
+    Runs in a background thread. Stops when stop_event is set.
+    Fades brightness up and down smoothly for a "heartbeat" effect.
+    """
+    r, g, b = COLOR_CONNECTING
+    steps = 20  # Number of brightness steps per half-cycle
+
+    while not stop_event.is_set():
+        # Fade in
+        for i in range(steps + 1):
+            if stop_event.is_set():
+                break
+            frac = i / steps
+            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
+            for led in range(NUM_LEDS):
+                strip.setPixelColor(led, Color(cr, cg, cb))
+            strip.show()
+            stop_event.wait(CONNECT_PULSE_STEP_S)
+        # Fade out
+        for i in range(steps, -1, -1):
+            if stop_event.is_set():
+                break
+            frac = i / steps
+            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
+            for led in range(NUM_LEDS):
+                strip.setPixelColor(led, Color(cr, cg, cb))
+            strip.show()
+            stop_event.wait(CONNECT_PULSE_STEP_S)
+
+    all_leds_off(strip)
+
+
+def signal_connected(strip):
+    """Flash green to indicate successful connection and login."""
+    flash_leds(strip, COLOR_CONNECTED, FLASH_COUNT_CONNECT)
+
 
 def animate_search(strip, stop_event):
     """
@@ -162,6 +203,7 @@ def run(first_login=False):
         if dt < BUTTON_DEBOUNCE_MS * 1000:  # tickDiff is in microseconds
             return
         last_press_tick[0] = tick
+        print(last_press_tick[0])
         button_event.set()
 
     cb = pi.callback(BUTTON_PIN, pigpio.FALLING_EDGE, on_button_press)
@@ -177,12 +219,33 @@ def run(first_login=False):
         # Let the user log in via a plain Chromium session first
         prompt_login()
 
+    # Start connecting animation while the browser launches
+    stop_connect_anim = threading.Event()
+    connect_thread = threading.Thread(
+        target=animate_connecting, args=(strip, stop_connect_anim), daemon=True
+    )
+    connect_thread.start()
+
     print("Launching browser (headless)...")
-    driver = launch(headless=True)
+    try:
+        driver = launch(headless=True)
+    except Exception as e:
+        stop_connect_anim.set()
+        connect_thread.join(timeout=2)
+        print(f"ERROR: Browser failed to launch: {e}")
+        signal_error(strip)
+        cb.cancel()
+        pi.stop()
+        return
 
     try:
         # ---- Check login ----
+        print("Checking session...")
         logged_in = is_logged_in(driver)
+
+        # Stop connecting animation
+        stop_connect_anim.set()
+        connect_thread.join(timeout=2)
 
         if not logged_in:
             print("ERROR: Not logged in.")
@@ -190,8 +253,9 @@ def run(first_login=False):
             signal_error(strip)
             return
 
+        signal_connected(strip)
         print()
-        print("Ready! Press the button to seek a game.")
+        print("Connected! Press the button to seek a game.")
         print("Press Ctrl+C to exit.")
         print()
 
