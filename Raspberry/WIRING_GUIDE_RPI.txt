@@ -1,0 +1,159 @@
+================================================================================
+  SMART CHESS BOARD — WIRING GUIDE (Raspberry Pi 4)
+  4x4 Prototype (scalable to 8x8)
+================================================================================
+
+COMPONENTS
+  - 1x Raspberry Pi 4 Model B
+  - 2x CD74HC4067 16-ch MUX (breakout or DIP-24)
+  - 16x Digital Hall effect sensors (active-low, e.g. A3144 / OH3144)
+  - 16x 10K pull-up resistors
+  - 1x WS2812B LED strip (16+ LEDs, serpentine layout)
+  - 1x Momentary push button (seek game)
+  - Neodymium magnets in chess piece bases (6mm x 2-3mm)
+
+================================================================================
+GPIO PINOUT
+================================================================================
+
+  Function          BCM    Phys    Dir
+  ----------------  -----  -----   ------
+  Row MUX S0        17     11      OUT
+  Row MUX S1        27     13      OUT
+  Row MUX S2        22     15      OUT
+  Col MUX S0         5     29      OUT
+  Col MUX S1         6     31      OUT
+  Col MUX S2        13     33      OUT
+  MUX Read (SIG)    24     18      IN
+  LED Strip DIN     18     12      OUT (PWM0, required by rpi_ws281x)
+  Seek Game Button  26     37      IN  (internal pull-up, active LOW)
+
+  Total: 9 GPIO pins.
+
+  Hardwired to GND (not RPi): both MUX S3, both MUX EN.
+
+  40-PIN HEADER (*** = used):
+
+           3V3  (1)  (2)  5V .............. LED strip VCC
+    SDA  GPIO2  (3)  (4)  5V
+    SCL  GPIO3  (5)  (6)  GND
+         GPIO4  (7)  (8)  GPIO14
+           GND  (9)  (10) GPIO15
+  ***  GPIO17  (11) (12) GPIO18  ***  LED DIN
+  ***  GPIO27  (13) (14) GND
+  ***  GPIO22  (15) (16) GPIO23
+           3V3 (17) (18) GPIO24  ***  MUX Read
+        GPIO10 (19) (20) GND
+         GPIO9 (21) (22) GPIO25
+        GPIO11 (23) (24) GPIO8
+           GND (25) (26) GPIO7
+               (27) (28)
+  ***   GPIO5 (29) (30) GND
+  ***   GPIO6 (31) (32) GPIO12
+  ***  GPIO13 (33) (34) GND
+        GPIO19 (35) (36) GPIO16
+  ***  GPIO26 (37) (38) GPIO20
+           GND (39) (40) GPIO21
+
+================================================================================
+MUX WIRING (both CD74HC4067, DIP-24)
+================================================================================
+
+  CD74HC4067 pins:
+    1=SIG  9=C0  8=C1  7=C2  6=C3  5=C4  4=C5  3=C6  2=C7
+    10=S0  11=S1  14=S2  13=S3  15=EN  12=GND  24=VCC
+
+  ROW MUX (#1, demux mode — grounds one row at a time)
+    SIG (1) --> GND          S0 (10) <-- GPIO 17
+    VCC(24) --> 3.3V         S1 (11) <-- GPIO 27
+    GND(12) --> GND          S2 (14) <-- GPIO 22
+    S3 (13) --> GND          EN (15) --> GND
+    C0  (9) --> Row 0 GND rail
+    C1  (8) --> Row 1 GND rail
+    C2  (7) --> Row 2 GND rail
+    C3  (6) --> Row 3 GND rail    (C4-C7 for 8x8)
+
+  COL MUX (#2, mux mode — routes column signal to read pin)
+    SIG (1) --> GPIO 24      S0 (10) <-- GPIO 5
+    VCC(24) --> 3.3V         S1 (11) <-- GPIO 6
+    GND(12) --> GND          S2 (14) <-- GPIO 13
+    S3 (13) --> GND          EN (15) --> GND
+    C0  (9) <-- Col 0 wire
+    C1  (8) <-- Col 1 wire
+    C2  (7) <-- Col 2 wire
+    C3  (6) <-- Col 3 wire       (C4-C7 for 8x8)
+
+  Add 100nF bypass cap between VCC and GND on each MUX.
+
+================================================================================
+HALL SENSOR (per cell)
+================================================================================
+
+                3.3V
+                 |
+                 +------- Sensor VCC
+                 |
+                [10K]    pull-up
+                 |
+  Sensor OUT ----+------- Column wire --> Col MUX channel
+  Sensor GND ------------ Row wire    --> Row MUX channel
+
+  HIGH = no magnet.  LOW = magnet detected (when row is grounded).
+
+================================================================================
+LED STRIP (WS2812B)
+================================================================================
+
+  GPIO 18 --[330R]--> DIN     5V (pin 2/4) --> VCC     GND --> GND
+  Add 1000uF cap across VCC/GND near strip. For 8x8 use external 5V supply.
+
+  Serpentine layout:
+    Row 0: LED 0  > 1  > 2  > 3
+    Row 1: LED 7  < 6  < 5  < 4
+    Row 2: LED 8  > 9  > 10 > 11
+    Row 3: LED 15 < 14 < 13 < 12
+
+  Index formula:  even rows: row*COLS + col  /  odd rows: row*COLS + (COLS-1-col)
+
+================================================================================
+SEEK GAME BUTTON
+================================================================================
+
+  GPIO 26 (pin 37) ---+--- Button ---+--- GND (pin 39)
+
+  Internal pull-up enabled in software (pigpio PUD_UP).
+  Idle = HIGH, pressed = LOW (falling edge triggers seek).
+  No external resistor needed.
+
+================================================================================
+POWER
+================================================================================
+
+  RPi: USB-C 5V/3A supply.
+  3.3V rail (pin 1/17): MUXes + sensors (~170mA total, well within 500mA limit).
+  5V rail (pin 2/4): LED strip (16 LEDs at low brightness ~50-100mA). OK for 4x4.
+  8x8 (64 LEDs): external 5V supply with shared GND.
+
+================================================================================
+SCALING TO 8x8
+================================================================================
+
+  1. BOARD_ROWS = BOARD_COLS = 8 in Python files
+  2. Wire 48 more sensors to rows/cols 4-7 (MUX channels C4-C7, pins 5/4/3/2)
+  3. Extend LED strip to 64 LEDs
+  4. External 5V supply for LEDs
+  5. Same 9 GPIO pins, same 2 MUX chips, no code changes
+
+================================================================================
+NOTES
+================================================================================
+
+  - RPi GPIO is 3.3V ONLY. Never apply 5V to any GPIO pin.
+  - CD74HC4067 works at 3.3V (2-6V range). Fine for digital signals.
+  - GPIO 18 (PWM0) is required by rpi_ws281x. If audio jack is in use
+    (shares PWM), switch audio to HDMI.
+  - Software: sudo pip3 install selenium pigpio rpi-ws281x
+              sudo apt install chromium-browser chromium-chromedriver
+  - All scripts require sudo (for GPIO/PWM access).
+
+================================================================================
