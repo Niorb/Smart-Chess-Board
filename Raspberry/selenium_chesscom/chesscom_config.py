@@ -41,7 +41,11 @@ COLOR_FOUND_WHITE   = (255, 255, 255)   # White flash — you play White
 COLOR_FOUND_BLACK   = (0, 255, 0)       # Green flash — you play Black
 COLOR_CANCELLED     = (255, 0, 0)       # Red flash — search cancelled
 COLOR_ERROR         = (255, 0, 0)       # Red flash — error occurred
+COLOR_IDLE          = (255, 255, 255)  # Dim white pulse while idle (online)
 
+IDLE_PULSE_MAX_FRAC  = 0.08  # Max brightness fraction for idle pulse (0-1)
+IDLE_PULSE_STEP_S    = 0.05  # Delay between brightness steps during idle pulse
+IDLE_PULSE_STEPS     = 30    # Number of steps per half-cycle
 CONNECT_PULSE_STEP_S = 0.03  # Delay between brightness steps during pulse
 SEARCH_CHASE_DELAY_S = 0.15  # Delay between LED chase steps during search
 FLASH_ON_S           = 0.3   # Duration of LED on during flash

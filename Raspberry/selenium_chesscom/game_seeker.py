@@ -33,7 +33,8 @@ from chesscom_config import (
     # LED patterns
     COLOR_CONNECTING, COLOR_CONNECTED,
     COLOR_SEARCHING, COLOR_FOUND_WHITE, COLOR_FOUND_BLACK,
-    COLOR_CANCELLED, COLOR_ERROR,
+    COLOR_CANCELLED, COLOR_ERROR, COLOR_IDLE,
+    IDLE_PULSE_MAX_FRAC, IDLE_PULSE_STEP_S, IDLE_PULSE_STEPS,
     CONNECT_PULSE_STEP_S, SEARCH_CHASE_DELAY_S,
     FLASH_ON_S, FLASH_OFF_S,
     FLASH_COUNT_FOUND, FLASH_COUNT_ERROR, FLASH_COUNT_CANCEL, FLASH_COUNT_CONNECT,
@@ -151,6 +152,38 @@ def animate_search(strip, stop_event):
     all_leds_off(strip)
 
 
+def animate_idle(strip, stop_event):
+    """
+    Very dim white breathing pulse while idle to confirm the system is online.
+    Runs in a background thread. Stops when stop_event is set.
+    """
+    r, g, b = COLOR_IDLE
+
+    while not stop_event.is_set():
+        # Fade in
+        for i in range(IDLE_PULSE_STEPS + 1):
+            if stop_event.is_set():
+                break
+            frac = (i / IDLE_PULSE_STEPS) * IDLE_PULSE_MAX_FRAC
+            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
+            for led in range(NUM_LEDS):
+                strip.setPixelColor(led, Color(cr, cg, cb))
+            strip.show()
+            stop_event.wait(IDLE_PULSE_STEP_S)
+        # Fade out
+        for i in range(IDLE_PULSE_STEPS, -1, -1):
+            if stop_event.is_set():
+                break
+            frac = (i / IDLE_PULSE_STEPS) * IDLE_PULSE_MAX_FRAC
+            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
+            for led in range(NUM_LEDS):
+                strip.setPixelColor(led, Color(cr, cg, cb))
+            strip.show()
+            stop_event.wait(IDLE_PULSE_STEP_S)
+
+    all_leds_off(strip)
+
+
 def flash_leds(strip, rgb, count):
     """Flash all LEDs a given color a given number of times."""
     for _ in range(count):
@@ -261,9 +294,19 @@ def run(first_login=False):
 
         # ---- Main loop ----
         while True:
-            # IDLE — wait for button press
+            # IDLE — start dim pulse to show we're online
+            stop_idle = threading.Event()
+            idle_thread = threading.Thread(
+                target=animate_idle, args=(strip, stop_idle), daemon=True
+            )
+            idle_thread.start()
+
             button_event.clear()
             button_event.wait()
+
+            # Button pressed — stop idle pulse
+            stop_idle.set()
+            idle_thread.join(timeout=2)
 
             # CHECK_LOGIN
             if not is_logged_in(driver):
