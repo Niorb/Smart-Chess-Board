@@ -85,24 +85,24 @@ TIME_CONTROL = "10 min"
 
 SELECTORS = {
     # Element visible ONLY when logged in (e.g., user avatar, profile link)
-    "logged_in_indicator": "PLACEHOLDER",
+    "logged_in_indicator": "#sidebar-main-menu > a:nth-child(9)",
 
     # The time control button/option matching TIME_CONTROL text
-    "time_control_button": "PLACEHOLDER",
+    "time_control_button": "#board-layout-sidebar > div.sidebar-content > div.new-game-component > div.new-game-primary > div > div:nth-child(4) > div:nth-child(3) > div.time-selector-field-component > button.cc-button-component.cc-button-secondary.cc-button-medium.cc-bg-secondary.cc-selected-border",
 
     # The main "Play" button that starts matchmaking
-    "play_button": "PLACEHOLDER",
+    "play_button": "#board-layout-sidebar > div.sidebar-content > div.new-game-component > div.new-game-primary > button",
 
     # Indicator visible while searching for an opponent
-    "searching_indicator": "PLACEHOLDER",
+    "searching_indicator": "#board-layout-player-top > div.player-playerContent > div.player-tagline > div > div > span.animated-text-visible",
 
     # Button to cancel matchmaking (appears during search)
-    "cancel_search": "PLACEHOLDER",
+    "cancel_search": "#board-layout-sidebar > div.sidebar-content > div > div.outgoing-challenges-content > div > button",
 
     # The board container element (visible = game has started)
-    "board_container": "PLACEHOLDER",
+    "board_container": "#board-single",
 
     # CSS class on the board element when you play as Black (board is flipped)
     # This is a CLASS NAME, not a full selector (e.g., "flipped")
-    "board_flipped_class": "PLACEHOLDER",
+    "board_flipped_class": "board flipped",
 }
