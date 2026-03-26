@@ -87,6 +87,8 @@ Now press the **physical button** (GPIO 26) to start searching for a game. Watch
 
 | LED Pattern | Meaning |
 |-------------|---------|
+| **Orange** breathing pulse | Connecting — browser launching & checking login |
+| **Green** flash ×2 | Connected — logged in and ready |
 | All LEDs **off** | Idle — waiting for button press |
 | **Blue** chase around perimeter | Searching for a game on chess.com |
 | **White** flash ×3 | Game found — you play as **White** |

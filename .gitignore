@@ -1,3 +1,5 @@
 Raspberry/test.py
-Raspberry/chesscom_session/
+Raspberry/selenium_chesscom/chesscom_session
+CLAUDE.md
 *.png
+*.jpeg
