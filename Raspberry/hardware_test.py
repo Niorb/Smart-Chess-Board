@@ -41,7 +41,8 @@ MUX_READ_PIN = 24
 
 # WS2812B LED strip
 LED_PIN        = 18    # Must be GPIO 18 (PWM0) for rpi_ws281x
-NUM_LEDS       = BOARD_ROWS * BOARD_COLS
+LEDS_PER_SQUARE = 2
+NUM_LEDS       = BOARD_ROWS * BOARD_COLS * LEDS_PER_SQUARE
 LED_BRIGHTNESS = 50    # 0-255
 LED_FREQ_HZ    = 800000
 LED_DMA        = 10
@@ -64,12 +65,14 @@ def set_mux_channel(pi, s0, s1, s2, channel):
     pi.write(s2, (channel >> 2) & 1)
 
 
-def get_led_index(row, col):
-    """Convert board [row, col] to serpentine LED strip index."""
+def get_led_indices(row, col):
+    """Convert board [row, col] to serpentine LED strip indices (2 LEDs per square)."""
+    leds_per_row = BOARD_COLS * LEDS_PER_SQUARE
     if row % 2 == 0:
-        return row * BOARD_COLS + col
+        base = row * leds_per_row + col * LEDS_PER_SQUARE
     else:
-        return row * BOARD_COLS + (BOARD_COLS - 1 - col)
+        base = row * leds_per_row + (BOARD_COLS - 1 - col) * LEDS_PER_SQUARE
+    return [base, base + 1]
 
 
 def scan_board(pi, raw_state):
@@ -110,26 +113,23 @@ def test_led_chase(strip):
     print("  TEST 1: LED Strip Chase")
     print("========================================")
     print()
-    print("Each LED will light GREEN one by one.")
+    print("Each square's 2 LEDs will light GREEN one by one.")
     print("Watch the strip and verify the order.")
     print()
 
-    for i in range(NUM_LEDS):
-        # Clear all, light one
-        for j in range(NUM_LEDS):
-            strip.setPixelColor(j, Color(0, 0, 0))
-        strip.setPixelColor(i, Color(0, 255, 0))  # Green
-        strip.show()
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            # Clear all
+            for j in range(NUM_LEDS):
+                strip.setPixelColor(j, Color(0, 0, 0))
+            # Light both LEDs for this square
+            indices = get_led_indices(row, col)
+            for idx in indices:
+                strip.setPixelColor(idx, Color(0, 255, 0))  # Green
+            strip.show()
 
-        # Reverse-map LED index to row, col
-        row = i // BOARD_COLS
-        if row % 2 == 0:
-            col = i % BOARD_COLS
-        else:
-            col = (BOARD_COLS - 1) - (i % BOARD_COLS)
-
-        print(f"  LED {i} ON  (row {row}, col {col})")
-        time.sleep(0.2)
+            print(f"  Square (row {row}, col {col})  LEDs {indices[0]},{indices[1]}")
+            time.sleep(0.2)
 
     # Clear
     for i in range(NUM_LEDS):
@@ -173,11 +173,10 @@ def print_sensor_grid(sensor_state):
 def update_leds_from_sensors(strip, sensor_state):
     for r in range(BOARD_ROWS):
         for c in range(BOARD_COLS):
-            idx = get_led_index(r, c)
-            if sensor_state[r][c]:
-                strip.setPixelColor(idx, Color(0, 255, 0))  # Green = magnet
-            else:
-                strip.setPixelColor(idx, Color(0, 0, 0))    # Off = no magnet
+            indices = get_led_indices(r, c)
+            color = Color(0, 255, 0) if sensor_state[r][c] else Color(0, 0, 0)
+            for idx in indices:
+                strip.setPixelColor(idx, color)
     strip.show()
 
 # =============================================================================
