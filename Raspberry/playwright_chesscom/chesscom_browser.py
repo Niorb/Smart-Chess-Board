@@ -119,32 +119,38 @@ def is_logged_in(page):
         return False
 
 
-def prompt_login():
+def do_first_login():
     """
-    Instruct the user to log in via a plain Chromium session (not Playwright).
-    The user runs Chromium manually with the same --user-data-dir so the
-    session cookies are saved in the shared profile folder.
+    Open a visible Playwright browser so the user can log in to chess.com.
+    The persistent context saves cookies automatically. After the user logs
+    in and presses Enter, the browser is closed. The caller then relaunches
+    headless.
 
-    Returns: None (the user must restart game_seeker.py after logging in).
+    Returns: True if login was verified, False otherwise.
     """
-    user_data_dir = os.path.abspath(USER_DATA_DIR)
-
     print()
     print("=" * 50)
     print("  FIRST-TIME LOGIN")
     print("=" * 50)
     print()
-    print("Open a SECOND terminal (or SSH session) and run:")
-    print()
-    print(f"  chromium-browser --user-data-dir={user_data_dir} https://www.chess.com")
-    print()
-    print("Log in to chess.com in that browser window.")
-    print("Once logged in, CLOSE the browser, then come back")
-    print("here and press ENTER to continue...")
+    print("A browser window will open — log in to chess.com.")
+    print("Once logged in, come back here and press ENTER.")
     print()
 
+    context, page = launch(headless=False)
+    page.goto(CHESS_COM_PLAY_URL)
+
     input()  # Block until user presses Enter
-    print("Session should now be saved. Verifying...")
+
+    logged_in = is_logged_in(page)
+    close(context)
+
+    if logged_in:
+        print("Login saved successfully.")
+    else:
+        print("WARNING: Could not detect login. Try again.")
+
+    return logged_in
 
 # =============================================================================
 # GAME SEEKING

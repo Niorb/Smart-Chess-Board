@@ -39,7 +39,7 @@ from chesscom_config import (
     FLASH_COUNT_FOUND, FLASH_COUNT_ERROR, FLASH_COUNT_CANCEL, FLASH_COUNT_CONNECT,
 )
 from chesscom_browser import (
-    launch, close, is_logged_in, prompt_login,
+    launch, close, is_logged_in, do_first_login,
     seek_game, wait_for_game, cancel_search, detect_my_color,
 )
 
@@ -249,8 +249,11 @@ def run(first_login=False):
 
     # ---- Browser setup ----
     if first_login:
-        # Let the user log in via a plain Chromium session first
-        prompt_login()
+        if not do_first_login():
+            signal_error(strip)
+            cb.cancel()
+            lgpio.gpiochip_close(h)
+            return
 
     # Start connecting animation while the browser launches
     stop_connect_anim = threading.Event()
