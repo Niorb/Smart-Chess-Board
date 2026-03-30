@@ -38,6 +38,7 @@ _playwright_instance = None
 # BROWSER LIFECYCLE
 # =============================================================================
 
+
 def launch(headless=True):
     """
     Launch a Chromium browser with a persistent user profile.
@@ -55,10 +56,11 @@ def launch(headless=True):
     context = _playwright_instance.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
         headless=headless,
+        # executable_path="/usr/bin/chromium",
         viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         args=[
             "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
+            # "--no-sandbox",
             "--disable-dev-shm-usage",
             "--shm-size=1gb",
             # RPi-friendly flags — prevent white screen / GPU stalls
@@ -93,9 +95,11 @@ def close(browser_context):
     except Exception:
         pass
 
+
 # =============================================================================
 # LOGIN
 # =============================================================================
+
 
 def is_logged_in(page):
     """
@@ -152,9 +156,11 @@ def do_first_login():
 
     return logged_in
 
+
 # =============================================================================
 # GAME SEEKING
 # =============================================================================
+
 
 def navigate_to_play(page):
     """Navigate to the chess.com play page if not already there."""
@@ -178,8 +184,10 @@ def seek_game(page):
             try:
                 page.click(SELECTORS["time_control_button"], timeout=5000)
             except PlaywrightTimeout:
-                print("WARNING: Could not find time control button, "
-                      "proceeding with default.")
+                print(
+                    "WARNING: Could not find time control button, "
+                    "proceeding with default."
+                )
 
         # Click Play
         page.click(SELECTORS["play_button"], timeout=10000)
@@ -239,9 +247,11 @@ def cancel_search(page):
         print("WARNING: Could not find cancel button.")
         return False
 
+
 # =============================================================================
 # GAME STATE DETECTION
 # =============================================================================
+
 
 def detect_my_color(page):
     """

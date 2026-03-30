@@ -45,7 +45,7 @@ COL_MUX_S2 = 13
 MUX_READ_PIN = 24
 
 # WS2812B LED strip
-LED_PIN        = 18    # Must be GPIO 18 (PWM0) for rpi_ws281x
+LED_PIN        = 10    # GPIO 10 (SPI0 MOSI) — no root needed
 NUM_LEDS       = BOARD_ROWS * BOARD_COLS
 LED_BRIGHTNESS = 50
 LED_FREQ_HZ    = 800000

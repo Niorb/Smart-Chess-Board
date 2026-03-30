@@ -22,7 +22,7 @@ BUTTON_DEBOUNCE_MS = 500       # Ignore presses within this window
 
 BOARD_ROWS = 4
 BOARD_COLS = 4
-LED_PIN        = 18            # GPIO 18 (PWM0) — required by rpi_ws281x
+LED_PIN        = 10            # GPIO 10 (SPI0 MOSI) — no root needed
 NUM_LEDS       = BOARD_ROWS * BOARD_COLS
 LED_BRIGHTNESS = 50
 LED_FREQ_HZ    = 800000

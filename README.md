@@ -54,7 +54,7 @@ Phase 2 code is written and working but **not yet integrated** with the game see
 | Col MUX S1 | GPIO 6 | Output |
 | Col MUX S2 | GPIO 13 | Output |
 | MUX Read (SIG) | GPIO 24 | Input |
-| LED Strip DIN | GPIO 18 | Output (PWM0) |
+| LED Strip DIN | GPIO 10 | Output (SPI0 MOSI) |
 | Seek Button | GPIO 26 | Input (pull-up) |
 
 Both MUX S3 and EN pins are hardwired to GND.
@@ -98,16 +98,29 @@ For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspber
 
 ```bash
 sudo apt update
-sudo pip3 install playwright lgpio rpi-ws281x
+pip3 install playwright lgpio rpi-ws281x
 playwright install chromium
+```
+
+**Enable SPI** (required for LED strip without root):
+
+```bash
+sudo raspi-config nonint do_spi 0
+```
+
+**Permissions** (add your user to the `gpio` and `spi` groups, then reboot):
+
+```bash
+sudo usermod -a -G gpio,spi $USER
+sudo reboot
 ```
 
 ### Verify Installation
 
 ```bash
-sudo python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
-sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
-sudo python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
+python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
+python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ## Usage
