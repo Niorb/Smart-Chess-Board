@@ -9,19 +9,18 @@ Press the button to seek a game on chess.com.
 LEDs flash to indicate the result (white/black/cancelled/error).
 
 Usage:
-  sudo pigpiod
   sudo python3 game_seeker.py               # normal (headless browser)
   sudo python3 game_seeker.py --first-login  # first time (shows browser on display)
 
 Requires:
-  pip3 install playwright pigpio rpi-ws281x
+  pip3 install playwright lgpio rpi-ws281x
   playwright install chromium
 """
 
 import sys
 import time
 import threading
-import pigpio
+import lgpio
 from rpi_ws281x import PixelStrip, Color
 
 from chesscom_config import (
@@ -218,28 +217,29 @@ def signal_error(strip):
 def run(first_login=False):
     """Main state machine: IDLE -> SEEKING -> GAME_FOUND -> IDLE."""
 
-    # ---- pigpio setup ----
-    pi = pigpio.pi()
-    if not pi.connected:
-        print("ERROR: Could not connect to pigpiod. Run: sudo pigpiod")
+    # ---- lgpio setup ----
+    try:
+        h = lgpio.gpiochip_open(0)
+    except lgpio.error as e:
+        print(f"ERROR: Could not open GPIO chip: {e}")
         return
 
-    pi.set_mode(BUTTON_PIN, pigpio.INPUT)
-    pi.set_pull_up_down(BUTTON_PIN, pigpio.PUD_UP)
+    # Claim button pin as input with pull-up and edge detection
+    lgpio.gpio_claim_alert(h, BUTTON_PIN, lgpio.FALLING_EDGE, lgpio.SET_PULL_UP)
 
-    # Button event — set by pigpio callback, consumed by main loop
+    # Button event — set by lgpio callback, consumed by main loop
     button_event = threading.Event()
-    last_press_tick = [0]
+    last_press_time = [0.0]
 
-    def on_button_press(gpio, level, tick):
-        dt = pigpio.tickDiff(last_press_tick[0], tick)
-        if dt < BUTTON_DEBOUNCE_MS * 1000:  # tickDiff is in microseconds
+    def on_button_press(chip, gpio, level, tick):
+        now = time.monotonic()
+        dt_ms = (now - last_press_time[0]) * 1000
+        if dt_ms < BUTTON_DEBOUNCE_MS:
             return
-        last_press_tick[0] = tick
-        print(last_press_tick[0])
+        last_press_time[0] = now
         button_event.set()
 
-    cb = pi.callback(BUTTON_PIN, pigpio.FALLING_EDGE, on_button_press)
+    cb = lgpio.callback(h, BUTTON_PIN, lgpio.FALLING_EDGE, on_button_press)
 
     # ---- LED setup ----
     strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
@@ -268,7 +268,7 @@ def run(first_login=False):
         print(f"ERROR: Browser failed to launch: {e}")
         signal_error(strip)
         cb.cancel()
-        pi.stop()
+        lgpio.gpiochip_close(h)
         return
 
     # Pre-initialize so the finally block can always call .set()
@@ -369,7 +369,7 @@ def run(first_login=False):
             anim_thread.join(timeout=2)
         all_leds_off(strip)
         cb.cancel()
-        pi.stop()
+        lgpio.gpiochip_close(h)
         close(context)
         print("Cleanup complete.")
 

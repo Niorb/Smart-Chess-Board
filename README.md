@@ -13,7 +13,7 @@ The system has two phases:
 ### Phase 1: Game Seeking (Functional)
 
 1. Press the physical **seek button** (GPIO 26)
-2. A headless **Chromium browser** (via Selenium) navigates to chess.com and starts matchmaking
+2. A headless **Chromium browser** (via Selenium or Playwright) navigates to chess.com and starts matchmaking
 3. LEDs animate a **blue chase** around the board perimeter while searching
 4. Game found — LEDs flash **white** (you play White) or **green** (you play Black)
 5. Press the button again during search to **cancel**
@@ -96,26 +96,32 @@ For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspber
 
 ### Installation
 
+Choose one browser backend (or install both):
+
 ```bash
-# Install Chromium and chromedriver
 sudo apt update
+
+# Selenium backend
 sudo apt install chromium-browser chromium-chromedriver
+sudo pip3 install selenium lgpio rpi-ws281x
 
-# Install Python libraries
-sudo pip3 install selenium pigpio rpi-ws281x
-
-# Enable pigpio daemon (auto-start on boot)
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+# Playwright backend (alternative)
+sudo pip3 install playwright lgpio rpi-ws281x
+playwright install chromium
 ```
 
 ### Verify Installation
 
 ```bash
-sudo python3 -c "import pigpio; pi = pigpio.pi(); print('pigpio OK:', pi.connected); pi.stop()"
-sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
+sudo python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
 sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+
+# Selenium
+sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
 chromedriver --version
+
+# Playwright
+sudo python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ## Usage
@@ -124,10 +130,14 @@ All scripts require **sudo** (GPIO and PWM access).
 
 ### First-Time Login
 
-You only need to do this once. It opens a real Chromium window so you can log in to chess.com — the cookies are saved and reused by the headless browser.
+You only need to do this once (per backend). It opens a real Chromium window so you can log in to chess.com — the cookies are saved and reused by the headless browser.
 
 ```bash
+# Selenium backend
 sudo python3 Raspberry/selenium_chesscom/game_seeker.py --first-login
+
+# Playwright backend
+sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
 ```
 
 1. A `chromium-browser ...` command is printed — run it in a **second terminal**
@@ -137,7 +147,11 @@ sudo python3 Raspberry/selenium_chesscom/game_seeker.py --first-login
 ### Run the Game Seeker
 
 ```bash
+# Selenium backend
 sudo python3 Raspberry/selenium_chesscom/game_seeker.py
+
+# Playwright backend
+sudo python3 Raspberry/playwright_chesscom/game_seeker.py
 ```
 
 The browser runs headless (invisible). Press the physical button to seek a game.
@@ -174,7 +188,12 @@ Runs an LED chase test followed by a live sensor monitor — useful for verifyin
 
 ## Configuration
 
-All settings live in [`Raspberry/selenium_chesscom/chesscom_config.py`](Raspberry/selenium_chesscom/chesscom_config.py):
+Each backend has its own config file with the same settings:
+
+- [`Raspberry/selenium_chesscom/chesscom_config.py`](Raspberry/selenium_chesscom/chesscom_config.py)
+- [`Raspberry/playwright_chesscom/chesscom_config.py`](Raspberry/playwright_chesscom/chesscom_config.py)
+
+Settings include:
 
 - **GPIO pins** — button, LED strip
 - **LED colors and timing** — animation speeds, flash counts, brightness
@@ -183,7 +202,7 @@ All settings live in [`Raspberry/selenium_chesscom/chesscom_config.py`](Raspberr
 
 ### Updating CSS Selectors
 
-Chess.com occasionally updates their UI, which breaks the Selenium selectors. To fix:
+Chess.com occasionally updates their UI, which breaks the selectors. Update **both** config files when this happens. To fix:
 
 1. Open chess.com in a browser and go to `/play/online`
 2. Press **F12** to open DevTools
@@ -211,7 +230,7 @@ An alternative implementation using an **ESP32-WROOM-32** is available in the [`
 
 Upload via Arduino IDE with an ESP32 board selected. See [`ESP32/WIRING_GUIDE.txt`](ESP32/WIRING_GUIDE.txt) for pin assignments (different from RPi).
 
-Note: The ESP32 version handles board scanning only — the chess.com Selenium integration runs exclusively on the Raspberry Pi.
+Note: The ESP32 version handles board scanning only — the chess.com browser integration (Selenium/Playwright) runs exclusively on the Raspberry Pi.
 
 ## Project Structure
 
@@ -222,6 +241,10 @@ Smart Chess Board/
 │   │   ├── game_seeker.py        # Main entry point — button + browser + LEDs
 │   │   ├── chesscom_browser.py   # Selenium wrapper — login, seek, detect color
 │   │   └── chesscom_config.py    # All settings — GPIO, LED, selectors, timing
+│   ├── playwright_chesscom/
+│   │   ├── game_seeker.py        # Main entry point — same logic, Playwright API
+│   │   ├── chesscom_browser.py   # Playwright wrapper — login, seek, detect color
+│   │   └── chesscom_config.py    # All settings — same as Selenium version
 │   ├── smart_chess_board.py      # Standalone board scanner with piece tracking
 │   ├── hardware_test.py          # LED + sensor diagnostic tool
 │   ├── USER_GUIDE.md             # Detailed user guide

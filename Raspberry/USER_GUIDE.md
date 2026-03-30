@@ -6,7 +6,7 @@ Before using the chess.com integration, make sure you have:
 
 - **Raspberry Pi 4** running Raspberry Pi OS 64-bit (Bookworm or newer)
 - **Hardware wired** — Hall sensors, MUX chips, WS2812B LED strip, and the seek-game button on **GPIO 26** (connect one side to GPIO 26, other side to GND; the internal pull-up is enabled by software)
-- **pigpio daemon** installed and running
+- **lgpio** library installed (`sudo pip3 install lgpio` or `sudo apt install python3-lgpio`)
 - **Python 3.9+** installed (comes with Raspberry Pi OS)
 - An **SSH client** on your laptop/PC (PuTTY, terminal, etc.)
 
@@ -17,38 +17,49 @@ Before using the chess.com integration, make sure you have:
 Run these commands on the Raspberry Pi:
 
 ```bash
-# 1. Install Chromium and its matching chromedriver
+# 1. Install Chromium
 sudo apt update
-sudo apt install chromium-browser chromium-chromedriver
+sudo apt install chromium-browser
 
-# 2. Install Python libraries
-sudo pip3 install selenium pigpio rpi-ws281x
+# 2. Install Python libraries — pick one browser backend (or both)
 
-# 3. Enable the pigpio daemon to start on boot
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+# Selenium backend
+sudo apt install chromium-chromedriver
+sudo pip3 install selenium lgpio rpi-ws281x
+
+# Playwright backend (alternative)
+sudo pip3 install playwright lgpio rpi-ws281x
+playwright install chromium
 ```
 
 Verify everything works:
 
 ```bash
-sudo python3 -c "import pigpio; pi = pigpio.pi(); print('pigpio OK:', pi.connected); pi.stop()"
-sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
+sudo python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
 sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+
+# Selenium
+sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
 chromedriver --version
+
+# Playwright
+sudo python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ---
 
 ## 3. First-Time Login
 
-You only need to do this once (or when your session expires). The idea is to open a regular Chromium browser that shares the same profile folder as the game seeker, so the cookies you get by logging in are reused by Selenium later.
+You only need to do this once per backend (or when your session expires). The idea is to open a regular Chromium browser that shares the same profile folder as the game seeker, so the cookies you get by logging in are reused later.
 
 **Step 1:** Start the game seeker with the `--first-login` flag:
 
 ```bash
-sudo pigpiod          # if not already running
-sudo python3 game_seeker.py --first-login
+# Selenium backend
+cd selenium_chesscom && sudo python3 game_seeker.py --first-login
+
+# Playwright backend
+cd playwright_chesscom && sudo python3 game_seeker.py --first-login
 ```
 
 It will print a `chromium-browser ...` command for you.
@@ -59,7 +70,7 @@ It will print a `chromium-browser ...` command for you.
 
 The script verifies the session and launches headless. You're all set!
 
-**Why this way?** Running Chromium directly (not through Selenium) avoids the white-screen issues on RPi. The `--user-data-dir` flag ensures the login cookies are stored in the same `chesscom_session/` folder that Selenium reads from.
+**Why this way?** Running Chromium directly (not through Selenium/Playwright) avoids the white-screen issues on RPi. The `--user-data-dir` flag ensures the login cookies are stored in the same `chesscom_session/` folder that the browser backend reads from.
 
 ---
 
@@ -68,7 +79,11 @@ The script verifies the session and launches headless. You're all set!
 After the first login, just run:
 
 ```bash
-sudo python3 game_seeker.py
+# Selenium backend
+cd selenium_chesscom && sudo python3 game_seeker.py
+
+# Playwright backend
+cd playwright_chesscom && sudo python3 game_seeker.py
 ```
 
 The browser runs **headless** (invisible). You'll see:
@@ -118,7 +133,7 @@ Session expired! Re-run with --first-login.
 
 Plus 3 red LED flashes. To fix:
 
-1. Run: `sudo python3 game_seeker.py --first-login`
+1. Run: `sudo python3 <backend>/game_seeker.py --first-login` (replace `<backend>` with `selenium_chesscom` or `playwright_chesscom`)
 2. Follow the instructions — open Chromium in a second terminal, log in, close it
 3. Press Enter in the first terminal
 
@@ -126,16 +141,15 @@ Plus 3 red LED flashes. To fix:
 
 ## 8. Troubleshooting
 
-### "Could not connect to pigpiod"
+### "Could not open GPIO chip"
 
-The pigpio daemon isn't running:
+The script needs access to `/dev/gpiochip0`. Make sure you're running with `sudo`:
 
 ```bash
-sudo pigpiod
-# or, to auto-start on boot:
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+sudo python3 game_seeker.py
 ```
+
+If it still fails, check that the GPIO device exists: `ls -l /dev/gpiochip0`
 
 ### Browser window doesn't appear with `--first-login`
 
@@ -156,14 +170,14 @@ Chess.com updated their website. You need to re-inspect the DOM and update `ches
 ### Button not responding
 
 - Verify wiring: one pin of the button to **GPIO 26**, other pin to **GND**
-- Test with: `sudo python3 -c "import pigpio, time; pi=pigpio.pi(); pi.set_mode(26,pigpio.INPUT); pi.set_pull_up_down(26,pigpio.PUD_UP); [print(pi.read(26)) or time.sleep(0.5) for _ in range(10)]; pi.stop()"`
+- Test with: `sudo python3 -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
 - Should print `1` normally and `0` when pressed
 
 ---
 
 ## 9. Updating Selectors (When Chess.com Changes)
 
-The file `chesscom_config.py` contains CSS selectors that tell Selenium where to find buttons and elements on chess.com. If chess.com updates their website, these may break.
+Each backend has a `chesscom_config.py` file containing CSS selectors that tell the browser automation where to find buttons and elements on chess.com. If chess.com updates their website, these may break. Update **both** config files when this happens.
 
 **How to find new selectors:**
 
@@ -195,11 +209,16 @@ The file `chesscom_config.py` contains CSS selectors that tell Selenium where to
 
 ## 10. File Overview
 
-| File | Purpose |
-|------|---------|
-| `game_seeker.py` | Run this — button + browser + LEDs |
-| `chesscom_config.py` | All settings and DOM selectors — edit this when chess.com changes |
-| `chesscom_browser.py` | Selenium automation (session, seek, detect) |
+| File / Directory | Purpose |
+|------------------|---------|
+| `selenium_chesscom/` | Selenium-based browser backend |
+| `selenium_chesscom/game_seeker.py` | Run this — button + Selenium browser + LEDs |
+| `selenium_chesscom/chesscom_config.py` | All settings and DOM selectors — edit when chess.com changes |
+| `selenium_chesscom/chesscom_browser.py` | Selenium automation (session, seek, detect) |
+| `playwright_chesscom/` | Playwright-based browser backend (same logic) |
+| `playwright_chesscom/game_seeker.py` | Run this — button + Playwright browser + LEDs |
+| `playwright_chesscom/chesscom_config.py` | All settings and DOM selectors — keep in sync with Selenium version |
+| `playwright_chesscom/chesscom_browser.py` | Playwright automation (session, seek, detect) |
 | `smart_chess_board.py` | Standalone board scanner with piece tracking (not used by game seeker yet) |
 | `hardware_test.py` | LED and sensor test script |
-| `chesscom_session/` | Auto-created by Chromium — stores your login cookies and profile |
+| `*/chesscom_session/` | Auto-created by Chromium — stores your login cookies and profile |

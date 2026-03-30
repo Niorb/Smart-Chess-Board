@@ -14,14 +14,13 @@ Piece encoding: standard chess notation characters.
   Empty: '.'
 
 Usage:
-  sudo pigpiod          # start the pigpio daemon (once)
   sudo python3 smart_chess_board.py
 
-Requires: sudo pip3 install pigpio rpi-ws281x
+Requires: sudo pip3 install lgpio rpi-ws281x
 """
 
 import time
-import pigpio
+import lgpio
 from rpi_ws281x import PixelStrip, Color
 
 # =============================================================================
@@ -127,32 +126,32 @@ else:
 # MUX CONTROL
 # =============================================================================
 
-def set_mux_channel(pi, s0, s1, s2, channel):
+def set_mux_channel(h, s0, s1, s2, channel):
     """Set the 3 address pins of a CD74HC4067 to select a channel (0-7)."""
-    pi.write(s0, (channel     ) & 1)
-    pi.write(s1, (channel >> 1) & 1)
-    pi.write(s2, (channel >> 2) & 1)
+    lgpio.gpio_write(h, s0, (channel     ) & 1)
+    lgpio.gpio_write(h, s1, (channel >> 1) & 1)
+    lgpio.gpio_write(h, s2, (channel >> 2) & 1)
 
 # =============================================================================
 # BOARD SCANNING
 # =============================================================================
 
-def scan_board(pi, raw_state):
+def scan_board(h, raw_state):
     """Scan every cell in the matrix and store results in raw_state[][]."""
     for row in range(BOARD_ROWS):
-        set_mux_channel(pi, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, row)
-        pi.read(MUX_READ_PIN)  # Dummy read for settling
+        set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, row)
+        lgpio.gpio_read(h, MUX_READ_PIN)  # Dummy read for settling
         time.sleep(MUX_SETTLE_S)
 
         for col in range(BOARD_COLS):
-            set_mux_channel(pi, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, col)
+            set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, col)
             time.sleep(MUX_SETTLE_S)
             # LOW (0) = magnet detected = piece present (active-low sensor)
-            raw_state[row][col] = (pi.read(MUX_READ_PIN) == 0)
+            raw_state[row][col] = (lgpio.gpio_read(h, MUX_READ_PIN) == 0)
 
     # Deselect both MUXes to an unused channel after scan
-    set_mux_channel(pi, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, 5)
-    set_mux_channel(pi, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, 5)
+    set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, 5)
+    set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, 5)
 
 # =============================================================================
 # DEBOUNCING
@@ -284,19 +283,20 @@ def update_leds(strip, old_sensor, sensor_state):
 # =============================================================================
 
 def main():
-    # Connect to pigpio daemon
-    pi = pigpio.pi()
-    if not pi.connected:
-        print("ERROR: Could not connect to pigpiod. Run: sudo pigpiod")
+    # Open GPIO chip
+    try:
+        h = lgpio.gpiochip_open(0)
+    except lgpio.error as e:
+        print(f"ERROR: Could not open GPIO chip: {e}")
         return
 
     # Configure MUX select pins as outputs
     for pin in [ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2,
                 COL_MUX_S0, COL_MUX_S1, COL_MUX_S2]:
-        pi.set_mode(pin, pigpio.OUTPUT)
+        lgpio.gpio_claim_output(h, pin)
 
     # Configure read pin as input
-    pi.set_mode(MUX_READ_PIN, pigpio.INPUT)
+    lgpio.gpio_claim_input(h, MUX_READ_PIN)
 
     # LED strip setup
     strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
@@ -317,7 +317,7 @@ def main():
     # Startup banner
     print("========================================")
     print("  Smart Chess Board - 4x4 Prototype")
-    print("  (Raspberry Pi 4 + pigpio)")
+    print("  (Raspberry Pi 4 + lgpio)")
     print("========================================")
     print()
     print("Pin assignments (BCM):")
@@ -334,7 +334,7 @@ def main():
     print()
 
     # Initial scan — accept raw state directly (no debounce)
-    scan_board(pi, raw_state)
+    scan_board(h, raw_state)
     for r in range(BOARD_ROWS):
         for c in range(BOARD_COLS):
             sensor_state[r][c] = raw_state[r][c]
@@ -351,7 +351,7 @@ def main():
             old_sensor = [row[:] for row in sensor_state]
 
             # Scan and debounce
-            scan_board(pi, raw_state)
+            scan_board(h, raw_state)
             changed = apply_debounce(raw_state, sensor_state, stable_count)
 
             if changed:
@@ -365,8 +365,8 @@ def main():
         for i in range(NUM_LEDS):
             strip.setPixelColor(i, Color(0, 0, 0))
         strip.show()
-        pi.stop()
-        print("pigpio connection closed.")
+        lgpio.gpiochip_close(h)
+        print("GPIO chip closed.")
 
 
 if __name__ == "__main__":
