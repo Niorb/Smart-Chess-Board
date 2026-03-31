@@ -25,27 +25,54 @@ from rpi_ws281x import PixelStrip, Color
 
 from chesscom_config import (
     # GPIO
-    BUTTON_PIN, BUTTON_DEBOUNCE_MS,
+    BUTTON_PIN,
+    BUTTON_DEBOUNCE_MS,
     # LED
-    BOARD_ROWS, BOARD_COLS, LED_PIN, NUM_LEDS, LED_BRIGHTNESS,
-    LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_CHANNEL,
+    BOARD_ROWS,
+    BOARD_COLS,
+    LED_PIN,
+    NUM_LEDS,
+    LED_BRIGHTNESS,
+    LED_FREQ_HZ,
+    LED_DMA,
+    LED_INVERT,
+    LED_CHANNEL,
     # LED patterns
-    COLOR_CONNECTING, COLOR_CONNECTED,
-    COLOR_SEARCHING, COLOR_FOUND_WHITE, COLOR_FOUND_BLACK,
-    COLOR_CANCELLED, COLOR_ERROR, COLOR_IDLE,
-    IDLE_PULSE_MAX_FRAC, IDLE_PULSE_STEP_S, IDLE_PULSE_STEPS,
-    CONNECT_PULSE_STEP_S, SEARCH_CHASE_DELAY_S,
-    FLASH_ON_S, FLASH_OFF_S,
-    FLASH_COUNT_FOUND, FLASH_COUNT_ERROR, FLASH_COUNT_CANCEL, FLASH_COUNT_CONNECT,
+    COLOR_CONNECTING,
+    COLOR_CONNECTED,
+    COLOR_SEARCHING,
+    COLOR_FOUND_WHITE,
+    COLOR_FOUND_BLACK,
+    COLOR_CANCELLED,
+    COLOR_ERROR,
+    COLOR_IDLE,
+    IDLE_PULSE_MAX_FRAC,
+    IDLE_PULSE_STEP_S,
+    IDLE_PULSE_STEPS,
+    CONNECT_PULSE_STEP_S,
+    SEARCH_CHASE_DELAY_S,
+    FLASH_ON_S,
+    FLASH_OFF_S,
+    FLASH_COUNT_FOUND,
+    FLASH_COUNT_ERROR,
+    FLASH_COUNT_CANCEL,
+    FLASH_COUNT_CONNECT,
 )
 from chesscom_browser import (
-    launch, close, is_logged_in, do_first_login,
-    seek_game, wait_for_game, cancel_search, detect_my_color,
+    launch,
+    close,
+    is_logged_in,
+    do_first_login,
+    seek_game,
+    wait_for_game,
+    cancel_search,
+    detect_my_color,
 )
 
 # =============================================================================
 # LED HELPERS
 # =============================================================================
+
 
 def get_led_index(row, col):
     """Convert board [row, col] to serpentine LED strip index."""
@@ -91,6 +118,7 @@ def get_perimeter_indices():
 # =============================================================================
 # LED ANIMATIONS
 # =============================================================================
+
 
 def animate_connecting(strip, stop_event):
     """
@@ -214,6 +242,7 @@ def signal_error(strip):
 # MAIN
 # =============================================================================
 
+
 def run(first_login=False):
     """Main state machine: IDLE -> SEEKING -> GAME_FOUND -> IDLE."""
 
@@ -234,6 +263,7 @@ def run(first_login=False):
     def on_button_press(chip, gpio, level, tick):
         now = time.monotonic()
         dt_ms = (now - last_press_time[0]) * 1000
+        print(f"button pressed, dt_ms={dt_ms}")
         if dt_ms < BUTTON_DEBOUNCE_MS:
             return
         last_press_time[0] = now
@@ -242,8 +272,9 @@ def run(first_login=False):
     cb = lgpio.callback(h, BUTTON_PIN, lgpio.FALLING_EDGE, on_button_press)
 
     # ---- LED setup ----
-    strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
-                       LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
+    strip = PixelStrip(
+        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
+    )
     strip.begin()
     all_leds_off(strip)
 
@@ -363,6 +394,9 @@ def run(first_login=False):
     except KeyboardInterrupt:
         print("\nExiting...")
     finally:
+        # Stop connecting animation if it is still running (e.g. exception in is_logged_in)
+        stop_connect_anim.set()
+        connect_thread.join(timeout=2)
         # Stop any running LED animation threads
         stop_idle.set()
         stop_anim.set()

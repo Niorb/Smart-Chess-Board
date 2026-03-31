@@ -1,8 +1,12 @@
 Raspberry/test.py
 Raspberry/selenium_chesscom/chesscom_session
+Raspberry/playwright_chesscom/chesscom_session
 Raspberry/chesscom_session
 profile.ps1
 CLAUDE.md
+.claudeignore
+agent.md
 *.png
 *.jpg
 *.jpeg
+*__pycache__

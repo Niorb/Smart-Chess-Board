@@ -87,6 +87,10 @@ def scan_board(h, raw_state):
             # LOW (0) = magnet detected = piece present (active-low sensor)
             raw_state[row][col] = (lgpio.gpio_read(h, MUX_READ_PIN) == 0)
 
+    # Deselect both MUXes to an unused channel after scan
+    set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, 5)
+    set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, 5)
+
 
 def apply_debounce(raw_state, sensor_state, stable_count):
     """Apply debouncing. Returns True if any square's state changed."""

@@ -182,6 +182,9 @@ def seek_game(page):
         # Select time control (if the selector is configured)
         if SELECTORS["time_control_button"] != "PLACEHOLDER":
             try:
+                # Open dropdown menu
+                page.click(SELECTORS["time_control_show_options"], timeout=5000)
+                # Click on desired time control
                 page.click(SELECTORS["time_control_button"], timeout=5000)
             except PlaywrightTimeout:
                 print(
@@ -231,7 +234,10 @@ def wait_for_game(page, timeout=None, cancel_event=None):
         except Exception:
             pass
 
-        time.sleep(POLL_INTERVAL)
+        if cancel_event:
+            cancel_event.wait(POLL_INTERVAL)
+        else:
+            time.sleep(POLL_INTERVAL)
 
     print("Search timed out — no game found.")
     return False

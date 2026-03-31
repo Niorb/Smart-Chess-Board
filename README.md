@@ -86,6 +86,16 @@ Row 3:  LED 15 ← 14  ← 13  ← 12
 
 For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspberry/WIRING_GUIDE_RPI.txt).
 
+### Hardware Notes
+
+- Hall effect sensors are **active-low**: `gpio_read() == 0` means a magnet is present.
+- After each scan, the multiplexer code deselects both MUXes to channel `5`, which is treated as an unused channel.
+- The board uses serpentine LED indexing: even rows map left-to-right, odd rows right-to-left.
+- `Raspberry/hardware_test.py` and `Raspberry/smart_chess_board.py` are currently **not aligned** on LED topology:
+  - `Raspberry/smart_chess_board.py` assumes **1 LED per square** for a total of 16 LEDs on a 4x4 board.
+  - `Raspberry/hardware_test.py` assumes **2 LEDs per square** for a total of 32 LEDs on a 4x4 board.
+  - Check which file you are editing before changing LED mapping or LED counts.
+
 ## Software Setup
 
 ### Prerequisites
