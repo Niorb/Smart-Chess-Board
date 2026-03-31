@@ -5,7 +5,7 @@ Raspberry/chesscom_session
 profile.ps1
 CLAUDE.md
 .claudeignore
-agent.md
+AGENTS.md
 *.png
 *.jpg
 *.jpeg

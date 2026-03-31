@@ -59,19 +59,19 @@ def launch(headless=True):
         # executable_path="/usr/bin/chromium",
         viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         args=[
-            "--disable-blink-features=AutomationControlled",
-            # "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--shm-size=1gb",
-            # RPi-friendly flags — prevent white screen / GPU stalls
-            "--disable-gpu",
-            "--disable-software-rasterizer",
-            "--disable-extensions",
-            "--disable-background-networking",
-            "--disable-sync",
-            "--disable-translate",
-            "--no-first-run",
-            "--ignore-certificate-errors",
+            "--disable-gpu",  # Essential on Pi, no GPU
+            "--disable-extensions",  # Clean, no overhead
+            "--no-first-run",  # Skip setup dialogs
+            "--disable-blink-features=AutomationControlled",  # Keep for chess.com detection avoidance
+            "--no-sandbox",  # Safe in controlled Pi env, reduces overhead
+            "--disable-dev-shm-usage",  # IMPORTANT: /dev/shm is tiny on Pi, causes crashes
+            "--shm-size=1gb",  # Pair with above — or use --disable-dev-shm-usage alone
+            "--single-process",  # Merges renderer into browser process, saves ~50MB RAM
+            "--disable-setuid-sandbox",
+            "--js-flags=--max-old-space-size=256",  # Cap V8 heap to 256MB
+            "--memory-pressure-off",  # Prevents aggressive GC pauses
+            "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+            "--disable-ipc-flooding-protection",  # Reduces IPC overhead
         ],
     )
 
@@ -112,7 +112,7 @@ def is_logged_in(page):
     """
     if "chess.com" not in page.url:
         page.goto(CHESS_COM_PLAY_URL)
-        page.wait_for_load_state("networkidle", timeout=60000)
+        page.wait_for_load_state("domcontentloaded", timeout=60000)
 
     return "/login" not in page.url and "/register" not in page.url
 
@@ -280,3 +280,88 @@ def detect_my_color(page):
     except Exception as e:
         print(f"WARNING: Could not detect color ({e}), defaulting to white.")
         return "white"
+
+
+def read_board(page):
+    """
+    Read the current board position from the chess.com game page.
+
+    Queries all piece elements inside the board container and parses their
+    CSS classes (e.g. "piece bn square-78") to reconstruct the position.
+
+    Returns: 8x8 list[list[str]]
+        - Uppercase letters = White pieces  (K Q R B N P)
+        - Lowercase letters = Black pieces  (k q r b n p)
+        - '.'               = empty square
+        piece_map[row][col]: row 0 = rank 1 (White back rank),
+                             row 7 = rank 8 (Black back rank)
+                             col 0 = file a, col 7 = file h
+
+    Returns a blank board (all '.') if no pieces are found or on error.
+    """
+    PIECE_CODES = {
+        "wp",
+        "wr",
+        "wn",
+        "wb",
+        "wq",
+        "wk",
+        "bp",
+        "br",
+        "bn",
+        "bb",
+        "bq",
+        "bk",
+    }
+
+    piece_map = [["." for _ in range(8)] for _ in range(8)]
+    pieces_selector = LOCATORS["board_container"] + " .piece"
+
+    try:
+        elements = page.query_selector_all(pieces_selector)
+        for el in elements:
+            classes = (el.get_attribute("class") or "").split()
+
+            piece_code = None
+            square_code = None
+            for cls in classes:
+                if cls in PIECE_CODES:
+                    piece_code = cls
+                elif cls.startswith("square-") and len(cls) == 9:
+                    square_code = cls[7:]  # "78" from "square-78"
+
+            if not piece_code or not square_code:
+                continue
+
+            file_n = int(square_code[0])  # 1-8
+            rank_n = int(square_code[1])  # 1-8
+            col = file_n - 1  # 0-7
+            row = rank_n - 1  # 0-7
+
+            if not (0 <= row <= 7 and 0 <= col <= 7):
+                continue
+
+            color, piece = piece_code[0], piece_code[1]  # 'w'/'b', 'p'/'r'/...
+            piece_map[row][col] = piece.upper() if color == "w" else piece
+
+    except Exception as e:
+        print(f"WARNING: Could not read board ({e})")
+
+    return piece_map
+
+
+def print_board(piece_map):
+    """
+    Print an 8x8 piece_map (from read_board) to the terminal.
+
+    Displays rank 8 at the top, rank 1 at the bottom (White's perspective).
+    Uppercase = White, lowercase = Black, '.' = empty.
+    """
+    print()
+    print("    a b c d e f g h")
+    print("   ----------------")
+    for rank in range(8, 0, -1):
+        row = rank - 1
+        row_str = " ".join(piece_map[row])
+        print(f" {rank}| {row_str}")
+    print()

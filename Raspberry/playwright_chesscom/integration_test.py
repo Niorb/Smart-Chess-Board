@@ -36,7 +36,7 @@ from chesscom_config import (
     LED_INVERT,
     LED_CHANNEL,
 )
-from chesscom_browser import launch, close, is_logged_in
+from chesscom_browser import launch, close, is_logged_in, read_board, print_board
 
 # Try to import hardware support — gracefully degrade on non-Pi machines
 try:
@@ -141,11 +141,13 @@ def test_locator(page, locator_key, timeFormat=TIME_CONTROL):
     CSS selectors (board_container, starting with "#") use query_selector.
     Everything else uses get_by_role("button", name=...).
     """
+
     if locator_key == "_time_control_dynamic":
         try:
             locator = page.get_by_role("button", name=TIME_CONTROL, exact=True)
             count = locator.count()
             locator.click()
+            print_board(read_board(page))
             return count > 0
         except Exception:
             return False
@@ -154,6 +156,13 @@ def test_locator(page, locator_key, timeFormat=TIME_CONTROL):
         val = timeFormat
     else:
         val = LOCATORS[locator_key]
+
+    if locator_key == "cancel_search":
+        print("Canceling search...")
+        locator = page.get_by_role("button", name=LOCATORS["cancel_search"])
+        count = locator.count()
+        locator.nth(1).click()
+        return count > 0
 
     if val.startswith("#") or val.startswith("."):
         try:
@@ -180,10 +189,10 @@ def run_tests(page, strip, visible):
     print()
 
     # Navigate to play page
-    print("Navigating to chess.com/play/online ...")
-    page.goto(CHESS_COM_PLAY_URL)
-    page.wait_for_load_state("load")
-    time.sleep(2)  # let JS settle
+    # print("Navigating to chess.com/play/online ...")
+    # page.goto(CHESS_COM_PLAY_URL)
+    # page.wait_for_load_state("load")
+    # time.sleep(2)  # let JS settle
 
     for name, phase, desc in LOCATOR_TESTS:
         if phase == "class":
@@ -205,7 +214,7 @@ def run_tests(page, strip, visible):
             print()
             continue
 
-        wait_for_button(f"Press button to test: {name}")
+        wait_for_button(f"Press button to test: {name}, {phase}")
 
         # For dropdown tests: open the time control menu first
         if phase == "dropdown":
