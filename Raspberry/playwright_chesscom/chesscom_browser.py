@@ -28,7 +28,7 @@ from chesscom_config import (
     GAME_SEARCH_TIMEOUT,
     POLL_INTERVAL,
     TIME_CONTROL,
-    SELECTORS,
+    LOCATORS,
 )
 
 # Keep a module-level reference so the Playwright context manager stays alive
@@ -104,23 +104,17 @@ def close(browser_context):
 def is_logged_in(page):
     """
     Check if the user is currently logged in to chess.com.
-    Navigates to the play page if not already there, then looks for the
-    logged-in indicator element.
+    Navigates to the play page if not already there, then checks whether
+    chess.com redirected to a login/register page (which only happens when
+    the session is missing or expired).
 
     Returns: True if logged in, False otherwise.
     """
     if "chess.com" not in page.url:
         page.goto(CHESS_COM_PLAY_URL)
+        page.wait_for_load_state("networkidle", timeout=60000)
 
-    try:
-        page.wait_for_selector(
-            SELECTORS["logged_in_indicator"],
-            state="visible",
-            timeout=5000,
-        )
-        return True
-    except PlaywrightTimeout:
-        return False
+    return "/login" not in page.url and "/register" not in page.url
 
 
 def do_first_login():
@@ -179,21 +173,25 @@ def seek_game(page):
     try:
         navigate_to_play(page)
 
-        # Select time control (if the selector is configured)
-        if SELECTORS["time_control_button"] != "PLACEHOLDER":
-            try:
-                # Open dropdown menu
-                page.click(SELECTORS["time_control_show_options"], timeout=5000)
-                # Click on desired time control
-                page.click(SELECTORS["time_control_button"], timeout=5000)
-            except PlaywrightTimeout:
-                print(
-                    "WARNING: Could not find time control button, "
-                    "proceeding with default."
-                )
+        # Select time control
+        try:
+            # Open dropdown menu
+            page.get_by_role(
+                "button", name=LOCATORS["time_control_show_options"]
+            ).click(timeout=5000)
+            # Click the option whose visible text matches TIME_CONTROL (e.g. "10 min")
+            page.get_by_role("button", name=TIME_CONTROL, exact=True).click(
+                timeout=5000
+            )
+        except PlaywrightTimeout:
+            print(
+                "WARNING: Could not find time control button, proceeding with default."
+            )
 
         # Click Play
-        page.click(SELECTORS["play_button"], timeout=10000)
+        page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
+            timeout=10000
+        )
         print("Searching for a game...")
         return True
 
@@ -221,7 +219,7 @@ def wait_for_game(page, timeout=None, cancel_event=None):
         timeout = GAME_SEARCH_TIMEOUT
 
     deadline = time.time() + timeout
-    selector = SELECTORS["board_container"]
+    board_locator = page.locator(LOCATORS["board_container"])
 
     while time.time() < deadline:
         # Check for cancellation
@@ -229,7 +227,7 @@ def wait_for_game(page, timeout=None, cancel_event=None):
             return None
 
         try:
-            if page.query_selector(selector):
+            if board_locator.is_visible():
                 return True
         except Exception:
             pass
@@ -246,7 +244,7 @@ def wait_for_game(page, timeout=None, cancel_event=None):
 def cancel_search(page):
     """Cancel an active game search by clicking the cancel button."""
     try:
-        page.click(SELECTORS["cancel_search"], timeout=5000)
+        page.get_by_role("button", name=LOCATORS["cancel_search"]).click(timeout=5000)
         print("Search cancelled.")
         return True
     except PlaywrightTimeout:
@@ -268,8 +266,8 @@ def detect_my_color(page):
 
     Returns: "white" or "black"
     """
-    flipped_classes = SELECTORS["board_flipped_class"].split()
-    board_selector = SELECTORS["board_container"]
+    flipped_classes = LOCATORS["board_flipped_class"].split()
+    board_selector = LOCATORS["board_container"]
 
     try:
         board = page.query_selector(board_selector)

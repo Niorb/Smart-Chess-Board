@@ -2,12 +2,12 @@
 """
 integration_test.py
 
-Tests that all CSS selectors in chesscom_config.py resolve on chess.com.
-Launches a visible Playwright browser, navigates to the play page,
-and checks each selector one by one with visual LED feedback.
+Tests that all locators in chesscom_config.py resolve on chess.com.
+Launches a Playwright browser, navigates to the play page,
+and checks each locator one by one with visual LED feedback.
 
-  GREEN flash  = selector found
-  RED flash    = selector NOT found
+  GREEN flash  = locator found
+  RED flash    = locator NOT found
 
 Requires a saved login session (run game_seeker.py --first-login first).
 
@@ -19,12 +19,14 @@ Usage:
 import sys
 import os
 import time
+import re
 
 # Add playwright_chesscom to path so imports work
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "playwright_chesscom"))
 
 from chesscom_config import (
-    SELECTORS,
+    LOCATORS,
+    TIME_CONTROL,
     CHESS_COM_PLAY_URL,
     LED_PIN,
     NUM_LEDS,
@@ -106,36 +108,63 @@ def wait_for_button(prompt="Press Enter to continue..."):
 
 
 # =============================================================================
-# SELECTOR TESTS
+# LOCATOR TESTS
 # =============================================================================
 
-# Selectors to test and what page state they need.
+# Locators to test and what page state they need.
 # "play_page" = just needs to be on /play/online while logged in.
+# "dropdown"  = needs the time control dropdown open.
 # "searching" = needs an active game search (tested separately).
 # "in_game"   = needs a game in progress (tested separately).
-# "class"     = not a CSS selector, just a class name check.
-SELECTOR_TESTS = [
-    ("logged_in_indicator", "play_page", "Logged-in indicator (avatar/profile link)"),
+# "class"     = class name check, not a locator test.
+#
+# Locator key "_time_control_dynamic" is a special case: it uses TIME_CONTROL
+# as the button label rather than a key in LOCATORS.
+LOCATOR_TESTS = [
     ("time_control_show_options", "dropdown", "Time control dropdown trigger"),
-    ("time_control_button", "dropdown", "Time control option button"),
+    (
+        "_time_control_dynamic",
+        "play_page",
+        f'Time control option button ("{TIME_CONTROL}")',
+    ),
     ("play_button", "play_page", "Play button"),
-    ("searching_indicator", "searching", "Searching indicator toast"),
     ("cancel_search", "searching", "Cancel search button"),
     ("board_container", "in_game", "Board container"),
-    ("board_flipped_class", "class", "Board flipped class name (not a selector)"),
+    ("board_flipped_class", "class", "Board flipped class name (not a locator)"),
 ]
 
 
-def test_selector(page, selector_name):
-    """Check if a selector is present on the current page right now. Returns True/False."""
-    selector = SELECTORS[selector_name]
-    if selector == "PLACEHOLDER":
-        return False
-    try:
-        el = page.query_selector(selector)
-        return el is not None
-    except Exception:
-        return False
+def test_locator(page, locator_key, timeFormat=TIME_CONTROL):
+    """
+    Check if a locator resolves on the current page. Returns True/False.
+
+    CSS selectors (board_container, starting with "#") use query_selector.
+    Everything else uses get_by_role("button", name=...).
+    """
+    if locator_key == "_time_control_dynamic":
+        try:
+            locator = page.get_by_role("button", name=TIME_CONTROL, exact=True)
+            count = locator.count()
+            locator.click()
+            return count > 0
+        except Exception:
+            return False
+
+    if locator_key == "time_control_show_options":
+        val = timeFormat
+    else:
+        val = LOCATORS[locator_key]
+
+    if val.startswith("#") or val.startswith("."):
+        try:
+            return page.query_selector(val) is not None
+        except Exception:
+            return False
+    else:
+        try:
+            return page.get_by_role("button", name=val).count() > 0
+        except Exception:
+            return False
 
 
 def run_tests(page, strip, visible):
@@ -144,13 +173,9 @@ def run_tests(page, strip, visible):
     failed = 0
     skipped = 0
 
-    total_testable = sum(
-        1 for _, phase, _ in SELECTOR_TESTS if phase in ("play_page", "dropdown")
-    )
-
     print()
     print("=" * 55)
-    print("  Phase 1: Play page selectors")
+    print("  Phase 1: Play page locators")
     print("=" * 55)
     print()
 
@@ -160,15 +185,12 @@ def run_tests(page, strip, visible):
     page.wait_for_load_state("load")
     time.sleep(2)  # let JS settle
 
-    for name, phase, desc in SELECTOR_TESTS:
-        selector_val = SELECTORS[name]
-
+    for name, phase, desc in LOCATOR_TESTS:
         if phase == "class":
+            val = LOCATORS[name]
             print(f"  [ SKIP ] {name}")
             print(f"           {desc}")
-            print(
-                f'           Value: "{selector_val}" (class name, not tested as selector)'
-            )
+            print(f'           Value: "{val}" (class name, not tested as locator)')
             skipped += 1
             results[name] = "SKIP"
             print()
@@ -185,16 +207,27 @@ def run_tests(page, strip, visible):
 
         wait_for_button(f"Press button to test: {name}")
 
-        # For dropdown: open the time control menu first
+        # For dropdown tests: open the time control menu first
         if phase == "dropdown":
             try:
                 print("  Opening time control dropdown...")
-                page.click(SELECTORS["time_control_show_options"])
+                # Regex capturing things like 10 min (Rapid) 3 min (Blitz) 2 | 1 (Blitz)
+                locator = page.get_by_text(
+                    re.compile(r"^(?:\d+\s*min|\d+\s*\|\s*\d+)\s*\([^)]*\)$")
+                )
+                locator.click()
+                timeFormat = locator.inner_text()
+                print(timeFormat)
+                # page.get_by_role(
+                #     "button", name=LOCATORS["time_control_show_options"]
+                # ).click()
                 time.sleep(0.5)
+                ok = test_locator(page, name, timeFormat)
             except Exception:
                 pass  # might already be open or not needed
 
-        ok = test_selector(page, name)
+        if phase != "dropdown":
+            ok = test_locator(page, name)
         tag = "PASS" if ok else "FAIL"
         results[name] = tag
 
@@ -203,16 +236,19 @@ def run_tests(page, strip, visible):
         else:
             failed += 1
 
+        locator_display = (
+            TIME_CONTROL if name == "_time_control_dynamic" else LOCATORS.get(name, "")
+        )
         icon = " OK " if ok else "FAIL"
         print(f"  [ {icon} ] {name}")
         print(f"           {desc}")
-        print(f"           Selector: {selector_val[:70]}")
+        print(f"           Locator: {str(locator_display)[:70]}")
         flash_result(strip, ok)
         print()
 
-    # --- Phase 2: searching selectors ---
+    # --- Phase 2: searching locators ---
     print("=" * 55)
-    print("  Phase 2: Searching selectors")
+    print("  Phase 2: Searching locators")
     print("=" * 55)
     print()
     wait_for_button("Press button to start Phase 2 (will click Play)...")
@@ -221,7 +257,7 @@ def run_tests(page, strip, visible):
 
     search_started = False
     try:
-        page.click(SELECTORS["play_button"])
+        page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click()
         time.sleep(2)
         search_started = True
     except Exception as e:
@@ -229,13 +265,13 @@ def run_tests(page, strip, visible):
         print()
 
     if search_started:
-        for name, phase, desc in SELECTOR_TESTS:
+        for name, phase, desc in LOCATOR_TESTS:
             if phase != "searching":
                 continue
 
             wait_for_button(f"Press button to test: {name}")
 
-            ok = test_selector(page, name)
+            ok = test_locator(page, name)
             tag = "PASS" if ok else "FAIL"
             results[name] = tag
 
@@ -247,21 +283,21 @@ def run_tests(page, strip, visible):
             icon = " OK " if ok else "FAIL"
             print(f"  [ {icon} ] {name}")
             print(f"           {desc}")
-            print(f"           Selector: {SELECTORS[name][:70]}")
+            print(f"           Locator: {LOCATORS[name][:70]}")
             flash_result(strip, ok)
             print()
 
         # Cancel the search so we don't actually start a game
         print("  Cancelling search...")
         try:
-            page.click(SELECTORS["cancel_search"])
+            page.get_by_role("button", name=LOCATORS["cancel_search"]).click()
             time.sleep(1)
         except Exception:
             print(
                 "  WARNING: Could not cancel search — you may need to cancel manually."
             )
     else:
-        for name, phase, _ in SELECTOR_TESTS:
+        for name, phase, _ in LOCATOR_TESTS:
             if phase == "searching":
                 results[name] = "SKIP"
                 skipped += 1
@@ -276,7 +312,7 @@ def run_tests(page, strip, visible):
     print()
     print("  Skipped — requires an active game.")
     print("  board_container and board_flipped_class need a game in progress.")
-    for name, phase, _ in SELECTOR_TESTS:
+    for name, phase, _ in LOCATOR_TESTS:
         if phase == "in_game" and name not in results:
             results[name] = "SKIP"
             skipped += 1
@@ -287,7 +323,7 @@ def run_tests(page, strip, visible):
     print("  SUMMARY")
     print("=" * 55)
     print()
-    for name, phase, desc in SELECTOR_TESTS:
+    for name, phase, desc in LOCATOR_TESTS:
         tag = results.get(name, "SKIP")
         print(f"  [{tag:^4}]  {name}")
     print()
@@ -295,10 +331,10 @@ def run_tests(page, strip, visible):
     print()
 
     if failed == 0 and passed > 0:
-        print("  All testable selectors found!")
+        print("  All testable locators found!")
         flash_all_pass(strip)
     elif failed > 0:
-        print("  Some selectors are broken — update chesscom_config.py SELECTORS.")
+        print("  Some locators are broken — update chesscom_config.py LOCATORS.")
 
     return failed
 
@@ -316,7 +352,7 @@ def main():
 
     print()
     print("========================================")
-    print("  Integration Test — CSS Selectors")
+    print("  Integration Test — Locators")
     print("========================================")
     print()
     print(f"Mode: {'visible' if visible else 'headless'}")

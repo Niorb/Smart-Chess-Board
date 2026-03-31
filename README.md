@@ -201,28 +201,24 @@ All settings live in [`Raspberry/playwright_chesscom/chesscom_config.py`](Raspbe
 - **GPIO pins** — button, LED strip
 - **LED colors and timing** — animation speeds, flash counts, brightness
 - **Time control** — which chess.com time format to select (default: "10 min")
-- **CSS selectors** — DOM selectors for chess.com elements
+- **Locators** — how chess.com UI elements are identified
 
-### Updating CSS Selectors
+### Updating Locators
 
-Chess.com occasionally updates their UI, which breaks the selectors. To fix:
+`chesscom_config.py` uses Playwright's semantic locator API instead of fragile CSS paths. Elements are found by their **ARIA role + visible text label**, so they survive DOM restructuring as long as the button text doesn't change. Login detection uses a URL check (chess.com redirects to `/login` when unauthenticated) — no DOM element needed.
 
-1. Open chess.com in a browser and go to `/play/online`
-2. Press **F12** to open DevTools
-3. Right-click the target element and select **Inspect**
-4. Update the corresponding entry in the `SELECTORS` dict in `chesscom_config.py`
+If chess.com updates their UI and something stops working, update the corresponding entry in `LOCATORS` in `chesscom_config.py`:
 
-| Selector key | What to look for |
-|-------------|-----------------|
-| `logged_in_indicator` | Your avatar, username, or any element that only appears when logged in |
-| `time_control_button` | The button/tab for your preferred time control (e.g., "10 min") |
-| `play_button` | The main "Play" button that starts matchmaking |
-| `searching_indicator` | The "Searching..." text or animation during matchmaking |
-| `cancel_search` | The cancel/X button that appears while searching |
-| `board_container` | The chess board element (appears when a game starts) |
-| `board_flipped_class` | The CSS class name added to the board when you play as Black |
+| Locator key | What it targets | How it's matched |
+|-------------|----------------|-----------------|
+| `time_control_show_options` | Button that opens the time control dropdown | `get_by_role("button", name=...)` — update value if label changes |
+| *(TIME_CONTROL)* | The specific time control option (e.g. "10 min") | `get_by_role("button", name=TIME_CONTROL)` — set via `TIME_CONTROL` config |
+| `play_button` | The main "Play" button that starts matchmaking | `get_by_role("button", name=...)` |
+| `cancel_search` | The cancel button that appears while searching | `get_by_role("button", name=...)` |
+| `board_container` | The chess board element (appears when a game starts) | CSS ID `#board-single` — stable, unlikely to change |
+| `board_flipped_class` | CSS class added to the board when you play as Black | Class name string — checked against element's `class` attribute |
 
-**Tip:** Prefer shorter, ID-based selectors (e.g. `#board-single`) over long nth-child chains — they are more resilient to layout changes.
+To find the right label for a button: open chess.com in a browser, hover over the element — the visible text (or `aria-label` in DevTools) is what goes in `LOCATORS`.
 
 ## Session Expired?
 
@@ -262,9 +258,9 @@ If it still fails, check that the GPIO device exists: `ls -l /dev/gpiochip0`
 - Try adding `--disable-gpu` to the browser args in `chesscom_browser.py`
 - Close other running programs to free memory
 
-### "Could not find the Play button" / selectors broken
+### "Could not find the Play button" / locators broken
 
-Chess.com updated their website. Re-inspect the DOM and update `chesscom_config.py` — see the [Updating CSS Selectors](#updating-css-selectors) section.
+Chess.com updated their website. Check the visible text of the broken button in a browser and update the corresponding value in the `LOCATORS` dict in `chesscom_config.py` — see the [Updating Locators](#updating-locators) section.
 
 ### Button not responding
 
