@@ -199,7 +199,6 @@ def main():
             return
 
         # --- Wait for game to start ---
-        step("Wait for game to start (resign button appears)")
         print("  Polling for resign button...")
         if not wait_for_game_start(page):
             print("  FAIL — timed out waiting for game to start.")

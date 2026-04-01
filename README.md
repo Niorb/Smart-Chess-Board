@@ -27,7 +27,7 @@ The board scanner detects which pieces are on which squares in real time:
 - Lights up squares with LEDs when pieces are lifted or placed
 - Outputs a live board state to the terminal
 
-Phase 2 code is written and working but **not yet integrated** with the game seeker — the end goal is to sync physical board moves to chess.com during a game.
+Phase 2 code is written and working. `interactive_game.py` connects board-reading and move-clicking into a playable terminal session — the remaining step is wiring the physical Hall sensor board state into that loop.
 
 ## Hardware
 
@@ -156,6 +156,27 @@ sudo python3 Raspberry/playwright_chesscom/game_seeker.py
 ```
 
 The browser runs headless (invisible). Press the physical button to seek a game.
+
+### Interactive Terminal Chess
+
+Play a game directly from the terminal — no button or LEDs needed. The browser can run headless or visible.
+
+```bash
+python3 Raspberry/playwright_chesscom/interactive_game.py
+python3 Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
+python3 Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
+```
+
+The script walks through each step with Enter-key confirmation:
+1. Launches the browser and verifies login
+2. Navigates to the play page
+3. Opens the time control dropdown and selects the chosen format
+4. Clicks Play and waits for an opponent (polls for the resign button)
+5. Prints the board and your color
+6. **White:** prompts for a move (`e2 e4` format) and clicks it on the board
+7. **Black:** polls the board every 0.5 s for the opponent's move, then prompts for yours
+
+Ctrl+C exits cleanly at any point.
 
 ### Run the Board Scanner
 
@@ -298,7 +319,8 @@ Smart Chess Board/
 ├── Raspberry/
 │   ├── playwright_chesscom/         # Active browser backend
 │   │   ├── game_seeker.py           # Main entry point — button + browser + LEDs
-│   │   ├── chesscom_browser.py      # Playwright wrapper — login, seek, detect color
+│   │   ├── interactive_game.py      # Terminal chess session — seek, move, wait for opponent
+│   │   ├── chesscom_browser.py      # Playwright wrapper — login, seek, read board, make moves
 │   │   └── chesscom_config.py       # All settings — GPIO, LED, selectors, timing
 │   ├── selenium_chesscom/           # Legacy (not actively maintained)
 │   ├── smart_chess_board.py         # Standalone board scanner with piece tracking
