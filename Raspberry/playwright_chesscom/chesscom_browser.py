@@ -111,7 +111,7 @@ def is_logged_in(page):
 
     Returns: True if logged in, False otherwise.
     """
-    if "chess.com" not in page.url:
+    if CHESS_COM_PLAY_URL not in page.url:
         page.goto(CHESS_COM_PLAY_URL)
         page.wait_for_load_state("domcontentloaded", timeout=60000)
 
@@ -390,6 +390,7 @@ def read_clocks(page, color="white"):
     Returns: (white_time, black_time) as strings (e.g. "9:45", "10:00").
     Returns "?" for any clock that cannot be read.
     """
+
     def read_clock(selector):
         try:
             el = page.query_selector(selector)
@@ -431,11 +432,13 @@ def make_move(page, from_file, from_rank, to_file, to_rank, color):
         sq_h = box["height"] / 8
 
         if color == "white":
+
             def to_pixel(file, rank):
                 x = box["x"] + (file - 1) * sq_w + sq_w / 2
                 y = box["y"] + (8 - rank) * sq_h + sq_h / 2
                 return x, y
         else:
+
             def to_pixel(file, rank):
                 x = box["x"] + (8 - file) * sq_w + sq_w / 2
                 y = box["y"] + (rank - 1) * sq_h + sq_h / 2

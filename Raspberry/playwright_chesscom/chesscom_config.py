@@ -44,8 +44,8 @@ COLOR_ERROR = (255, 0, 0)  # Red flash — error occurred
 COLOR_IDLE = (255, 255, 255)  # Dim white pulse while idle (online)
 
 IDLE_PULSE_MAX_FRAC = 0.08  # Max brightness fraction for idle pulse (0-1)
-IDLE_PULSE_STEP_S = 0.05  # Delay between brightness steps during idle pulse
-IDLE_PULSE_STEPS = 30  # Number of steps per half-cycle
+IDLE_PULSE_STEP_S = 0.02  # Delay between brightness steps during idle pulse
+IDLE_PULSE_STEPS = 80  # Number of steps per half-cycle
 CONNECT_PULSE_STEP_S = 0.03  # Delay between brightness steps during pulse
 SEARCH_CHASE_DELAY_S = 0.15  # Delay between LED chase steps during search
 FLASH_ON_S = 0.3  # Duration of LED on during flash
@@ -73,7 +73,7 @@ MOVE_CLICK_DELAY_S = 0.15  # Pause between source and destination click (seconds
 
 # The text label of the time control to select on chess.com's play page.
 # Examples: "1 min", "3 min", "5 min", "10 min", "15 | 10", "30 min"
-TIME_CONTROL = "3 min"
+TIME_CONTROL = "10 min"
 
 
 def GetCadence(time_control):
@@ -132,6 +132,8 @@ LOCATORS = {
     # The board container element (visible = game has started).
     # Stable chess.com element ID — kept as a CSS selector.
     "resign_button": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > button.resign-button-component > span.resign-button-label",
+    "second_resign_button": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > div:nth-child(2) > span > button > span.resign-button-label",
+    # Board container
     "board_container": "#board-single",
     # CSS class on the board element when you play as Black (board is flipped).
     # This is a CLASS NAME, not a full selector.

@@ -159,24 +159,27 @@ The browser runs headless (invisible). Press the physical button to seek a game.
 
 ### Interactive Terminal Chess
 
-Play a game directly from the terminal — no button or LEDs needed. The browser can run headless or visible.
+Play a game directly from the terminal with full LED feedback. Requires `sudo` for LED strip access (same as game seeker).
 
 ```bash
-python3 Raspberry/playwright_chesscom/interactive_game.py
-python3 Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
-python3 Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
+sudo python3 Raspberry/playwright_chesscom/interactive_game.py
+sudo python3 Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
+sudo python3 Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
 ```
 
-The script walks through each step with Enter-key confirmation:
-1. Launches the browser and verifies login
-2. Navigates to the play page
-3. Opens the time control dropdown and selects the chosen format
-4. Clicks Play and waits for an opponent (polls for the resign button)
-5. Prints the board and your color
-6. **White:** prompts for a move (`e2 e4` format) and clicks it on the board
-7. **Black:** polls the board every 0.5 s for the opponent's move, then prompts for yours
+The script walks through each step with LED feedback:
+1. **Orange pulse** — browser launching
+2. **Green flash ×2** — logged in
+3. **Dim white pulse** — ready, press Enter to start matchmaking
+4. **Blue chase** — searching for an opponent
+5. **White ×3 / Green ×3** — game found; announces your color
+6. **White:** dim white pulse while you type your move (`e2 e4` format); **white flash ×1** confirms the click
+7. **Blue chase** while waiting for the opponent's reply; **green flash ×1** when they move
+8. Both player clocks are printed after each move
 
-Ctrl+C exits cleanly at any point.
+Board orientation follows your color: White sees rank 8 at top (files a–h); Black sees rank 1 at top (files h–a).
+
+Ctrl+C exits cleanly and turns off all LEDs. LEDs are optional — the script runs without them if `rpi_ws281x` is not installed.
 
 ### Run the Board Scanner
 
@@ -196,16 +199,18 @@ Runs an LED chase test followed by a live sensor monitor — useful for verifyin
 
 ## LED Reference
 
-| Pattern | Meaning |
-|---------|---------|
-| Orange breathing pulse | Connecting — browser launching |
-| Green flash x2 | Connected — logged in and ready |
-| Dim white breathing pulse | Idle (online) — system is running |
-| Blue chase around perimeter | Searching for a game |
-| White flash x3 | Game found — you play as **White** |
-| Green flash x3 | Game found — you play as **Black** |
-| Red flash x1 | Search cancelled |
-| Red flash x3 | Error — session expired, network issue, or timeout |
+| Pattern | Meaning | Scripts |
+|---------|---------|---------|
+| Orange breathing pulse | Connecting — browser launching | both |
+| Green flash ×2 | Connected — logged in and ready | both |
+| Dim white breathing pulse | Ready / your turn — waiting for input | both |
+| Blue chase around perimeter | Searching for a game / waiting for opponent | both |
+| White flash ×3 | Game found — you play as **White** | both |
+| Green flash ×3 | Game found — you play as **Black** | both |
+| White flash ×1 | Move sent to chess.com | `interactive_game.py` |
+| Green flash ×1 | Opponent has moved | `interactive_game.py` |
+| Red flash ×1 | Search cancelled | `game_seeker.py` |
+| Red flash ×3 | Error — session expired, network issue, or timeout | both |
 
 ## Button Controls
 
