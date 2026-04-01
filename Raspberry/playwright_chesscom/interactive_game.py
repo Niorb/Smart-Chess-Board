@@ -24,6 +24,7 @@ from chesscom_browser import (
     detect_my_color,
     read_board,
     print_board,
+    read_clocks,
     make_move,
 )
 
@@ -37,7 +38,6 @@ def step(prompt):
     """Print a prompt, wait for Enter, then confirm the press."""
     print(f"\n  >> {prompt}")
     input("     [Press Enter to continue]")
-    print("     PRESSED")
 
 
 def parse_square(token):
@@ -87,26 +87,43 @@ def wait_for_game_start(page, timeout=120):
     return False
 
 
-def boards_differ(a, b):
-    """Return True if two 8x8 board lists differ."""
-    for r in range(8):
-        for c in range(8):
-            if a[r][c] != b[r][c]:
-                return True
-    return False
+def count_differences(a, b):
+    """Count squares that differ between two 8x8 boards."""
+    return sum(a[r][c] != b[r][c] for r in range(8) for c in range(8))
 
 
-def wait_for_opponent(page, known_board):
+def print_clocks(page, color):
+    """Read and print both player clocks."""
+    white, black = read_clocks(page, color)
+    print(f"  Clocks — White: {white}  Black: {black}")
+
+
+def wait_for_opponent(page, pre_move_board):
     """
-    Poll board every 0.5 s until it changes (opponent moved).
+    Poll board every 0.5 s until the opponent has moved.
+
+    If pre_move_board is None (we haven't moved yet, e.g. playing Black on move 1),
+    any board change triggers return.
+
+    Otherwise compares against pre_move_board (the board state before our move).
+    Any single move changes exactly 2 squares (source → empty, destination ← piece),
+    so our move alone accounts for 2 differences. When more than 2 squares differ
+    from pre_move_board, the opponent has also played. This correctly handles
+    premoves and near-instant responses that happen before the first read_board call.
+
     Returns the new board state.
     """
     print("\n  Waiting for opponent's move...")
+    last = read_board(page)  # baseline for the None case
     while True:
         time.sleep(0.5)
-        new_board = read_board(page)
-        if boards_differ(known_board, new_board):
-            return new_board
+        current = read_board(page)
+        if pre_move_board is None:
+            if count_differences(current, last) > 0:
+                return current
+        else:
+            if count_differences(current, pre_move_board) > 2:
+                return current
 
 
 # =============================================================================
@@ -211,11 +228,13 @@ def main():
 
         print()
         print(f"  Playing as: {color.upper()}")
-        print_board(board)
+        print_board(board, color)
+        print_clocks(page, color)
 
         # --- Game loop ---
         # White moves first; if we're Black we wait for opponent's first move.
         my_turn = color == "white"
+        pre_move_board = None  # set before each of our moves; None = haven't moved yet
 
         while True:
             if my_turn:
@@ -231,21 +250,26 @@ def main():
                     break
 
                 from_file, from_rank, to_file, to_rank = parsed
+                pre_move_board = (
+                    board  # snapshot before clicking — used by wait_for_opponent
+                )
                 ok = make_move(page, from_file, from_rank, to_file, to_rank, color)
                 if not ok:
                     print("  ERROR: make_move failed — is the game still active?")
                     break
 
-                # Update board after our move
+                # Show board after our move (may already include an opponent premove)
                 time.sleep(0.3)
                 board = read_board(page)
-                print_board(board)
+                print_board(board, color)
+                print_clocks(page, color)
                 my_turn = False
 
             else:
-                board = wait_for_opponent(page, board)
+                board = wait_for_opponent(page, pre_move_board)
                 print("\n  Opponent moved:")
-                print_board(board)
+                print_board(board, color)
+                print_clocks(page, color)
                 my_turn = True
 
     except KeyboardInterrupt:
