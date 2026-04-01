@@ -13,7 +13,7 @@ The system has two phases:
 ### Phase 1: Game Seeking (Functional)
 
 1. Press the physical **seek button** (GPIO 26)
-2. A headless **Chromium browser** (via Selenium) navigates to chess.com and starts matchmaking
+2. A headless **Chromium browser** (via Playwright) navigates to chess.com and starts matchmaking
 3. LEDs animate a **blue chase** around the board perimeter while searching
 4. Game found — LEDs flash **white** (you play White) or **green** (you play Black)
 5. Press the button again during search to **cancel**
@@ -54,7 +54,7 @@ Phase 2 code is written and working but **not yet integrated** with the game see
 | Col MUX S1 | GPIO 6 | Output |
 | Col MUX S2 | GPIO 13 | Output |
 | MUX Read (SIG) | GPIO 24 | Input |
-| LED Strip DIN | GPIO 18 | Output (PWM0) |
+| LED Strip DIN | GPIO 10 | Output (SPI0 MOSI) |
 | Seek Button | GPIO 26 | Input (pull-up) |
 
 Both MUX S3 and EN pins are hardwired to GND.
@@ -86,6 +86,16 @@ Row 3:  LED 15 ← 14  ← 13  ← 12
 
 For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspberry/WIRING_GUIDE_RPI.txt).
 
+### Hardware Notes
+
+- Hall effect sensors are **active-low**: `gpio_read() == 0` means a magnet is present.
+- After each scan, the multiplexer code deselects both MUXes to channel `5`, which is treated as an unused channel.
+- The board uses serpentine LED indexing: even rows map left-to-right, odd rows right-to-left.
+- `Raspberry/hardware_test.py` and `Raspberry/smart_chess_board.py` are currently **not aligned** on LED topology:
+  - `Raspberry/smart_chess_board.py` assumes **1 LED per square** for a total of 16 LEDs on a 4x4 board.
+  - `Raspberry/hardware_test.py` assumes **2 LEDs per square** for a total of 32 LEDs on a 4x4 board.
+  - Check which file you are editing before changing LED mapping or LED counts.
+
 ## Software Setup
 
 ### Prerequisites
@@ -97,25 +107,30 @@ For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspber
 ### Installation
 
 ```bash
-# Install Chromium and chromedriver
 sudo apt update
-sudo apt install chromium-browser chromium-chromedriver
+pip3 install playwright lgpio rpi-ws281x
+playwright install chromium
+```
 
-# Install Python libraries
-sudo pip3 install selenium pigpio rpi-ws281x
+**Enable SPI** (required for LED strip without root):
 
-# Enable pigpio daemon (auto-start on boot)
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+```bash
+sudo raspi-config nonint do_spi 0
+```
+
+**Permissions** (add your user to the `gpio` and `spi` groups, then reboot):
+
+```bash
+sudo usermod -a -G gpio,spi $USER
+sudo reboot
 ```
 
 ### Verify Installation
 
 ```bash
-sudo python3 -c "import pigpio; pi = pigpio.pi(); print('pigpio OK:', pi.connected); pi.stop()"
-sudo python3 -c "from selenium import webdriver; print('Selenium OK')"
-sudo python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
-chromedriver --version
+python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
+python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ## Usage
@@ -124,20 +139,20 @@ All scripts require **sudo** (GPIO and PWM access).
 
 ### First-Time Login
 
-You only need to do this once. It opens a real Chromium window so you can log in to chess.com — the cookies are saved and reused by the headless browser.
+You only need to do this once. A browser window opens directly — no second terminal needed.
 
 ```bash
-sudo python3 Raspberry/selenium_chesscom/game_seeker.py --first-login
+sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
 ```
 
-1. A `chromium-browser ...` command is printed — run it in a **second terminal**
-2. Log in to chess.com in the browser window
-3. Close the browser, then press **Enter** in the first terminal
+1. A Chromium window opens automatically to chess.com
+2. Log in to chess.com in that window
+3. Press **Enter** in the terminal — the session is saved and the browser relaunches headless
 
 ### Run the Game Seeker
 
 ```bash
-sudo python3 Raspberry/selenium_chesscom/game_seeker.py
+sudo python3 Raspberry/playwright_chesscom/game_seeker.py
 ```
 
 The browser runs headless (invisible). Press the physical button to seek a game.
@@ -164,7 +179,6 @@ Runs an LED chase test followed by a live sensor monitor — useful for verifyin
 |---------|---------|
 | Orange breathing pulse | Connecting — browser launching |
 | Green flash x2 | Connected — logged in and ready |
-| All LEDs off | Idle — waiting for button press |
 | Dim white breathing pulse | Idle (online) — system is running |
 | Blue chase around perimeter | Searching for a game |
 | White flash x3 | Game found — you play as **White** |
@@ -172,23 +186,87 @@ Runs an LED chase test followed by a live sensor monitor — useful for verifyin
 | Red flash x1 | Search cancelled |
 | Red flash x3 | Error — session expired, network issue, or timeout |
 
+## Button Controls
+
+| Action | What happens |
+|--------|-------------|
+| **Press once** (while idle) | Starts searching for a game |
+| **Press once** (while searching) | Cancels the search |
+| **Ctrl+C** (in terminal) | Stops the program, turns off LEDs |
+
 ## Configuration
 
-All settings live in [`Raspberry/selenium_chesscom/chesscom_config.py`](Raspberry/selenium_chesscom/chesscom_config.py):
+All settings live in [`Raspberry/playwright_chesscom/chesscom_config.py`](Raspberry/playwright_chesscom/chesscom_config.py):
 
 - **GPIO pins** — button, LED strip
 - **LED colors and timing** — animation speeds, flash counts, brightness
 - **Time control** — which chess.com time format to select (default: "10 min")
-- **CSS selectors** — DOM selectors for chess.com elements
+- **Locators** — how chess.com UI elements are identified
 
-### Updating CSS Selectors
+### Updating Locators
 
-Chess.com occasionally updates their UI, which breaks the Selenium selectors. To fix:
+`chesscom_config.py` uses Playwright's semantic locator API instead of fragile CSS paths. Elements are found by their **ARIA role + visible text label**, so they survive DOM restructuring as long as the button text doesn't change. Login detection uses a URL check (chess.com redirects to `/login` when unauthenticated) — no DOM element needed.
 
-1. Open chess.com in a browser and go to `/play/online`
-2. Press **F12** to open DevTools
-3. Right-click the target element and select **Inspect**
-4. Update the corresponding entry in the `SELECTORS` dict in `chesscom_config.py`
+If chess.com updates their UI and something stops working, update the corresponding entry in `LOCATORS` in `chesscom_config.py`:
+
+| Locator key | What it targets | How it's matched |
+|-------------|----------------|-----------------|
+| `time_control_show_options` | Button that opens the time control dropdown | `get_by_role("button", name=...)` — update value if label changes |
+| *(TIME_CONTROL)* | The specific time control option (e.g. "10 min") | `get_by_role("button", name=TIME_CONTROL)` — set via `TIME_CONTROL` config |
+| `play_button` | The main "Play" button that starts matchmaking | `get_by_role("button", name=...)` |
+| `cancel_search` | The cancel button that appears while searching | `get_by_role("button", name=...)` |
+| `board_container` | The chess board element (appears when a game starts) | CSS ID `#board-single` — stable, unlikely to change |
+| `board_flipped_class` | CSS class added to the board when you play as Black | Class name string — checked against element's `class` attribute |
+
+To find the right label for a button: open chess.com in a browser, hover over the element — the visible text (or `aria-label` in DevTools) is what goes in `LOCATORS`.
+
+## Session Expired?
+
+Chess.com sessions typically last days/weeks, but if yours expires you'll see:
+
+```
+Session expired! Re-run with --first-login.
+```
+
+Plus 3 red LED flashes. To fix:
+
+1. Run: `sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login`
+2. Log in in the browser window that opens
+3. Press Enter in the terminal
+
+## Troubleshooting
+
+### "Could not open GPIO chip"
+
+The script needs access to `/dev/gpiochip0`. Make sure you're running with `sudo`:
+
+```bash
+sudo python3 game_seeker.py
+```
+
+If it still fails, check that the GPIO device exists: `ls -l /dev/gpiochip0`
+
+### Browser window doesn't appear with `--first-login`
+
+- Make sure the RPi's display is on and the desktop environment is running
+- Try running from the RPi's own terminal (not SSH) if the display server isn't forwarding
+- Check `DISPLAY` environment variable: `echo $DISPLAY` (should be `:0` or similar)
+
+### Chromium crashes on Raspberry Pi
+
+- Check available RAM: `free -h` (Chromium needs ~300MB)
+- Try adding `--disable-gpu` to the browser args in `chesscom_browser.py`
+- Close other running programs to free memory
+
+### "Could not find the Play button" / locators broken
+
+Chess.com updated their website. Check the visible text of the broken button in a browser and update the corresponding value in the `LOCATORS` dict in `chesscom_config.py` — see the [Updating Locators](#updating-locators) section.
+
+### Button not responding
+
+- Verify wiring: one pin of the button to **GPIO 26**, other pin to **GND**
+- Test with: `sudo python3 -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
+- Should print `1` normally and `0` when pressed
 
 ## Scaling to 8x8
 
@@ -211,27 +289,27 @@ An alternative implementation using an **ESP32-WROOM-32** is available in the [`
 
 Upload via Arduino IDE with an ESP32 board selected. See [`ESP32/WIRING_GUIDE.txt`](ESP32/WIRING_GUIDE.txt) for pin assignments (different from RPi).
 
-Note: The ESP32 version handles board scanning only — the chess.com Selenium integration runs exclusively on the Raspberry Pi.
+Note: The ESP32 version handles board scanning only — the chess.com browser integration runs exclusively on the Raspberry Pi.
 
 ## Project Structure
 
 ```
 Smart Chess Board/
 ├── Raspberry/
-│   ├── selenium_chesscom/
-│   │   ├── game_seeker.py        # Main entry point — button + browser + LEDs
-│   │   ├── chesscom_browser.py   # Selenium wrapper — login, seek, detect color
-│   │   └── chesscom_config.py    # All settings — GPIO, LED, selectors, timing
-│   ├── smart_chess_board.py      # Standalone board scanner with piece tracking
-│   ├── hardware_test.py          # LED + sensor diagnostic tool
-│   ├── USER_GUIDE.md             # Detailed user guide
-│   └── WIRING_GUIDE_RPI.txt     # RPi GPIO pinout and wiring reference
+│   ├── playwright_chesscom/         # Active browser backend
+│   │   ├── game_seeker.py           # Main entry point — button + browser + LEDs
+│   │   ├── chesscom_browser.py      # Playwright wrapper — login, seek, detect color
+│   │   └── chesscom_config.py       # All settings — GPIO, LED, selectors, timing
+│   ├── selenium_chesscom/           # Legacy (not actively maintained)
+│   ├── smart_chess_board.py         # Standalone board scanner with piece tracking
+│   ├── hardware_test.py             # LED + sensor diagnostic tool
+│   └── WIRING_GUIDE_RPI.txt        # RPi GPIO pinout and wiring reference
 ├── ESP32/
 │   ├── SmartChessBoard/
-│   │   └── SmartChessBoard.ino   # Full board scanner sketch
+│   │   └── SmartChessBoard.ino      # Full board scanner sketch
 │   ├── HardwareTest/
-│   │   └── HardwareTest.ino      # Diagnostic sketch
-│   └── WIRING_GUIDE.txt         # ESP32 wiring reference
+│   │   └── HardwareTest.ino         # Diagnostic sketch
+│   └── WIRING_GUIDE.txt            # ESP32 wiring reference
 └── README.md
 ```
 
