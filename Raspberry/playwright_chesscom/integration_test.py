@@ -36,7 +36,14 @@ from chesscom_config import (
     LED_INVERT,
     LED_CHANNEL,
 )
-from chesscom_browser import launch, close, is_logged_in, read_board, print_board
+from chesscom_browser import (
+    launch,
+    close,
+    is_logged_in,
+    read_board,
+    print_board,
+    make_move,
+)
 
 # Try to import hardware support — gracefully degrade on non-Pi machines
 try:
@@ -157,12 +164,12 @@ def test_locator(page, locator_key, timeFormat=TIME_CONTROL):
     else:
         val = LOCATORS[locator_key]
 
-    if locator_key == "cancel_search":
-        print("Canceling search...")
-        locator = page.get_by_role("button", name=LOCATORS["cancel_search"])
-        count = locator.count()
-        locator.nth(1).click()
-        return count > 0
+    # if locator_key == "cancel_search":
+    #     print("Canceling search...")
+    #     locator = page.get_by_role("button", name=LOCATORS["cancel_search"])
+    #     count = locator.count()
+    #     locator.nth(1).click()
+    #     return count > 0
 
     if val.startswith("#") or val.startswith("."):
         try:
@@ -296,11 +303,13 @@ def run_tests(page, strip, visible):
             flash_result(strip, ok)
             print()
 
+        print("Making move")
+        make_move(page, 5, 2, 5, 4, "white")
         # Cancel the search so we don't actually start a game
         print("  Cancelling search...")
         try:
-            page.get_by_role("button", name=LOCATORS["cancel_search"]).click()
-            time.sleep(1)
+            page.get_by_role("button", name=LOCATORS["cancel_search"]).nth(1)
+            time.sleep(0.5)
         except Exception:
             print(
                 "  WARNING: Could not cancel search — you may need to cancel manually."

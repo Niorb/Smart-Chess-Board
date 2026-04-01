@@ -65,6 +65,7 @@ VIEWPORT_WIDTH = 1500
 VIEWPORT_HEIGHT = 1000
 GAME_SEARCH_TIMEOUT = 120  # 2 minutes max wait for a match (seconds)
 POLL_INTERVAL = 0.5  # How often to check for game found (seconds)
+MOVE_CLICK_DELAY_S = 0.15  # Pause between source and destination click (seconds)
 
 # =============================================================================
 # TIME CONTROL
@@ -124,7 +125,8 @@ LOCATORS = {
     "cancel_search": "Cancel",
     # The board container element (visible = game has started).
     # Stable chess.com element ID — kept as a CSS selector.
-    "board_container": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > button.resign-button-component > span.resign-button-label",
+    "resign_button": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > button.resign-button-component > span.resign-button-label",
+    "board_container": "#board-single",
     # CSS class on the board element when you play as Black (board is flipped).
     # This is a CLASS NAME, not a full selector.
     "board_flipped_class": "flipped",

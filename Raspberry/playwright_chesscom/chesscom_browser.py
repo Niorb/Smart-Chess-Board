@@ -28,6 +28,7 @@ from chesscom_config import (
     GAME_SEARCH_TIMEOUT,
     POLL_INTERVAL,
     TIME_CONTROL,
+    MOVE_CLICK_DELAY_S,
     LOCATORS,
 )
 
@@ -365,3 +366,54 @@ def print_board(piece_map):
         row_str = " ".join(piece_map[row])
         print(f" {rank}| {row_str}")
     print()
+
+
+# =============================================================================
+# MOVE EXECUTION
+# =============================================================================
+
+
+def make_move(page, from_file, from_rank, to_file, to_rank, color):
+    """
+    Make a move on chess.com by clicking source then destination square.
+
+    Args:
+        page: Playwright Page
+        from_file, from_rank: source square (file 1-8 = a-h, rank 1-8)
+        to_file, to_rank:     destination square (same indexing)
+        color: "white" or "black" — determines board orientation for coordinate math
+
+    Returns: True if both clicks were issued, False on error.
+    """
+    try:
+        box = page.locator(LOCATORS["board_container"]).bounding_box()
+        if box is None:
+            print("ERROR: Board not visible, cannot make move.")
+            return False
+
+        sq_w = box["width"] / 8
+        sq_h = box["height"] / 8
+
+        if color == "white":
+            def to_pixel(file, rank):
+                x = box["x"] + (file - 1) * sq_w + sq_w / 2
+                y = box["y"] + (8 - rank) * sq_h + sq_h / 2
+                return x, y
+        else:
+            def to_pixel(file, rank):
+                x = box["x"] + (8 - file) * sq_w + sq_w / 2
+                y = box["y"] + (rank - 1) * sq_h + sq_h / 2
+                return x, y
+
+        src_x, src_y = to_pixel(from_file, from_rank)
+        dst_x, dst_y = to_pixel(to_file, to_rank)
+
+        page.mouse.click(src_x, src_y)
+        time.sleep(MOVE_CLICK_DELAY_S)
+        page.mouse.click(dst_x, dst_y)
+
+        return True
+
+    except Exception as e:
+        print(f"ERROR: make_move failed ({e})")
+        return False
