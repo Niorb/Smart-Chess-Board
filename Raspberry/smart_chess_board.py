@@ -23,26 +23,24 @@ import time
 import lgpio
 from rpi_ws281x import PixelStrip, Color
 
+from board_hardware import (
+    BOARD_ROWS,
+    BOARD_COLS,
+    ROW_MUX_S0,
+    ROW_MUX_S1,
+    ROW_MUX_S2,
+    COL_MUX_S0,
+    COL_MUX_S1,
+    COL_MUX_S2,
+    MUX_READ_PIN,
+    scan_board,
+    apply_debounce,
+    init_mux_pins,
+)
+
 # =============================================================================
-# CONFIGURATION — change these to scale or rewire
+# CONFIGURATION
 # =============================================================================
-
-# Board dimensions (change both to 8 for full-size board)
-BOARD_ROWS = 4
-BOARD_COLS = 4
-
-# Row MUX select pins (BCM numbering)
-ROW_MUX_S0 = 17
-ROW_MUX_S1 = 27
-ROW_MUX_S2 = 22
-
-# Column MUX select pins (BCM numbering)
-COL_MUX_S0 = 5
-COL_MUX_S1 = 6
-COL_MUX_S2 = 13
-
-# Read pin
-MUX_READ_PIN = 24
 
 # WS2812B LED strip
 LED_PIN        = 10    # GPIO 10 (SPI0 MOSI) — no root needed
@@ -54,7 +52,6 @@ LED_INVERT     = False
 LED_CHANNEL    = 0
 
 # Timing
-MUX_SETTLE_S       = 0.001   # 1ms settle after MUX switch
 SCAN_INTERVAL_S    = 0.1     # 100ms between full board scans
 DEBOUNCE_THRESHOLD = 3       # Consecutive matching reads to accept change
 
@@ -121,56 +118,6 @@ elif BOARD_ROWS == 4 and BOARD_COLS == 4:
     ]
 else:
     raise ValueError(f"Define an INITIAL_POSITION for {BOARD_ROWS}x{BOARD_COLS}")
-
-# =============================================================================
-# MUX CONTROL
-# =============================================================================
-
-def set_mux_channel(h, s0, s1, s2, channel):
-    """Set the 3 address pins of a CD74HC4067 to select a channel (0-7)."""
-    lgpio.gpio_write(h, s0, (channel     ) & 1)
-    lgpio.gpio_write(h, s1, (channel >> 1) & 1)
-    lgpio.gpio_write(h, s2, (channel >> 2) & 1)
-
-# =============================================================================
-# BOARD SCANNING
-# =============================================================================
-
-def scan_board(h, raw_state):
-    """Scan every cell in the matrix and store results in raw_state[][]."""
-    for row in range(BOARD_ROWS):
-        set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, row)
-        lgpio.gpio_read(h, MUX_READ_PIN)  # Dummy read for settling
-        time.sleep(MUX_SETTLE_S)
-
-        for col in range(BOARD_COLS):
-            set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, col)
-            time.sleep(MUX_SETTLE_S)
-            # LOW (0) = magnet detected = piece present (active-low sensor)
-            raw_state[row][col] = (lgpio.gpio_read(h, MUX_READ_PIN) == 0)
-
-    # Deselect both MUXes to an unused channel after scan
-    set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, 5)
-    set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, 5)
-
-# =============================================================================
-# DEBOUNCING
-# =============================================================================
-
-def apply_debounce(raw_state, sensor_state, stable_count):
-    """Apply debouncing. Returns True if any square's state changed."""
-    changed = False
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS):
-            if raw_state[r][c] == sensor_state[r][c]:
-                stable_count[r][c] = 0
-            else:
-                stable_count[r][c] += 1
-                if stable_count[r][c] >= DEBOUNCE_THRESHOLD:
-                    sensor_state[r][c] = raw_state[r][c]
-                    stable_count[r][c] = 0
-                    changed = True
-    return changed
 
 # =============================================================================
 # PIECE TRACKING
@@ -268,10 +215,10 @@ def update_leds(strip, old_sensor, sensor_state):
             if sensor_state[row][col] != old_sensor[row][col]:
                 idx = get_led_index(row, col)
                 if not sensor_state[row][col]:
-                    # Piece LIFTED → blue
+                    # Piece LIFTED -> blue
                     strip.setPixelColor(idx, Color(0, 0, 255))
                 else:
-                    # Piece PLACED → off
+                    # Piece PLACED -> off
                     strip.setPixelColor(idx, Color(0, 0, 0))
                 need_show = True
 
@@ -290,13 +237,8 @@ def main():
         print(f"ERROR: Could not open GPIO chip: {e}")
         return
 
-    # Configure MUX select pins as outputs
-    for pin in [ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2,
-                COL_MUX_S0, COL_MUX_S1, COL_MUX_S2]:
-        lgpio.gpio_claim_output(h, pin)
-
-    # Configure read pin as input
-    lgpio.gpio_claim_input(h, MUX_READ_PIN)
+    # Configure MUX and read pins
+    init_mux_pins(h)
 
     # LED strip setup
     strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
@@ -352,7 +294,7 @@ def main():
 
             # Scan and debounce
             scan_board(h, raw_state)
-            changed = apply_debounce(raw_state, sensor_state, stable_count)
+            changed = apply_debounce(raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD)
 
             if changed:
                 process_changes(old_sensor, sensor_state, piece_map, lifted)

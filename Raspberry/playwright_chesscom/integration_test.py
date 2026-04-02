@@ -28,13 +28,7 @@ from chesscom_config import (
     LOCATORS,
     TIME_CONTROL,
     CHESS_COM_PLAY_URL,
-    LED_PIN,
     NUM_LEDS,
-    LED_BRIGHTNESS,
-    LED_FREQ_HZ,
-    LED_DMA,
-    LED_INVERT,
-    LED_CHANNEL,
 )
 from chesscom_browser import (
     launch,
@@ -44,36 +38,19 @@ from chesscom_browser import (
     print_board,
     make_move,
 )
+from led_helpers import (
+    init_strip,
+    all_leds_off,
+    HAS_LEDS,
+)
 
-# Try to import hardware support — gracefully degrade on non-Pi machines
-try:
-    from rpi_ws281x import PixelStrip, Color
-
-    HAS_LEDS = True
-except ImportError:
-    HAS_LEDS = False
+# Import Color only when hardware is available
+if HAS_LEDS:
+    from rpi_ws281x import Color
 
 # =============================================================================
-# LED HELPERS
+# LED HELPERS (test-specific)
 # =============================================================================
-
-
-def init_strip():
-    if not HAS_LEDS:
-        return None
-    strip = PixelStrip(
-        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
-    )
-    strip.begin()
-    return strip
-
-
-def all_leds_off(strip):
-    if not strip:
-        return
-    for i in range(NUM_LEDS):
-        strip.setPixelColor(i, Color(0, 0, 0))
-    strip.show()
 
 
 def flash_result(strip, success):
@@ -164,13 +141,6 @@ def test_locator(page, locator_key, timeFormat=TIME_CONTROL):
     else:
         val = LOCATORS[locator_key]
 
-    # if locator_key == "cancel_search":
-    #     print("Canceling search...")
-    #     locator = page.get_by_role("button", name=LOCATORS["cancel_search"])
-    #     count = locator.count()
-    #     locator.nth(1).click()
-    #     return count > 0
-
     if val.startswith("#") or val.startswith("."):
         try:
             return page.query_selector(val) is not None
@@ -194,12 +164,6 @@ def run_tests(page, strip, visible):
     print("  Phase 1: Play page locators")
     print("=" * 55)
     print()
-
-    # Navigate to play page
-    # print("Navigating to chess.com/play/online ...")
-    # page.goto(CHESS_COM_PLAY_URL)
-    # page.wait_for_load_state("load")
-    # time.sleep(2)  # let JS settle
 
     for name, phase, desc in LOCATOR_TESTS:
         if phase == "class":
@@ -234,9 +198,6 @@ def run_tests(page, strip, visible):
                 locator.click()
                 timeFormat = locator.inner_text()
                 print(timeFormat)
-                # page.get_by_role(
-                #     "button", name=LOCATORS["time_control_show_options"]
-                # ).click()
                 time.sleep(0.5)
                 ok = test_locator(page, name, timeFormat)
             except Exception:
