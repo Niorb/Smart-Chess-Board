@@ -2,7 +2,7 @@
 led_helpers.py
 
 Shared LED strip helpers for the chess.com Playwright integration.
-Used by game_seeker.py, interactive_game.py, and integration_test.py.
+Used by game_seeker.py and interactive_game.py.
 
 All public functions accept strip=None gracefully (no-op when hardware
 is unavailable), so callers on non-Pi machines work without changes.
@@ -71,12 +71,35 @@ def init_strip():
 # =============================================================================
 
 
-def get_led_index(row, col):
-    """Convert board [row, col] to serpentine LED strip index."""
+def get_led_indices(row, col):
+    """
+    Convert board [row, col] to serpentine LED strip indices.
+    Row 0 (Even, L-R): Skip 1, Col0(3), Col1(2), Skip 1, Col2(2), Col3(3), Skip 2.
+    Row 1 (Odd, R-L): Skip 2, Col3(3), Col2(2), Skip 1, Col1(2), Col0(3).
+    Total 13 LEDs per row after initial skip. Total 53 LEDs.
+    """
+    base = 1 + row * 13
+    
     if row % 2 == 0:
-        return row * BOARD_COLS + col
+        # Even row (L-R)
+        col_offsets = {
+            0: [0, 1, 2],
+            1: [3, 4],
+            2: [6, 7],
+            3: [8, 9, 10]
+        }
+        offsets = col_offsets[col]
     else:
-        return row * BOARD_COLS + (BOARD_COLS - 1 - col)
+        # Odd row (R-L)
+        col_offsets = {
+            3: [2, 3, 4],
+            2: [5, 6],
+            1: [8, 9],
+            0: [10, 11, 12]
+        }
+        offsets = col_offsets[col]
+        
+    return [base + o for o in offsets]
 
 
 def all_leds_off(strip):
@@ -101,19 +124,22 @@ def all_leds_color(strip, rgb):
 def get_perimeter_indices():
     """
     Get LED indices for the board perimeter in order (clockwise).
-    For a 4x4 board: top row L->R, right col top->bottom,
-    bottom row R->L, left col bottom->top.
+    Returns a list of lists (each inner list contains LEDs for one square).
     """
-    indices = []
+    perimeter_squares = []
+    # Top row L->R
     for col in range(BOARD_COLS):
-        indices.append(get_led_index(0, col))
+        perimeter_squares.append(get_led_indices(0, col))
+    # Right col top->bottom
     for row in range(1, BOARD_ROWS):
-        indices.append(get_led_index(row, BOARD_COLS - 1))
+        perimeter_squares.append(get_led_indices(row, BOARD_COLS - 1))
+    # Bottom row R->L
     for col in range(BOARD_COLS - 2, -1, -1):
-        indices.append(get_led_index(BOARD_ROWS - 1, col))
+        perimeter_squares.append(get_led_indices(BOARD_ROWS - 1, col))
+    # Left col bottom->top
     for row in range(BOARD_ROWS - 2, 0, -1):
-        indices.append(get_led_index(row, 0))
-    return indices
+        perimeter_squares.append(get_led_indices(row, 0))
+    return perimeter_squares
 
 
 def flash_leds(strip, rgb, count):
@@ -172,15 +198,16 @@ def animate_search(strip, stop_event):
     """
     if not strip:
         return
-    perimeter = get_perimeter_indices()
+    perimeter_squares = get_perimeter_indices()
     r, g, b = COLOR_SEARCHING
 
     while not stop_event.is_set():
-        for idx in perimeter:
+        for indices in perimeter_squares:
             if stop_event.is_set():
                 break
             all_leds_off(strip)
-            strip.setPixelColor(idx, Color(r, g, b))
+            for idx in indices:
+                strip.setPixelColor(idx, Color(r, g, b))
             strip.show()
             stop_event.wait(SEARCH_CHASE_DELAY_S)
 

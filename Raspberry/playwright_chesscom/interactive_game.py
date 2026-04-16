@@ -136,38 +136,42 @@ def print_clocks(page, color):
     print(f"  Clocks — White: {white}  Black: {black}")
 
 
-def wait_for_opponent(page, pre_move_board):
+def wait_for_opponent(page, pre_move_board, my_color):
     """
     Poll board every 0.5 s until the opponent has moved.
 
-    If pre_move_board is None (playing Black on move 1, before we have moved):
-        Compares against STARTING_POSITION. White's first move changes exactly
-        2 squares, so >= 2 differences means White has played. Using the fixed
-        starting position avoids the race condition where White moves before the
-        first read_board() call would establish a live baseline.
-
-    Otherwise compares against pre_move_board (snapshot taken before our click).
-        Our move = 2 square differences. Opponent's reply = 2 more. Threshold > 2
-        fires only after both moves are reflected, handling premoves and instant
-        replies that land before the next poll.
+    Specifically checks for the presence of an opponent piece on a square
+    where they didn't have one before. This handles castling, en passant,
+    and premoves more robustly than raw square difference counts.
 
     Returns the new board state.
     """
     print("\n  Waiting for opponent's move...")
-    if pre_move_board is None:
-        # Move 1 as Black: compare against the known starting position
-        while True:
-            time.sleep(0.5)
-            current = read_board(page)
-            if count_differences(current, STARTING_POSITION) >= 2:
-                return current
-    else:
-        # Mid-game: wait until both our move and opponent's move are visible
-        while True:
-            time.sleep(0.5)
-            current = read_board(page)
-            if count_differences(current, pre_move_board) > 2:
-                return current
+    opponent_is_white = my_color == "black"
+
+    def has_opponent_moved(old_board, new_board):
+        for r in range(8):
+            for c in range(8):
+                old_p = old_board[r][c]
+                new_p = new_board[r][c]
+                if new_p == ".":
+                    continue
+                # Opponent pieces: Uppercase = White, Lowercase = Black
+                is_opp = new_p.isupper() if opponent_is_white else new_p.islower()
+                if not is_opp:
+                    continue
+                was_opp = old_p.isupper() if (old_p != "." and opponent_is_white) else (old_p != "." and old_p.islower())
+                if is_opp and not was_opp:
+                    return True
+        return False
+
+    baseline = STARTING_POSITION if pre_move_board is None else pre_move_board
+
+    while True:
+        time.sleep(0.5)
+        current = read_board(page)
+        if has_opponent_moved(baseline, current):
+            return current
 
 
 # =============================================================================
@@ -345,7 +349,7 @@ def main():
                 stop_search = threading.Event()
                 search_thread = start_animation(animate_search, strip, stop_search)
 
-                board = wait_for_opponent(page, pre_move_board)
+                board = wait_for_opponent(page, pre_move_board, color)
 
                 stop_animation(stop_search, search_thread)
                 # Single green flash signals the opponent has moved

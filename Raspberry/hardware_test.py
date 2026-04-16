@@ -34,40 +34,51 @@ from board_hardware import (
 )
 
 # =============================================================================
-# CONFIGURATION — hardware_test uses 2 LEDs per square
+# CONFIGURATION — hardware_test uses 53 LEDs
 # =============================================================================
 
-LEDS_PER_SQUARE = 2
-NUM_LEDS       = BOARD_ROWS * BOARD_COLS * LEDS_PER_SQUARE
-LED_PIN        = 10    # GPIO 10 (SPI0 MOSI) — no root needed
-LED_BRIGHTNESS = 50    # 0-255
-LED_FREQ_HZ    = 800000
-LED_DMA        = 10
-LED_INVERT     = False
-LED_CHANNEL    = 0
+NUM_LEDS = 53
+LED_PIN = 10  # GPIO 10 (SPI0 MOSI) — no root needed
+LED_BRIGHTNESS = 50  # 0-255
+LED_FREQ_HZ = 800000
+LED_DMA = 10
+LED_INVERT = False
+LED_CHANNEL = 0
 
 # Timing
-SCAN_INTERVAL_S    = 0.03     # Between full board scans
-DEBOUNCE_THRESHOLD = 3        # Consecutive matching reads to accept change
+SCAN_INTERVAL_S = 0.03  # Between full board scans
+DEBOUNCE_THRESHOLD = 3  # Consecutive matching reads to accept change
 
 # =============================================================================
-# LED HELPERS (2-LED-per-square variant)
+# LED HELPERS
 # =============================================================================
 
 
 def get_led_indices(row, col):
-    """Convert board [row, col] to serpentine LED strip indices (2 LEDs per square)."""
-    leds_per_row = BOARD_COLS * LEDS_PER_SQUARE
+    """
+    Convert board [row, col] to serpentine LED strip indices.
+    Row 0 (Even, L-R): Skip 1, Col0(3), Col1(2), Skip 1, Col2(2), Col3(3), Skip 2.
+    Row 1 (Odd, R-L): Skip 2, Col3(3), Col2(2), Skip 1, Col1(2), Col0(3).
+    Total 13 LEDs per row after initial skip. Total 53 LEDs.
+    """
+    base = 1 + row * 13
+
     if row % 2 == 0:
-        base = row * leds_per_row + col * LEDS_PER_SQUARE
+        # Even row (L-R)
+        col_offsets = {0: [0, 1, 2], 1: [3, 4], 2: [6, 7], 3: [8, 9, 10]}
+        offsets = col_offsets[col]
     else:
-        base = row * leds_per_row + (BOARD_COLS - 1 - col) * LEDS_PER_SQUARE
-    return [base, base + 1]
+        # Odd row (R-L)
+        col_offsets = {3: [2, 3, 4], 2: [5, 6], 1: [8, 9], 0: [10, 11, 12]}
+        offsets = col_offsets[col]
+
+    return [base + o for o in offsets]
 
 
 # =============================================================================
 # TEST 1: LED STRIP CHASE
 # =============================================================================
+
 
 def test_led_chase(strip):
     print("========================================")
@@ -90,7 +101,7 @@ def test_led_chase(strip):
             strip.show()
 
             print(f"  Square (row {row}, col {col})  LEDs {indices[0]},{indices[1]}")
-            time.sleep(0.2)
+            time.sleep(0.1)
 
     # Clear
     for i in range(NUM_LEDS):
@@ -115,9 +126,11 @@ def test_led_chase(strip):
     print("LED chase test DONE.")
     print()
 
+
 # =============================================================================
 # TEST 2: LIVE SENSOR -> LED MONITOR
 # =============================================================================
+
 
 def print_sensor_grid(sensor_state):
     print()
@@ -125,8 +138,9 @@ def print_sensor_grid(sensor_state):
     print(header)
     print("   " + "--" * BOARD_COLS)
     for r in range(BOARD_ROWS):
-        row_str = " ".join("1" if sensor_state[r][c] else "0"
-                           for c in range(BOARD_COLS))
+        row_str = " ".join(
+            "1" if sensor_state[r][c] else "0" for c in range(BOARD_COLS)
+        )
         print(f" {r}| {row_str}")
     print()
 
@@ -140,9 +154,11 @@ def update_leds_from_sensors(strip, sensor_state):
                 strip.setPixelColor(idx, color)
     strip.show()
 
+
 # =============================================================================
 # MAIN
 # =============================================================================
+
 
 def main():
     # Open GPIO chip
@@ -156,14 +172,15 @@ def main():
     init_mux_pins(h)
 
     # LED strip setup
-    strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA,
-                       LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
+    strip = PixelStrip(
+        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
+    )
     strip.begin()
 
     # Initialize state
     sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    raw_state    = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    stable_count = [[0]     * BOARD_COLS for _ in range(BOARD_ROWS)]
+    raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
 
     print()
     print("========================================")
@@ -204,7 +221,9 @@ def main():
     try:
         while True:
             scan_board(h, raw_state)
-            if apply_debounce(raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD):
+            if apply_debounce(
+                raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD
+            ):
                 update_leds_from_sensors(strip, sensor_state)
                 print_sensor_grid(sensor_state)
             time.sleep(SCAN_INTERVAL_S)

@@ -84,8 +84,6 @@ Row 2:  LED 8  →  9  → 10  → 11
 Row 3:  LED 15 ← 14  ← 13  ← 12
 ```
 
-For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspberry/WIRING_GUIDE_RPI.txt).
-
 ### Hardware Notes
 
 - Hall effect sensors are **active-low**: `gpio_read() == 0` means a magnet is present.
@@ -128,21 +126,19 @@ sudo reboot
 ### Verify Installation
 
 ```bash
-python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
-python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
-python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
+python -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
+python -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+python -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ## Usage
-
-All scripts require **sudo** (GPIO and PWM access).
 
 ### First-Time Login
 
 You only need to do this once. A browser window opens directly — no second terminal needed.
 
 ```bash
-sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
+python Raspberry/playwright_chesscom/game_seeker.py --first-login
 ```
 
 1. A Chromium window opens automatically to chess.com
@@ -152,19 +148,19 @@ sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
 ### Run the Game Seeker
 
 ```bash
-sudo python3 Raspberry/playwright_chesscom/game_seeker.py
+python Raspberry/playwright_chesscom/game_seeker.py
 ```
 
 The browser runs headless (invisible). Press the physical button to seek a game.
 
 ### Interactive Terminal Chess
 
-Play a game directly from the terminal with full LED feedback. Requires `sudo` for LED strip access (same as game seeker).
+Play a game directly from the terminal with full LED feedback.
 
 ```bash
-sudo python3 Raspberry/playwright_chesscom/interactive_game.py
-sudo python3 Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
-sudo python3 Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
+python Raspberry/playwright_chesscom/interactive_game.py
+python Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
+python Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
 ```
 
 The script walks through each step with LED feedback:
@@ -184,7 +180,7 @@ Ctrl+C exits cleanly and turns off all LEDs. LEDs are optional — the script ru
 ### Run the Board Scanner
 
 ```bash
-sudo python3 Raspberry/smart_chess_board.py
+python Raspberry/smart_chess_board.py
 ```
 
 Displays a live board state in the terminal and mirrors sensor activity to the LED strip.
@@ -192,7 +188,7 @@ Displays a live board state in the terminal and mirrors sensor activity to the L
 ### Hardware Diagnostics
 
 ```bash
-sudo python3 Raspberry/hardware_test.py
+python Raspberry/hardware_test.py
 ```
 
 Runs an LED chase test followed by a live sensor monitor — useful for verifying wiring.
@@ -256,7 +252,7 @@ Session expired! Re-run with --first-login.
 
 Plus 3 red LED flashes. To fix:
 
-1. Run: `sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login`
+1. Run: `python Raspberry/playwright_chesscom/game_seeker.py --first-login`
 2. Log in in the browser window that opens
 3. Press Enter in the terminal
 
@@ -264,10 +260,10 @@ Plus 3 red LED flashes. To fix:
 
 ### "Could not open GPIO chip"
 
-The script needs access to `/dev/gpiochip0`. Make sure you're running with `sudo`:
+The script needs access to `/dev/gpiochip0`.
 
 ```bash
-sudo python3 game_seeker.py
+python game_seeker.py
 ```
 
 If it still fails, check that the GPIO device exists: `ls -l /dev/gpiochip0`
@@ -291,7 +287,7 @@ Chess.com updated their website. Check the visible text of the broken button in 
 ### Button not responding
 
 - Verify wiring: one pin of the button to **GPIO 26**, other pin to **GND**
-- Test with: `sudo python3 -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
+- Test with: `python -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
 - Should print `1` normally and `0` when pressed
 
 ## Scaling to 8x8

@@ -3,6 +3,8 @@ Raspberry/selenium_chesscom/chesscom_session
 Raspberry/playwright_chesscom/chesscom_session
 Raspberry/chesscom_session
 profile.ps1
+.gemini/
+.agent_db/
 CLAUDE.md
 .claudeignore
 AGENTS.md
