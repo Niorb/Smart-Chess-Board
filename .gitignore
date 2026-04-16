@@ -1,8 +1,7 @@
 Raspberry/test.py
-Raspberry/selenium_chesscom/chesscom_session
-Raspberry/playwright_chesscom/chesscom_session
 chesscom_session/
 profile.ps1
+.codebase_ignore
 .gemini/
 .agent_db/
 CLAUDE.md
