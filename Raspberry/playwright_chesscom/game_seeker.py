@@ -21,43 +21,8 @@ import sys
 import time
 import threading
 import lgpio
-from rpi_ws281x import PixelStrip, Color
 
-from chesscom_config import (
-    # GPIO
-    BUTTON_PIN,
-    BUTTON_DEBOUNCE_MS,
-    # LED
-    BOARD_ROWS,
-    BOARD_COLS,
-    LED_PIN,
-    NUM_LEDS,
-    LED_BRIGHTNESS,
-    LED_FREQ_HZ,
-    LED_DMA,
-    LED_INVERT,
-    LED_CHANNEL,
-    # LED patterns
-    COLOR_CONNECTING,
-    COLOR_CONNECTED,
-    COLOR_SEARCHING,
-    COLOR_FOUND_WHITE,
-    COLOR_FOUND_BLACK,
-    COLOR_CANCELLED,
-    COLOR_ERROR,
-    COLOR_IDLE,
-    IDLE_PULSE_MAX_FRAC,
-    IDLE_PULSE_STEP_S,
-    IDLE_PULSE_STEPS,
-    CONNECT_PULSE_STEP_S,
-    SEARCH_CHASE_DELAY_S,
-    FLASH_ON_S,
-    FLASH_OFF_S,
-    FLASH_COUNT_FOUND,
-    FLASH_COUNT_ERROR,
-    FLASH_COUNT_CANCEL,
-    FLASH_COUNT_CONNECT,
-)
+from chesscom_config import BUTTON_PIN, BUTTON_DEBOUNCE_MS
 from chesscom_browser import (
     launch,
     close,
@@ -68,175 +33,19 @@ from chesscom_browser import (
     cancel_search,
     detect_my_color,
 )
-
-# =============================================================================
-# LED HELPERS
-# =============================================================================
-
-
-def get_led_index(row, col):
-    """Convert board [row, col] to serpentine LED strip index."""
-    if row % 2 == 0:
-        return row * BOARD_COLS + col
-    else:
-        return row * BOARD_COLS + (BOARD_COLS - 1 - col)
-
-
-def all_leds_off(strip):
-    """Turn off all LEDs."""
-    for i in range(NUM_LEDS):
-        strip.setPixelColor(i, Color(0, 0, 0))
-    strip.show()
-
-
-def all_leds_color(strip, rgb):
-    """Set all LEDs to the same color."""
-    r, g, b = rgb
-    for i in range(NUM_LEDS):
-        strip.setPixelColor(i, Color(r, g, b))
-    strip.show()
-
-
-def get_perimeter_indices():
-    """
-    Get LED indices for the board perimeter in order (clockwise).
-    For a 4x4 board: top row L->R, right col top->bottom,
-    bottom row R->L, left col bottom->top.
-    """
-    indices = []
-    for col in range(BOARD_COLS):
-        indices.append(get_led_index(0, col))
-    for row in range(1, BOARD_ROWS):
-        indices.append(get_led_index(row, BOARD_COLS - 1))
-    for col in range(BOARD_COLS - 2, -1, -1):
-        indices.append(get_led_index(BOARD_ROWS - 1, col))
-    for row in range(BOARD_ROWS - 2, 0, -1):
-        indices.append(get_led_index(row, 0))
-    return indices
-
-
-# =============================================================================
-# LED ANIMATIONS
-# =============================================================================
-
-
-def animate_connecting(strip, stop_event):
-    """
-    Orange breathing pulse on all LEDs while the browser launches.
-    Runs in a background thread. Stops when stop_event is set.
-    Fades brightness up and down smoothly for a "heartbeat" effect.
-    """
-    r, g, b = COLOR_CONNECTING
-    steps = 20  # Number of brightness steps per half-cycle
-
-    while not stop_event.is_set():
-        # Fade in
-        for i in range(steps + 1):
-            if stop_event.is_set():
-                break
-            frac = i / steps
-            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
-            for led in range(NUM_LEDS):
-                strip.setPixelColor(led, Color(cr, cg, cb))
-            strip.show()
-            stop_event.wait(CONNECT_PULSE_STEP_S)
-        # Fade out
-        for i in range(steps, -1, -1):
-            if stop_event.is_set():
-                break
-            frac = i / steps
-            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
-            for led in range(NUM_LEDS):
-                strip.setPixelColor(led, Color(cr, cg, cb))
-            strip.show()
-            stop_event.wait(CONNECT_PULSE_STEP_S)
-
-    all_leds_off(strip)
-
-
-def signal_connected(strip):
-    """Flash green to indicate successful connection and login."""
-    flash_leds(strip, COLOR_CONNECTED, FLASH_COUNT_CONNECT)
-
-
-def animate_search(strip, stop_event):
-    """
-    Blue chase around the board perimeter while searching.
-    Runs in a background thread. Stops when stop_event is set.
-    """
-    perimeter = get_perimeter_indices()
-    r, g, b = COLOR_SEARCHING
-
-    while not stop_event.is_set():
-        for idx in perimeter:
-            if stop_event.is_set():
-                break
-            all_leds_off(strip)
-            strip.setPixelColor(idx, Color(r, g, b))
-            strip.show()
-            stop_event.wait(SEARCH_CHASE_DELAY_S)  # Sleep but wake on stop
-
-    all_leds_off(strip)
-
-
-def animate_idle(strip, stop_event):
-    """
-    Very dim white breathing pulse while idle to confirm the system is online.
-    Runs in a background thread. Stops when stop_event is set.
-    """
-    r, g, b = COLOR_IDLE
-
-    while not stop_event.is_set():
-        # Fade in
-        for i in range(IDLE_PULSE_STEPS + 1):
-            if stop_event.is_set():
-                break
-            frac = (i / IDLE_PULSE_STEPS) * IDLE_PULSE_MAX_FRAC
-            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
-            for led in range(NUM_LEDS):
-                strip.setPixelColor(led, Color(cr, cg, cb))
-            strip.show()
-            stop_event.wait(IDLE_PULSE_STEP_S)
-        # Fade out
-        for i in range(IDLE_PULSE_STEPS, -1, -1):
-            if stop_event.is_set():
-                break
-            frac = (i / IDLE_PULSE_STEPS) * IDLE_PULSE_MAX_FRAC
-            cr, cg, cb = int(r * frac), int(g * frac), int(b * frac)
-            for led in range(NUM_LEDS):
-                strip.setPixelColor(led, Color(cr, cg, cb))
-            strip.show()
-            stop_event.wait(IDLE_PULSE_STEP_S)
-
-    all_leds_off(strip)
-
-
-def flash_leds(strip, rgb, count):
-    """Flash all LEDs a given color a given number of times."""
-    for _ in range(count):
-        all_leds_color(strip, rgb)
-        time.sleep(FLASH_ON_S)
-        all_leds_off(strip)
-        time.sleep(FLASH_OFF_S)
-
-
-def signal_game_found(strip, color):
-    """Flash LEDs to indicate game found and assigned color."""
-    if color == "white":
-        flash_leds(strip, COLOR_FOUND_WHITE, FLASH_COUNT_FOUND)
-    else:
-        flash_leds(strip, COLOR_FOUND_BLACK, FLASH_COUNT_FOUND)
-
-
-def signal_cancelled(strip):
-    """Flash LEDs to indicate search cancelled."""
-    flash_leds(strip, COLOR_CANCELLED, FLASH_COUNT_CANCEL)
-
-
-def signal_error(strip):
-    """Flash LEDs to indicate an error."""
-    flash_leds(strip, COLOR_ERROR, FLASH_COUNT_ERROR)
-
+from led_helpers import (
+    init_strip,
+    all_leds_off,
+    signal_connected,
+    signal_game_found,
+    signal_cancelled,
+    signal_error,
+    animate_connecting,
+    animate_search,
+    animate_idle,
+    start_animation,
+    stop_animation,
+)
 
 # =============================================================================
 # MAIN
@@ -272,10 +81,7 @@ def run(first_login=False):
     cb = lgpio.callback(h, BUTTON_PIN, lgpio.FALLING_EDGE, on_button_press)
 
     # ---- LED setup ----
-    strip = PixelStrip(
-        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
-    )
-    strip.begin()
+    strip = init_strip()
     all_leds_off(strip)
 
     # ---- Browser setup ----
@@ -288,17 +94,13 @@ def run(first_login=False):
 
     # Start connecting animation while the browser launches
     stop_connect_anim = threading.Event()
-    connect_thread = threading.Thread(
-        target=animate_connecting, args=(strip, stop_connect_anim), daemon=True
-    )
-    connect_thread.start()
+    connect_thread = start_animation(animate_connecting, strip, stop_connect_anim)
 
     print("Launching browser (headless)...")
     try:
         context, page = launch(headless=True)
     except Exception as e:
-        stop_connect_anim.set()
-        connect_thread.join(timeout=2)
+        stop_animation(stop_connect_anim, connect_thread)
         print(f"ERROR: Browser failed to launch: {e}")
         signal_error(strip)
         cb.cancel()
@@ -317,8 +119,7 @@ def run(first_login=False):
         logged_in = is_logged_in(page)
 
         # Stop connecting animation
-        stop_connect_anim.set()
-        connect_thread.join(timeout=2)
+        stop_animation(stop_connect_anim, connect_thread)
 
         if not logged_in:
             print("ERROR: Not logged in.")
@@ -336,17 +137,13 @@ def run(first_login=False):
         while True:
             # IDLE — start dim pulse to show we're online
             stop_idle = threading.Event()
-            idle_thread = threading.Thread(
-                target=animate_idle, args=(strip, stop_idle), daemon=True
-            )
-            idle_thread.start()
+            idle_thread = start_animation(animate_idle, strip, stop_idle)
 
             button_event.clear()
             button_event.wait()
 
             # Button pressed — stop idle pulse
-            stop_idle.set()
-            idle_thread.join(timeout=2)
+            stop_animation(stop_idle, idle_thread)
 
             # CHECK_LOGIN
             if not is_logged_in(page):
@@ -362,18 +159,14 @@ def run(first_login=False):
 
             # Start search LED animation in background thread
             stop_anim = threading.Event()
-            anim_thread = threading.Thread(
-                target=animate_search, args=(strip, stop_anim), daemon=True
-            )
-            anim_thread.start()
+            anim_thread = start_animation(animate_search, strip, stop_anim)
 
             # Wait for game, allowing cancellation via button
             button_event.clear()
             result = wait_for_game(page, cancel_event=button_event)
 
             # Stop LED animation
-            stop_anim.set()
-            anim_thread.join(timeout=2)
+            stop_animation(stop_anim, anim_thread)
 
             if result is True:
                 # GAME_FOUND

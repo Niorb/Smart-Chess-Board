@@ -27,7 +27,7 @@ The board scanner detects which pieces are on which squares in real time:
 - Lights up squares with LEDs when pieces are lifted or placed
 - Outputs a live board state to the terminal
 
-Phase 2 code is written and working but **not yet integrated** with the game seeker — the end goal is to sync physical board moves to chess.com during a game.
+Phase 2 code is written and working. `interactive_game.py` connects board-reading and move-clicking into a playable terminal session — the remaining step is wiring the physical Hall sensor board state into that loop.
 
 ## Hardware
 
@@ -84,8 +84,6 @@ Row 2:  LED 8  →  9  → 10  → 11
 Row 3:  LED 15 ← 14  ← 13  ← 12
 ```
 
-For detailed wiring instructions, see [`Raspberry/WIRING_GUIDE_RPI.txt`](Raspberry/WIRING_GUIDE_RPI.txt).
-
 ### Hardware Notes
 
 - Hall effect sensors are **active-low**: `gpio_read() == 0` means a magnet is present.
@@ -128,21 +126,19 @@ sudo reboot
 ### Verify Installation
 
 ```bash
-python3 -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
-python3 -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
-python3 -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
+python -c "import lgpio; h = lgpio.gpiochip_open(0); print('lgpio OK'); lgpio.gpiochip_close(h)"
+python -c "from rpi_ws281x import PixelStrip; print('rpi_ws281x OK')"
+python -c "from playwright.sync_api import sync_playwright; print('Playwright OK')"
 ```
 
 ## Usage
-
-All scripts require **sudo** (GPIO and PWM access).
 
 ### First-Time Login
 
 You only need to do this once. A browser window opens directly — no second terminal needed.
 
 ```bash
-sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
+python Raspberry/playwright_chesscom/game_seeker.py --first-login
 ```
 
 1. A Chromium window opens automatically to chess.com
@@ -152,15 +148,39 @@ sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login
 ### Run the Game Seeker
 
 ```bash
-sudo python3 Raspberry/playwright_chesscom/game_seeker.py
+python Raspberry/playwright_chesscom/game_seeker.py
 ```
 
 The browser runs headless (invisible). Press the physical button to seek a game.
 
+### Interactive Terminal Chess
+
+Play a game directly from the terminal with full LED feedback.
+
+```bash
+python Raspberry/playwright_chesscom/interactive_game.py
+python Raspberry/playwright_chesscom/interactive_game.py --visible        # show the browser
+python Raspberry/playwright_chesscom/interactive_game.py --time "10 min"  # pick a time control
+```
+
+The script walks through each step with LED feedback:
+1. **Orange pulse** — browser launching
+2. **Green flash ×2** — logged in
+3. **Dim white pulse** — ready, press Enter to start matchmaking
+4. **Blue chase** — searching for an opponent
+5. **White ×3 / Green ×3** — game found; announces your color
+6. **White:** dim white pulse while you type your move (`e2 e4` format); **white flash ×1** confirms the click
+7. **Blue chase** while waiting for the opponent's reply; **green flash ×1** when they move
+8. Both player clocks are printed after each move
+
+Board orientation follows your color: White sees rank 8 at top (files a–h); Black sees rank 1 at top (files h–a).
+
+Ctrl+C exits cleanly and turns off all LEDs. LEDs are optional — the script runs without them if `rpi_ws281x` is not installed.
+
 ### Run the Board Scanner
 
 ```bash
-sudo python3 Raspberry/smart_chess_board.py
+python Raspberry/smart_chess_board.py
 ```
 
 Displays a live board state in the terminal and mirrors sensor activity to the LED strip.
@@ -168,23 +188,25 @@ Displays a live board state in the terminal and mirrors sensor activity to the L
 ### Hardware Diagnostics
 
 ```bash
-sudo python3 Raspberry/hardware_test.py
+python Raspberry/hardware_test.py
 ```
 
 Runs an LED chase test followed by a live sensor monitor — useful for verifying wiring.
 
 ## LED Reference
 
-| Pattern | Meaning |
-|---------|---------|
-| Orange breathing pulse | Connecting — browser launching |
-| Green flash x2 | Connected — logged in and ready |
-| Dim white breathing pulse | Idle (online) — system is running |
-| Blue chase around perimeter | Searching for a game |
-| White flash x3 | Game found — you play as **White** |
-| Green flash x3 | Game found — you play as **Black** |
-| Red flash x1 | Search cancelled |
-| Red flash x3 | Error — session expired, network issue, or timeout |
+| Pattern | Meaning | Scripts |
+|---------|---------|---------|
+| Orange breathing pulse | Connecting — browser launching | both |
+| Green flash ×2 | Connected — logged in and ready | both |
+| Dim white breathing pulse | Ready / your turn — waiting for input | both |
+| Blue chase around perimeter | Searching for a game / waiting for opponent | both |
+| White flash ×3 | Game found — you play as **White** | both |
+| Green flash ×3 | Game found — you play as **Black** | both |
+| White flash ×1 | Move sent to chess.com | `interactive_game.py` |
+| Green flash ×1 | Opponent has moved | `interactive_game.py` |
+| Red flash ×1 | Search cancelled | `game_seeker.py` |
+| Red flash ×3 | Error — session expired, network issue, or timeout | both |
 
 ## Button Controls
 
@@ -230,7 +252,7 @@ Session expired! Re-run with --first-login.
 
 Plus 3 red LED flashes. To fix:
 
-1. Run: `sudo python3 Raspberry/playwright_chesscom/game_seeker.py --first-login`
+1. Run: `python Raspberry/playwright_chesscom/game_seeker.py --first-login`
 2. Log in in the browser window that opens
 3. Press Enter in the terminal
 
@@ -238,10 +260,10 @@ Plus 3 red LED flashes. To fix:
 
 ### "Could not open GPIO chip"
 
-The script needs access to `/dev/gpiochip0`. Make sure you're running with `sudo`:
+The script needs access to `/dev/gpiochip0`.
 
 ```bash
-sudo python3 game_seeker.py
+python game_seeker.py
 ```
 
 If it still fails, check that the GPIO device exists: `ls -l /dev/gpiochip0`
@@ -265,7 +287,7 @@ Chess.com updated their website. Check the visible text of the broken button in 
 ### Button not responding
 
 - Verify wiring: one pin of the button to **GPIO 26**, other pin to **GND**
-- Test with: `sudo python3 -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
+- Test with: `python -c "import lgpio, time; h=lgpio.gpiochip_open(0); lgpio.gpio_claim_input(h,26,lgpio.SET_PULL_UP); [print(lgpio.gpio_read(h,26)) or time.sleep(0.5) for _ in range(10)]; lgpio.gpiochip_close(h)"`
 - Should print `1` normally and `0` when pressed
 
 ## Scaling to 8x8
@@ -298,7 +320,8 @@ Smart Chess Board/
 ├── Raspberry/
 │   ├── playwright_chesscom/         # Active browser backend
 │   │   ├── game_seeker.py           # Main entry point — button + browser + LEDs
-│   │   ├── chesscom_browser.py      # Playwright wrapper — login, seek, detect color
+│   │   ├── interactive_game.py      # Terminal chess session — seek, move, wait for opponent
+│   │   ├── chesscom_browser.py      # Playwright wrapper — login, seek, read board, make moves
 │   │   └── chesscom_config.py       # All settings — GPIO, LED, selectors, timing
 │   ├── selenium_chesscom/           # Legacy (not actively maintained)
 │   ├── smart_chess_board.py         # Standalone board scanner with piece tracking

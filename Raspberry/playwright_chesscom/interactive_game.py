@@ -3,7 +3,7 @@
 interactive_game.py
 
 Interactive chess session on chess.com via Playwright.
-Walks through browser launch → login check → game start, then runs a
+Walks through browser launch -> login check -> game start, then runs a
 turn-by-turn loop: prompt for moves as White, wait for opponent as Black.
 
 Usage:
@@ -15,8 +15,15 @@ Usage:
 import re
 import sys
 import time
+import threading
 
-from chesscom_config import LOCATORS, CHESS_COM_PLAY_URL, TIME_CONTROL
+from chesscom_config import (
+    LOCATORS,
+    CHESS_COM_PLAY_URL,
+    TIME_CONTROL,
+    COLOR_FOUND_WHITE,
+    COLOR_FOUND_BLACK,
+)
 from chesscom_browser import (
     launch,
     close,
@@ -24,7 +31,21 @@ from chesscom_browser import (
     detect_my_color,
     read_board,
     print_board,
+    read_clocks,
     make_move,
+)
+from led_helpers import (
+    init_strip,
+    all_leds_off,
+    flash_leds,
+    signal_connected,
+    signal_game_found,
+    signal_error,
+    animate_connecting,
+    animate_search,
+    animate_idle,
+    start_animation,
+    stop_animation,
 )
 
 
@@ -37,12 +58,11 @@ def step(prompt):
     """Print a prompt, wait for Enter, then confirm the press."""
     print(f"\n  >> {prompt}")
     input("     [Press Enter to continue]")
-    print("     PRESSED")
 
 
 def parse_square(token):
     """
-    Parse a square like "e2" → (file, rank) as 1-indexed ints.
+    Parse a square like "e2" -> (file, rank) as 1-indexed ints.
     Returns None if the token is invalid.
     """
     token = token.strip().lower()
@@ -56,7 +76,7 @@ def parse_square(token):
 
 def parse_move(text):
     """
-    Parse a move string like "e2 e4" → (from_file, from_rank, to_file, to_rank).
+    Parse a move string like "e2 e4" -> (from_file, from_rank, to_file, to_rank).
     Returns None if the input is not parseable.
     """
     parts = text.strip().split()
@@ -75,11 +95,13 @@ def wait_for_game_start(page, timeout=120):
     Returns True if the game started, False on timeout.
     """
     resign_selector = LOCATORS["resign_button"]
+    resign2_selector = LOCATORS["second_resign_button"]
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             el = page.query_selector(resign_selector)
-            if el and el.is_visible():
+            el2 = page.query_selector(resign2_selector)
+            if (el and el.is_visible()) or (el2 and el2.is_visible()):
                 return True
         except Exception:
             pass
@@ -87,26 +109,69 @@ def wait_for_game_start(page, timeout=120):
     return False
 
 
-def boards_differ(a, b):
-    """Return True if two 8x8 board lists differ."""
-    for r in range(8):
-        for c in range(8):
-            if a[r][c] != b[r][c]:
-                return True
-    return False
+# Standard chess starting position.
+# row 0 = rank 1 (White back rank), row 7 = rank 8 (Black back rank)
+# col 0 = file a, col 7 = file h
+# Uppercase = White, lowercase = Black, '.' = empty
+STARTING_POSITION = [
+    ["R", "N", "B", "Q", "K", "B", "N", "R"],  # rank 1
+    ["P", "P", "P", "P", "P", "P", "P", "P"],  # rank 2
+    [".", ".", ".", ".", ".", ".", ".", "."],  # rank 3
+    [".", ".", ".", ".", ".", ".", ".", "."],  # rank 4
+    [".", ".", ".", ".", ".", ".", ".", "."],  # rank 5
+    [".", ".", ".", ".", ".", ".", ".", "."],  # rank 6
+    ["p", "p", "p", "p", "p", "p", "p", "p"],  # rank 7
+    ["r", "n", "b", "q", "k", "b", "n", "r"],  # rank 8
+]
 
 
-def wait_for_opponent(page, known_board):
+def count_differences(a, b):
+    """Count squares that differ between two 8x8 boards."""
+    return sum(a[r][c] != b[r][c] for r in range(8) for c in range(8))
+
+
+def print_clocks(page, color):
+    """Read and print both player clocks."""
+    white, black = read_clocks(page, color)
+    print(f"  Clocks — White: {white}  Black: {black}")
+
+
+def wait_for_opponent(page, pre_move_board, my_color):
     """
-    Poll board every 0.5 s until it changes (opponent moved).
+    Poll board every 0.5 s until the opponent has moved.
+
+    Specifically checks for the presence of an opponent piece on a square
+    where they didn't have one before. This handles castling, en passant,
+    and premoves more robustly than raw square difference counts.
+
     Returns the new board state.
     """
     print("\n  Waiting for opponent's move...")
+    opponent_is_white = my_color == "black"
+
+    def has_opponent_moved(old_board, new_board):
+        for r in range(8):
+            for c in range(8):
+                old_p = old_board[r][c]
+                new_p = new_board[r][c]
+                if new_p == ".":
+                    continue
+                # Opponent pieces: Uppercase = White, Lowercase = Black
+                is_opp = new_p.isupper() if opponent_is_white else new_p.islower()
+                if not is_opp:
+                    continue
+                was_opp = old_p.isupper() if (old_p != "." and opponent_is_white) else (old_p != "." and old_p.islower())
+                if is_opp and not was_opp:
+                    return True
+        return False
+
+    baseline = STARTING_POSITION if pre_move_board is None else pre_move_board
+
     while True:
         time.sleep(0.5)
-        new_board = read_board(page)
-        if boards_differ(known_board, new_board):
-            return new_board
+        current = read_board(page)
+        if has_opponent_moved(baseline, current):
+            return current
 
 
 # =============================================================================
@@ -134,8 +199,15 @@ def select_time_control(page, time_control):
         return None
 
     try:
-        page.get_by_role("button", name=time_control, exact=True).click(timeout=5000)
+        selector = page.get_by_role("button", name=time_control, exact=True)
+        count = selector.count()
+        print(f"Amount of 10 min: {count}")
+        time.sleep(1)
+        selector.first.click(timeout=20000)
         print(f"  OK — selected time control: {time_control!r}")
+        trigger = page.get_by_text(dropdown_pattern)
+        current_label = trigger.inner_text()
+        print(f"  Dropdown closed (now: {current_label!r})")
         return time_control
     except Exception as e:
         print(f"  FAIL — could not select '{time_control}': {e}")
@@ -162,7 +234,11 @@ def main():
     print(f"  Time control: {time_control}")
     print()
 
-    # --- Browser launch ---
+    strip = init_strip()
+
+    # --- Browser launch — orange connecting pulse ---
+    stop_connect = threading.Event()
+    connect_thread = start_animation(animate_connecting, strip, stop_connect)
     print("  Launching Chromium...")
     context, page = launch(headless=headless)
 
@@ -170,57 +246,74 @@ def main():
         # --- Login check ---
         print("  Checking login...")
         if not is_logged_in(page):
+            stop_animation(stop_connect, connect_thread)
+            signal_error(strip)
             print("  ERROR: Not logged in to chess.com.")
             print("  Run: python3 game_seeker.py --first-login")
             return
+        stop_animation(stop_connect, connect_thread)
+        signal_connected(strip)
+        time.sleep(1)
         print("  OK — logged in.")
-
-        # --- Navigate to play page ---
-        print("  Navigating to play page...")
-        page.goto(CHESS_COM_PLAY_URL)
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-        print(f"  OK — at {page.url}")
-
+        stop2_connect = threading.Event()
+        connect2_thread = start_animation(animate_connecting, strip, stop2_connect)
         # --- Select time control ---
-        step(f"Select time control: {time_control!r}")
+        print(f"  Selecting time control: {time_control!r}")
         selected = select_time_control(page, time_control)
         if selected is None:
             print("  WARNING — proceeding with whatever time control is currently set.")
 
-        # --- Click Play ---
+        stop_animation(stop2_connect, connect2_thread)
+        # --- Click Play — idle pulse while waiting for Enter ---
+        stop_idle = threading.Event()
+        idle_thread = start_animation(animate_idle, strip, stop_idle)
         step("Click Play / Start Game")
+        stop_animation(stop_idle, idle_thread)
+
         try:
             page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
                 timeout=8000
             )
             print("  OK — Play button clicked, searching for a game...")
         except Exception as e:
+            signal_error(strip)
             print(f"  FAIL — could not click Play button: {e}")
             return
 
-        # --- Wait for game to start ---
-        step("Wait for game to start (resign button appears)")
-        print("  Polling for resign button...")
-        if not wait_for_game_start(page):
+        # --- Searching — blue chase while waiting for an opponent ---
+        stop_search = threading.Event()
+        search_thread = start_animation(animate_search, strip, stop_search)
+        print("  Searching for a game...")
+        game_started = wait_for_game_start(page)
+        stop_animation(stop_search, search_thread)
+
+        if not game_started:
+            signal_error(strip)
             print("  FAIL — timed out waiting for game to start.")
             return
         print("  OK — game started!")
 
-        # --- Detect color and initial board ---
+        # --- Detect color and flash the result ---
         color = detect_my_color(page)
+        signal_game_found(strip, color)
         board = read_board(page)
 
         print()
         print(f"  Playing as: {color.upper()}")
-        print_board(board)
+        print_board(board, color)
+        print_clocks(page, color)
 
         # --- Game loop ---
         # White moves first; if we're Black we wait for opponent's first move.
         my_turn = color == "white"
+        pre_move_board = None  # set before each of our moves; None = haven't moved yet
 
         while True:
             if my_turn:
-                # Prompt for move
+                # Dim white idle pulse while waiting for the player to type a move
+                stop_idle = threading.Event()
+                idle_thread = start_animation(animate_idle, strip, stop_idle)
+
                 while True:
                     raw = input("\n  Your move (e.g. e2 e4): ").strip()
                     if not raw:
@@ -231,27 +324,46 @@ def main():
                         continue
                     break
 
+                stop_animation(stop_idle, idle_thread)
+
                 from_file, from_rank, to_file, to_rank = parsed
+                pre_move_board = board  # snapshot before clicking
                 ok = make_move(page, from_file, from_rank, to_file, to_rank, color)
                 if not ok:
+                    signal_error(strip)
                     print("  ERROR: make_move failed — is the game still active?")
                     break
 
-                # Update board after our move
+                # Single white flash confirms the move was sent
+                flash_leds(strip, COLOR_FOUND_WHITE, 1)
+
+                # Show board after our move (may already include an opponent premove)
                 time.sleep(0.3)
                 board = read_board(page)
-                print_board(board)
+                print_board(board, color)
+                print_clocks(page, color)
                 my_turn = False
 
             else:
-                board = wait_for_opponent(page, board)
+                # Blue chase while waiting for opponent
+                stop_search = threading.Event()
+                search_thread = start_animation(animate_search, strip, stop_search)
+
+                board = wait_for_opponent(page, pre_move_board, color)
+
+                stop_animation(stop_search, search_thread)
+                # Single green flash signals the opponent has moved
+                flash_leds(strip, COLOR_FOUND_BLACK, 1)
+
                 print("\n  Opponent moved:")
-                print_board(board)
+                print_board(board, color)
+                print_clocks(page, color)
                 my_turn = True
 
     except KeyboardInterrupt:
         print("\n\n  Interrupted — closing browser.")
     finally:
+        all_leds_off(strip)
         close(context)
         print("  Done.")
 

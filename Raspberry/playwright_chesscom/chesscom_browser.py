@@ -111,7 +111,7 @@ def is_logged_in(page):
 
     Returns: True if logged in, False otherwise.
     """
-    if "chess.com" not in page.url:
+    if CHESS_COM_PLAY_URL not in page.url:
         page.goto(CHESS_COM_PLAY_URL)
         page.wait_for_load_state("domcontentloaded", timeout=60000)
 
@@ -351,21 +351,58 @@ def read_board(page):
     return piece_map
 
 
-def print_board(piece_map):
+def print_board(piece_map, color="white"):
     """
     Print an 8x8 piece_map (from read_board) to the terminal.
 
-    Displays rank 8 at the top, rank 1 at the bottom (White's perspective).
+    color="white" (default): rank 8 at top, file a on left (White's POV).
+    color="black":           rank 1 at top, file h on left (Black's POV).
     Uppercase = White, lowercase = Black, '.' = empty.
     """
     print()
-    print("    a b c d e f g h")
-    print("   ----------------")
-    for rank in range(8, 0, -1):
-        row = rank - 1
-        row_str = " ".join(piece_map[row])
-        print(f" {rank}| {row_str}")
+    if color == "black":
+        print("    h g f e d c b a")
+        print("   ----------------")
+        for rank in range(1, 9):
+            row = rank - 1
+            row_str = " ".join(reversed(piece_map[row]))
+            print(f" {rank}| {row_str}")
+    else:
+        print("    a b c d e f g h")
+        print("   ----------------")
+        for rank in range(8, 0, -1):
+            row = rank - 1
+            row_str = " ".join(piece_map[row])
+            print(f" {rank}| {row_str}")
     print()
+
+
+# =============================================================================
+# CLOCKS
+# =============================================================================
+
+
+def read_clocks(page, color="white"):
+    """
+    Read both player clocks from the current game page.
+
+    color: "white" or "black" — selects the correct selectors for the board orientation.
+    Returns: (white_time, black_time) as strings (e.g. "9:45", "10:00").
+    Returns "?" for any clock that cannot be read.
+    """
+
+    def read_clock(selector):
+        try:
+            el = page.query_selector(selector)
+            if el:
+                return el.inner_text().strip()
+        except Exception:
+            pass
+        return "?"
+
+    white = read_clock(LOCATORS[f"white_clock_{color}"])
+    black = read_clock(LOCATORS[f"black_clock_{color}"])
+    return white, black
 
 
 # =============================================================================
@@ -395,11 +432,13 @@ def make_move(page, from_file, from_rank, to_file, to_rank, color):
         sq_h = box["height"] / 8
 
         if color == "white":
+
             def to_pixel(file, rank):
                 x = box["x"] + (file - 1) * sq_w + sq_w / 2
                 y = box["y"] + (8 - rank) * sq_h + sq_h / 2
                 return x, y
         else:
+
             def to_pixel(file, rank):
                 x = box["x"] + (8 - file) * sq_w + sq_w / 2
                 y = box["y"] + (rank - 1) * sq_h + sq_h / 2
