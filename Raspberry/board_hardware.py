@@ -9,7 +9,22 @@ that is identical across both entry points.
 """
 
 import time
-import lgpio
+try:
+    import lgpio
+except ImportError:
+    class MockLgpio:
+        def gpiochip_open(self, _): return "mock_chip"
+        def gpiochip_close(self, _): pass
+        def gpio_claim_output(self, *args): pass
+        def gpio_claim_input(self, *args): pass
+        def gpio_write(self, *args): pass
+        def gpio_read(self, *args): return 1 # Default HIGH (no magnet)
+        def callback(self, *args): pass
+        error = Exception
+        FALLING_EDGE = 1
+        SET_PULL_UP = 1
+    lgpio = MockLgpio()
+    print("WARNING: lgpio not found. Using MockLgpio.")
 
 # =============================================================================
 # BOARD DIMENSIONS
