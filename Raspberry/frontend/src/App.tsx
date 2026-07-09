@@ -19,6 +19,7 @@ import {
   Cpu, 
   Settings as SettingsIcon,
   AlertTriangle,
+  Terminal,
   Activity,
   Sliders,
   RefreshCw
