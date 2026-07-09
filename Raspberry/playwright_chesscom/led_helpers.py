@@ -74,28 +74,36 @@ def init_strip():
 def get_led_indices(row, col):
     """
     Convert board [row, col] to serpentine LED strip indices.
-    Row 0 (Even, L-R): Skip 1, Col0(3), Col1(2), Skip 1, Col2(2), Col3(3), Skip 2.
-    Row 1 (Odd, R-L): Skip 2, Col3(3), Col2(2), Skip 1, Col1(2), Col0(3).
-    Total 13 LEDs per row after initial skip. Total 53 LEDs.
+    4 rows and 8 columns, 18 LEDs per row.
+    Columns 0 and 5 have 3 LEDs (offsets relative to wiring direction), others have 2.
+    The 3rd LED on those columns is kept off (not returned in offsets).
     """
-    base = 1 + row * 13
+    base = row * 18
     
     if row % 2 == 0:
         # Even row (L-R)
         col_offsets = {
-            0: [0, 1, 2],
+            0: [0, 1],      # offset 2 off
             1: [3, 4],
-            2: [6, 7],
-            3: [8, 9, 10]
+            2: [5, 6],
+            3: [7, 8],
+            4: [9, 10],
+            5: [11, 12],    # offset 13 off
+            6: [14, 15],
+            7: [16, 17]
         }
         offsets = col_offsets[col]
     else:
         # Odd row (R-L)
         col_offsets = {
-            3: [2, 3, 4],
-            2: [5, 6],
-            1: [8, 9],
-            0: [10, 11, 12]
+            7: [0, 1],
+            6: [2, 3],
+            5: [5, 6],      # offset 4 off
+            4: [7, 8],
+            3: [9, 10],
+            2: [11, 12],
+            1: [13, 14],
+            0: [16, 17]     # offset 15 off
         }
         offsets = col_offsets[col]
         

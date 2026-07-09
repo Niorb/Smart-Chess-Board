@@ -164,7 +164,7 @@ def navigate_to_play(page):
         page.wait_for_load_state("load")
 
 
-def seek_game(page):
+def seek_game(page, time_control=None):
     """
     Start searching for a game on chess.com.
     Navigates to the play page, selects the time control, and clicks Play.
@@ -174,20 +174,40 @@ def seek_game(page):
     try:
         navigate_to_play(page)
 
-        # Select time control
-        try:
-            # Open dropdown menu
-            page.get_by_role(
-                "button", name=LOCATORS["time_control_show_options"]
-            ).click(timeout=5000)
-            # Click the option whose visible text matches TIME_CONTROL (e.g. "10 min")
-            page.get_by_role("button", name=TIME_CONTROL, exact=True).click(
-                timeout=5000
-            )
-        except PlaywrightTimeout:
-            print(
-                "WARNING: Could not find time control button, proceeding with default."
-            )
+        if time_control:
+            print(f"Selecting time control: {time_control}")
+            import re
+            dropdown_pattern = re.compile(r"^(?:\d+\s*min|\d+\s*\|\s*\d+)\s*\([^)]*\)$")
+            try:
+                # 1. Click the dropdown trigger
+                trigger = page.get_by_text(dropdown_pattern)
+                trigger.click()
+                time.sleep(0.5)
+                # 2. Click the option (e.g. "10 min", "3 min", "1 min")
+                selector = page.get_by_role("button", name=time_control, exact=True)
+                selector.first.click(timeout=8000)
+                print(f"Selected time control: {time_control}")
+            except Exception as e:
+                print(f"WARNING: Dynamic time control selection failed ({e}), trying standard select...")
+                try:
+                    page.get_by_role("button", name=time_control, exact=True).click(timeout=5000)
+                except Exception:
+                    pass
+        else:
+            # Select default time control from config
+            try:
+                # Open dropdown menu
+                page.get_by_role(
+                    "button", name=LOCATORS["time_control_show_options"]
+                ).click(timeout=5000)
+                # Click the option whose visible text matches TIME_CONTROL (e.g. "10 min")
+                page.get_by_role("button", name=TIME_CONTROL, exact=True).click(
+                    timeout=5000
+                )
+            except PlaywrightTimeout:
+                print(
+                    "WARNING: Could not find time control button, proceeding with default."
+                )
 
         # Click Play
         page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
@@ -398,10 +418,20 @@ def read_clocks(page, color="white"):
                 return el.inner_text().strip()
         except Exception:
             pass
-        return "?"
+        return None
 
-    white = read_clock(LOCATORS[f"white_clock_{color}"])
-    black = read_clock(LOCATORS[f"black_clock_{color}"])
+    white = read_clock(LOCATORS.get(f"white_clock_{color}"))
+    black = read_clock(LOCATORS.get(f"black_clock_{color}"))
+    
+    # Fallback to generic top/bottom containers if specific selectors failed
+    if not white or white == "?":
+        sel = "#board-layout-player-bottom .clock-component" if color == "white" else "#board-layout-player-top .clock-component"
+        white = read_clock(sel) or "?"
+        
+    if not black or black == "?":
+        sel = "#board-layout-player-top .clock-component" if color == "white" else "#board-layout-player-bottom .clock-component"
+        black = read_clock(sel) or "?"
+        
     return white, black
 
 

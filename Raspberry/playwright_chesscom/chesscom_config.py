@@ -10,6 +10,16 @@ right-click elements -> Inspect, and note their CSS selectors.
 """
 
 # =============================================================================
+# SERIAL / ANALOG (ESP32)
+# =============================================================================
+
+SERIAL_PORT = "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0"
+BAUD_RATE = 115200
+ADC_BASELINE = 1550
+ADC_DEVIATION = 150
+ANALOG_THRESHOLD = 2000  # Deprecated, keep for backwards compatibility
+
+# =============================================================================
 # GPIO
 # =============================================================================
 
@@ -21,9 +31,9 @@ BUTTON_DEBOUNCE_MS = 500  # Ignore presses within this window
 # =============================================================================
 
 BOARD_ROWS = 4
-BOARD_COLS = 4
+BOARD_COLS = 8
 LED_PIN = 10  # GPIO 10 (SPI0 MOSI) — no root needed
-NUM_LEDS = 53
+NUM_LEDS = 72
 LED_BRIGHTNESS = 50
 LED_FREQ_HZ = 800000
 LED_DMA = 10

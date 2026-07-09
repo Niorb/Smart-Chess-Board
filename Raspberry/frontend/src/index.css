@@ -19,8 +19,12 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
+  min-height: 100vh;
+  background-color: #020617; /* Matches app slate-950 background */
+}
+
+#root {
+  width: 100%;
   min-height: 100vh;
 }

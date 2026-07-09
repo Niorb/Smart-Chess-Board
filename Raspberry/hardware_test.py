@@ -2,242 +2,314 @@
 """
 hardware_test.py
 
-Standalone test script for the Smart Chess Board hardware on Raspberry Pi 4.
-Runs two tests in sequence:
-  1. LED strip chase — lights each LED one by one, then flashes all.
-  2. Live sensor monitor — scans the Hall sensor matrix and mirrors
-     sensor state onto the LED strip in real time.
-
-Usage:
-  sudo python3 hardware_test.py
-
-Requires: sudo pip3 install lgpio rpi-ws281x
+ULTRA-SIMPLIFIED diagnostic tool for the Smart Chess Board.
+Goal: Keep Row 0 selected, scan Column MUX channels 0-3, calibrate a per-square
+baseline from the first 10 readings, print differences from that baseline, and light
+squares whose absolute difference exceeds the configured threshold.
 """
 
 import time
+
 import lgpio
-from rpi_ws281x import PixelStrip, Color
+import serial
+from rpi_ws281x import Color, PixelStrip
 
 from board_hardware import (
-    BOARD_ROWS,
-    BOARD_COLS,
-    ROW_MUX_S0,
-    ROW_MUX_S1,
-    ROW_MUX_S2,
     COL_MUX_S0,
     COL_MUX_S1,
     COL_MUX_S2,
-    MUX_READ_PIN,
-    scan_board,
-    apply_debounce,
+    COL_MUX_S3,
+    MUX_SETTLE_S,
+    ROW_MUX_S0,
+    ROW_MUX_S1,
+    ROW_MUX_S2,
+    ROW_MUX_S3,
     init_mux_pins,
+    set_mux_channel,
+)
+from playwright_chesscom.chesscom_config import (
+    BAUD_RATE,
+    LED_BRIGHTNESS,
+    LED_CHANNEL,
+    LED_DMA,
+    LED_FREQ_HZ,
+    LED_INVERT,
+    LED_PIN,
+    NUM_LEDS,
+    SERIAL_PORT,
 )
 
-# =============================================================================
-# CONFIGURATION — hardware_test uses 53 LEDs
-# =============================================================================
-
-NUM_LEDS = 53
-LED_PIN = 10  # GPIO 10 (SPI0 MOSI) — no root needed
-LED_BRIGHTNESS = 50  # 0-255
-LED_FREQ_HZ = 800000
-LED_DMA = 10
-LED_INVERT = False
-LED_CHANNEL = 0
-
-# Timing
-SCAN_INTERVAL_S = 0.03  # Between full board scans
-DEBOUNCE_THRESHOLD = 3  # Consecutive matching reads to accept change
-
-# =============================================================================
-# LED HELPERS
-# =============================================================================
+BASELINE_SAMPLES = 10
+DIFF_LED_THRESHOLD = 150
+SCAN_INTERVAL_S = 0.02
+ACTIVE_ROWS = [0, 1, 2, 3]
+ACTIVE_COLS = [0, 1, 2, 3, 4, 5, 6, 7]
+LED_POSITIVE_COLOR = Color(255, 0, 0)  # Red for positive shift (> 150)
+LED_NEGATIVE_COLOR = Color(0, 255, 0)  # Green for negative shift (< -150)
+LED_OFF_COLOR = Color(0, 0, 0)
 
 
 def get_led_indices(row, col):
     """
-    Convert board [row, col] to serpentine LED strip indices.
-    Row 0 (Even, L-R): Skip 1, Col0(3), Col1(2), Skip 1, Col2(2), Col3(3), Skip 2.
-    Row 1 (Odd, R-L): Skip 2, Col3(3), Col2(2), Skip 1, Col1(2), Col0(3).
-    Total 13 LEDs per row after initial skip. Total 53 LEDs.
+    Convert board [row, col] to LED strip indices.
+    4 rows and 8 columns, 18 LEDs per row.
+    Columns 0 and 5 have 3 LEDs, others have 2. The 3rd LED is kept off.
     """
-    base = 1 + row * 13
+    base = row * 18
 
     if row % 2 == 0:
-        # Even row (L-R)
-        col_offsets = {0: [0, 1, 2], 1: [3, 4], 2: [6, 7], 3: [8, 9, 10]}
-        offsets = col_offsets[col]
+        col_offsets = {
+            0: [0, 1],
+            1: [3, 4],
+            2: [5, 6],
+            3: [7, 8],
+            4: [9, 10],
+            5: [11, 12],
+            6: [14, 15],
+            7: [16, 17]
+        }
     else:
-        # Odd row (R-L)
-        col_offsets = {3: [2, 3, 4], 2: [5, 6], 1: [8, 9], 0: [10, 11, 12]}
-        offsets = col_offsets[col]
+        col_offsets = {
+            7: [0, 1],
+            6: [2, 3],
+            5: [5, 6],
+            4: [7, 8],
+            3: [9, 10],
+            2: [11, 12],
+            1: [13, 14],
+            0: [16, 17]
+        }
 
-    return [base + o for o in offsets]
+    return [base + offset for offset in col_offsets[col]]
 
 
-# =============================================================================
-# TEST 1: LED STRIP CHASE
-# =============================================================================
+def init_led_strip():
+    """Initialize the WS2812B LED strip."""
+    strip = PixelStrip(
+        NUM_LEDS,
+        LED_PIN,
+        LED_FREQ_HZ,
+        LED_DMA,
+        LED_INVERT,
+        LED_BRIGHTNESS,
+        LED_CHANNEL,
+    )
+    strip.begin()
+    clear_leds(strip)
+    print(f"LED: Initialized {NUM_LEDS} LEDs on GPIO {LED_PIN}.")
+    return strip
 
 
-def test_led_chase(strip):
-    print("========================================")
-    print("  TEST 1: LED Strip Chase")
-    print("========================================")
-    print()
-    print("Each square's 2 LEDs will light GREEN one by one.")
-    print("Watch the strip and verify the order.")
-    print()
+def set_all_leds(strip, color):
+    """Update every LED in the strip buffer without showing it yet."""
+    if strip is None:
+        return
 
-    for row in range(BOARD_ROWS):
-        for col in range(BOARD_COLS):
-            # Clear all
-            for j in range(NUM_LEDS):
-                strip.setPixelColor(j, Color(0, 0, 0))
-            # Light both LEDs for this square
-            indices = get_led_indices(row, col)
-            for idx in indices:
-                strip.setPixelColor(idx, Color(0, 255, 0))  # Green
-            strip.show()
+    for led_index in range(NUM_LEDS):
+        strip.setPixelColor(led_index, color)
 
-            print(f"  Square (row {row}, col {col})  LEDs {indices[0]},{indices[1]}")
-            time.sleep(0.1)
 
-    # Clear
-    for i in range(NUM_LEDS):
-        strip.setPixelColor(i, Color(0, 0, 0))
+def clear_leds(strip):
+    """Turn off every LED on the strip."""
+    if strip is None:
+        return
+
+    set_all_leds(strip, LED_OFF_COLOR)
     strip.show()
-    time.sleep(0.3)
 
-    # Flash all white 3 times
-    print()
-    print("Flashing all LEDs WHITE 3 times...")
-    for _ in range(3):
-        for i in range(NUM_LEDS):
-            strip.setPixelColor(i, Color(255, 255, 255))
+
+def update_leds_from_differences(strip, differences, previous_frame):
+    """Light active squares green for positive diff and red for negative diff."""
+    if strip is None:
+        return previous_frame
+
+    # Build the whole LED frame in memory, then call show() once only if it changed.
+    # This avoids visible off/on flicker and avoids unnecessarily refreshing WS2812 data.
+    frame = [LED_OFF_COLOR] * NUM_LEDS
+
+    for row in ACTIVE_ROWS:
+        for col_index, diff in enumerate(differences[row]):
+            col = ACTIVE_COLS[col_index]
+            if diff is None or abs(diff) <= DIFF_LED_THRESHOLD:
+                continue
+
+            color = LED_POSITIVE_COLOR if diff > 0 else LED_NEGATIVE_COLOR
+            for led_index in get_led_indices(row, col):
+                if 0 <= led_index < NUM_LEDS:
+                    frame[led_index] = color
+
+    if frame != previous_frame:
+        for led_index, color in enumerate(frame):
+            strip.setPixelColor(led_index, color)
         strip.show()
-        time.sleep(0.3)
 
-        for i in range(NUM_LEDS):
-            strip.setPixelColor(i, Color(0, 0, 0))
-        strip.show()
-        time.sleep(0.3)
-
-    print("LED chase test DONE.")
-    print()
+    return frame
 
 
-# =============================================================================
-# TEST 2: LIVE SENSOR -> LED MONITOR
-# =============================================================================
+def read_sensor(h, ser, row, col):
+    """Read one analog value for a row/column MUX selection."""
+    set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, row)
+    
+    # Swap hardware column index: board column col (0-3) corresponds to hardware column 3-col
+    hw_col = (3 - col) if col < 4 else col
+    set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col)
+    time.sleep(MUX_SETTLE_S)
+
+    ser.write(b"R")
+    line = ser.readline().decode("utf-8", errors="ignore").strip()
+    try:
+        return int(line)
+    except ValueError:
+        return None
 
 
-def print_sensor_grid(sensor_state):
-    print()
-    header = "   " + " ".join(str(c) for c in range(BOARD_COLS))
+def read_active_values(h, ser):
+    """Read all configured active rows/columns into a row-specific dictionary."""
+    values = {}
+    ser.reset_input_buffer()
+
+    for row in ACTIVE_ROWS:
+        values[row] = []
+        for col in ACTIVE_COLS:
+            values[row].append(read_sensor(h, ser, row, col))
+
+    return values
+
+
+def calibrate_baseline(h, ser):
+    """Average the first readings per row/column to create default starting values."""
+    sums = {row: [0] * len(ACTIVE_COLS) for row in ACTIVE_ROWS}
+    counts = {row: [0] * len(ACTIVE_COLS) for row in ACTIVE_ROWS}
+
+    print(f"Calibrating baseline from first {BASELINE_SAMPLES} readings...")
+    print("Keep the board in its default starting state.")
+
+    for sample_num in range(BASELINE_SAMPLES):
+        values = read_active_values(h, ser)
+        for row in ACTIVE_ROWS:
+            for col_index, value in enumerate(values[row]):
+                if value is not None:
+                    sums[row][col_index] += value
+                    counts[row][col_index] += 1
+
+        print(f"Baseline sample {sample_num + 1}/{BASELINE_SAMPLES}: {values}")
+        time.sleep(0.1)
+
+    baseline = {}
+    for row in ACTIVE_ROWS:
+        baseline[row] = []
+        for col_index in range(len(ACTIVE_COLS)):
+            if counts[row][col_index] == 0:
+                baseline[row].append(None)
+            else:
+                baseline[row].append(sums[row][col_index] / counts[row][col_index])
+
+    print(f"Baseline saved: {baseline}")
+    return baseline
+
+
+def build_difference_values(values, baseline):
+    """Subtract the calibrated baseline from the latest readings."""
+    differences = {}
+
+    for row in ACTIVE_ROWS:
+        differences[row] = []
+        for col_index, value in enumerate(values[row]):
+            base_value = baseline[row][col_index]
+            if value is None or base_value is None:
+                differences[row].append(None)
+            else:
+                differences[row].append(round(value - base_value, 1))
+
+    return differences
+
+
+def print_diff_grid(differences):
+    """Print the 4x4 difference grid with aligned columns."""
+    header = "        " + "  ".join(f"  C{c}   " for c in ACTIVE_COLS)
     print(header)
-    print("   " + "--" * BOARD_COLS)
-    for r in range(BOARD_ROWS):
-        row_str = " ".join(
-            "1" if sensor_state[r][c] else "0" for c in range(BOARD_COLS)
-        )
-        print(f" {r}| {row_str}")
+    for row in ACTIVE_ROWS:
+        values = differences.get(row, [])
+        cells = []
+        for v in values:
+            if v is None:
+                cells.append("  None ")
+            else:
+                marker = "*" if abs(v) > DIFF_LED_THRESHOLD else " "
+                cells.append(f"{v:+7.1f}{marker}")
+        print(f"  R{row}  [ " + "  ".join(cells) + " ]")
     print()
-
-
-def update_leds_from_sensors(strip, sensor_state):
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS):
-            indices = get_led_indices(r, c)
-            color = Color(0, 255, 0) if sensor_state[r][c] else Color(0, 0, 0)
-            for idx in indices:
-                strip.setPixelColor(idx, color)
-    strip.show()
-
-
-# =============================================================================
-# MAIN
-# =============================================================================
 
 
 def main():
-    # Open GPIO chip
+    print("--- Hardware Test (4x4 Prototype, Baseline Differences) ---")
+    print(f"Target rows: {ACTIVE_ROWS}, columns: {ACTIVE_COLS}")
+    print(f"LED threshold: abs(diff) > {DIFF_LED_THRESHOLD}")
+
+    strip = None
+    try:
+        strip = init_led_strip()
+    except Exception as e:
+        print(f"ERROR: LED init fail: {e}")
+        print("Continuing without LED output.")
+
+    # 1. Initialize GPIO
     try:
         h = lgpio.gpiochip_open(0)
-    except lgpio.error as e:
-        print(f"ERROR: Could not open GPIO chip: {e}")
+        init_mux_pins(h)
+        # Start on the first active row. The scan loop sets row/column per reading.
+        set_mux_channel(
+            h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, ACTIVE_ROWS[0]
+        )
+        print(f"GPIO: Chip 0 opened. Active rows configured: {ACTIVE_ROWS}.")
+    except Exception as e:
+        print(f"ERROR: GPIO fail: {e}")
         return
 
-    # Configure MUX and read pins
-    init_mux_pins(h)
+    ser = None
+    baseline = None
+    led_frame = None
 
-    # LED strip setup
-    strip = PixelStrip(
-        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
-    )
-    strip.begin()
-
-    # Initialize state
-    sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
-
-    print()
-    print("========================================")
-    print("  Smart Chess Board — Hardware Test")
-    print("  (Raspberry Pi 4 + lgpio)")
-    print("========================================")
-    print()
-    print("Pin assignments (BCM):")
-    print(f"  Row MUX S0-S2 : GPIO {ROW_MUX_S0}, {ROW_MUX_S1}, {ROW_MUX_S2}")
-    print(f"  Col MUX S0-S2 : GPIO {COL_MUX_S0}, {COL_MUX_S1}, {COL_MUX_S2}")
-    print(f"  MUX Read      : GPIO {MUX_READ_PIN}")
-    print(f"  LED strip     : GPIO {LED_PIN}")
-    print()
-
-    # ----- TEST 1: LED Chase -----
-    test_led_chase(strip)
-
-    # ----- TEST 2: Sensor Monitor -----
-    print("========================================")
-    print("  TEST 2: Live Sensor -> LED Monitor")
-    print("========================================")
-    print()
-    print("Place/remove magnets on the board.")
-    print("LED lights GREEN where a magnet is detected.")
-    print("Grid: 1 = magnet, 0 = empty.")
-    print("Press Ctrl+C to exit.")
-    print()
-
-    # Initial scan
-    scan_board(h, raw_state)
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS):
-            sensor_state[r][c] = raw_state[r][c]
-    update_leds_from_sensors(strip, sensor_state)
-    print_sensor_grid(sensor_state)
-
-    # Main loop
     try:
         while True:
-            scan_board(h, raw_state)
-            if apply_debounce(
-                raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD
-            ):
-                update_leds_from_sensors(strip, sensor_state)
-                print_sensor_grid(sensor_state)
+            # 2. Maintain Serial Connection
+            if ser is None:
+                try:
+                    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+                    print(f"Serial: Connected to {SERIAL_PORT} at {BAUD_RATE}")
+                    ser.reset_input_buffer()
+                except Exception as e:
+                    print(f"Serial: Waiting for connection... ({e})")
+                    time.sleep(1)
+                    continue
+
+            # 3. Calibrate once, then print differences from the default baseline.
+            try:
+                if baseline is None:
+                    baseline = calibrate_baseline(h, ser)
+
+                values = read_active_values(h, ser)
+                differences = build_difference_values(values, baseline)
+
+                led_frame = update_leds_from_differences(strip, differences, led_frame)
+
+                print_diff_grid(differences)
+            except Exception as e:
+                print(f"Serial: Read error: {e}")
+                ser.close()
+                ser = None
+
             time.sleep(SCAN_INTERVAL_S)
+
+    except KeyboardInterrupt:
+        print("\nStopping...")
     finally:
-        # Turn off all LEDs
-        for i in range(NUM_LEDS):
-            strip.setPixelColor(i, Color(0, 0, 0))
-        strip.show()
-        lgpio.gpiochip_close(h)
-        print("GPIO chip closed.")
+        clear_leds(strip)
+        if ser:
+            ser.close()
+        if h:
+            lgpio.gpiochip_close(h)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nExiting...")
+    main()

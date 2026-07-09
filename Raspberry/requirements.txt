@@ -3,5 +3,6 @@ uvicorn[standard]>=0.34.0
 playwright>=1.48.0
 lgpio==0.2.2.0
 rpi-ws281x==5.0.0
+pyserial>=3.5
 python-multipart>=0.0.17
 websockets>=14.1
