@@ -30,7 +30,8 @@ export async function updateBoardSettings(
   scanDelay?: number,
   muxSettleMs?: number,
   debounceThreshold?: number,
-  baselineWindowS?: number
+  baselineWindowS?: number,
+  disabledSquares?: number[][]
 ) {
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',
@@ -44,6 +45,7 @@ export async function updateBoardSettings(
       mux_settle_ms: muxSettleMs,
       debounce_threshold: debounceThreshold,
       baseline_window_s: baselineWindowS,
+      disabled_squares: disabledSquares,
     }),
   });
   return response.json();

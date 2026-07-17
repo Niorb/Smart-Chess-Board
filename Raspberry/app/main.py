@@ -87,6 +87,7 @@ class ThresholdSettings(BaseModel):
     mux_settle_ms: Optional[int] = None
     debounce_threshold: Optional[int] = None
     baseline_window_s: Optional[int] = None
+    disabled_squares: Optional[List[List[int]]] = None
 
 @app.get("/api/board/physical")
 async def get_physical_board():
@@ -117,6 +118,8 @@ async def update_board_settings(body: ThresholdSettings):
         settings["debounce_threshold"] = body.debounce_threshold
     if body.baseline_window_s is not None:
         settings["baseline_window_s"] = body.baseline_window_s
+    if body.disabled_squares is not None:
+        settings["disabled_squares"] = body.disabled_squares
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 

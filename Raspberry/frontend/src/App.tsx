@@ -84,6 +84,36 @@ function App() {
     }
   };
 
+  const handleToggleDisableSquare = async (row: number, col: number) => {
+    const currentDisabled = state.physical.disabled_squares ?? [];
+    const exists = currentDisabled.some((sq) => sq[0] === row && sq[1] === col);
+    let nextDisabled: number[][];
+    if (exists) {
+      nextDisabled = currentDisabled.filter((sq) => !(sq[0] === row && sq[1] === col));
+    } else {
+      nextDisabled = [...currentDisabled, [row, col]];
+    }
+    
+    try {
+      const res = await updateBoardSettings(
+        positiveThresh,
+        negativeThresh,
+        rowMode,
+        manualRow,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS,
+        nextDisabled
+      );
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error toggling disabled square:", err);
+    }
+  };
+
   useEffect(() => {
     if (state.status !== 'PLAYING') {
       setSelectedSquare(null);
@@ -101,6 +131,7 @@ function App() {
     mux_settle_ms?: number;
     debounce_threshold?: number;
     baseline_window_s?: number;
+    disabled_squares?: number[][];
   } | null>(null);
   const [positiveThresh, setPositiveThresh] = useState<number>(150);
   const [negativeThresh, setNegativeThresh] = useState<number>(150);
@@ -467,9 +498,14 @@ function App() {
                            
                            const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
                            const isHighlighted = state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol;
+                           const isDisabled = (state.physical.disabled_squares ?? []).some(
+                             (sq) => sq[0] === sensorRow && sq[1] === sensorCol
+                           );
                            
                            let bgClass = 'bg-slate-900/40';
-                           if (isHighlighted) {
+                           if (isDisabled) {
+                             bgClass = 'bg-slate-950/80 border border-slate-900/40 opacity-25 cursor-not-allowed';
+                           } else if (isHighlighted) {
                              bgClass = 'bg-orange-500/80 shadow-[0_0_8px_rgba(249,115,22,0.6)] ring-2 ring-orange-400';
                            } else if (sensorStateVal === 1) {
                              bgClass = 'bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
@@ -480,8 +516,16 @@ function App() {
                            return (
                              <div 
                                key={`sensor-${rIdx}-${cIdx}`}
-                               onClick={() => handleToggleHighlight(sensorRow, sensorCol)}
-                               className={`rounded-sm transition-all duration-300 cursor-pointer hover:bg-slate-800/50 ${bgClass}`}
+                               onClick={() => {
+                                 if (!isDisabled) {
+                                   handleToggleHighlight(sensorRow, sensorCol);
+                                 }
+                               }}
+                               onContextMenu={(e) => {
+                                 e.preventDefault();
+                                 handleToggleDisableSquare(sensorRow, sensorCol);
+                               }}
+                               className={`rounded-sm transition-all duration-300 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/50'} ${bgClass}`}
                              />
                            );
                          })
@@ -652,8 +696,16 @@ function App() {
                           let dotColorClass = 'bg-slate-800';
 
                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol;
+                          const isDisabled = (state.physical.disabled_squares ?? []).some(
+                            (sq) => sq[0] === sensorRow && sq[1] === sensorCol
+                          );
 
-                          if (isHighlighted) {
+                          if (isDisabled) {
+                            cardClass = 'bg-slate-950/20 border-slate-900/40 text-slate-600 opacity-40 line-through';
+                            statusText = 'DISABLED';
+                            statusColorClass = 'text-slate-700';
+                            dotColorClass = 'bg-slate-900';
+                          } else if (isHighlighted) {
                             cardClass = 'bg-orange-950/40 border-orange-500/80 shadow-[0_0_15px_rgba(249,115,22,0.15)] text-orange-100 ring-2 ring-orange-500/40';
                             statusText = 'HIGHLIGHT';
                             statusColorClass = 'text-orange-400';
@@ -672,14 +724,22 @@ function App() {
 
                           // Highlight row selection visually in manual mode
                           let rowDiagClass = isRowActive ? 'opacity-100 scale-100' : 'opacity-25 scale-95 border-slate-900/60 pointer-events-none select-none';
-                          if (rowMode === 'manual' && isRowActive && !isHighlighted) {
+                          if (rowMode === 'manual' && isRowActive && !isHighlighted && !isDisabled) {
                             cardClass += ' ring-2 ring-blue-500/40 bg-slate-900/20';
                           }
 
                           return (
                             <div 
                               key={`debug-sensor-${sensorRow}-${sensorCol}`}
-                              onClick={() => handleToggleHighlight(sensorRow, sensorCol)}
+                              onClick={() => {
+                                if (!isDisabled) {
+                                  handleToggleHighlight(sensorRow, sensorCol);
+                                }
+                              }}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                handleToggleDisableSquare(sensorRow, sensorCol);
+                              }}
                               className={`flex flex-col justify-between p-1.5 rounded-lg border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${rowDiagClass}`}
                             >
                               <div className="flex justify-between items-center w-full">

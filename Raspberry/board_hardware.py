@@ -62,7 +62,8 @@ settings = {
     "scan_delay": 100,
     "mux_settle_us": 100,
     "debounce_threshold": 2,
-    "baseline_window_s": 4
+    "baseline_window_s": 4,
+    "disabled_squares": []
 }
 
 last_sent_settle_us = None
@@ -76,6 +77,8 @@ def load_settings():
                 if "baselines" in loaded and "threshold_positive" in loaded and "threshold_negative" in loaded:
                     if "mux_settle_ms" in loaded and "mux_settle_us" not in loaded:
                         loaded["mux_settle_us"] = min(255, int(loaded["mux_settle_ms"] * 1000))
+                    if "disabled_squares" not in loaded:
+                        loaded["disabled_squares"] = []
                     settings.update(loaded)
                     logger.info(f"Loaded board settings from {SETTINGS_FILE}")
                 else:
@@ -184,7 +187,10 @@ def get_raw_analog_matrix(h, serial_conn):
                 for c in range(BOARD_COLS):
                     val = vals[idx]
                     idx += 1
+                    disabled_squares = settings.get("disabled_squares", [])
                     if row_mode == "manual" and r != manual_row:
+                        matrix[r][c] = settings["baselines"][r][c]
+                    elif [r, c] in disabled_squares or (r, c) in disabled_squares:
                         matrix[r][c] = settings["baselines"][r][c]
                     else:
                         matrix[r][c] = val
@@ -245,6 +251,12 @@ def scan_board(h, serial_conn, raw_state):
                     idx += 1
 
                     if row_mode == "manual" and r != manual_row:
+                        matrix[r][c] = settings["baselines"][r][c]
+                        raw_state[r][c] = 0
+                        continue
+
+                    disabled_squares = settings.get("disabled_squares", [])
+                    if [r, c] in disabled_squares or (r, c) in disabled_squares:
                         matrix[r][c] = settings["baselines"][r][c]
                         raw_state[r][c] = 0
                         continue

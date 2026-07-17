@@ -73,7 +73,8 @@ class BoardStateManager:
             "baselines": settings.get("baselines"),
             "highlighted_square": self.highlighted_square,
             "led_test_active": self.led_test_active,
-            "testing_led_index": self.testing_led_index
+            "testing_led_index": self.testing_led_index,
+            "disabled_squares": settings.get("disabled_squares", [])
         }
 
     def _update_leds(self):

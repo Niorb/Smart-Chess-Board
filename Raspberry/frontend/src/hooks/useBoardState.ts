@@ -11,6 +11,7 @@ export interface BoardState {
     highlighted_square?: [number, number] | null;
     led_test_active?: boolean;
     testing_led_index?: number;
+    disabled_squares?: number[][];
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;
