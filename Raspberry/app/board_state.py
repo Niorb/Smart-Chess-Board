@@ -164,6 +164,17 @@ class BoardStateManager:
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
                     from board_hardware import settings
+                    row_mode = settings.get("row_mode", "auto")
+                    manual_row = settings.get("manual_row", 0)
+                    
+                    # Instantly clear raw state, physical state, and stable counts for inactive rows
+                    for r in range(BOARD_ROWS):
+                        if row_mode == "manual" and r != manual_row:
+                            for c in range(BOARD_COLS):
+                                raw_state[r][c] = 0
+                                self.physical_state[r][c] = 0
+                                stable_count[r][c] = 0
+
                     debounce_thresh = settings.get("debounce_threshold", 2)
                     apply_debounce(
                         raw_state, self.physical_state, stable_count, debounce_thresh
