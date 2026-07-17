@@ -26,7 +26,11 @@ export async function updateBoardSettings(
   positive: number,
   negative: number,
   rowMode?: 'auto' | 'manual',
-  manualRow?: number
+  manualRow?: number,
+  scanDelay?: number,
+  muxSettleMs?: number,
+  debounceThreshold?: number,
+  baselineWindowS?: number
 ) {
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',
@@ -36,6 +40,10 @@ export async function updateBoardSettings(
       threshold_negative: negative,
       row_mode: rowMode,
       manual_row: manualRow,
+      scan_delay: scanDelay,
+      mux_settle_ms: muxSettleMs,
+      debounce_threshold: debounceThreshold,
+      baseline_window_s: baselineWindowS,
     }),
   });
   return response.json();

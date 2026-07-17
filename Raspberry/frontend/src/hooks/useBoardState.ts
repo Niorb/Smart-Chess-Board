@@ -7,6 +7,7 @@ export interface BoardState {
     cols: number;
     grid: number[][];
     adc?: number[][];
+    baselines?: number[][];
     highlighted_square?: [number, number] | null;
     led_test_active?: boolean;
     testing_led_index?: number;

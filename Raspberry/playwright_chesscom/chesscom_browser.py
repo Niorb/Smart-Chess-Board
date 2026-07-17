@@ -30,6 +30,7 @@ from chesscom_config import (
     TIME_CONTROL,
     MOVE_CLICK_DELAY_S,
     LOCATORS,
+    BROWSER_LOCALE,
 )
 
 # Keep a module-level reference so the Playwright context manager stays alive
@@ -57,9 +58,11 @@ def launch(headless=True):
     context = _playwright_instance.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
         headless=headless,
+        locale=BROWSER_LOCALE,
         # executable_path="/usr/bin/chromium",
         viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         args=[
+            f"--lang={BROWSER_LOCALE}",
             "--disable-gpu",  # Essential on Pi, no GPU
             "--disable-extensions",  # Clean, no overhead
             "--no-first-run",  # Skip setup dialogs

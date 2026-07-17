@@ -14,7 +14,7 @@ right-click elements -> Inspect, and note their CSS selectors.
 # =============================================================================
 
 SERIAL_PORT = "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0"
-BAUD_RATE = 115200
+BAUD_RATE = 921600
 ADC_BASELINE = 1550
 ADC_DEVIATION = 150
 ANALOG_THRESHOLD = 2000  # Deprecated, keep for backwards compatibility
@@ -32,13 +32,19 @@ BUTTON_DEBOUNCE_MS = 500  # Ignore presses within this window
 
 BOARD_ROWS = 4
 BOARD_COLS = 8
-LED_PIN = 10  # GPIO 10 (SPI0 MOSI) — no root needed
-NUM_LEDS = 72
+LED_ROWS = 8
+LED_COLS = 8
+LED_PIN = 23  # ESP32 GPIO 23 — first strip
+LED_PIN_2 = 22  # ESP32 GPIO 22 — second strip
+NUM_LEDS = 144
 LED_BRIGHTNESS = 50
 LED_FREQ_HZ = 800000
 LED_DMA = 10
+LED_DMA_2 = 11
 LED_INVERT = False
 LED_CHANNEL = 0
+LED_CHANNEL_2 = 1
+
 
 # =============================================================================
 # LED PATTERNS — (R, G, B) tuples
@@ -76,6 +82,8 @@ VIEWPORT_HEIGHT = 1000
 GAME_SEARCH_TIMEOUT = 120  # 2 minutes max wait for a match (seconds)
 POLL_INTERVAL = 0.5  # How often to check for game found (seconds)
 MOVE_CLICK_DELAY_S = 0.15  # Pause between source and destination click (seconds)
+BROWSER_LOCALE = "en-US"  # Default locale for browser emulation/keyboard layout support
+
 
 # =============================================================================
 # TIME CONTROL

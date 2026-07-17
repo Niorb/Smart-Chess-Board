@@ -14,13 +14,18 @@ import threading
 from chesscom_config import (
     BOARD_ROWS,
     BOARD_COLS,
+    LED_ROWS,
+    LED_COLS,
     NUM_LEDS,
     LED_PIN,
+    LED_PIN_2,
     LED_BRIGHTNESS,
     LED_FREQ_HZ,
     LED_DMA,
+    LED_DMA_2,
     LED_INVERT,
     LED_CHANNEL,
+    LED_CHANNEL_2,
     COLOR_CONNECTING,
     COLOR_CONNECTED,
     COLOR_SEARCHING,
@@ -44,11 +49,70 @@ from chesscom_config import (
 
 # Try to import LED hardware — degrades gracefully on non-Pi machines
 try:
-    from rpi_ws281x import PixelStrip, Color
+    from rpi_ws281x import Color
 
     HAS_LEDS = True
 except ImportError:
     HAS_LEDS = False
+
+    # Fallback implementation so client code doesn't break on non-Pi environments
+    def Color(red, green, blue, white=0):
+        return (white << 24) | (red << 16) | (green << 8) | blue
+
+
+class DualPixelStrip:
+    def __init__(self, num_leds_per_strip):
+        self.num_leds_per_strip = num_leds_per_strip
+        self.ser = None
+        self.current_colors = [0] * (2 * num_leds_per_strip)
+        self.shown_colors = [0] * (2 * num_leds_per_strip)
+
+    def set_serial_conn(self, ser):
+        self.ser = ser
+
+    def begin(self):
+        pass  # ESP32 does its own setup on boot
+
+    def show(self):
+        if not self.ser:
+            return
+        
+        changed = False
+        # Collect updates to send as few packets as possible
+        for idx in range(2 * self.num_leds_per_strip):
+            curr = self.current_colors[idx]
+            if curr != self.shown_colors[idx]:
+                changed = True
+                r = (curr >> 16) & 0xFF
+                g = (curr >> 8) & 0xFF
+                b = curr & 0xFF
+                try:
+                    self.ser.write(bytes([ord('L'), idx, r, g, b]))
+                except Exception as e:
+                    print(f"LED Wrapper: Error writing SetPixelColor command to serial: {e}")
+                self.shown_colors[idx] = curr
+
+        if changed:
+            try:
+                self.ser.write(b'W')
+            except Exception as e:
+                print(f"LED Wrapper: Error writing Show command to serial: {e}")
+
+    def setPixelColor(self, index, color):
+        if 0 <= index < len(self.current_colors):
+            if isinstance(color, int):
+                val = color
+            else:
+                try:
+                    r, g, b = color
+                    val = (r << 16) | (g << 8) | b
+                except Exception:
+                    val = 0
+            self.current_colors[index] = val
+
+    def numPixels(self):
+        return 2 * self.num_leds_per_strip
+
 
 # =============================================================================
 # STRIP INIT
@@ -59,10 +123,8 @@ def init_strip():
     """Initialise and return the LED strip, or None if hardware is unavailable."""
     if not HAS_LEDS:
         return None
-    strip = PixelStrip(
-        NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL
-    )
-    strip.begin()
+    # Initialize the DualPixelStrip wrapper which controls both halves of the board
+    strip = DualPixelStrip(num_leds_per_strip=72)
     return strip
 
 
@@ -74,46 +136,60 @@ def init_strip():
 def get_led_indices(row, col):
     """
     Convert board [row, col] to serpentine LED strip indices.
-    4 rows and 8 columns, 18 LEDs per row.
-    Columns 0 and 5 have 3 LEDs (offsets relative to wiring direction), others have 2.
-    The 3rd LED on those columns is kept off (not returned in offsets).
+    Strip 1: files a-d (col 0-3), starts at a8 (row 7, col 0) and ends at d8 (row 7, col 3).
+    Strip 2: files e-h (col 4-7), starts at h8 (row 7, col 7) and ends at e8 (row 7, col 4).
     """
-    base = row * 18
+    # Mapping offsets inside a single 18-LED column
+    offsets_normal = {
+        0: [0, 1],
+        1: [2, 3],
+        2: [5, 6],
+        3: [7, 8],
+        4: [9, 10],
+        5: [11, 12],
+        6: [14, 15],
+        7: [16, 17]
+    }
     
-    if row % 2 == 0:
-        # Even row (L-R)
-        col_offsets = {
-            0: [0, 1],      # offset 2 off
-            1: [3, 4],
-            2: [5, 6],
-            3: [7, 8],
-            4: [9, 10],
-            5: [11, 12],    # offset 13 off
-            6: [14, 15],
-            7: [16, 17]
-        }
-        offsets = col_offsets[col]
+    if col < 4:
+        # Strip 1 (col 0-3)
+        base = col * 18
+        if col % 2 == 0:
+            # File a, c: starts at top (row 7) and goes down (row 0)
+            offset_idx = 7 - row
+        else:
+            # File b, d: starts at bottom (row 0) and goes up (row 7)
+            offset_idx = row
+        return [base + o for o in offsets_normal[offset_idx]]
     else:
-        # Odd row (R-L)
-        col_offsets = {
-            7: [0, 1],
-            6: [2, 3],
-            5: [5, 6],      # offset 4 off
-            4: [7, 8],
-            3: [9, 10],
-            2: [11, 12],
-            1: [13, 14],
-            0: [16, 17]     # offset 15 off
-        }
-        offsets = col_offsets[col]
-        
-    return [base + o for o in offsets]
+        # Strip 2 (col 4-7)
+        # Relative column from right to left: h=0, g=1, f=2, e=3
+        c_rel = 7 - col
+        base = 72 + c_rel * 18
+        if c_rel % 2 == 0:
+            # File h, f: starts at top (row 7) and goes down (row 0)
+            offset_idx = 7 - row
+        else:
+            # File g, e: starts at bottom (row 0) and goes up (row 7)
+            offset_idx = row
+        return [base + o for o in offsets_normal[offset_idx]]
 
 
 def all_leds_off(strip):
     """Turn off all LEDs."""
     if not strip:
         return
+    if hasattr(strip, 'ser') and strip.ser:
+        try:
+            strip.ser.write(b'C')
+            if hasattr(strip, 'current_colors'):
+                for i in range(len(strip.current_colors)):
+                    strip.current_colors[i] = 0
+                    strip.shown_colors[i] = 0
+            return
+        except Exception:
+            pass
+    # Fallback
     for i in range(NUM_LEDS):
         strip.setPixelColor(i, Color(0, 0, 0))
     strip.show()
@@ -124,6 +200,18 @@ def all_leds_color(strip, rgb):
     if not strip:
         return
     r, g, b = rgb
+    val = (r << 16) | (g << 8) | b
+    if hasattr(strip, 'ser') and strip.ser:
+        try:
+            strip.ser.write(bytes([ord('A'), r, g, b]))
+            if hasattr(strip, 'current_colors'):
+                for i in range(len(strip.current_colors)):
+                    strip.current_colors[i] = val
+                    strip.shown_colors[i] = val
+            return
+        except Exception:
+            pass
+    # Fallback
     for i in range(NUM_LEDS):
         strip.setPixelColor(i, Color(r, g, b))
     strip.show()
@@ -135,17 +223,17 @@ def get_perimeter_indices():
     Returns a list of lists (each inner list contains LEDs for one square).
     """
     perimeter_squares = []
-    # Top row L->R
-    for col in range(BOARD_COLS):
+    # Top row L->R (row 7, col 0 to 7)
+    for col in range(LED_COLS):
+        perimeter_squares.append(get_led_indices(7, col))
+    # Right col top->bottom (row 6 down to 0, col 7)
+    for row in range(LED_ROWS - 2, -1, -1):
+        perimeter_squares.append(get_led_indices(row, LED_COLS - 1))
+    # Bottom row R->L (row 0, col 6 down to 0)
+    for col in range(LED_COLS - 2, -1, -1):
         perimeter_squares.append(get_led_indices(0, col))
-    # Right col top->bottom
-    for row in range(1, BOARD_ROWS):
-        perimeter_squares.append(get_led_indices(row, BOARD_COLS - 1))
-    # Bottom row R->L
-    for col in range(BOARD_COLS - 2, -1, -1):
-        perimeter_squares.append(get_led_indices(BOARD_ROWS - 1, col))
-    # Left col bottom->top
-    for row in range(BOARD_ROWS - 2, 0, -1):
+    # Left col bottom->top (row 1 to 6, col 0)
+    for row in range(1, LED_ROWS - 1):
         perimeter_squares.append(get_led_indices(row, 0))
     return perimeter_squares
 

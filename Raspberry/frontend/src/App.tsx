@@ -99,11 +99,19 @@ function App() {
     threshold_negative: number;
     row_mode?: 'auto' | 'manual';
     manual_row?: number;
+    scan_delay?: number;
+    mux_settle_ms?: number;
+    debounce_threshold?: number;
+    baseline_window_s?: number;
   } | null>(null);
   const [positiveThresh, setPositiveThresh] = useState<number>(150);
   const [negativeThresh, setNegativeThresh] = useState<number>(150);
   const [rowMode, setRowMode] = useState<'auto' | 'manual'>('auto');
   const [manualRow, setManualRow] = useState<number>(0);
+  const [scanDelay, setScanDelay] = useState<number>(100);
+  const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
+  const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
+  const [baselineWindowS, setBaselineWindowS] = useState<number>(4);
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -117,6 +125,10 @@ function App() {
         setNegativeThresh(res.threshold_negative);
         setRowMode(res.row_mode || 'auto');
         setManualRow(res.manual_row !== undefined ? res.manual_row : 0);
+        setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
+        setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
+        setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
+        setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 4);
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -158,6 +170,10 @@ function App() {
         setSettings(res.settings);
         setPositiveThresh(res.settings.threshold_positive);
         setNegativeThresh(res.settings.threshold_negative);
+        setScanDelay(res.settings.scan_delay !== undefined ? res.settings.scan_delay : 100);
+        setMuxSettleMs(res.settings.mux_settle_ms !== undefined ? res.settings.mux_settle_ms : 10);
+        setDebounceThreshold(res.settings.debounce_threshold !== undefined ? res.settings.debounce_threshold : 2);
+        setBaselineWindowS(res.settings.baseline_window_s !== undefined ? res.settings.baseline_window_s : 4);
         setCalibrationStatus("Success: Baselines updated!");
       } else {
         setCalibrationStatus("Failed: " + res.message);
@@ -174,7 +190,16 @@ function App() {
   const handleSaveThresholds = async () => {
     setSettingsStatus("Saving thresholds...");
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow);
+      const res = await updateBoardSettings(
+        positiveThresh,
+        negativeThresh,
+        rowMode,
+        manualRow,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS
+      );
       if (res.status === 'success') {
         setSettings(res.settings);
         setSettingsStatus("Success: Thresholds saved!");
@@ -192,7 +217,7 @@ function App() {
   const handleRowModeChange = async (mode: 'auto' | 'manual') => {
     setRowMode(mode);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, mode, manualRow);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, mode, manualRow, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -204,12 +229,60 @@ function App() {
   const handleManualRowChange = async (row: number) => {
     setManualRow(row);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, row);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, row, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
     } catch (err) {
       console.error("Error activating row:", err);
+    }
+  };
+
+  const handleScanDelayChange = async (val: number) => {
+    setScanDelay(val);
+    try {
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, val, muxSettleMs, debounceThreshold, baselineWindowS);
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error updating scan delay:", err);
+    }
+  };
+
+  const handleMuxSettleMsChange = async (val: number) => {
+    setMuxSettleMs(val);
+    try {
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, val, debounceThreshold, baselineWindowS);
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error updating mux settle delay:", err);
+    }
+  };
+
+  const handleDebounceThresholdChange = async (val: number) => {
+    setDebounceThreshold(val);
+    try {
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, muxSettleMs, val, baselineWindowS);
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error updating debounce threshold:", err);
+    }
+  };
+
+  const handleBaselineWindowSChange = async (val: number) => {
+    setBaselineWindowS(val);
+    try {
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, muxSettleMs, debounceThreshold, val);
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error updating baseline window:", err);
     }
   };
 
@@ -579,6 +652,8 @@ function App() {
                           const sensorCol = rIdx;
                           const rawAdc = state.physical.adc?.[sensorRow]?.[sensorCol] ?? 0;
                           const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
+                          const baseline = state.physical.baselines?.[sensorRow]?.[sensorCol] ?? settings?.baselines?.[sensorRow]?.[sensorCol] ?? 1550;
+                          const diffVal = rawAdc - baseline;
                           
                           // Map col 0-7 to a-h, row 0-3 to 1-4
                           const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorCol];
@@ -635,10 +710,10 @@ function App() {
                                  <span className={`text-xl font-bold font-mono tracking-tight block ${
                                    isHighlighted ? 'text-orange-400' : sensorStateVal === 1 ? 'text-red-400' : sensorStateVal === -1 ? 'text-emerald-400' : 'text-slate-200'
                                  }`}>
-                                    {rawAdc}
+                                    {diffVal > 0 ? `+${diffVal}` : diffVal}
                                  </span>
                                  <span className="text-[9px] text-slate-500 font-mono block mt-0.5">
-                                    Base: {settings?.baselines?.[sensorRow]?.[sensorCol] ?? 1550}
+                                    Base: {baseline}
                                  </span>
                               </div>
 
@@ -668,7 +743,11 @@ function App() {
                    </div>
                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-850/60 flex flex-col gap-2">
                       <div className="flex justify-between text-xs py-1 border-b border-slate-800/40">
-                         <span className="text-slate-400">Normal Idle Baseline</span>
+                         <span className="text-slate-400">Auto-Calibration</span>
+                         <span className="text-emerald-400 font-bold uppercase tracking-wider text-[9px] animate-pulse">Active (4s Avg)</span>
+                      </div>
+                      <div className="flex justify-between text-xs py-1 border-b border-slate-800/40">
+                         <span className="text-slate-400">Normal Idle Value</span>
                          <span className="text-slate-200 font-mono">~1550</span>
                       </div>
                       <div className="flex justify-between text-xs py-1">
@@ -719,7 +798,39 @@ function App() {
                             className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                           />
                        </div>
+                        {/* Debounce Threshold Slider */}
+                        <div className="flex flex-col gap-1.5 text-left">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400">Debounce Threshold (scans)</span>
+                              <span className="font-mono text-purple-400 font-bold">{debounceThreshold}</span>
+                           </div>
+                           <input 
+                             type="range"
+                             min="1"
+                             max="10"
+                             step="1"
+                             value={debounceThreshold}
+                             onChange={(e) => handleDebounceThresholdChange(parseInt(e.target.value))}
+                             className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                           />
+                        </div>
 
+                        {/* Baseline Window Slider */}
+                        <div className="flex flex-col gap-1.5 text-left">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400">Auto-Calib Window (sec)</span>
+                              <span className="font-mono text-amber-400 font-bold">{baselineWindowS}s</span>
+                           </div>
+                           <input 
+                             type="range"
+                             min="1"
+                             max="20"
+                             step="1"
+                             value={baselineWindowS}
+                             onChange={(e) => handleBaselineWindowSChange(parseInt(e.target.value))}
+                             className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                           />
+                        </div>
                        {/* Save Thresholds Button */}
                        <button
                          onClick={handleSaveThresholds}
@@ -738,13 +849,13 @@ function App() {
 
                        {/* Calibrate Button */}
                        <button
-                         onClick={handleCalibrate}
-                         disabled={loading || calibrating || !isConnected}
-                         className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10"
-                       >
-                          <RefreshCw size={14} className={calibrating ? 'animate-spin' : ''} />
-                          {calibrating ? 'Calibrating...' : 'Calibrate Baselines'}
-                       </button>
+                          onClick={handleCalibrate}
+                          disabled={loading || calibrating || !isConnected}
+                          className="w-full bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2"
+                        >
+                           <RefreshCw size={14} className={calibrating ? 'animate-spin' : ''} />
+                           {calibrating ? 'Recalibrating...' : 'Force Recalibrate Baselines'}
+                        </button>
                        
                        {calibrationStatus && (
                           <div className={`text-center text-[11px] font-bold font-mono ${
@@ -823,9 +934,47 @@ function App() {
                                     </button>
                                  ))}
                               </div>
-                              <p className="text-[10px] text-slate-550 mt-1 leading-normal">
+                              <p className="text-[10px] text-slate-550 mt-1 leading-normal border-b border-slate-800/60 pb-3">
                                  Locking a row sets other rows to channel 15 on the MUX. They should read baseline values (~1550).
                               </p>
+
+                              <div className="flex flex-col gap-1.5 mt-2">
+                                 <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Manual Scan Delay</span>
+                                    <span className="font-mono text-blue-400 font-bold">{scanDelay} ms</span>
+                                 </div>
+                                 <input 
+                                   type="range"
+                                   min="50"
+                                   max="2000"
+                                   step="50"
+                                   value={scanDelay}
+                                   onChange={(e) => handleScanDelayChange(parseInt(e.target.value))}
+                                   className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                 />
+                                 <p className="text-[10px] text-slate-550 leading-normal">
+                                    Adjust how long to pause between matrix scans to make tracking raw values easier.
+                                 </p>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-slate-800/40">
+                                 <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">MUX Settle Delay</span>
+                                    <span className="font-mono text-emerald-400 font-bold">{muxSettleMs} ms</span>
+                                 </div>
+                                 <input 
+                                   type="range"
+                                   min="1"
+                                   max="50"
+                                   step="1"
+                                   value={muxSettleMs}
+                                   onChange={(e) => handleMuxSettleMsChange(parseInt(e.target.value))}
+                                   className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                 />
+                                 <p className="text-[10px] text-slate-550 leading-normal">
+                                    Increase this if raw sensor values are unstable or noisy when switching channels.
+                                 </p>
+                              </div>
                            </div>
                         )}
                      </div>

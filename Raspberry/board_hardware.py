@@ -58,8 +58,14 @@ settings = {
     "threshold_positive": 150,
     "threshold_negative": 150,
     "row_mode": "auto",
-    "manual_row": 0
+    "manual_row": 0,
+    "scan_delay": 100,
+    "mux_settle_ms": 2,
+    "debounce_threshold": 2,
+    "baseline_window_s": 4
 }
+
+last_sent_settle_ms = None
 
 def load_settings():
     global settings
@@ -97,6 +103,9 @@ def save_settings():
 # Initial load on module import
 load_settings()
 
+# Dynamic baseline history (timestamp, raw_value, detected_magnet) for each square
+baseline_history = {}
+
 # =============================================================================
 # MUX PIN ASSIGNMENTS (BCM numbering)
 # =============================================================================
@@ -115,30 +124,23 @@ COL_MUX_S3 = 19  # Added S3 for full 16-channel support
 # TIMING
 # =============================================================================
 
-MUX_SETTLE_S = 0.002  # 2ms settling time for faster scanning
+MUX_SETTLE_S = 0.002  # 2ms settling time default for faster scanning
 
 # =============================================================================
 # MUX CONTROL
 # =============================================================================
 
 def set_mux_channel(h, s0, s1, s2, s3, channel):
-    """Set the 4 address pins of a CD74HC4067 to select a channel (0-15)."""
-    if channel < 0 or channel > 15:
-        channel = 15
-    lgpio.gpio_write(h, s0, (channel) & 1)
-    lgpio.gpio_write(h, s1, (channel >> 1) & 1)
-    lgpio.gpio_write(h, s2, (channel >> 2) & 1)
-    lgpio.gpio_write(h, s3, (channel >> 3) & 1)
+    """No-op on the Pi — MUX is now controlled directly by the ESP32 coprocessor."""
+    pass
 
 # =============================================================================
 # GPIO SETUP
 # =============================================================================
 
 def init_mux_pins(h):
-    """Configure MUX select pins as outputs."""
-    for pin in [ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3,
-                COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3]:
-        lgpio.gpio_claim_output(h, pin)
+    """No-op on the Pi — MUX is now controlled directly by the ESP32 coprocessor."""
+    pass
 
 
 # =============================================================================
@@ -147,10 +149,10 @@ def init_mux_pins(h):
 
 def get_raw_analog_matrix(h, serial_conn):
     """
-    Scans the entire 4x8 matrix of analog sensors (mocking columns >= 4).
+    Scans the entire 4x8 matrix of analog sensors using the serial batch scan command.
     """
     matrix = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    if serial_conn is None or h is None:
+    if serial_conn is None:
         return matrix
 
     # Flush any stale serial data
@@ -158,34 +160,31 @@ def get_raw_analog_matrix(h, serial_conn):
 
     row_mode = settings.get("row_mode", "auto")
     manual_row = settings.get("manual_row", 0)
+    settle_ms = settings.get("mux_settle_ms", 2)
 
-    for row in range(BOARD_ROWS):
-        if row_mode == "manual":
-            target_row = manual_row if row == manual_row else 15
-            set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, target_row)
-        else:
-            set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, row)
-        for col in range(BOARD_COLS):
-            if col >= 4:
-                # Last 4 columns are not wired yet, set to baseline value
-                matrix[row][col] = settings["baselines"][row][col]
-                continue
+    global last_sent_settle_ms
+    if last_sent_settle_ms != settle_ms:
+        serial_conn.write(b'S' + bytes([settle_ms]))
+        last_sent_settle_ms = settle_ms
 
-            # Swap hardware column index: board column col (0-3) corresponds to hardware column 3-col
-            hw_col = 3 - col
-            set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col)
-            time.sleep(MUX_SETTLE_S)
+    serial_conn.write(b'B')
 
-            # Request analog value
-            serial_conn.write(b'R')
-            
-            # Read response
-            line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-            if line:
-                try:
-                    matrix[row][col] = int(line)
-                except ValueError:
-                    pass
+    line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
+    if line:
+        try:
+            vals = [int(v) for v in line.split(',')]
+            if len(vals) == 32:
+                idx = 0
+                for r in range(BOARD_ROWS):
+                    for c in range(BOARD_COLS):
+                        val = vals[idx]
+                        idx += 1
+                        if row_mode == "manual" and r != manual_row:
+                            matrix[r][c] = settings["baselines"][r][c]
+                        else:
+                            matrix[r][c] = val
+        except ValueError:
+            pass
 
     return matrix
 
@@ -193,7 +192,7 @@ def get_raw_analog_matrix(h, serial_conn):
 def scan_board(h, serial_conn, raw_state):
     """
     Scans the board and returns both the raw matrix and a dictionary of diagnostic info.
-    Mocking columns >= 4.
+    Reads values as a single batch from the serial interface.
     """
     matrix = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
     diag = {
@@ -202,7 +201,7 @@ def scan_board(h, serial_conn, raw_state):
         "timeouts": 0,
         "errors": 0
     }
-    if serial_conn is None or h is None:
+    if serial_conn is None:
         diag["status"] = "NO_HARDWARE"
         return matrix, diag
 
@@ -211,63 +210,83 @@ def scan_board(h, serial_conn, raw_state):
 
     row_mode = settings.get("row_mode", "auto")
     manual_row = settings.get("manual_row", 0)
+    settle_ms = settings.get("mux_settle_ms", 2)
+    non_mocked_count = (1 if row_mode == "manual" else BOARD_ROWS) * BOARD_COLS
 
-    for r in range(BOARD_ROWS):
-        if row_mode == "manual":
-            target_row = manual_row if r == manual_row else 15
-            set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, target_row)
-        else:
-            set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r)
-        for c in range(BOARD_COLS):
-            if c >= 4:
-                # Last 4 columns are not wired yet, set to baseline and idle
+    global last_sent_settle_ms
+    if last_sent_settle_ms != settle_ms:
+        serial_conn.write(b'S' + bytes([settle_ms]))
+        last_sent_settle_ms = settle_ms
+
+    serial_conn.write(b'B')
+
+    line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
+    if not line:
+        diag["timeouts"] = non_mocked_count
+        diag["status"] = "TIMEOUT"
+        for r in range(BOARD_ROWS):
+            for c in range(BOARD_COLS):
                 matrix[r][c] = settings["baselines"][r][c]
                 raw_state[r][c] = 0
-                continue
+    else:
+        diag["last_raw_line"] = line
+        try:
+            vals = [int(v) for v in line.split(',')]
+            if len(vals) == 32:
+                idx = 0
+                for r in range(BOARD_ROWS):
+                    for c in range(BOARD_COLS):
+                        val = vals[idx]
+                        idx += 1
 
-            # Swap hardware column index: board column c (0-3) corresponds to hardware column 3-c
-            hw_col = 3 - c
-            set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col)
-            time.sleep(MUX_SETTLE_S)
+                        if row_mode == "manual" and r != manual_row:
+                            matrix[r][c] = settings["baselines"][r][c]
+                            raw_state[r][c] = 0
+                            continue
 
-            serial_conn.write(b'R')
-            line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-            
-            if not line:
-                diag["timeouts"] += 1
+                        matrix[r][c] = val
+                        diff = val - settings["baselines"][r][c]
+                        if diff > settings["threshold_positive"]:
+                            raw_state[r][c] = 1
+                        elif diff < -settings["threshold_negative"]:
+                            raw_state[r][c] = -1
+                        else:
+                            raw_state[r][c] = 0
+
+                        # Dynamic baseline moving average update (4 seconds window)
+                        now = time.time()
+                        detected = (raw_state[r][c] != 0)
+                        
+                        if (r, c) not in baseline_history:
+                            baseline_history[(r, c)] = []
+                            
+                        baseline_history[(r, c)].append((now, val, detected))
+                        
+                        # Keep only entries within the last baseline_window_s seconds
+                        baseline_window = settings.get("baseline_window_s", 4)
+                        baseline_history[(r, c)] = [entry for entry in baseline_history[(r, c)] if now - entry[0] <= baseline_window]
+                        any_magnet = any(entry[2] for entry in baseline_history[(r, c)])
+                        
+                        if not any_magnet and len(baseline_history[(r, c)]) > 0:
+                            avg_val = sum(entry[1] for entry in baseline_history[(r, c)]) / len(baseline_history[(r, c)])
+                            settings["baselines"][r][c] = int(avg_val)
             else:
-                diag["last_raw_line"] = line
-                try:
-                    val = int(line)
-                    matrix[r][c] = val
-                except ValueError:
-                    diag["errors"] += 1
-                    
-            diff = matrix[r][c] - settings["baselines"][r][c]
-            if diff > settings["threshold_positive"]:
-                raw_state[r][c] = 1   # Positive shift (grows > baseline + threshold)
-            elif diff < -settings["threshold_negative"]:
-                raw_state[r][c] = -1  # Negative shift (drops < baseline - threshold)
-            else:
-                raw_state[r][c] = 0   # Idle
-
-    non_mocked_count = BOARD_ROWS * 4
-    if diag["timeouts"] == non_mocked_count:
-        diag["status"] = "TIMEOUT"
-    elif diag["errors"] > 0:
-        diag["status"] = "PARSE_ERROR"
+                diag["errors"] = non_mocked_count
+                diag["status"] = "PARSE_ERROR"
+        except ValueError:
+            diag["errors"] = non_mocked_count
+            diag["status"] = "PARSE_ERROR"
 
     return matrix, diag
 
 
 def calibrate_board(h, serial_conn, samples=5):
     """
-    Reads multiple samples per channel, averages them, and saves the new values
-    as baselines in the persistent configuration settings.
-    Mocking columns >= 4.
+    Reads multiple samples per channel using the batch scan command, averages them, 
+    and saves the new values as baselines in the persistent configuration settings.
     """
-    if serial_conn is None or h is None:
-        logger.error("Calibration failed: serial or GPIO chip not initialized.")
+    if serial_conn is None:
+        logger.error("Calibration failed: serial connection not initialized.")
         return False
         
     sums = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
@@ -276,28 +295,28 @@ def calibrate_board(h, serial_conn, samples=5):
     # Flush buffers
     serial_conn.reset_input_buffer()
     
+    settle_ms = settings.get("mux_settle_ms", 2)
+    global last_sent_settle_ms
+    if last_sent_settle_ms != settle_ms:
+        serial_conn.write(b'S' + bytes([settle_ms]))
+        last_sent_settle_ms = settle_ms
+
     for s in range(samples):
-        for r in range(BOARD_ROWS):
-            set_mux_channel(h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r)
-            for c in range(BOARD_COLS):
-                if c >= 4:
-                    sums[r][c] += 1550
-                    counts[r][c] += 1
-                    continue
-                # Swap hardware column index: board column c (0-3) corresponds to hardware column 3-c
-                hw_col = 3 - c
-                set_mux_channel(h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col)
-                time.sleep(MUX_SETTLE_S)
-                
-                serial_conn.write(b'R')
-                line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                if line:
-                    try:
-                        val = int(line)
-                        sums[r][c] += val
-                        counts[r][c] += 1
-                    except ValueError:
-                        pass
+        serial_conn.write(b'B')
+        line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
+        if line:
+            try:
+                vals = [int(v) for v in line.split(',')]
+                if len(vals) == 32:
+                    idx = 0
+                    for r in range(BOARD_ROWS):
+                        for c in range(BOARD_COLS):
+                            val = vals[idx]
+                            idx += 1
+                            sums[r][c] += val
+                            counts[r][c] += 1
+            except ValueError:
+                pass
         time.sleep(0.02)
         
     # Update baselines
@@ -310,7 +329,6 @@ def calibrate_board(h, serial_conn, samples=5):
                 else:
                     settings["baselines"][r][c] = 1550
             else:
-                # Fallback if no scans succeeded for this channel
                 settings["baselines"][r][c] = 1550
                     
     save_settings()

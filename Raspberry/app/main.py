@@ -83,6 +83,10 @@ class ThresholdSettings(BaseModel):
     threshold_negative: int
     row_mode: Optional[str] = None
     manual_row: Optional[int] = None
+    scan_delay: Optional[int] = None
+    mux_settle_ms: Optional[int] = None
+    debounce_threshold: Optional[int] = None
+    baseline_window_s: Optional[int] = None
 
 @app.get("/api/board/physical")
 async def get_physical_board():
@@ -105,6 +109,14 @@ async def update_board_settings(body: ThresholdSettings):
         settings["row_mode"] = body.row_mode
     if body.manual_row is not None:
         settings["manual_row"] = body.manual_row
+    if body.scan_delay is not None:
+        settings["scan_delay"] = body.scan_delay
+    if body.mux_settle_ms is not None:
+        settings["mux_settle_ms"] = body.mux_settle_ms
+    if body.debounce_threshold is not None:
+        settings["debounce_threshold"] = body.debounce_threshold
+    if body.baseline_window_s is not None:
+        settings["baseline_window_s"] = body.baseline_window_s
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 

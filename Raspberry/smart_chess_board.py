@@ -15,7 +15,6 @@ Requires: pip3 install pyserial rpi-ws281x lgpio
 import time
 import math
 import serial
-from rpi_ws281x import PixelStrip, Color
 
 from board_hardware import (
     BOARD_ROWS,
@@ -36,6 +35,7 @@ from playwright_chesscom.chesscom_config import (
     LED_INVERT,
     LED_CHANNEL,
 )
+from playwright_chesscom.led_helpers import init_strip, get_led_indices, Color
 
 # Timing
 SCAN_INTERVAL_S = 2.0  # 0.5Hz (2 seconds between full board scans)
@@ -166,39 +166,48 @@ def get_valid_moves(piece, row, col, piece_map):
                 nr, nc = nr+dr, nc+dc
     return moves
 
-def get_led_indices(row, col):
-    base = row * 18
-    if row % 2 == 0:
-        col_offsets = {0: [0, 1], 1: [3, 4], 2: [5, 6], 3: [7, 8], 4: [9, 10], 5: [11, 12], 6: [14, 15], 7: [16, 17]}
-    else:
-        col_offsets = {7: [0, 1], 6: [2, 3], 5: [5, 6], 4: [7, 8], 3: [9, 10], 2: [11, 12], 1: [13, 14], 0: [16, 17]}
-    return [base + o for o in col_offsets[col]]
+# get_led_indices imported from led_helpers
 
 def update_leds(strip, piece_map, lifted):
+    from board_hardware import settings
+    row_mode = settings.get("row_mode", "auto")
+    manual_row = settings.get("manual_row", 0)
+
     for i in range(NUM_LEDS): strip.setPixelColor(i, Color(0, 0, 0))
     if lifted["piece"] != ".":
-        for idx in get_led_indices(lifted["row"], lifted["col"]): strip.setPixelColor(idx, Color(0, 0, 255))
+        if row_mode != "manual" or lifted["row"] == manual_row:
+            for idx in get_led_indices(lifted["row"], lifted["col"]): strip.setPixelColor(idx, Color(0, 0, 255))
         if lifted.get("capture_square"):
             cap_r, cap_c = lifted["capture_square"]
-            color = Color(255, 0, 0) if int(time.time() * 4) % 2 == 0 else Color(0, 0, 0)
-            for idx in get_led_indices(cap_r, cap_c): strip.setPixelColor(idx, color)
+            if row_mode != "manual" or cap_r == manual_row:
+                color = Color(255, 0, 0) if int(time.time() * 4) % 2 == 0 else Color(0, 0, 0)
+                for idx in get_led_indices(cap_r, cap_c): strip.setPixelColor(idx, color)
         else:
             for r, c, is_cap in get_valid_moves(lifted["piece"], lifted["row"], lifted["col"], piece_map):
+                if row_mode == "manual" and r != manual_row:
+                    continue
                 color = Color(255, 0, 0) if is_cap else Color(0, 255, 0)
                 for idx in get_led_indices(r, c): strip.setPixelColor(idx, color)
     strip.show()
 
 def check_board_setup(h, ser, strip, initial_position):
+    from board_hardware import settings
     raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
     sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
     stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
     print("\nBOARD SETUP MODE - Place pieces according to target grid.")
     try:
         while True:
+            row_mode = settings.get("row_mode", "auto")
+            manual_row = settings.get("manual_row", 0)
             scan_board(h, ser, raw_state)
             apply_debounce(raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD)
             setup_ok, pulse = True, 0.65 + 0.35 * math.sin(time.time() * 5)
             for r in range(BOARD_ROWS):
+                if row_mode == "manual" and r != manual_row:
+                    for c in range(BOARD_COLS):
+                        for idx in get_led_indices(r, c): strip.setPixelColor(idx, Color(0, 0, 0))
+                    continue
                 for c in range(BOARD_COLS):
                     target, present = initial_position[r][c], sensor_state[r][c]
                     required = (target != ".")
@@ -228,15 +237,16 @@ def main():
         return
 
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1.0)
         print(f"Connected to ESP32 on {SERIAL_PORT}")
     except Exception as e:
         print(f"ERROR: Could not open serial port {SERIAL_PORT}: {e}")
         lgpio.gpiochip_close(h)
         return
 
-    strip = PixelStrip(NUM_LEDS, LED_PIN, LED_FREQ_HZ, LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
-    strip.begin()
+    strip = init_strip()
+    if strip is not None:
+        strip.set_serial_conn(ser)
 
     sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
     raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]

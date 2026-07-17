@@ -6,27 +6,27 @@ An intelligent, physical chess board that detects piece movements using Hall eff
 
 - **Core Tech:** Raspberry Pi 4 (Python), ESP32 (Arduino/C++), Playwright, lgpio, rpi-ws281x.
 - **Hardware Architecture:** 
-  - **Sensors:** Digital Hall effect sensors (active-low) in a matrix.
-  - **Multiplexing:** Two CD74HC4067 16-channel MUX chips route row/column selection to minimize GPIO usage.
-  - **Feedback:** WS2812B LED strip in a **serpentine layout** provides visual cues (e.g., your turn, game found).
-  - **Scalability:** Designed for a 4x4 prototype but scales to 8x8 with hardware changes only.
+  - **Sensors:** Analog Hall effect sensors in a matrix.
+  - **Coprocessor:** ESP32 WROOM acts as an **on-demand ADC** over Serial.
+  - **Multiplexing:** Two CD74HC4067 16-channel MUX chips controlled by **Raspberry Pi GPIO** for row/column selection.
+  - **Synchronization:** Serial Request-Response protocol (Pi triggers read, ESP32 replies with value) ensures perfectly synchronized matrix scanning.
+  - **Feedback:** WS2812B LED strip in a **serpentine layout** provides visual cues.
 - **Key Features:**
   - Headless Chess.com matchmaking and gameplay.
-  - Real-time physical board scanning and piece identity tracking.
-  - Physical button for seeking/canceling games.
-  - LED animations for game states (Connecting, Searching, White/Black found).
+  - Real-time physical board scanning via serial coprocessor.
+  - Software-defined analog thresholding for piece detection.
 
 ## Directory Structure
 
 - `Raspberry/`: Primary Python implementation for RPi 4.
   - `playwright_chesscom/`: Browser automation and integration.
-    - `chesscom_config.py`: **Central configuration** for GPIO, LEDs, and UI selectors.
-    - `game_seeker.py`: Main entry point for matching via physical button.
-    - `interactive_game.py`: Terminal-based chess session with full LED feedback.
-    - `interactive_game_light.py`: (Experimental) Lightweight alternative using Lightpanda; currently incompatible with Chess.com due to missing WebWorker support.
-  - `smart_chess_board.py`: Standalone board scanner and piece tracker.
-  - `hardware_test.py`: Diagnostic tool for LEDs and sensors.
-- `ESP32/`: Alternative implementation for board scanning (no browser integration).
+    - `chesscom_config.py`: **Central configuration** (GPIO, LEDs, Serial, Analog Thresholds).
+  - `board_hardware.py`: Serial-based board scanner.
+  - `smart_chess_board.py`: Standalone board scanner and piece tracker (Analog).
+  - `hardware_test.py`: Diagnostic tool for LEDs and raw analog sensor values.
+  - `legacy/`: Preservation of the old digital-switch implementation.
+  - `ESP32_firmware/`: Arduino firmware for the analog coprocessor.
+- `ESP32/`: (Deprecated) Old board scanning logic.
 
 ## Development Conventions
 
