@@ -13,8 +13,6 @@ import {
 import { 
   Play, 
   XCircle, 
-  Wifi, 
-  WifiOff, 
   Grid3X3, 
   Cpu, 
   Settings as SettingsIcon,
