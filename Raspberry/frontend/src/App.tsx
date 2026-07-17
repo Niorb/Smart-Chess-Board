@@ -678,8 +678,8 @@ function App() {
                    <div className="grid grid-cols-8 gap-2 w-full">
                       {Array(8).fill(null).map((_, rIdx) => {
                         return Array(8).fill(null).map((_, cIdx) => {
-                          const sensorCol = cIdx;
-                          const sensorRow = rIdx;
+                          const sensorCol = 7 - rIdx;
+                          const sensorRow = cIdx;
                           const rawAdc = state.physical.adc?.[sensorCol]?.[sensorRow] ?? 0;
                           const sensorStateVal = state.physical.grid?.[sensorCol]?.[sensorRow] ?? 0;
                           const baseline = state.physical.baselines?.[sensorCol]?.[sensorRow] ?? settings?.baselines?.[sensorCol]?.[sensorRow] ?? 1550;
