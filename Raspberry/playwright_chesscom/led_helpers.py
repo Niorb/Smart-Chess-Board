@@ -168,12 +168,9 @@ def init_strip():
 def get_led_indices(col, row):
     """
     Convert board [col, row] to serpentine LED strip indices.
-    Strip 1: files a-d (row 0-3), starts at a8 (col 7, row 0) and ends at d8 (col 7, row 3).
+    Strip 1: files a-d (row 0-3), starts at a1 (col 0, row 0) and ends at d8 (col 7, row 3).
     Strip 2: files e-h (row 4-7), starts at h8 (col 7, row 7) and ends at e8 (col 7, row 4).
     """
-    # Invert the rank index (vertical flip)
-    col = 7 - col
-
     # Keep the original values for Strip 2 vertical mapping
     orig_col = col
     orig_row = row
@@ -207,11 +204,11 @@ def get_led_indices(col, row):
         # Strip 1 (row 0-3)
         base = orig_row * 18
         if orig_row % 2 == 0:
-            # File a, c: starts at top (Rank 8 / col 7) and goes down (Rank 1 / col 0)
-            offset_idx = 7 - orig_col
-        else:
-            # File b, d: starts at bottom (Rank 1 / col 0) and goes up (Rank 8 / col 7)
+            # File a, c: starts at bottom (Rank 1 / col 0) and goes up (Rank 8 / col 7)
             offset_idx = orig_col
+        else:
+            # File b, d: starts at top (Rank 8 / col 7) and goes down (Rank 1 / col 0)
+            offset_idx = 7 - orig_col
         return [base + o for o in offsets_strip1[offset_idx]]
     else:
         # Strip 2 (row 4-7)
