@@ -161,7 +161,7 @@ def init_strip():
     if not HAS_LEDS:
         return None
     # Initialize the DualPixelStrip wrapper which controls both halves of the board
-    strip = DualPixelStrip(num_leds_per_strip=72)
+    strip = DualPixelStrip(num_leds_per_strip=76)
     return strip
 
 
@@ -181,8 +181,8 @@ def get_led_indices(row, col):
     row = 7 - col
     col = 7 - orig_row
 
-    # Mapping offsets inside a single 18-LED column
-    offsets_normal = {
+    # Mapping offsets inside a single 18-LED column for Strip 1 (files a-d / col 0-3)
+    offsets_strip1 = {
         0: [0, 1],
         1: [2, 3],
         2: [5, 6],
@@ -191,6 +191,19 @@ def get_led_indices(row, col):
         5: [11, 12],
         6: [14, 15],
         7: [16, 17]
+    }
+    
+    # Mapping offsets inside a single 19-LED column for Strip 2 (files e-h / col 4-7)
+    # Starting at start of LED ribbon: (2 LEDs, 3 LEDs, 2 LEDs, 2 LEDs + 1 OFF, 2 LEDs, 2 LEDs, 3 LEDs, 2 LEDs)
+    offsets_strip2 = {
+        0: [0, 1],
+        1: [2, 3, 4],
+        2: [5, 6],
+        3: [7, 8],  # index 9 is skipped (OFF)
+        4: [10, 11],
+        5: [12, 13],
+        6: [14, 15, 16],
+        7: [17, 18]
     }
     
     if col < 4:
@@ -202,19 +215,19 @@ def get_led_indices(row, col):
         else:
             # File b, d: starts at bottom (row 0) and goes up (row 7)
             offset_idx = row
-        return [base + o for o in offsets_normal[offset_idx]]
+        return [base + o for o in offsets_strip1[offset_idx]]
     else:
         # Strip 2 (col 4-7)
         # Relative column from right to left: h=0, g=1, f=2, e=3
         c_rel = 7 - col
-        base = 72 + c_rel * 18
+        base = 72 + c_rel * 19
         if c_rel % 2 == 0:
             # File h, f: starts at top (row 7) and goes down (row 0)
             offset_idx = 7 - row
         else:
             # File g, e: starts at bottom (row 0) and goes up (row 7)
             offset_idx = row
-        return [base + o for o in offsets_normal[offset_idx]]
+        return [base + o for o in offsets_strip2[offset_idx]]
 
 
 def all_leds_off(strip):
