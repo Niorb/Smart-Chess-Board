@@ -127,7 +127,7 @@ def read_active_values(h, ser):
             import struct
             vals = struct.unpack('<64H', data)
             idx = 0
-            for r in range(8):
+            for r in reversed(range(8)):
                 for c in range(8):
                     val = vals[idx]
                     idx += 1
