@@ -175,10 +175,6 @@ def get_led_indices(col, row):
     orig_col = col
     orig_row = row
 
-    # Adjust for 180-degree board rotation and transposition (anti-diagonal symmetry) for Strip 1
-    col_trans = 7 - row
-    row_trans = 7 - orig_col
-
     # Mapping offsets inside a single 18-LED column for Strip 1 (files a-d / row 0-3)
     offsets_strip1 = {
         0: [0, 1],
@@ -206,13 +202,13 @@ def get_led_indices(col, row):
     
     if orig_row < 4:
         # Strip 1 (row 0-3)
-        base = row_trans * 18
-        if row_trans % 2 == 0:
-            # File a, c: starts at top (col 7) and goes down (col 0)
-            offset_idx = 7 - col_trans
+        base = orig_row * 18
+        if orig_row % 2 == 0:
+            # File a, c: starts at top (Rank 8 / col 7) and goes down (Rank 1 / col 0)
+            offset_idx = 7 - orig_col
         else:
-            # File b, d: starts at bottom (col 0) and goes up (col 7)
-            offset_idx = col_trans
+            # File b, d: starts at bottom (Rank 1 / col 0) and goes up (Rank 8 / col 7)
+            offset_idx = orig_col
         return [base + o for o in offsets_strip1[offset_idx]]
     else:
         # Strip 2 (row 4-7)

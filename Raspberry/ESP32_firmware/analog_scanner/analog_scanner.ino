@@ -10,8 +10,8 @@
 
 #include <Adafruit_NeoPixel.h>
 
-#define PIN_STRIP1 23
-#define PIN_STRIP2 22
+#define PIN_STRIP1 22
+#define PIN_STRIP2 23
 #define NUM_LEDS_PER_STRIP 76
 
 Adafruit_NeoPixel strip1(NUM_LEDS_PER_STRIP, PIN_STRIP1, NEO_GRB + NEO_KHZ800);
