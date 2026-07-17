@@ -251,11 +251,15 @@ def main():
                 if baseline is None:
                     baseline = calibrate_baseline(h, ser)
 
+                t0 = time.time()
                 values = read_active_values(h, ser)
+                t1 = time.time()
                 differences = build_difference_values(values, baseline)
-
+                t2 = time.time()
                 led_frame = update_leds_from_differences(strip, differences, led_frame)
+                t3 = time.time()
 
+                print(f"[TIMING] Read: {t1-t0:.4f}s | Diff: {t2-t1:.4f}s | LED: {t3-t2:.4f}s")
                 print_diff_grid(differences)
             except Exception as e:
                 print(f"Serial: Read error: {e}")
