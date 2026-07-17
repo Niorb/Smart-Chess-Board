@@ -171,6 +171,9 @@ def get_led_indices(col, row):
     Strip 1: files a-d (row 0-3), starts at a8 (col 7, row 0) and ends at d8 (col 7, row 3).
     Strip 2: files e-h (row 4-7), starts at h8 (col 7, row 7) and ends at e8 (col 7, row 4).
     """
+    # Invert the rank index (vertical flip)
+    col = 7 - col
+
     # Keep the original values for Strip 2 vertical mapping
     orig_col = col
     orig_row = row

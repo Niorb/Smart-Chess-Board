@@ -98,7 +98,7 @@ def update_leds_from_differences(strip, differences, previous_frame):
                 continue
 
             color = LED_POSITIVE_COLOR if diff > 0 else LED_NEGATIVE_COLOR
-            for led_index in get_led_indices(col, row):
+            for led_index in get_led_indices(row, col):
                 if 0 <= led_index < NUM_LEDS:
                     frame[led_index] = color
 
