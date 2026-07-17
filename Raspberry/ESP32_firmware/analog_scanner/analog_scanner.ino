@@ -31,14 +31,34 @@ const int COL_MUX_S1 = 17;
 const int COL_MUX_S2 = 18;
 const int COL_MUX_S3 = 19;
 
-// Default MUX settling delay (ms)
-int settle_ms = 2;
+// Default MUX settling delay (us)
+int settle_us = 100;
+
+// Cache to store the latest raw scan of the 4x8 matrix
+uint16_t latest_scan[32] = {0};
 
 void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
   digitalWrite(s0, (channel & 1) ? HIGH : LOW);
   digitalWrite(s1, (channel & 2) ? HIGH : LOW);
   digitalWrite(s2, (channel & 4) ? HIGH : LOW);
   digitalWrite(s3, (channel & 8) ? HIGH : LOW);
+}
+
+void scanMatrix() {
+  for (int r = 0; r < 4; r++) {
+    setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
+    for (int col = 0; col < 8; col++) {
+      // Hardware column mapping swap: 0-3 is reversed, 4-7 is direct
+      int hw_col = (col < 4) ? (3 - col) : col;
+      setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col);
+      
+      delayMicroseconds(settle_us);
+      
+      // Double read to settle the internal ESP32 sample-and-hold circuit
+      analogRead(MUX_ANALOG_IN);
+      latest_scan[r * 8 + col] = analogRead(MUX_ANALOG_IN);
+    }
+  }
 }
 
 void setup() {
@@ -50,6 +70,7 @@ void setup() {
   pinMode(ROW_MUX_S2, OUTPUT);
   pinMode(ROW_MUX_S3, OUTPUT);
   
+  // Configure MUX column select pins
   pinMode(COL_MUX_S0, OUTPUT);
   pinMode(COL_MUX_S1, OUTPUT);
   pinMode(COL_MUX_S2, OUTPUT);
@@ -75,28 +96,11 @@ void loop() {
     char c = Serial.read();
     
     if (c == 'B') {
-      // Execute a batch scan across the 4x8 matrix
-      for (int r = 0; r < 4; r++) {
-        setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
-        for (int col = 0; col < 8; col++) {
-          // Hardware column mapping swap: 0-3 is reversed, 4-7 is direct
-          int hw_col = (col < 4) ? (3 - col) : col;
-          setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col);
-          
-          delay(settle_ms);
-          
-          // Double read to settle the internal ESP32 sample-and-hold circuit
-          analogRead(MUX_ANALOG_IN);
-          long value = analogRead(MUX_ANALOG_IN);
-          
-          Serial.print(value);
-          if (r == 3 && col == 7) {
-            Serial.println(); // end of packet
-          } else {
-            Serial.print(",");
-          }
-        }
-      }
+      // Write binary packet header
+      Serial.write(0xAA);
+      Serial.write(0x55);
+      // Write 64 bytes of raw ADC data (32 uint16_t values)
+      Serial.write((uint8_t*)latest_scan, 64);
     } 
     else if (c == 'L') {
       // Set pixel color
@@ -157,10 +161,14 @@ void loop() {
       }
       if (Serial.available() > 0) {
         int val = Serial.read();
-        if (val >= 0 && val <= 100) {
-          settle_ms = val;
+        if (val >= 0 && val <= 255) {
+          settle_us = val;
         }
       }
     }
+  } else {
+    // Perform continuous background scan
+    scanMatrix();
   }
 }
+

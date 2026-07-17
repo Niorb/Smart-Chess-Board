@@ -117,22 +117,23 @@ def read_active_values(h, ser):
 
     # Request batch scan
     ser.write(b"B")
-    line = ser.readline().decode("utf-8", errors="ignore").strip()
-    if line:
-        try:
-            vals = [int(v) for v in line.split(',')]
-            if len(vals) == 32:
-                idx = 0
-                for r in range(4):
-                    for c in range(8):
-                        val = vals[idx]
-                        idx += 1
-                        if r in values:
-                            if c in ACTIVE_COLS:
-                                col_idx = ACTIVE_COLS.index(c)
-                                values[r][col_idx] = val
-        except ValueError:
-            pass
+    
+    # Read binary packet: 2 header bytes + 64 data bytes
+    header = ser.read(2)
+    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
+        data = ser.read(64)
+        if len(data) == 64:
+            import struct
+            vals = struct.unpack('<32H', data)
+            idx = 0
+            for r in range(4):
+                for c in range(8):
+                    val = vals[idx]
+                    idx += 1
+                    if r in values:
+                        if c in ACTIVE_COLS:
+                            col_idx = ACTIVE_COLS.index(c)
+                            values[r][col_idx] = val
 
     return values
 

@@ -60,12 +60,12 @@ settings = {
     "row_mode": "auto",
     "manual_row": 0,
     "scan_delay": 100,
-    "mux_settle_ms": 2,
+    "mux_settle_us": 100,
     "debounce_threshold": 2,
     "baseline_window_s": 4
 }
 
-last_sent_settle_ms = None
+last_sent_settle_us = None
 
 def load_settings():
     global settings
@@ -74,6 +74,8 @@ def load_settings():
             with open(SETTINGS_FILE, "r") as f:
                 loaded = json.load(f)
                 if "baselines" in loaded and "threshold_positive" in loaded and "threshold_negative" in loaded:
+                    if "mux_settle_ms" in loaded and "mux_settle_us" not in loaded:
+                        loaded["mux_settle_us"] = min(255, int(loaded["mux_settle_ms"] * 1000))
                     settings.update(loaded)
                     logger.info(f"Loaded board settings from {SETTINGS_FILE}")
                 else:
@@ -124,7 +126,7 @@ COL_MUX_S3 = 19  # Added S3 for full 16-channel support
 # TIMING
 # =============================================================================
 
-MUX_SETTLE_S = 0.002  # 2ms settling time default for faster scanning
+MUX_SETTLE_S = 0.0001  # 100us settling time default for faster scanning
 
 # =============================================================================
 # MUX CONTROL
@@ -160,31 +162,37 @@ def get_raw_analog_matrix(h, serial_conn):
 
     row_mode = settings.get("row_mode", "auto")
     manual_row = settings.get("manual_row", 0)
-    settle_ms = settings.get("mux_settle_ms", 2)
+    settle_us = settings.get("mux_settle_us", 100)
 
-    global last_sent_settle_ms
-    if last_sent_settle_ms != settle_ms:
-        serial_conn.write(b'S' + bytes([settle_ms]))
-        last_sent_settle_ms = settle_ms
+    global last_sent_settle_us
+    if last_sent_settle_us != settle_us:
+        serial_conn.write(b'S' + bytes([settle_us]))
+        last_sent_settle_us = settle_us
 
     serial_conn.write(b'B')
 
-    line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-    if line:
-        try:
-            vals = [int(v) for v in line.split(',')]
-            if len(vals) == 32:
-                idx = 0
-                for r in range(BOARD_ROWS):
-                    for c in range(BOARD_COLS):
-                        val = vals[idx]
-                        idx += 1
-                        if row_mode == "manual" and r != manual_row:
-                            matrix[r][c] = settings["baselines"][r][c]
-                        else:
-                            matrix[r][c] = val
-        except ValueError:
-            pass
+    # Read binary packet: 2 header bytes + 64 data bytes
+    header = serial_conn.read(2)
+    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
+        data = serial_conn.read(64)
+        if len(data) == 64:
+            import struct
+            vals = struct.unpack('<32H', data)
+            idx = 0
+            for r in range(BOARD_ROWS):
+                for c in range(BOARD_COLS):
+                    val = vals[idx]
+                    idx += 1
+                    if row_mode == "manual" and r != manual_row:
+                        matrix[r][c] = settings["baselines"][r][c]
+                    else:
+                        matrix[r][c] = val
+    else:
+        logger.warning(f"Serial sync error: expected header 0xAA55, got {header.hex() if header else 'nothing'}")
+        serial_conn.reset_input_buffer()
+        for r in range(BOARD_ROWS):
+            for c in range(BOARD_COLS):
+                matrix[r][c] = settings["baselines"][r][c]
 
     return matrix
 
@@ -210,72 +218,77 @@ def scan_board(h, serial_conn, raw_state):
 
     row_mode = settings.get("row_mode", "auto")
     manual_row = settings.get("manual_row", 0)
-    settle_ms = settings.get("mux_settle_ms", 2)
+    settle_us = settings.get("mux_settle_us", 100)
     non_mocked_count = (1 if row_mode == "manual" else BOARD_ROWS) * BOARD_COLS
 
-    global last_sent_settle_ms
-    if last_sent_settle_ms != settle_ms:
-        serial_conn.write(b'S' + bytes([settle_ms]))
-        last_sent_settle_ms = settle_ms
+    global last_sent_settle_us
+    if last_sent_settle_us != settle_us:
+        serial_conn.write(b'S' + bytes([settle_us]))
+        last_sent_settle_us = settle_us
 
     serial_conn.write(b'B')
 
-    line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-    if not line:
-        diag["timeouts"] = non_mocked_count
-        diag["status"] = "TIMEOUT"
+    # Read binary packet: 2 header bytes + 64 data bytes
+    header = serial_conn.read(2)
+    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
+        data = serial_conn.read(64)
+        if len(data) == 64:
+            import struct
+            vals = struct.unpack('<32H', data)
+            diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
+            idx = 0
+            for r in range(BOARD_ROWS):
+                for c in range(BOARD_COLS):
+                    val = vals[idx]
+                    idx += 1
+
+                    if row_mode == "manual" and r != manual_row:
+                        matrix[r][c] = settings["baselines"][r][c]
+                        raw_state[r][c] = 0
+                        continue
+
+                    matrix[r][c] = val
+                    diff = val - settings["baselines"][r][c]
+                    if diff > settings["threshold_positive"]:
+                        raw_state[r][c] = 1
+                    elif diff < -settings["threshold_negative"]:
+                        raw_state[r][c] = -1
+                    else:
+                        raw_state[r][c] = 0
+
+                    # Dynamic baseline moving average update (4 seconds window)
+                    now = time.time()
+                    detected = (raw_state[r][c] != 0)
+                    
+                    if (r, c) not in baseline_history:
+                        baseline_history[(r, c)] = []
+                        
+                    baseline_history[(r, c)].append((now, val, detected))
+                    
+                    # Keep only entries within the last baseline_window_s seconds
+                    baseline_window = settings.get("baseline_window_s", 4)
+                    baseline_history[(r, c)] = [entry for entry in baseline_history[(r, c)] if now - entry[0] <= baseline_window]
+                    any_magnet = any(entry[2] for entry in baseline_history[(r, c)])
+                    
+                    if not any_magnet and len(baseline_history[(r, c)]) > 0:
+                        avg_val = sum(entry[1] for entry in baseline_history[(r, c)]) / len(baseline_history[(r, c)])
+                        settings["baselines"][r][c] = int(avg_val)
+        else:
+            diag["errors"] = non_mocked_count
+            diag["status"] = "TIMEOUT"
+            serial_conn.reset_input_buffer()
+            for r in range(BOARD_ROWS):
+                for c in range(BOARD_COLS):
+                    matrix[r][c] = settings["baselines"][r][c]
+                    raw_state[r][c] = 0
+    else:
+        diag["errors"] = non_mocked_count
+        diag["status"] = "PARSE_ERROR"
+        serial_conn.reset_input_buffer()
         for r in range(BOARD_ROWS):
             for c in range(BOARD_COLS):
                 matrix[r][c] = settings["baselines"][r][c]
                 raw_state[r][c] = 0
-    else:
-        diag["last_raw_line"] = line
-        try:
-            vals = [int(v) for v in line.split(',')]
-            if len(vals) == 32:
-                idx = 0
-                for r in range(BOARD_ROWS):
-                    for c in range(BOARD_COLS):
-                        val = vals[idx]
-                        idx += 1
-
-                        if row_mode == "manual" and r != manual_row:
-                            matrix[r][c] = settings["baselines"][r][c]
-                            raw_state[r][c] = 0
-                            continue
-
-                        matrix[r][c] = val
-                        diff = val - settings["baselines"][r][c]
-                        if diff > settings["threshold_positive"]:
-                            raw_state[r][c] = 1
-                        elif diff < -settings["threshold_negative"]:
-                            raw_state[r][c] = -1
-                        else:
-                            raw_state[r][c] = 0
-
-                        # Dynamic baseline moving average update (4 seconds window)
-                        now = time.time()
-                        detected = (raw_state[r][c] != 0)
-                        
-                        if (r, c) not in baseline_history:
-                            baseline_history[(r, c)] = []
-                            
-                        baseline_history[(r, c)].append((now, val, detected))
-                        
-                        # Keep only entries within the last baseline_window_s seconds
-                        baseline_window = settings.get("baseline_window_s", 4)
-                        baseline_history[(r, c)] = [entry for entry in baseline_history[(r, c)] if now - entry[0] <= baseline_window]
-                        any_magnet = any(entry[2] for entry in baseline_history[(r, c)])
-                        
-                        if not any_magnet and len(baseline_history[(r, c)]) > 0:
-                            avg_val = sum(entry[1] for entry in baseline_history[(r, c)]) / len(baseline_history[(r, c)])
-                            settings["baselines"][r][c] = int(avg_val)
-            else:
-                diag["errors"] = non_mocked_count
-                diag["status"] = "PARSE_ERROR"
-        except ValueError:
-            diag["errors"] = non_mocked_count
-            diag["status"] = "PARSE_ERROR"
 
     return matrix, diag
 
@@ -295,28 +308,27 @@ def calibrate_board(h, serial_conn, samples=5):
     # Flush buffers
     serial_conn.reset_input_buffer()
     
-    settle_ms = settings.get("mux_settle_ms", 2)
-    global last_sent_settle_ms
-    if last_sent_settle_ms != settle_ms:
-        serial_conn.write(b'S' + bytes([settle_ms]))
-        last_sent_settle_ms = settle_ms
+    settle_us = settings.get("mux_settle_us", 100)
+    global last_sent_settle_us
+    if last_sent_settle_us != settle_us:
+        serial_conn.write(b'S' + bytes([settle_us]))
+        last_sent_settle_us = settle_us
 
     for s in range(samples):
         serial_conn.write(b'B')
-        line = serial_conn.readline().decode('utf-8', errors='ignore').strip()
-        if line:
-            try:
-                vals = [int(v) for v in line.split(',')]
-                if len(vals) == 32:
-                    idx = 0
-                    for r in range(BOARD_ROWS):
-                        for c in range(BOARD_COLS):
-                            val = vals[idx]
-                            idx += 1
-                            sums[r][c] += val
-                            counts[r][c] += 1
-            except ValueError:
-                pass
+        header = serial_conn.read(2)
+        if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
+            data = serial_conn.read(64)
+            if len(data) == 64:
+                import struct
+                vals = struct.unpack('<32H', data)
+                idx = 0
+                for r in range(BOARD_ROWS):
+                    for c in range(BOARD_COLS):
+                        val = vals[idx]
+                        idx += 1
+                        sums[r][c] += val
+                        counts[r][c] += 1
         time.sleep(0.02)
         
     # Update baselines
