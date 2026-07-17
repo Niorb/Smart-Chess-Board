@@ -194,8 +194,8 @@ def get_raw_analog_matrix(h, serial_conn):
             import struct
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             idx = 0
-            for c in range(BOARD_COLS):
-                for r in range(BOARD_ROWS):
+            for r in range(BOARD_ROWS):
+                for c in range(BOARD_COLS):
                     val = vals[idx]
                     idx += 1
                     disabled_squares = settings.get("disabled_squares", [])
@@ -256,8 +256,8 @@ def scan_board(h, serial_conn, raw_state):
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             idx = 0
-            for c in range(BOARD_COLS):
-                for r in range(BOARD_ROWS):
+            for r in range(BOARD_ROWS):
+                for c in range(BOARD_COLS):
                     val = vals[idx]
                     idx += 1
 
@@ -349,8 +349,8 @@ def calibrate_board(h, serial_conn, samples=5):
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 idx = 0
-                for c in range(BOARD_COLS):
-                    for r in range(BOARD_ROWS):
+                for r in range(BOARD_ROWS):
+                    for c in range(BOARD_COLS):
                         val = vals[idx]
                         idx += 1
                         sums[c][r] += val
