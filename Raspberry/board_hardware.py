@@ -40,8 +40,8 @@ try:
         ADC_DEVIATION,
     )
 except ImportError:
-    BOARD_ROWS = 4
-    BOARD_COLS = 4
+    BOARD_ROWS = 8
+    BOARD_COLS = 8
     ANALOG_THRESHOLD = 2000
     ADC_BASELINE = 1550
     ADC_DEVIATION = 150
@@ -52,13 +52,13 @@ except ImportError:
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "board_settings.json")
 
-# Default settings
+# Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings = {
-    "baselines": [[1550] * BOARD_COLS for _ in range(BOARD_ROWS)],
+    "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
     "threshold_positive": 150,
     "threshold_negative": 150,
-    "row_mode": "auto",
-    "manual_row": 0,
+    "col_mode": "auto",
+    "manual_col": 0,
     "scan_delay": 100,
     "mux_settle_us": 100,
     "debounce_threshold": 2,
@@ -74,11 +74,22 @@ def load_settings():
         try:
             with open(SETTINGS_FILE, "r") as f:
                 loaded = json.load(f)
+                
+                # Check for legacy row terminology keys and migrate them
+                if "row_mode" in loaded:
+                    loaded["col_mode"] = loaded["row_mode"]
+                    del loaded["row_mode"]
+                if "manual_row" in loaded:
+                    loaded["manual_col"] = loaded["manual_row"]
+                    del loaded["manual_row"]
+
                 if "baselines" in loaded and "threshold_positive" in loaded and "threshold_negative" in loaded:
                     if "mux_settle_ms" in loaded and "mux_settle_us" not in loaded:
                         loaded["mux_settle_us"] = min(255, int(loaded["mux_settle_ms"] * 1000))
+                    
                     if "disabled_squares" not in loaded:
                         loaded["disabled_squares"] = []
+                    
                     settings.update(loaded)
                     logger.info(f"Loaded board settings from {SETTINGS_FILE}")
                 else:
@@ -86,16 +97,16 @@ def load_settings():
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
 
-    # Ensure baselines match current BOARD_ROWS and BOARD_COLS dimensions
-    if len(settings["baselines"]) != BOARD_ROWS:
-        settings["baselines"] = [[1550] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    # Ensure baselines match current BOARD_COLS and BOARD_ROWS dimensions
+    if len(settings["baselines"]) != BOARD_COLS:
+        settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
     else:
-        for r in range(BOARD_ROWS):
-            if len(settings["baselines"][r]) != BOARD_COLS:
-                if len(settings["baselines"][r]) < BOARD_COLS:
-                    settings["baselines"][r] = settings["baselines"][r] + [1550] * (BOARD_COLS - len(settings["baselines"][r]))
+        for c in range(BOARD_COLS):
+            if len(settings["baselines"][c]) != BOARD_ROWS:
+                if len(settings["baselines"][c]) < BOARD_ROWS:
+                    settings["baselines"][c] = settings["baselines"][c] + [1550] * (BOARD_ROWS - len(settings["baselines"][c]))
                 else:
-                    settings["baselines"][r] = settings["baselines"][r][:BOARD_COLS]
+                    settings["baselines"][c] = settings["baselines"][c][:BOARD_ROWS]
 
 def save_settings():
     try:
@@ -112,18 +123,18 @@ load_settings()
 baseline_history = {}
 
 # =============================================================================
-# MUX PIN ASSIGNMENTS (BCM numbering)
+# MUX PIN ASSIGNMENTS (BCM numbering - swapped names)
 # =============================================================================
 
-ROW_MUX_S0 = 17
-ROW_MUX_S1 = 27
-ROW_MUX_S2 = 22
-ROW_MUX_S3 = 23  # Added S3 for full 16-channel support
+COL_MUX_S0 = 17
+COL_MUX_S1 = 27
+COL_MUX_S2 = 22
+COL_MUX_S3 = 23
 
-COL_MUX_S0 = 5
-COL_MUX_S1 = 6
-COL_MUX_S2 = 13
-COL_MUX_S3 = 19  # Added S3 for full 16-channel support
+ROW_MUX_S0 = 5
+ROW_MUX_S1 = 6
+ROW_MUX_S2 = 13
+ROW_MUX_S3 = 19
 
 # =============================================================================
 # TIMING
@@ -154,17 +165,17 @@ def init_mux_pins(h):
 
 def get_raw_analog_matrix(h, serial_conn):
     """
-    Scans the entire 4x8 matrix of analog sensors using the serial batch scan command.
+    Scans the entire 8x8 matrix of analog sensors using the serial batch scan command.
     """
-    matrix = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    matrix = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     if serial_conn is None:
         return matrix
 
     # Flush any stale serial data
     serial_conn.reset_input_buffer()
 
-    row_mode = settings.get("row_mode", "auto")
-    manual_row = settings.get("manual_row", 0)
+    col_mode = settings.get("col_mode", "auto")
+    manual_col = settings.get("manual_col", 0)
     settle_us = settings.get("mux_settle_us", 100)
 
     global last_sent_settle_us
@@ -177,29 +188,29 @@ def get_raw_analog_matrix(h, serial_conn):
     # Read binary packet: 2 header bytes + data bytes
     header = serial_conn.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
         data = serial_conn.read(expected_bytes)
         if len(data) == expected_bytes:
             import struct
-            vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
+            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             idx = 0
-            for r in range(BOARD_ROWS):
-                for c in range(BOARD_COLS):
+            for c in range(BOARD_COLS):
+                for r in range(BOARD_ROWS):
                     val = vals[idx]
                     idx += 1
                     disabled_squares = settings.get("disabled_squares", [])
-                    if row_mode == "manual" and r != manual_row:
-                        matrix[r][c] = settings["baselines"][r][c]
-                    elif [r, c] in disabled_squares or (r, c) in disabled_squares:
-                        matrix[r][c] = settings["baselines"][r][c]
+                    if col_mode == "manual" and c != manual_col:
+                        matrix[c][r] = settings["baselines"][c][r]
+                    elif [c, r] in disabled_squares or (c, r) in disabled_squares:
+                        matrix[c][r] = settings["baselines"][c][r]
                     else:
-                        matrix[r][c] = val
+                        matrix[c][r] = val
     else:
         logger.warning(f"Serial sync error: expected header 0xAA55, got {header.hex() if header else 'nothing'}")
         serial_conn.reset_input_buffer()
-        for r in range(BOARD_ROWS):
-            for c in range(BOARD_COLS):
-                matrix[r][c] = settings["baselines"][r][c]
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS):
+                matrix[c][r] = settings["baselines"][c][r]
 
     return matrix
 
@@ -209,7 +220,7 @@ def scan_board(h, serial_conn, raw_state):
     Scans the board and returns both the raw matrix and a dictionary of diagnostic info.
     Reads values as a single batch from the serial interface.
     """
-    matrix = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    matrix = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     diag = {
         "status": "OK",
         "last_raw_line": "",
@@ -223,10 +234,10 @@ def scan_board(h, serial_conn, raw_state):
     # Flush any stale serial data
     serial_conn.reset_input_buffer()
 
-    row_mode = settings.get("row_mode", "auto")
-    manual_row = settings.get("manual_row", 0)
+    col_mode = settings.get("col_mode", "auto")
+    manual_col = settings.get("manual_col", 0)
     settle_us = settings.get("mux_settle_us", 100)
-    non_mocked_count = (1 if row_mode == "manual" else BOARD_ROWS) * BOARD_COLS
+    non_mocked_count = (1 if col_mode == "manual" else BOARD_COLS) * BOARD_ROWS
 
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
@@ -238,71 +249,71 @@ def scan_board(h, serial_conn, raw_state):
     # Read binary packet: 2 header bytes + data bytes
     header = serial_conn.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
         data = serial_conn.read(expected_bytes)
         if len(data) == expected_bytes:
             import struct
-            vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
+            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             idx = 0
-            for r in range(BOARD_ROWS):
-                for c in range(BOARD_COLS):
+            for c in range(BOARD_COLS):
+                for r in range(BOARD_ROWS):
                     val = vals[idx]
                     idx += 1
 
-                    if row_mode == "manual" and r != manual_row:
-                        matrix[r][c] = settings["baselines"][r][c]
-                        raw_state[r][c] = 0
+                    if col_mode == "manual" and c != manual_col:
+                        matrix[c][r] = settings["baselines"][c][r]
+                        raw_state[c][r] = 0
                         continue
 
                     disabled_squares = settings.get("disabled_squares", [])
-                    if [r, c] in disabled_squares or (r, c) in disabled_squares:
-                        matrix[r][c] = settings["baselines"][r][c]
-                        raw_state[r][c] = 0
+                    if [c, r] in disabled_squares or (c, r) in disabled_squares:
+                        matrix[c][r] = settings["baselines"][c][r]
+                        raw_state[c][r] = 0
                         continue
 
-                    matrix[r][c] = val
-                    diff = val - settings["baselines"][r][c]
+                    matrix[c][r] = val
+                    diff = val - settings["baselines"][c][r]
                     if diff > settings["threshold_positive"]:
-                        raw_state[r][c] = 1
+                        raw_state[c][r] = 1
                     elif diff < -settings["threshold_negative"]:
-                        raw_state[r][c] = -1
+                        raw_state[c][r] = -1
                     else:
-                        raw_state[r][c] = 0
+                        raw_state[c][r] = 0
 
                     # Dynamic baseline moving average update (4 seconds window)
                     now = time.time()
-                    detected = (raw_state[r][c] != 0)
+                    detected = (raw_state[c][r] != 0)
                     
-                    if (r, c) not in baseline_history:
-                        baseline_history[(r, c)] = []
+                    if (c, r) not in baseline_history:
+                        baseline_history[(c, r)] = []
                         
-                    baseline_history[(r, c)].append((now, val, detected))
+                    baseline_history[(c, r)].append((now, val, detected))
                     
                     # Keep only entries within the last baseline_window_s seconds
                     baseline_window = settings.get("baseline_window_s", 4)
-                    baseline_history[(r, c)] = [entry for entry in baseline_history[(r, c)] if now - entry[0] <= baseline_window]
-                    any_magnet = any(entry[2] for entry in baseline_history[(r, c)])
+                    baseline_history[(c, r)] = [entry for entry in baseline_history[(c, r)] if now - entry[0] <= baseline_window]
+                    any_magnet = any(entry[2] for entry in baseline_history[(c, r)])
                     
-                    if not any_magnet and len(baseline_history[(r, c)]) > 0:
-                        avg_val = sum(entry[1] for entry in baseline_history[(r, c)]) / len(baseline_history[(r, c)])
-                        settings["baselines"][r][c] = int(avg_val)
+                    if not any_magnet and len(baseline_history[(c, r)]) > 0:
+                        avg_val = sum(entry[1] for entry in baseline_history[(c, r)]) / len(baseline_history[(c, r)])
+                        settings["baselines"][c][r] = int(avg_val)
         else:
             diag["errors"] = non_mocked_count
             diag["status"] = "TIMEOUT"
             serial_conn.reset_input_buffer()
-            for r in range(BOARD_ROWS):
-                for c in range(BOARD_COLS):
-                    matrix[r][c] = settings["baselines"][r][c]
-                    raw_state[r][c] = 0
+            for c in range(BOARD_COLS):
+                for r in range(BOARD_ROWS):
+                    matrix[c][r] = settings["baselines"][c][r]
+                    raw_state[c][r] = 0
     else:
         diag["errors"] = non_mocked_count
         diag["status"] = "PARSE_ERROR"
         serial_conn.reset_input_buffer()
-        for r in range(BOARD_ROWS):
-            for c in range(BOARD_COLS):
-                matrix[r][c] = settings["baselines"][r][c]
-                raw_state[r][c] = 0
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS):
+                matrix[c][r] = settings["baselines"][c][r]
+                raw_state[c][r] = 0
 
     return matrix, diag
 
@@ -316,8 +327,8 @@ def calibrate_board(h, serial_conn, samples=5):
         logger.error("Calibration failed: serial connection not initialized.")
         return False
         
-    sums = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    counts = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     
     # Flush buffers
     serial_conn.reset_input_buffer()
@@ -332,31 +343,31 @@ def calibrate_board(h, serial_conn, samples=5):
         serial_conn.write(b'B')
         header = serial_conn.read(2)
         if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-            expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+            expected_bytes = BOARD_COLS * BOARD_ROWS * 2
             data = serial_conn.read(expected_bytes)
             if len(data) == expected_bytes:
                 import struct
-                vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
+                vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 idx = 0
-                for r in range(BOARD_ROWS):
-                    for c in range(BOARD_COLS):
+                for c in range(BOARD_COLS):
+                    for r in range(BOARD_ROWS):
                         val = vals[idx]
                         idx += 1
-                        sums[r][c] += val
-                        counts[r][c] += 1
+                        sums[c][r] += val
+                        counts[c][r] += 1
         time.sleep(0.02)
         
     # Update baselines
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS):
-            if counts[r][c] > 0:
-                avg_val = int(sums[r][c] / counts[r][c])
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            if counts[c][r] > 0:
+                avg_val = int(sums[c][r] / counts[c][r])
                 if avg_val > 0:
-                    settings["baselines"][r][c] = avg_val
+                    settings["baselines"][c][r] = avg_val
                 else:
-                    settings["baselines"][r][c] = 1550
+                    settings["baselines"][c][r] = 1550
             else:
-                settings["baselines"][r][c] = 1550
+                settings["baselines"][c][r] = 1550
                     
     save_settings()
     return True
@@ -371,14 +382,14 @@ def apply_debounce(raw_state, sensor_state, stable_count, threshold):
     Apply debouncing. Returns True if any square's state changed.
     """
     changed = False
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS):
-            if raw_state[r][c] == sensor_state[r][c]:
-                stable_count[r][c] = 0
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            if raw_state[c][r] == sensor_state[c][r]:
+                stable_count[c][r] = 0
             else:
-                stable_count[r][c] += 1
-                if stable_count[r][c] >= threshold:
-                    sensor_state[r][c] = raw_state[r][c]
-                    stable_count[r][c] = 0
+                stable_count[c][r] += 1
+                if stable_count[c][r] >= threshold:
+                    sensor_state[c][r] = raw_state[c][r]
+                    stable_count[c][r] = 0
                     changed = True
     return changed

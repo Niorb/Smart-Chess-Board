@@ -29,7 +29,7 @@ export interface BoardState {
 
 const DEFAULT_STATE: BoardState = {
   status: 'IDLE',
-  physical: { rows: 4, cols: 8, grid: [], led_test_active: false, testing_led_index: -1 },
+  physical: { rows: 8, cols: 8, grid: [], led_test_active: false, testing_led_index: -1 },
   digital: Array(8).fill(null).map(() => Array(8).fill('.')),
   my_color: null,
   clocks: { white: '?', black: '?' },

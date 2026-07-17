@@ -165,21 +165,21 @@ def init_strip():
     return strip
 
 
-def get_led_indices(row, col):
+def get_led_indices(col, row):
     """
-    Convert board [row, col] to serpentine LED strip indices.
-    Strip 1: files a-d (col 0-3), starts at a8 (row 7, col 0) and ends at d8 (row 7, col 3).
-    Strip 2: files e-h (col 4-7), starts at h8 (row 7, col 7) and ends at e8 (row 7, col 4).
+    Convert board [col, row] to serpentine LED strip indices.
+    Strip 1: files a-d (row 0-3), starts at a8 (col 7, row 0) and ends at d8 (col 7, row 3).
+    Strip 2: files e-h (row 4-7), starts at h8 (col 7, row 7) and ends at e8 (col 7, row 4).
     """
     # Keep the original values for Strip 2 vertical mapping
-    orig_row = row
     orig_col = col
+    orig_row = row
 
     # Adjust for 180-degree board rotation and transposition (anti-diagonal symmetry) for Strip 1
-    row = 7 - col
-    col = 7 - orig_row
+    col_trans = 7 - row
+    row_trans = 7 - orig_col
 
-    # Mapping offsets inside a single 18-LED column for Strip 1 (files a-d / col 0-3)
+    # Mapping offsets inside a single 18-LED column for Strip 1 (files a-d / row 0-3)
     offsets_strip1 = {
         0: [0, 1],
         1: [2, 3],
@@ -191,7 +191,7 @@ def get_led_indices(row, col):
         7: [16, 17]
     }
     
-    # Mapping offsets inside a single 19-LED column for Strip 2 (files e-h / col 4-7)
+    # Mapping offsets inside a single 19-LED column for Strip 2 (files e-h / row 4-7)
     # Starting at start of LED ribbon: (2 LEDs, 3 LEDs, 2 LEDs, 2 LEDs + 1 OFF, 2 LEDs, 2 LEDs, 3 LEDs, 2 LEDs)
     offsets_strip2 = {
         0: [0, 1],
@@ -204,27 +204,27 @@ def get_led_indices(row, col):
         7: [17, 18]
     }
     
-    if orig_col < 4:
-        # Strip 1 (col 0-3)
-        base = col * 18
-        if col % 2 == 0:
-            # File a, c: starts at top (row 7) and goes down (row 0)
-            offset_idx = 7 - row
+    if orig_row < 4:
+        # Strip 1 (row 0-3)
+        base = row_trans * 18
+        if row_trans % 2 == 0:
+            # File a, c: starts at top (col 7) and goes down (col 0)
+            offset_idx = 7 - col_trans
         else:
-            # File b, d: starts at bottom (row 0) and goes up (row 7)
-            offset_idx = row
+            # File b, d: starts at bottom (col 0) and goes up (col 7)
+            offset_idx = col_trans
         return [base + o for o in offsets_strip1[offset_idx]]
     else:
-        # Strip 2 (col 4-7)
+        # Strip 2 (row 4-7)
         # Relative column from right to left: h=0, g=1, f=2, e=3
-        c_rel = 7 - orig_col
+        c_rel = 7 - orig_row
         base = 72 + c_rel * 19
         if c_rel % 2 == 0:
             # File h, f: starts at top (Rank 8) and goes down (Rank 1)
-            offset_idx = 7 - orig_row
+            offset_idx = 7 - orig_col
         else:
             # File g, e: starts at bottom (Rank 1) and goes up (Rank 8)
-            offset_idx = orig_row
+            offset_idx = orig_col
         return [base + o for o in offsets_strip2[offset_idx]]
 
 
@@ -276,18 +276,18 @@ def get_perimeter_indices():
     Returns a list of lists (each inner list contains LEDs for one square).
     """
     perimeter_squares = []
-    # Top row L->R (row 7, col 0 to 7)
-    for col in range(LED_COLS):
-        perimeter_squares.append(get_led_indices(7, col))
-    # Right col top->bottom (row 6 down to 0, col 7)
-    for row in range(LED_ROWS - 2, -1, -1):
-        perimeter_squares.append(get_led_indices(row, LED_COLS - 1))
-    # Bottom row R->L (row 0, col 6 down to 0)
-    for col in range(LED_COLS - 2, -1, -1):
-        perimeter_squares.append(get_led_indices(0, col))
-    # Left col bottom->top (row 1 to 6, col 0)
-    for row in range(1, LED_ROWS - 1):
-        perimeter_squares.append(get_led_indices(row, 0))
+    # Top col L->R (col 7, row 0 to 7)
+    for r_idx in range(LED_ROWS):
+        perimeter_squares.append(get_led_indices(7, r_idx))
+    # Right row top->bottom (col 6 down to 0, row 7)
+    for c_idx in range(LED_COLS - 2, -1, -1):
+        perimeter_squares.append(get_led_indices(c_idx, LED_ROWS - 1))
+    # Bottom col R->L (col 0, row 6 down to 0)
+    for r_idx in range(LED_ROWS - 2, -1, -1):
+        perimeter_squares.append(get_led_indices(0, r_idx))
+    # Left row bottom->top (col 1 to 6, row 0)
+    for c_idx in range(1, LED_COLS - 1):
+        perimeter_squares.append(get_led_indices(c_idx, 0))
     return perimeter_squares
 
 

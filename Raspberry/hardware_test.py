@@ -43,8 +43,8 @@ from playwright_chesscom.led_helpers import init_strip, get_led_indices, Color
 BASELINE_SAMPLES = 10
 DIFF_LED_THRESHOLD = 150
 SCAN_INTERVAL_S = 0.02
-ACTIVE_ROWS = [0, 1, 2, 3, 4, 5, 6, 7]
 ACTIVE_COLS = [0, 1, 2, 3, 4, 5, 6, 7]
+ACTIVE_ROWS = [0, 1, 2, 3, 4, 5, 6, 7]
 LED_POSITIVE_COLOR = Color(255, 0, 0)  # Red for positive shift (> 150)
 LED_NEGATIVE_COLOR = Color(0, 255, 0)  # Green for negative shift (< -150)
 LED_OFF_COLOR = Color(0, 0, 0)
@@ -86,19 +86,19 @@ def update_leds_from_differences(strip, differences, previous_frame):
     frame = [LED_OFF_COLOR] * NUM_LEDS
 
     from board_hardware import settings
-    row_mode = settings.get("row_mode", "auto")
-    manual_row = settings.get("manual_row", 0)
+    col_mode = settings.get("col_mode", "auto")
+    manual_col = settings.get("manual_col", 0)
 
-    for row in ACTIVE_ROWS:
-        if row_mode == "manual" and row != manual_row:
+    for col in ACTIVE_COLS:
+        if col_mode == "manual" and col != manual_col:
             continue
-        for col_index, diff in enumerate(differences[row]):
-            col = ACTIVE_COLS[col_index]
+        for row_index, diff in enumerate(differences[col]):
+            row = ACTIVE_ROWS[row_index]
             if diff is None or abs(diff) <= DIFF_LED_THRESHOLD:
                 continue
 
             color = LED_POSITIVE_COLOR if diff > 0 else LED_NEGATIVE_COLOR
-            for led_index in get_led_indices(row, col):
+            for led_index in get_led_indices(col, row):
                 if 0 <= led_index < NUM_LEDS:
                     frame[led_index] = color
 
@@ -111,8 +111,8 @@ def update_leds_from_differences(strip, differences, previous_frame):
 
 
 def read_active_values(h, ser):
-    """Read all configured active rows/columns into a row-specific dictionary using batch read."""
-    values = {row: [None] * len(ACTIVE_COLS) for row in ACTIVE_ROWS}
+    """Read all configured active columns/rows into a column-specific dictionary using batch read."""
+    values = {col: [None] * len(ACTIVE_ROWS) for col in ACTIVE_COLS}
     ser.reset_input_buffer()
 
     # Request batch scan
@@ -127,45 +127,45 @@ def read_active_values(h, ser):
             import struct
             vals = struct.unpack('<64H', data)
             idx = 0
-            for r in range(8):
-                for c in range(8):
+            for c in range(8):
+                for r in range(8):
                     val = vals[idx]
                     idx += 1
-                    if r in values:
-                        if c in ACTIVE_COLS:
-                            col_idx = ACTIVE_COLS.index(c)
-                            values[r][col_idx] = val
+                    if c in values:
+                        if r in ACTIVE_ROWS:
+                            row_idx = ACTIVE_ROWS.index(r)
+                            values[c][row_idx] = val
 
     return values
 
 
 def calibrate_baseline(h, ser):
-    """Average the first readings per row/column to create default starting values."""
-    sums = {row: [0] * len(ACTIVE_COLS) for row in ACTIVE_ROWS}
-    counts = {row: [0] * len(ACTIVE_COLS) for row in ACTIVE_ROWS}
+    """Average the first readings per column/row to create default starting values."""
+    sums = {col: [0] * len(ACTIVE_ROWS) for col in ACTIVE_COLS}
+    counts = {col: [0] * len(ACTIVE_ROWS) for col in ACTIVE_COLS}
 
     print(f"Calibrating baseline from first {BASELINE_SAMPLES} readings...")
     print("Keep the board in its default starting state.")
 
     for sample_num in range(BASELINE_SAMPLES):
         values = read_active_values(h, ser)
-        for row in ACTIVE_ROWS:
-            for col_index, value in enumerate(values[row]):
+        for col in ACTIVE_COLS:
+            for row_index, value in enumerate(values[col]):
                 if value is not None:
-                    sums[row][col_index] += value
-                    counts[row][col_index] += 1
+                    sums[col][row_index] += value
+                    counts[col][row_index] += 1
 
         print(f"Baseline sample {sample_num + 1}/{BASELINE_SAMPLES}: {values}")
         time.sleep(0.1)
 
     baseline = {}
-    for row in ACTIVE_ROWS:
-        baseline[row] = []
-        for col_index in range(len(ACTIVE_COLS)):
-            if counts[row][col_index] == 0:
-                baseline[row].append(None)
+    for col in ACTIVE_COLS:
+        baseline[col] = []
+        for row_index in range(len(ACTIVE_ROWS)):
+            if counts[col][row_index] == 0:
+                baseline[col].append(None)
             else:
-                baseline[row].append(sums[row][col_index] / counts[row][col_index])
+                baseline[col].append(sums[col][row_index] / counts[col][row_index])
 
     print(f"Baseline saved: {baseline}")
     return baseline
@@ -175,24 +175,24 @@ def build_difference_values(values, baseline):
     """Subtract the calibrated baseline from the latest readings."""
     differences = {}
 
-    for row in ACTIVE_ROWS:
-        differences[row] = []
-        for col_index, value in enumerate(values[row]):
-            base_value = baseline[row][col_index]
+    for col in ACTIVE_COLS:
+        differences[col] = []
+        for row_index, value in enumerate(values[col]):
+            base_value = baseline[col][row_index]
             if value is None or base_value is None:
-                differences[row].append(None)
+                differences[col].append(None)
             else:
-                differences[row].append(round(value - base_value, 1))
+                differences[col].append(round(value - base_value, 1))
 
     return differences
 
 
 def print_diff_grid(differences):
-    """Print the 4x4 difference grid with aligned columns."""
-    header = "        " + "  ".join(f"  C{c}   " for c in ACTIVE_COLS)
+    """Print the difference grid with aligned columns and rows."""
+    header = "        " + "  ".join(f"  R{r}   " for r in ACTIVE_ROWS)
     print(header)
-    for row in ACTIVE_ROWS:
-        values = differences.get(row, [])
+    for col in ACTIVE_COLS:
+        values = differences.get(col, [])
         cells = []
         for v in values:
             if v is None:
@@ -200,13 +200,13 @@ def print_diff_grid(differences):
             else:
                 marker = "*" if abs(v) > DIFF_LED_THRESHOLD else " "
                 cells.append(f"{v:+7.1f}{marker}")
-        print(f"  R{row}  [ " + "  ".join(cells) + " ]")
+        print(f"  C{col}  [ " + "  ".join(cells) + " ]")
     print()
 
 
 def main():
-    print("--- Hardware Test (4x4 Prototype, Baseline Differences) ---")
-    print(f"Target rows: {ACTIVE_ROWS}, columns: {ACTIVE_COLS}")
+    print("--- Hardware Test (8x8 Grid, Baseline Differences) ---")
+    print(f"Target columns: {ACTIVE_COLS}, rows: {ACTIVE_ROWS}")
     print(f"LED threshold: abs(diff) > {DIFF_LED_THRESHOLD}")
 
     strip = None
@@ -220,11 +220,11 @@ def main():
     try:
         h = lgpio.gpiochip_open(0)
         init_mux_pins(h)
-        # Start on the first active row. The scan loop sets row/column per reading.
+        # Start on the first active column.
         set_mux_channel(
-            h, ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, ACTIVE_ROWS[0]
+            h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, ACTIVE_COLS[0]
         )
-        print(f"GPIO: Chip 0 opened. Active rows configured: {ACTIVE_ROWS}.")
+        print(f"GPIO: Chip 0 opened. Active columns configured: {ACTIVE_COLS}.")
     except Exception as e:
         print(f"ERROR: GPIO fail: {e}")
         return

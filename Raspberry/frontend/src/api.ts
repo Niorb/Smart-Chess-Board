@@ -25,8 +25,8 @@ export async function getBoardSettings() {
 export async function updateBoardSettings(
   positive: number,
   negative: number,
-  rowMode?: 'auto' | 'manual',
-  manualRow?: number,
+  colMode?: 'auto' | 'manual',
+  manualCol?: number,
   scanDelay?: number,
   muxSettleMs?: number,
   debounceThreshold?: number,
@@ -39,8 +39,8 @@ export async function updateBoardSettings(
     body: JSON.stringify({
       threshold_positive: positive,
       threshold_negative: negative,
-      row_mode: rowMode,
-      manual_row: manualRow,
+      col_mode: colMode,
+      manual_col: manualCol,
       scan_delay: scanDelay,
       mux_settle_ms: muxSettleMs,
       debounce_threshold: debounceThreshold,
@@ -68,11 +68,11 @@ export async function makeMove(fromSquare: string, toSquare: string) {
   return response.json();
 }
 
-export async function highlightSquare(row: number, col: number) {
+export async function highlightSquare(col: number, row: number) {
   const response = await fetch(`${API_BASE}/board/highlight`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ row, col }),
+    body: JSON.stringify({ col, row }),
   });
   return response.json();
 }

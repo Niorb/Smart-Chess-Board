@@ -21,15 +21,15 @@ Adafruit_NeoPixel strip2(NUM_LEDS_PER_STRIP, PIN_STRIP2, NEO_GRB + NEO_KHZ800);
 const int MUX_ANALOG_IN = 34;
 
 // MUX Select pins (CD74HC4067)
-const int ROW_MUX_S0 = 25;
-const int ROW_MUX_S1 = 26;
-const int ROW_MUX_S2 = 27;
-const int ROW_MUX_S3 = 14;
+const int COL_MUX_S0 = 25;
+const int COL_MUX_S1 = 26;
+const int COL_MUX_S2 = 27;
+const int COL_MUX_S3 = 14;
 
-const int COL_MUX_S0 = 16;
-const int COL_MUX_S1 = 17;
-const int COL_MUX_S2 = 18;
-const int COL_MUX_S3 = 19;
+const int ROW_MUX_S0 = 16;
+const int ROW_MUX_S1 = 17;
+const int ROW_MUX_S2 = 18;
+const int ROW_MUX_S3 = 19;
 
 // Default MUX settling delay (us)
 int settle_us = 100;
@@ -45,18 +45,18 @@ void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
 }
 
 void scanMatrix() {
-  for (int r = 0; r < 8; r++) {
-    setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
-    for (int col = 0; col < 8; col++) {
-      // Hardware column mapping swap: 0-3 is reversed, 4-7 is direct
-      int hw_col = (col < 4) ? (3 - col) : col;
-      setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, hw_col);
+  for (int col = 0; col < 8; col++) {
+    setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, col);
+    for (int r = 0; r < 8; r++) {
+      // Hardware row mapping swap: 0-3 is reversed, 4-7 is direct
+      int hw_row = (r < 4) ? (3 - r) : r;
+      setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, hw_row);
       
       delayMicroseconds(settle_us);
       
       // Double read to settle the internal ESP32 sample-and-hold circuit
       analogRead(MUX_ANALOG_IN);
-      latest_scan[r * 8 + col] = analogRead(MUX_ANALOG_IN);
+      latest_scan[col * 8 + r] = analogRead(MUX_ANALOG_IN);
     }
   }
 }
@@ -64,21 +64,21 @@ void scanMatrix() {
 void setup() {
   Serial.begin(921600);
   
-  // Configure MUX select pins as outputs
-  pinMode(ROW_MUX_S0, OUTPUT);
-  pinMode(ROW_MUX_S1, OUTPUT);
-  pinMode(ROW_MUX_S2, OUTPUT);
-  pinMode(ROW_MUX_S3, OUTPUT);
-  
-  // Configure MUX column select pins
+  // Configure MUX column select pins as outputs
   pinMode(COL_MUX_S0, OUTPUT);
   pinMode(COL_MUX_S1, OUTPUT);
   pinMode(COL_MUX_S2, OUTPUT);
   pinMode(COL_MUX_S3, OUTPUT);
   
+  // Configure MUX row select pins
+  pinMode(ROW_MUX_S0, OUTPUT);
+  pinMode(ROW_MUX_S1, OUTPUT);
+  pinMode(ROW_MUX_S2, OUTPUT);
+  pinMode(ROW_MUX_S3, OUTPUT);
+  
   // Default to channel 0
-  setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, 0);
   setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, 0);
+  setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, 0);
 
   // Configure ADC: 11dB attenuation provides ~0V to 3.6V range.
   analogSetAttenuation(ADC_11db); 

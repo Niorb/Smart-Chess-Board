@@ -20,8 +20,8 @@ logger = logging.getLogger("smart-chess-app.state")
 class BoardStateManager:
     def __init__(self):
         self.serial_lock = threading.Lock()
-        self.physical_state = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
-        self.raw_analog_values = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+        self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+        self.raw_analog_values = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.digital_state = [["." for _ in range(8)] for _ in range(8)]
         self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, SETUP
         self.clocks = {"white": "?", "black": "?"}
@@ -87,20 +87,20 @@ class BoardStateManager:
             from rpi_ws281x import Color
             from board_hardware import settings
             
-            row_mode = settings.get("row_mode", "auto")
-            manual_row = settings.get("manual_row", 0)
+            col_mode = settings.get("col_mode", "auto")
+            manual_col = settings.get("manual_col", 0)
             
             frame = [Color(0, 0, 0)] * NUM_LEDS
             
-            for r in range(BOARD_ROWS):
-                if row_mode == "manual" and r != manual_row:
+            for c in range(BOARD_COLS):
+                if col_mode == "manual" and c != manual_col:
                     continue
-                for c in range(BOARD_COLS):
-                    if self.highlighted_square == (r, c):
+                for r in range(BOARD_ROWS):
+                    if self.highlighted_square == (c, r):
                         # Orange color for highlighting
                         color = Color(255, 80, 0)
                     else:
-                        val = self.physical_state[r][c]
+                        val = self.physical_state[c][r]
                         if val == 1:
                             color = Color(255, 0, 0)    # Red for North
                         elif val == -1:
@@ -108,7 +108,7 @@ class BoardStateManager:
                         else:
                             continue
                             
-                    for idx in get_led_indices(r, c):
+                    for idx in get_led_indices(c, r):
                         if 0 <= idx < NUM_LEDS:
                             frame[idx] = color
                             
@@ -151,8 +151,8 @@ class BoardStateManager:
 
     async def update_loop(self, broadcast_callback):
         """Background task to poll hardware/digital board and broadcast state."""
-        raw_state = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
-        stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+        raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+        stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         diag_info = {"status": "NO_HARDWARE", "last_raw_line": "", "timeouts": 16, "errors": 0}
 
         logger.info("Starting background state update loop.")
@@ -165,16 +165,16 @@ class BoardStateManager:
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
                     from board_hardware import settings
-                    row_mode = settings.get("row_mode", "auto")
-                    manual_row = settings.get("manual_row", 0)
+                    col_mode = settings.get("col_mode", "auto")
+                    manual_col = settings.get("manual_col", 0)
                     
-                    # Instantly clear raw state, physical state, and stable counts for inactive rows
-                    for r in range(BOARD_ROWS):
-                        if row_mode == "manual" and r != manual_row:
-                            for c in range(BOARD_COLS):
-                                raw_state[r][c] = 0
-                                self.physical_state[r][c] = 0
-                                stable_count[r][c] = 0
+                    # Instantly clear raw state, physical state, and stable counts for inactive columns
+                    for c in range(BOARD_COLS):
+                        if col_mode == "manual" and c != manual_col:
+                            for r in range(BOARD_ROWS):
+                                raw_state[c][r] = 0
+                                self.physical_state[c][r] = 0
+                                stable_count[c][r] = 0
 
                     debounce_thresh = settings.get("debounce_threshold", 2)
                     apply_debounce(
@@ -217,8 +217,8 @@ class BoardStateManager:
 
                 # Poll interval (read dynamically from settings)
                 from board_hardware import settings
-                row_mode = settings.get("row_mode", "auto")
-                if row_mode == "manual":
+                col_mode = settings.get("col_mode", "auto")
+                if col_mode == "manual":
                     delay_ms = settings.get("scan_delay", 100)
                 else:
                     delay_ms = 10  # Fast 10ms poll interval in auto mode

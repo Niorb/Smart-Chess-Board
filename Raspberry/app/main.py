@@ -81,8 +81,8 @@ from typing import Optional
 class ThresholdSettings(BaseModel):
     threshold_positive: int
     threshold_negative: int
-    row_mode: Optional[str] = None
-    manual_row: Optional[int] = None
+    col_mode: Optional[str] = None
+    manual_col: Optional[int] = None
     scan_delay: Optional[int] = None
     mux_settle_ms: Optional[int] = None
     debounce_threshold: Optional[int] = None
@@ -102,14 +102,14 @@ async def get_board_settings():
 
 @app.post("/api/board/settings")
 async def update_board_settings(body: ThresholdSettings):
-    """Updates the positive/negative deviation thresholds and row mode diagnostics."""
+    """Updates the positive/negative deviation thresholds and column mode diagnostics."""
     from board_hardware import settings, save_settings
     settings["threshold_positive"] = body.threshold_positive
     settings["threshold_negative"] = body.threshold_negative
-    if body.row_mode is not None:
-        settings["row_mode"] = body.row_mode
-    if body.manual_row is not None:
-        settings["manual_row"] = body.manual_row
+    if body.col_mode is not None:
+        settings["col_mode"] = body.col_mode
+    if body.manual_col is not None:
+        settings["manual_col"] = body.manual_col
     if body.scan_delay is not None:
         settings["scan_delay"] = body.scan_delay
     if body.mux_settle_ms is not None:
@@ -134,17 +134,17 @@ async def calibrate_board_route():
         return {"status": "error", "message": "Calibration failed"}
 
 class HighlightRequest(BaseModel):
-    row: int
     col: int
+    row: int
 
 @app.post("/api/board/highlight")
 async def highlight_square_route(body: HighlightRequest):
     """Highlights or toggles a physical square with orange LEDs."""
     current = state_manager.highlighted_square
-    if current == (body.row, body.col):
+    if current == (body.col, body.row):
         state_manager.highlighted_square = None
     else:
-        state_manager.highlighted_square = (body.row, body.col)
+        state_manager.highlighted_square = (body.col, body.row)
     return {"status": "success", "highlighted_square": state_manager.highlighted_square}
 
 @app.post("/api/board/test_leds")

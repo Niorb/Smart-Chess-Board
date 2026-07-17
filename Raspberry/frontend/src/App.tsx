@@ -31,25 +31,25 @@ function App() {
   const [selectedTC, setSelectedTC] = useState<string>('10 min');
 
   // Click to Move
-  const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
+  const [selectedSquare, setSelectedSquare] = useState<{ col: number; row: number } | null>(null);
 
-  const getChessCoord = (row: number, col: number): string => {
-    const file = String.fromCharCode(97 + col);
-    const rank = row + 1;
+  const getChessCoord = (col: number, row: number): string => {
+    const file = String.fromCharCode(97 + row);
+    const rank = col + 1;
     return `${file}${rank}`;
   };
 
-  const handleSquareClick = async (row: number, col: number) => {
+  const handleSquareClick = async (col: number, row: number) => {
     if (state.status !== 'PLAYING') return;
 
     if (!selectedSquare) {
-      const piece = state.digital[row]?.[col];
+      const piece = state.digital[col]?.[row];
       if (piece && piece !== '.') {
-        setSelectedSquare({ row, col });
+        setSelectedSquare({ col, row });
       }
     } else {
-      const fromSquare = getChessCoord(selectedSquare.row, selectedSquare.col);
-      const toSquare = getChessCoord(row, col);
+      const fromSquare = getChessCoord(selectedSquare.col, selectedSquare.row);
+      const toSquare = getChessCoord(col, row);
 
       if (fromSquare === toSquare) {
         setSelectedSquare(null);
@@ -68,9 +68,9 @@ function App() {
     }
   };
 
-  const handleToggleHighlight = async (row: number, col: number) => {
+  const handleToggleHighlight = async (col: number, row: number) => {
     try {
-      await highlightSquare(row, col);
+      await highlightSquare(col, row);
     } catch (err) {
       console.error("Error toggling highlight:", err);
     }
@@ -84,22 +84,22 @@ function App() {
     }
   };
 
-  const handleToggleDisableSquare = async (row: number, col: number) => {
+  const handleToggleDisableSquare = async (col: number, row: number) => {
     const currentDisabled = state.physical.disabled_squares ?? [];
-    const exists = currentDisabled.some((sq) => sq[0] === row && sq[1] === col);
+    const exists = currentDisabled.some((sq) => sq[0] === col && sq[1] === row);
     let nextDisabled: number[][];
     if (exists) {
-      nextDisabled = currentDisabled.filter((sq) => !(sq[0] === row && sq[1] === col));
+      nextDisabled = currentDisabled.filter((sq) => !(sq[0] === col && sq[1] === row));
     } else {
-      nextDisabled = [...currentDisabled, [row, col]];
+      nextDisabled = [...currentDisabled, [col, row]];
     }
     
     try {
       const res = await updateBoardSettings(
         positiveThresh,
         negativeThresh,
-        rowMode,
-        manualRow,
+        colMode,
+        manualCol,
         scanDelay,
         muxSettleMs,
         debounceThreshold,
@@ -125,8 +125,8 @@ function App() {
     baselines: number[][];
     threshold_positive: number;
     threshold_negative: number;
-    row_mode?: 'auto' | 'manual';
-    manual_row?: number;
+    col_mode?: 'auto' | 'manual';
+    manual_col?: number;
     scan_delay?: number;
     mux_settle_ms?: number;
     debounce_threshold?: number;
@@ -135,8 +135,8 @@ function App() {
   } | null>(null);
   const [positiveThresh, setPositiveThresh] = useState<number>(150);
   const [negativeThresh, setNegativeThresh] = useState<number>(150);
-  const [rowMode, setRowMode] = useState<'auto' | 'manual'>('auto');
-  const [manualRow, setManualRow] = useState<number>(0);
+  const [colMode, setColMode] = useState<'auto' | 'manual'>('auto');
+  const [manualCol, setManualCol] = useState<number>(0);
   const [scanDelay, setScanDelay] = useState<number>(100);
   const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
   const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
@@ -152,8 +152,8 @@ function App() {
         setSettings(res);
         setPositiveThresh(res.threshold_positive);
         setNegativeThresh(res.threshold_negative);
-        setRowMode(res.row_mode || 'auto');
-        setManualRow(res.manual_row !== undefined ? res.manual_row : 0);
+        setColMode(res.col_mode || 'auto');
+        setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
         setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
@@ -222,8 +222,8 @@ function App() {
       const res = await updateBoardSettings(
         positiveThresh,
         negativeThresh,
-        rowMode,
-        manualRow,
+        colMode,
+        manualCol,
         scanDelay,
         muxSettleMs,
         debounceThreshold,
@@ -243,34 +243,34 @@ function App() {
     }
   };
 
-  const handleRowModeChange = async (mode: 'auto' | 'manual') => {
-    setRowMode(mode);
+  const handleColModeChange = async (mode: 'auto' | 'manual') => {
+    setColMode(mode);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, mode, manualRow, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, mode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
     } catch (err) {
-      console.error("Error updating row mode:", err);
+      console.error("Error updating column mode:", err);
     }
   };
 
-  const handleManualRowChange = async (row: number) => {
-    setManualRow(row);
+  const handleManualColChange = async (col: number) => {
+    setManualCol(col);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, row, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, colMode, col, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
     } catch (err) {
-      console.error("Error activating row:", err);
+      console.error("Error activating column:", err);
     }
   };
 
   const handleScanDelayChange = async (val: number) => {
     setScanDelay(val);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, val, muxSettleMs, debounceThreshold, baselineWindowS);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, colMode, manualCol, val, muxSettleMs, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -282,7 +282,7 @@ function App() {
   const handleMuxSettleMsChange = async (val: number) => {
     setMuxSettleMs(val);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, val, debounceThreshold, baselineWindowS);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, val, debounceThreshold, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -294,7 +294,7 @@ function App() {
   const handleDebounceThresholdChange = async (val: number) => {
     setDebounceThreshold(val);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, muxSettleMs, val, baselineWindowS);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, val, baselineWindowS);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -306,7 +306,7 @@ function App() {
   const handleBaselineWindowSChange = async (val: number) => {
     setBaselineWindowS(val);
     try {
-      const res = await updateBoardSettings(positiveThresh, negativeThresh, rowMode, manualRow, scanDelay, muxSettleMs, debounceThreshold, val);
+      const res = await updateBoardSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, val);
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -456,16 +456,16 @@ function App() {
                   Array(8).fill(null).map((_, cIdx) => {
                     const isDark = (rIdx + cIdx) % 2 === 1;
                     const isFlipped = state.my_color === 'black';
-                    const displayRow = isFlipped ? rIdx : 7 - rIdx;
-                    const displayCol = isFlipped ? 7 - cIdx : cIdx;
-                    const piece = state.digital[displayRow]?.[displayCol] || '.';
+                    const displayCol = isFlipped ? rIdx : 7 - rIdx;
+                    const displayRow = isFlipped ? 7 - cIdx : cIdx;
+                    const piece = state.digital[displayCol]?.[displayRow] || '.';
                     
                     return (
                       <div 
                         key={`${rIdx}-${cIdx}`}
-                        onClick={() => handleSquareClick(displayRow, displayCol)}
+                        onClick={() => handleSquareClick(displayCol, displayRow)}
                         className={`flex items-center justify-center relative cursor-pointer ${isDark ? 'bg-slate-700' : 'bg-slate-600'} ${
-                          selectedSquare?.row === displayRow && selectedSquare?.col === displayCol
+                          selectedSquare?.col === displayCol && selectedSquare?.row === displayRow
                             ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-400/20'
                             : ''
                         }`}
@@ -488,18 +488,18 @@ function App() {
                          Array(8).fill(null).map((_, cIdx) => {
                            const isFlipped = state.my_color === 'black';
                            
-                           // White: columns are files a-h (cIdx 0-7), rows are ranks 8-1 (rIdx 0-7)
-                           // Black: columns are files h-a (cIdx 0-7 flipped), rows are ranks 1-8 (rIdx 0-7)
+                           // Column = Rank (ranks 8-1 on White, 1-8 on Black)
+                           // Row = File (files a-h on White, h-a on Black)
                            const fileIdx = isFlipped ? (7 - cIdx) : cIdx;
                            const rankIdx = isFlipped ? rIdx : (7 - rIdx);
                            
-                           const sensorRow = rankIdx; 
-                           const sensorCol = fileIdx; 
+                           const sensorCol = rankIdx; 
+                           const sensorRow = fileIdx; 
                            
-                           const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
-                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol;
+                           const sensorStateVal = state.physical.grid?.[sensorCol]?.[sensorRow] ?? 0;
+                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorCol && state.physical.highlighted_square?.[1] === sensorRow;
                            const isDisabled = (state.physical.disabled_squares ?? []).some(
-                             (sq) => sq[0] === sensorRow && sq[1] === sensorCol
+                             (sq) => sq[0] === sensorCol && sq[1] === sensorRow
                            );
                            
                            let bgClass = 'bg-slate-900/40';
@@ -518,12 +518,12 @@ function App() {
                                key={`sensor-${rIdx}-${cIdx}`}
                                onClick={() => {
                                  if (!isDisabled) {
-                                   handleToggleHighlight(sensorRow, sensorCol);
+                                   handleToggleHighlight(sensorCol, sensorRow);
                                  }
                                }}
                                onContextMenu={(e) => {
                                  e.preventDefault();
-                                 handleToggleDisableSquare(sensorRow, sensorCol);
+                                 handleToggleDisableSquare(sensorCol, sensorRow);
                                }}
                                className={`rounded-sm transition-all duration-300 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/50'} ${bgClass}`}
                              />
@@ -678,26 +678,26 @@ function App() {
                    <div className="grid grid-cols-8 gap-2 w-full">
                       {Array(8).fill(null).map((_, rIdx) => {
                         return Array(8).fill(null).map((_, cIdx) => {
-                          const sensorRow = cIdx;
-                          const sensorCol = rIdx;
-                          const rawAdc = state.physical.adc?.[sensorRow]?.[sensorCol] ?? 0;
-                          const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
-                          const baseline = state.physical.baselines?.[sensorRow]?.[sensorCol] ?? settings?.baselines?.[sensorRow]?.[sensorCol] ?? 1550;
+                          const sensorCol = cIdx;
+                          const sensorRow = rIdx;
+                          const rawAdc = state.physical.adc?.[sensorCol]?.[sensorRow] ?? 0;
+                          const sensorStateVal = state.physical.grid?.[sensorCol]?.[sensorRow] ?? 0;
+                          const baseline = state.physical.baselines?.[sensorCol]?.[sensorRow] ?? settings?.baselines?.[sensorCol]?.[sensorRow] ?? 1550;
                           const diffVal = rawAdc - baseline;
                           
-                          const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorCol];
-                          const rank = sensorRow + 1;
+                          const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorRow];
+                          const rank = sensorCol + 1;
                           const chessCoord = `${file}${rank}`;
 
-                          const isRowActive = rowMode === 'auto' || sensorRow === manualRow;
-                          let cardClass = 'bg-slate-950 border-slate-850 text-slate-300';
+                          const isColActive = colMode === 'auto' || sensorCol === manualCol;
+                          let cardClass = 'bg-slate-950 border-slate-855 text-slate-300';
                           let statusText = 'IDLE';
                           let statusColorClass = 'text-slate-650';
                           let dotColorClass = 'bg-slate-800';
 
-                          const isHighlighted = state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol;
+                          const isHighlighted = state.physical.highlighted_square?.[0] === sensorCol && state.physical.highlighted_square?.[1] === sensorRow;
                           const isDisabled = (state.physical.disabled_squares ?? []).some(
-                            (sq) => sq[0] === sensorRow && sq[1] === sensorCol
+                            (sq) => sq[0] === sensorCol && sq[1] === sensorRow
                           );
 
                           if (isDisabled) {
@@ -706,48 +706,48 @@ function App() {
                             statusColorClass = 'text-slate-700';
                             dotColorClass = 'bg-slate-900';
                           } else if (isHighlighted) {
-                            cardClass = 'bg-orange-950/40 border-orange-500/80 shadow-[0_0_15px_rgba(249,115,22,0.15)] text-orange-100 ring-2 ring-orange-500/40';
+                            cardClass = 'bg-orange-950/40 border-orange-500/80 shadow-[0_0_15px_rgba(249,115,22,0.15)] text-orange-105 ring-2 ring-orange-500/40';
                             statusText = 'HIGHLIGHT';
                             statusColorClass = 'text-orange-400';
                             dotColorClass = 'bg-orange-450 animate-pulse';
                           } else if (sensorStateVal === 1) {
-                            cardClass = 'bg-red-950/40 border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.15)] text-red-100';
+                            cardClass = 'bg-red-950/40 border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.15)] text-red-105';
                             statusText = 'NORTH (+)';
                             statusColorClass = 'text-red-400';
                             dotColorClass = 'bg-red-400 animate-pulse';
                           } else if (sensorStateVal === -1) {
-                            cardClass = 'bg-emerald-950/40 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] text-emerald-100';
+                            cardClass = 'bg-emerald-950/40 border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.15)] text-emerald-105';
                             statusText = 'SOUTH (-)';
                             statusColorClass = 'text-emerald-400';
                             dotColorClass = 'bg-emerald-400 animate-pulse';
                           }
 
-                          // Highlight row selection visually in manual mode
-                          let rowDiagClass = isRowActive ? 'opacity-100 scale-100' : 'opacity-25 scale-95 border-slate-900/60 pointer-events-none select-none';
-                          if (rowMode === 'manual' && isRowActive && !isHighlighted && !isDisabled) {
+                          // Highlight col selection visually in manual mode
+                          let colDiagClass = isColActive ? 'opacity-100 scale-100' : 'opacity-25 scale-95 border-slate-900/60 pointer-events-none select-none';
+                          if (colMode === 'manual' && isColActive && !isHighlighted && !isDisabled) {
                             cardClass += ' ring-2 ring-blue-500/40 bg-slate-900/20';
                           }
 
                           return (
                             <div 
-                              key={`debug-sensor-${sensorRow}-${sensorCol}`}
+                              key={`debug-sensor-${sensorCol}-${sensorRow}`}
                               onClick={() => {
                                 if (!isDisabled) {
-                                  handleToggleHighlight(sensorRow, sensorCol);
+                                  handleToggleHighlight(sensorCol, sensorRow);
                                 }
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
-                                handleToggleDisableSquare(sensorRow, sensorCol);
+                                handleToggleDisableSquare(sensorCol, sensorRow);
                               }}
-                              className={`flex flex-col justify-between p-1.5 rounded-lg border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${rowDiagClass}`}
+                              className={`flex flex-col justify-between p-1.5 rounded-lg border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${colDiagClass}`}
                             >
                               <div className="flex justify-between items-center w-full">
                                  <span className="text-[9px] uppercase font-bold text-slate-500 font-mono">
                                     {chessCoord}
                                  </span>
                                  <span className="text-[7px] text-slate-655 font-mono">
-                                    [{sensorRow},{sensorCol}]
+                                    [{sensorCol},{sensorRow}]
                                  </span>
                               </div>
                               
@@ -757,7 +757,7 @@ function App() {
                                  }`}>
                                     {diffVal > 0 ? `+${diffVal}` : diffVal}
                                  </span>
-                                 <span className="text-[7px] text-slate-600 font-mono block">
+                                 <span className="text-[7px] text-slate-605 font-mono block">
                                     Base: {baseline}
                                  </span>
                               </div>
@@ -924,14 +924,14 @@ function App() {
                     </div>
                  </div>
 
-                  {/* Row Activation Diagnostics */}
+                  {/* Column Activation Diagnostics */}
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                         <Cpu size={16} className="text-blue-400" />
-                        Row Activation Diagnostics
+                        Column Activation Diagnostics
                      </h3>
                      <div className="text-xs text-slate-400 leading-relaxed text-left">
-                        Control which rows are physically scanned. Lock a row to diagnose wiring issues or crosstalk.
+                        Control which columns are physically scanned. Lock a column to diagnose wiring issues or crosstalk.
                      </div>
                      
                      <div className="flex flex-col gap-3">
@@ -939,9 +939,9 @@ function App() {
                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Activation Mode</label>
                            <div className="grid grid-cols-2 gap-2">
                               <button
-                                onClick={() => handleRowModeChange('auto')}
+                                onClick={() => handleColModeChange('auto')}
                                 className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                                  rowMode === 'auto'
+                                  colMode === 'auto'
                                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/10'
                                     : 'bg-slate-950 hover:bg-slate-850 border border-slate-850 text-slate-400 hover:text-white'
                                 }`}
@@ -949,11 +949,11 @@ function App() {
                                  Automatic
                               </button>
                               <button
-                                onClick={() => handleRowModeChange('manual')}
+                                onClick={() => handleColModeChange('manual')}
                                 className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                                  rowMode === 'manual'
+                                  colMode === 'manual'
                                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/10'
-                                    : 'bg-slate-950 hover:bg-slate-850 border border-slate-850 text-slate-400 hover:text-white'
+                                    : 'bg-slate-950 hover:bg-slate-855 border border-slate-850 text-slate-400 hover:text-white'
                                 }`}
                               >
                                  Manual
@@ -961,26 +961,26 @@ function App() {
                            </div>
                         </div>
 
-                        {rowMode === 'manual' && (
+                        {colMode === 'manual' && (
                            <div className="flex flex-col gap-1.5 text-left transition-all duration-350 animate-fadeIn">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Row Select</label>
+                              <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Column Select</label>
                               <div className="grid grid-cols-5 gap-1.5">
-                                 {[0, 1, 2, 3, 4, 5, 6, 7, -1].map((row) => (
+                                 {[0, 1, 2, 3, 4, 5, 6, 7, -1].map((col) => (
                                     <button
-                                      key={`row-select-${row}`}
-                                      onClick={() => handleManualRowChange(row)}
+                                      key={`col-select-${col}`}
+                                      onClick={() => handleManualColChange(col)}
                                       className={`py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
-                                        manualRow === row
+                                        manualCol === col
                                           ? 'bg-red-655 text-white border border-red-500 shadow-md shadow-red-950/20'
                                           : 'bg-slate-950 hover:bg-slate-850 border border-slate-850 text-slate-400 hover:text-white'
                                       }`}
                                     >
-                                       {row === -1 ? 'None' : `R${row}`}
+                                       {col === -1 ? 'None' : `C${col}`}
                                     </button>
                                  ))}
                               </div>
                               <p className="text-[10px] text-slate-550 mt-1 leading-normal border-b border-slate-800/60 pb-3">
-                                 Locking a row sets other rows to channel 15 on the MUX. They should read baseline values (~1550).
+                                 Locking a column sets other columns to channel 15 on the MUX. They should read baseline values (~1550).
                               </p>
 
                               <div className="flex flex-col gap-1.5 mt-2">

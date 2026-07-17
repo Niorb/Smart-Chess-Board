@@ -2,7 +2,7 @@
 """
 smart_chess_board.py
 
-Scans a 4x4 matrix of analog Hall effect sensors via an ESP32 connected 
+Scans an 8x8 matrix of analog Hall effect sensors via an ESP32 connected 
 over USB Serial. Detects chess piece presence via magnets. Tracks real 
 piece identities and lights up squares with WS2812B LEDs.
 
@@ -70,14 +70,18 @@ def is_white(piece): return piece.isupper() and piece != "."
 def is_black(piece): return piece.islower() and piece != "."
 
 # =============================================================================
-# STARTING POSITION (4x4 prototype)
+# STARTING POSITION (8x8 Standard chess board setup)
 # =============================================================================
 
 INITIAL_POSITION = [
-    ["B", "P", "N", "R"],
-    [".", ".", ".", "."],
-    [".", ".", ".", "."],
-    ["r", "n", "k", "b"],
+    ["R", "N", "B", "Q", "K", "B", "N", "R"],
+    ["P", "P", "P", "P", "P", "P", "P", "P"],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    ["p", "p", "p", "p", "p", "p", "p", "p"],
+    ["r", "n", "b", "q", "k", "b", "n", "r"],
 ]
 
 # =============================================================================
@@ -86,130 +90,130 @@ INITIAL_POSITION = [
 
 def process_changes(old_sensor, sensor_state, piece_map, lifted):
     moved_to = None
-    for row in range(BOARD_ROWS):
-        for col in range(BOARD_COLS):
-            if old_sensor[row][col] and not sensor_state[row][col]:
-                piece = piece_map[row][col]
+    for col in range(BOARD_COLS):
+        for row in range(BOARD_ROWS):
+            if old_sensor[col][row] and not sensor_state[col][row]:
+                piece = piece_map[col][row]
                 if piece != ".":
                     if lifted["piece"] != ".":
                         if (is_white(lifted["piece"]) and is_black(piece)) or (is_black(lifted["piece"]) and is_white(piece)):
                             print(f"Capture in progress: {piece_name(piece)} removed.")
-                            piece_map[row][col] = "."
-                            lifted["capture_square"] = (row, col)
+                            piece_map[col][row] = "."
+                            lifted["capture_square"] = (col, row)
                             continue
-                        piece_map[lifted["row"]][lifted["col"]] = lifted["piece"]
+                        piece_map[lifted["col"]][lifted["row"]] = lifted["piece"]
                     lifted["piece"] = piece
-                    lifted["row"], lifted["col"] = row, col
-                    piece_map[row][col] = "."
-                    print(f"{piece_name(piece)} lifted from [{row},{col}]")
+                    lifted["col"], lifted["row"] = col, row
+                    piece_map[col][row] = "."
+                    print(f"{piece_name(piece)} lifted from [{col},{row}]")
 
-    for row in range(BOARD_ROWS):
-        for col in range(BOARD_COLS):
-            if not old_sensor[row][col] and sensor_state[row][col]:
+    for col in range(BOARD_COLS):
+        for row in range(BOARD_ROWS):
+            if not old_sensor[col][row] and sensor_state[col][row]:
                 if lifted["piece"] != ".":
-                    captured = piece_map[row][col]
-                    if captured != ".": print(f"{piece_name(captured)} captured at [{row},{col}]!")
-                    piece_map[row][col] = lifted["piece"]
-                    if row != lifted["row"] or col != lifted["col"]:
-                        print(f"{piece_name(lifted['piece'])} moved [{lifted['row']},{lifted['col']}] -> [{row},{col}]")
-                        moved_to = (row, col)
+                    captured = piece_map[col][row]
+                    if captured != ".": print(f"{piece_name(captured)} captured at [{col},{row}]!")
+                    piece_map[col][row] = lifted["piece"]
+                    if col != lifted["col"] or row != lifted["row"]:
+                        print(f"{piece_name(lifted['piece'])} moved [{lifted['col']},{lifted['row']}] -> [{col},{row}]")
+                        moved_to = (col, row)
                     else:
                         print(f"{piece_name(lifted['piece'])} placed back.")
-                    lifted["piece"], lifted["row"], lifted["col"], lifted["capture_square"] = ".", -1, -1, None
+                    lifted["piece"], lifted["col"], lifted["row"], lifted["capture_square"] = ".", -1, -1, None
                 else:
-                    print(f"WARNING: Unknown piece at [{row},{col}]")
-                    piece_map[row][col] = "?"
+                    print(f"WARNING: Unknown piece at [{col},{row}]")
+                    piece_map[col][row] = "?"
     return moved_to
 
 def print_board_state(piece_map, lifted):
-    print("\n   " + " ".join(chr(ord("a") + c) for c in range(BOARD_COLS)))
-    print("   " + "--" * BOARD_COLS)
-    for row in range(BOARD_ROWS - 1, -1, -1):
-        print(f" {row + 1}| " + " ".join(piece_map[row][c] for c in range(BOARD_COLS)))
+    print("\n   " + " ".join(chr(ord("a") + r) for r in range(BOARD_ROWS)))
+    print("   " + "--" * BOARD_ROWS)
+    for col in range(BOARD_COLS - 1, -1, -1):
+        print(f" {col + 1}| " + " ".join(piece_map[col][r] for r in range(BOARD_ROWS)))
     if lifted["piece"] != ".":
-        print(f"\nIn the air: {piece_name(lifted['piece'])} from [{lifted['row']},{lifted['col']}]")
+        print(f"\nIn the air: {piece_name(lifted['piece'])} from [{lifted['col']},{lifted['row']}]")
 
 # =============================================================================
 # CHESS LOGIC / LEDS
 # =============================================================================
 
-def get_valid_moves(piece, row, col, piece_map):
+def get_valid_moves(piece, col, row, piece_map):
     moves = []
     piece_type, white_turn = piece.upper(), piece.isupper()
-    def is_enemy(r, c): return piece_map[r][c] != "." and (piece_map[r][c].islower() if white_turn else piece_map[r][c].isupper())
-    def is_friend(r, c): return piece_map[r][c] != "." and (piece_map[r][c].isupper() if white_turn else piece_map[r][c].islower())
-    def in_bounds(r, c): return 0 <= r < BOARD_ROWS and 0 <= c < BOARD_COLS
+    def is_enemy(c, r): return piece_map[c][r] != "." and (piece_map[c][r].islower() if white_turn else piece_map[c][r].isupper())
+    def is_friend(c, r): return piece_map[c][r] != "." and (piece_map[c][r].isupper() if white_turn else piece_map[c][r].islower())
+    def in_bounds(c, r): return 0 <= c < BOARD_COLS and 0 <= r < BOARD_ROWS
 
     if piece_type == "P":
         direction = 1 if white_turn else -1
-        if in_bounds(row+direction, col) and piece_map[row+direction][col] == ".": moves.append((row+direction, col, False))
-        for dc in [-1, 1]:
-            if in_bounds(row+direction, col+dc) and is_enemy(row+direction, col+dc): moves.append((row+direction, col+dc, True))
+        if in_bounds(col+direction, row) and piece_map[col+direction][row] == ".": moves.append((col+direction, row, False))
+        for dr in [-1, 1]:
+            if in_bounds(col+direction, row+dr) and is_enemy(col+direction, row+dr): moves.append((col+direction, row+dr, True))
     elif piece_type == "N":
-        for dr, dc in [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]:
-            if in_bounds(row+dr, col+dc) and not is_friend(row+dr, col+dc): moves.append((row+dr, col+dc, piece_map[row+dr][col+dc] != "."))
+        for dc, dr in [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]:
+            if in_bounds(col+dc, row+dr) and not is_friend(col+dc, row+dr): moves.append((col+dc, row+dr, piece_map[col+dc][row+dr] != "."))
     elif piece_type == "K":
-        for dr in [-1,0,1]:
-            for dc in [-1,0,1]:
-                if dr==0 and dc==0: continue
-                if in_bounds(row+dr, col+dc) and not is_friend(row+dr, col+dc): moves.append((row+dr, col+dc, piece_map[row+dr][col+dc] != "."))
+        for dc in [-1,0,1]:
+            for dr in [-1,0,1]:
+                if dc==0 and dr==0: continue
+                if in_bounds(col+dc, row+dr) and not is_friend(col+dc, row+dr): moves.append((col+dc, row+dr, piece_map[col+dc][row+dr] != "."))
     else:
         dirs = []
-        if piece_type in ["R", "Q"]: dirs += [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        if piece_type in ["R", "Q"]: dirs += [(1, 0), (-1, 0), (0, 1), (0, -1)]
         if piece_type in ["B", "Q"]: dirs += [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-        for dr, dc in dirs:
-            nr, nc = row+dr, col+dc
-            while in_bounds(nr, nc):
-                if piece_map[nr][nc] == ".": moves.append((nr, nc, False))
-                elif is_enemy(nr, nc): moves.append((nr, nc, True)); break
+        for dc, dr in dirs:
+            nc, nr = col+dc, row+dr
+            while in_bounds(nc, nr):
+                if piece_map[nc][nr] == ".": moves.append((nc, nr, False))
+                elif is_enemy(nc, nr): moves.append((nc, nr, True)); break
                 else: break
-                nr, nc = nr+dr, nc+dc
+                nc, nr = nc+dc, nr+dr
     return moves
 
 # get_led_indices imported from led_helpers
 
 def update_leds(strip, piece_map, lifted):
     from board_hardware import settings
-    row_mode = settings.get("row_mode", "auto")
-    manual_row = settings.get("manual_row", 0)
+    col_mode = settings.get("col_mode", "auto")
+    manual_col = settings.get("manual_col", 0)
 
     for i in range(NUM_LEDS): strip.setPixelColor(i, Color(0, 0, 0))
     if lifted["piece"] != ".":
-        if row_mode != "manual" or lifted["row"] == manual_row:
-            for idx in get_led_indices(lifted["row"], lifted["col"]): strip.setPixelColor(idx, Color(0, 0, 255))
+        if col_mode != "manual" or lifted["col"] == manual_col:
+            for idx in get_led_indices(lifted["col"], lifted["row"]): strip.setPixelColor(idx, Color(0, 0, 255))
         if lifted.get("capture_square"):
-            cap_r, cap_c = lifted["capture_square"]
-            if row_mode != "manual" or cap_r == manual_row:
+            cap_c, cap_r = lifted["capture_square"]
+            if col_mode != "manual" or cap_c == manual_col:
                 color = Color(255, 0, 0) if int(time.time() * 4) % 2 == 0 else Color(0, 0, 0)
-                for idx in get_led_indices(cap_r, cap_c): strip.setPixelColor(idx, color)
+                for idx in get_led_indices(cap_c, cap_r): strip.setPixelColor(idx, color)
         else:
-            for r, c, is_cap in get_valid_moves(lifted["piece"], lifted["row"], lifted["col"], piece_map):
-                if row_mode == "manual" and r != manual_row:
+            for c, r, is_cap in get_valid_moves(lifted["piece"], lifted["col"], lifted["row"], piece_map):
+                if col_mode == "manual" and c != manual_col:
                     continue
                 color = Color(255, 0, 0) if is_cap else Color(0, 255, 0)
-                for idx in get_led_indices(r, c): strip.setPixelColor(idx, color)
+                for idx in get_led_indices(c, r): strip.setPixelColor(idx, color)
     strip.show()
 
 def check_board_setup(h, ser, strip, initial_position):
     from board_hardware import settings
-    raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    raw_state = [[False] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    sensor_state = [[False] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     print("\nBOARD SETUP MODE - Place pieces according to target grid.")
     try:
         while True:
-            row_mode = settings.get("row_mode", "auto")
-            manual_row = settings.get("manual_row", 0)
+            col_mode = settings.get("col_mode", "auto")
+            manual_col = settings.get("manual_col", 0)
             scan_board(h, ser, raw_state)
             apply_debounce(raw_state, sensor_state, stable_count, DEBOUNCE_THRESHOLD)
             setup_ok, pulse = True, 0.65 + 0.35 * math.sin(time.time() * 5)
-            for r in range(BOARD_ROWS):
-                if row_mode == "manual" and r != manual_row:
-                    for c in range(BOARD_COLS):
-                        for idx in get_led_indices(r, c): strip.setPixelColor(idx, Color(0, 0, 0))
+            for c in range(BOARD_COLS):
+                if col_mode == "manual" and c != manual_col:
+                    for r in range(BOARD_ROWS):
+                        for idx in get_led_indices(c, r): strip.setPixelColor(idx, Color(0, 0, 0))
                     continue
-                for c in range(BOARD_COLS):
-                    target, present = initial_position[r][c], sensor_state[r][c]
+                for r in range(BOARD_ROWS):
+                    target, present = initial_position[c][r], sensor_state[c][r]
                     required = (target != ".")
                     if present != required: setup_ok = False
                     color = Color(0,0,0)
@@ -219,7 +223,7 @@ def check_board_setup(h, ser, strip, initial_position):
                             color = Color(int(((color>>16)&0xFF)*pulse), int(((color>>8)&0xFF)*pulse), int((color&0xFF)*pulse))
                     elif present:
                         color = Color(255, 0, 0); setup_ok = False
-                    for idx in get_led_indices(r, c): strip.setPixelColor(idx, color)
+                    for idx in get_led_indices(c, r): strip.setPixelColor(idx, color)
             strip.show()
             if setup_ok:
                 print("Board verified!"); time.sleep(1.0); break
@@ -248,11 +252,11 @@ def main():
     if strip is not None:
         strip.set_serial_conn(ser)
 
-    sensor_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    raw_state = [[False] * BOARD_COLS for _ in range(BOARD_ROWS)]
-    stable_count = [[0] * BOARD_COLS for _ in range(BOARD_ROWS)]
+    sensor_state = [[False] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[False] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     piece_map = [row[:] for row in INITIAL_POSITION]
-    lifted = {"piece": ".", "row": -1, "col": -1, "capture_square": None}
+    lifted = {"piece": ".", "col": -1, "row": -1, "capture_square": None}
 
     print("Smart Chess Board - Analog ESP32 Version")
     check_board_setup(h, ser, strip, piece_map)
