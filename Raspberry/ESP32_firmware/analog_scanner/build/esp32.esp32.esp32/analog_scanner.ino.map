@@ -59868,7 +59868,7 @@ LOAD C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bi
                 0x400017f4                        sbrk = 0x400017f4
                 0x40001808                        times = 0x40001808
                 0x4000181c                        write = 0x4000181c
-                0x3ffc3528                        _heap_start = _heap_low_start
+                0x3ffc3568                        _heap_start = _heap_low_start
                 0x400a0000                        _sram1_iram_start = 0x400a0000
                 0x00000000                        _sram1_iram_len = (_iram_end > _sram1_iram_start)?(_iram_end - _sram1_iram_start):0x0
                 0x40000000                        _heap_end = ALIGN (((0x40000000 - _sram1_iram_len) - 0x3), 0x4)
@@ -65176,470 +65176,470 @@ LOAD C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bi
                 0x3f800000                        . = ALIGN (0x4)
                 0x3f800000                        _ext_ram_bss_end = ABSOLUTE (.)
 
-.dram0.bss      0x3ffc1fd0     0x1558
+.dram0.bss      0x3ffc1fd0     0x1598
                 0x3ffc1fd0                        . = ALIGN (0x8)
                 0x3ffc1fd0                        _bss_start = ABSOLUTE (.)
  *(EXCLUDE_FILE(*libbtdm_app.a *libbt.a) .bss EXCLUDE_FILE(*libbtdm_app.a *libbt.a) .bss.*)
  .bss.latest_scan
-                0x3ffc1fd0       0x40 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
+                0x3ffc1fd0       0x80 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
                 0x3ffc1fd0                latest_scan
- .bss.strip2    0x3ffc2010       0x18 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
-                0x3ffc2010                strip2
- .bss.strip1    0x3ffc2028       0x18 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
-                0x3ffc2028                strip1
+ .bss.strip2    0x3ffc2050       0x18 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
+                0x3ffc2050                strip2
+ .bss.strip1    0x3ffc2068       0x18 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\sketch\analog_scanner.ino.cpp.o
+                0x3ffc2068                strip1
  .bss.led_data$1
-                0x3ffc2040        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
+                0x3ffc2080        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
  .bss.led_data_size$2
-                0x3ffc2044        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
+                0x3ffc2084        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
  .bss.show_mutex
-                0x3ffc2048        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
- .bss.Serial2   0x3ffc204c       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
-                0x3ffc204c                Serial2
- .bss.Serial1   0x3ffc2098       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
-                0x3ffc2098                Serial1
- .bss.Serial0   0x3ffc20e4       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
-                0x3ffc20e4                Serial0
+                0x3ffc2088        0x4 C:\Users\robin\AppData\Local\arduino\sketches\CC4026366272BC85D212C9A1FC806036\libraries\Adafruit_NeoPixel\esp.c.o
+ .bss.Serial2   0x3ffc208c       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
+                0x3ffc208c                Serial2
+ .bss.Serial1   0x3ffc20d8       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
+                0x3ffc20d8                Serial1
+ .bss.Serial0   0x3ffc2124       0x4c C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(HardwareSerial.cpp.o)
+                0x3ffc2124                Serial0
  .bss.emptyString
-                0x3ffc2130       0x10 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(WString.cpp.o)
-                0x3ffc2130                emptyString
+                0x3ffc2170       0x10 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(WString.cpp.o)
+                0x3ffc2170                emptyString
  .bss.adc_handle
-                0x3ffc2140       0x38 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-adc.c.o)
-                0x3ffc2140                adc_handle
+                0x3ffc2180       0x38 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-adc.c.o)
+                0x3ffc2180                adc_handle
  .bss._panic_handler_arg
-                0x3ffc2178        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-misc.c.o)
+                0x3ffc21b8        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-misc.c.o)
  .bss._panic_handler
-                0x3ffc217c        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-misc.c.o)
- .bss.pins      0x3ffc2180      0x280 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-periman.c.o)
+                0x3ffc21bc        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-misc.c.o)
+ .bss.pins      0x3ffc21c0      0x280 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-periman.c.o)
  .bss.deinit_functions
-                0x3ffc2400       0xe8 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-periman.c.o)
+                0x3ffc2440       0xe8 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-periman.c.o)
  .bss.g_rmt_block_lock
-                0x3ffc24e8        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-rmt.c.o)
+                0x3ffc2528        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-rmt.c.o)
  .bss.uartStateDetectingBaudrate$1
-                0x3ffc24ec        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
+                0x3ffc252c        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
  .bss.loc_buf$2
-                0x3ffc24ed       0x40 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
- *fill*         0x3ffc252d        0x3 
+                0x3ffc252d       0x40 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
+ *fill*         0x3ffc256d        0x3 
  .bss.s_uart_debug_nr
-                0x3ffc2530        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
+                0x3ffc2570        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-uart.c.o)
  .bss.loopTaskWDTEnabled
-                0x3ffc2534        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(main.cpp.o)
-                0x3ffc2534                loopTaskWDTEnabled
- *fill*         0x3ffc2535        0x3 
+                0x3ffc2574        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(main.cpp.o)
+                0x3ffc2574                loopTaskWDTEnabled
+ *fill*         0x3ffc2575        0x3 
  .bss.loopTaskHandle
-                0x3ffc2538        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(main.cpp.o)
-                0x3ffc2538                loopTaskHandle
+                0x3ffc2578        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(main.cpp.o)
+                0x3ffc2578                loopTaskHandle
  .bss._btLibraryInUse
-                0x3ffc253c        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-bt.c.o)
-                0x3ffc253c                _btLibraryInUse
+                0x3ffc257c        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-bt.c.o)
+                0x3ffc257c                _btLibraryInUse
  .bss.initialized$1
-                0x3ffc253d        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
- *fill*         0x3ffc253e        0x2 
- .bss.apb_change_lock
-                0x3ffc2540        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
- .bss.apb_change_callbacks
-                0x3ffc2544        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
- .bss.ESP       0x3ffc2548        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(Esp.cpp.o)
-                0x3ffc2548                ESP
- .bss.app_elf_sha256_str
-                0x3ffc2549        0xa C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_app_format.a(esp_app_desc.c.obj)
-                0x3ffc2549                app_elf_sha256_str
- *fill*         0x3ffc2553        0x1 
- .bss.curr_partition$2
-                0x3ffc2554        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libapp_update.a(esp_ota_ops.c.obj)
- .bss.s_partition_list_lock
-                0x3ffc2558        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_partition.a(partition.c.obj)
- .bss.s_partition_list
-                0x3ffc255c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_partition.a(partition.c.obj)
- .bss.map       0x3ffc2560        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libbootloader_support.a(bootloader_flash.c.obj)
- .bss.esp_flash_default_chip
-                0x3ffc2564        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(esp_flash_spi_init.c.obj)
-                0x3ffc2564                esp_flash_default_chip
- .bss.flash_erasing
-                0x3ffc2568        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_brownout_hook.c.obj)
- .bss.flash_brownout_needs_reset
-                0x3ffc2569        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_brownout_hook.c.obj)
- .bss.s_flash_op_complete
-                0x3ffc256a        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
- .bss.s_flash_op_can_start
-                0x3ffc256b        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
- .bss.s_flash_op_mutex
-                0x3ffc256c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
- .bss.s_flash_guard_ops
-                0x3ffc2570        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_ops.c.obj)
- .bss.s_no_block_func_arg
-                0x3ffc2574        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
- .bss.s_no_block_func_and_arg_are_ready
-                0x3ffc257c        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc257d        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
  *fill*         0x3ffc257e        0x2 
+ .bss.apb_change_lock
+                0x3ffc2580        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
+ .bss.apb_change_callbacks
+                0x3ffc2584        0x4 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(esp32-hal-cpu.c.o)
+ .bss.ESP       0x3ffc2588        0x1 C:\Users\robin\AppData\Local\arduino\cores\2c4675d2e2a4f93d6a9912c8ed48c0b9\core.a(Esp.cpp.o)
+                0x3ffc2588                ESP
+ .bss.app_elf_sha256_str
+                0x3ffc2589        0xa C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_app_format.a(esp_app_desc.c.obj)
+                0x3ffc2589                app_elf_sha256_str
+ *fill*         0x3ffc2593        0x1 
+ .bss.curr_partition$2
+                0x3ffc2594        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libapp_update.a(esp_ota_ops.c.obj)
+ .bss.s_partition_list_lock
+                0x3ffc2598        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_partition.a(partition.c.obj)
+ .bss.s_partition_list
+                0x3ffc259c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_partition.a(partition.c.obj)
+ .bss.map       0x3ffc25a0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libbootloader_support.a(bootloader_flash.c.obj)
+ .bss.esp_flash_default_chip
+                0x3ffc25a4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(esp_flash_spi_init.c.obj)
+                0x3ffc25a4                esp_flash_default_chip
+ .bss.flash_erasing
+                0x3ffc25a8        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_brownout_hook.c.obj)
+ .bss.flash_brownout_needs_reset
+                0x3ffc25a9        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_brownout_hook.c.obj)
+ .bss.s_flash_op_complete
+                0x3ffc25aa        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
+ .bss.s_flash_op_can_start
+                0x3ffc25ab        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
+ .bss.s_flash_op_mutex
+                0x3ffc25ac        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(cache_utils.c.obj)
+ .bss.s_flash_guard_ops
+                0x3ffc25b0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/qio_qspi\libspi_flash.a(flash_ops.c.obj)
+ .bss.s_no_block_func_arg
+                0x3ffc25b4        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+ .bss.s_no_block_func_and_arg_are_ready
+                0x3ffc25bc        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+ *fill*         0x3ffc25be        0x2 
  .bss.s_no_block_func
-                0x3ffc2580        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25c0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_wait_for
-                0x3ffc2588        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25c8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_func_arg
-                0x3ffc2590        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
- .bss.s_func    0x3ffc2598        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25d0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+ .bss.s_func    0x3ffc25d8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_ipc_ack
-                0x3ffc25a0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25e0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_ipc_mutex
-                0x3ffc25a8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25e8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_ipc_task_handle
-                0x3ffc25b0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
+                0x3ffc25f0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc.c.obj)
  .bss.s_dumping_core$0
-                0x3ffc25b8        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
- *fill*         0x3ffc25b9        0x3 
+                0x3ffc25f8        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
+ *fill*         0x3ffc25f9        0x3 
  .bss.g_panic_abort_details
-                0x3ffc25bc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
-                0x3ffc25bc                g_panic_abort_details
+                0x3ffc25fc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
+                0x3ffc25fc                g_panic_abort_details
  .bss.g_panic_abort
-                0x3ffc25c0        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
-                0x3ffc25c0                g_panic_abort
- *fill*         0x3ffc25c1        0x3 
+                0x3ffc2600        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic.c.obj)
+                0x3ffc2600                g_panic_abort
+ *fill*         0x3ffc2601        0x3 
  .bss.shutdown_handlers
-                0x3ffc25c4       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_system.c.obj)
+                0x3ffc2604       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_system.c.obj)
  .bss.__stack_chk_guard
-                0x3ffc25d8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(stack_check.c.obj)
-                0x3ffc25d8                __stack_chk_guard
+                0x3ffc2618        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(stack_check.c.obj)
+                0x3ffc2618                __stack_chk_guard
  .bss.p_twdt_obj
-                0x3ffc25dc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt.c.obj)
+                0x3ffc261c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt.c.obj)
  .bss.g_twdt_isr
-                0x3ffc25e0        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt.c.obj)
-                0x3ffc25e0                g_twdt_isr
- *fill*         0x3ffc25e1        0x3 
+                0x3ffc2620        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt.c.obj)
+                0x3ffc2620                g_twdt_isr
+ *fill*         0x3ffc2621        0x3 
  .bss.init_context
-                0x3ffc25e4        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt_impl_timergroup.c.obj)
+                0x3ffc2624        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(task_wdt_impl_timergroup.c.obj)
  .bss.s_resume_cores
-                0x3ffc25f0        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
+                0x3ffc2630        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
  .bss.s_cpu_inited
-                0x3ffc25f1        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
- .bss.s_cpu_up  0x3ffc25f3        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
- *fill*         0x3ffc25f5        0x3 
+                0x3ffc2631        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
+ .bss.s_cpu_up  0x3ffc2633        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(cpu_start.c.obj)
+ *fill*         0x3ffc2635        0x3 
  .bss.g_exc_frames
-                0x3ffc25f8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic_handler.c.obj)
-                0x3ffc25f8                g_exc_frames
+                0x3ffc2638        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(panic_handler.c.obj)
+                0x3ffc2638                g_exc_frames
  .bss.esp_ipc_isr_finish_cmd
-                0x3ffc2600        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2640        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
  .bss.s_stored_interrupt_level
-                0x3ffc2604        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2644        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
  .bss.s_count_of_nested_calls
-                0x3ffc2608        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2648        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
  .bss.s_stall_state
-                0x3ffc2610        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2650        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
  .bss.esp_ipc_func_arg
-                0x3ffc2614        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
-                0x3ffc2614                esp_ipc_func_arg
+                0x3ffc2654        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2654                esp_ipc_func_arg
  .bss.esp_ipc_func
-                0x3ffc2618        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
-                0x3ffc2618                esp_ipc_func
+                0x3ffc2658        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc2658                esp_ipc_func
  .bss.esp_ipc_isr_start_fl
-                0x3ffc261c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
-                0x3ffc261c                esp_ipc_isr_start_fl
- .bss.reason    0x3ffc2620        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(crosscore_int.c.obj)
- .bss.tick_cb   0x3ffc2628       0x40 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(freertos_hooks.c.obj)
- .bss.idle_cb   0x3ffc2668       0x40 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(freertos_hooks.c.obj)
+                0x3ffc265c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(esp_ipc_isr.c.obj)
+                0x3ffc265c                esp_ipc_isr_start_fl
+ .bss.reason    0x3ffc2660        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(crosscore_int.c.obj)
+ .bss.tick_cb   0x3ffc2668       0x40 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(freertos_hooks.c.obj)
+ .bss.idle_cb   0x3ffc26a8       0x40 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(freertos_hooks.c.obj)
  .bss.int_wdt_cpu1_ticked
-                0x3ffc26a8        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(int_wdt.c.obj)
-                0x3ffc26a8                int_wdt_cpu1_ticked
- *fill*         0x3ffc26a9        0x3 
+                0x3ffc26e8        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(int_wdt.c.obj)
+                0x3ffc26e8                int_wdt_cpu1_ticked
+ *fill*         0x3ffc26e9        0x3 
  .bss.iwdt_context
-                0x3ffc26ac        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(int_wdt.c.obj)
- .bss.ob$0      0x3ffc26b4       0x28 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
+                0x3ffc26ec        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(int_wdt.c.obj)
+ .bss.ob$0      0x3ffc26f4       0x28 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
  .bss.s_system_full_inited
-                0x3ffc26dc        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
+                0x3ffc271c        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
  .bss.s_system_inited
-                0x3ffc26dd        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
- *fill*         0x3ffc26df        0x1 
+                0x3ffc271d        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
+ *fill*         0x3ffc271f        0x1 
  .bss.g_startup_time
-                0x3ffc26e0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
-                0x3ffc26e0                g_startup_time
+                0x3ffc2720        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(startup.c.obj)
+                0x3ffc2720                g_startup_time
  .bss.s_cache_status
-                0x3ffc26e8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libhal.a(cache_hal_esp32.c.obj)
- .bss.base$0    0x3ffc26f0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_timestamp.c.obj)
+                0x3ffc2728        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libhal.a(cache_hal_esp32.c.obj)
+ .bss.base$0    0x3ffc2730        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_timestamp.c.obj)
  .bss.esp_log_cache_enabled
-                0x3ffc26f4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(util.c.obj)
+                0x3ffc2734        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(util.c.obj)
  .bss.s_log_tags
-                0x3ffc26f8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_linked_list.c.obj)
+                0x3ffc2738        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_linked_list.c.obj)
  .bss.s_log_cache_misses
-                0x3ffc26fc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
+                0x3ffc273c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
  .bss.s_log_cache_entry_count
-                0x3ffc2700        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
+                0x3ffc2740        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
  .bss.s_log_cache_max_generation
-                0x3ffc2704        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
+                0x3ffc2744        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
  .bss.s_log_cache
-                0x3ffc2708       0xf8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
+                0x3ffc2748       0xf8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_binary_heap.c.obj)
  .bss.s_log_mutex
-                0x3ffc2800        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_lock.c.obj)
+                0x3ffc2840        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\liblog.a(log_lock.c.obj)
  .bss.alloc_failed_callback
-                0x3ffc2804        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libheap.a(heap_caps.c.obj)
+                0x3ffc2844        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libheap.a(heap_caps.c.obj)
  .bss.registered_heaps
-                0x3ffc2808        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libheap.a(heap_caps_init.c.obj)
-                0x3ffc2808                registered_heaps
+                0x3ffc2848        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libheap.a(heap_caps_init.c.obj)
+                0x3ffc2848                registered_heaps
  .bss.last_ccount$1
-                0x3ffc280c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(hw_random.c.obj)
+                0x3ffc284c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(hw_random.c.obj)
  .bss.non_iram_int_disabled_flag
-                0x3ffc2810        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
- *fill*         0x3ffc2812        0x2 
+                0x3ffc2850        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
+ *fill*         0x3ffc2852        0x2 
  .bss.non_iram_int_disabled
-                0x3ffc2814        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
+                0x3ffc2854        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
  .bss.non_iram_int_mask
-                0x3ffc281c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
+                0x3ffc285c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
  .bss.vector_desc_head
-                0x3ffc2824        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
+                0x3ffc2864        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(intr_alloc.c.obj)
  .bss.ref_counts
-                0x3ffc2828       0x23 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(periph_ctrl.c.obj)
- *fill*         0x3ffc284b        0x1 
+                0x3ffc2868       0x23 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(periph_ctrl.c.obj)
+ *fill*         0x3ffc288b        0x1 
  .bss.s_rtc_isr_handle
-                0x3ffc284c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(rtc_module.c.obj)
+                0x3ffc288c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(rtc_module.c.obj)
  .bss.s_brownout_callback
-                0x3ffc2850        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(brownout.c.obj)
+                0x3ffc2890        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(brownout.c.obj)
  .bss.s_cur_pll_freq
-                0x3ffc2854        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(rtc_clk.c.obj)
+                0x3ffc2894        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(rtc_clk.c.obj)
  .bss.s_sar_power_on_cnt
-                0x3ffc2858        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(sar_periph_ctrl.c.obj)
+                0x3ffc2898        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(sar_periph_ctrl.c.obj)
  .bss.s_calibrated_freq
-                0x3ffc285c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(esp_clk_tree_common.c.obj)
+                0x3ffc289c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(esp_clk_tree_common.c.obj)
  .bss.s_other_cpu_startup_done
-                0x3ffc2864        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(app_startup.c.obj)
- *fill*         0x3ffc2865        0x3 
+                0x3ffc28a4        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(app_startup.c.obj)
+ *fill*         0x3ffc28a5        0x3 
  .bss.ulTotalRunTime
-                0x3ffc2868        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.ulTaskSwitchedInTime
-                0x3ffc286c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.uxSchedulerSuspended
-                0x3ffc2874        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xIdleTaskHandle
-                0x3ffc287c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xNextTaskUnblockTime
-                0x3ffc2884        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.uxTaskNumber
-                0x3ffc2888        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xNumOfOverflows
-                0x3ffc288c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xYieldPending
-                0x3ffc2890        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xPendedTicks
-                0x3ffc2898        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xSchedulerRunning
-                0x3ffc289c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.uxTopReadyPriority
-                0x3ffc28a0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xTickCount
-                0x3ffc28a4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.uxCurrentNumberOfTasks
                 0x3ffc28a8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.ulTaskSwitchedInTime
+                0x3ffc28ac        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.uxSchedulerSuspended
+                0x3ffc28b4        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xIdleTaskHandle
+                0x3ffc28bc        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xNextTaskUnblockTime
+                0x3ffc28c4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.uxTaskNumber
+                0x3ffc28c8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xNumOfOverflows
+                0x3ffc28cc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xYieldPending
+                0x3ffc28d0        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xPendedTicks
+                0x3ffc28d8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xSchedulerRunning
+                0x3ffc28dc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.uxTopReadyPriority
+                0x3ffc28e0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xTickCount
+                0x3ffc28e4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.uxCurrentNumberOfTasks
+                0x3ffc28e8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.xSuspendedTaskList
-                0x3ffc28ac       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc28ec       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.uxDeletedTasksWaitingCleanUp
-                0x3ffc28c0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xTasksWaitingTermination
-                0x3ffc28c4       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.xPendingReadyList
-                0x3ffc28d8       0x28 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
- .bss.pxOverflowDelayedTaskList
                 0x3ffc2900        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xTasksWaitingTermination
+                0x3ffc2904       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.xPendingReadyList
+                0x3ffc2918       0x28 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+ .bss.pxOverflowDelayedTaskList
+                0x3ffc2940        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.pxDelayedTaskList
-                0x3ffc2904        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc2944        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.xDelayedTaskList2
-                0x3ffc2908       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc2948       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.xDelayedTaskList1
-                0x3ffc291c       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc295c       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.pxReadyTasksLists
-                0x3ffc2930      0x1f4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc2970      0x1f4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
  .bss.pxCurrentTCBs
-                0x3ffc2b24        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
-                0x3ffc2b24                pxCurrentTCBs
+                0x3ffc2b64        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(tasks.c.obj)
+                0x3ffc2b64                pxCurrentTCBs
  .bss.port_switch_flag
-                0x3ffc2b2c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
-                0x3ffc2b2c                port_switch_flag
+                0x3ffc2b6c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
+                0x3ffc2b6c                port_switch_flag
  .bss.port_uxOldInterruptState
-                0x3ffc2b34        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
-                0x3ffc2b34                port_uxOldInterruptState
+                0x3ffc2b74        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
+                0x3ffc2b74                port_uxOldInterruptState
  .bss.port_uxCriticalNesting
-                0x3ffc2b3c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
-                0x3ffc2b3c                port_uxCriticalNesting
+                0x3ffc2b7c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
+                0x3ffc2b7c                port_uxCriticalNesting
  .bss.port_interruptNesting
-                0x3ffc2b44        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
-                0x3ffc2b44                port_interruptNesting
+                0x3ffc2b84        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
+                0x3ffc2b84                port_interruptNesting
  .bss.port_xSchedulerRunning
-                0x3ffc2b4c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
-                0x3ffc2b4c                port_xSchedulerRunning
+                0x3ffc2b8c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(port.c.obj)
+                0x3ffc2b8c                port_xSchedulerRunning
  .bss._xt_tick_divisor
-                0x3ffc2b54        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(xtensa_init.c.obj)
-                0x3ffc2b54                _xt_tick_divisor
+                0x3ffc2b94        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(xtensa_init.c.obj)
+                0x3ffc2b94                _xt_tick_divisor
  .bss.xStaticTimerQueue$14
-                0x3ffc2b58       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2b98       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.ucStaticTimerQueueStorage$15
-                0x3ffc2bb4       0xa0 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2bf4       0xa0 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.xLastTime$17
-                0x3ffc2c54        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2c94        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.xTimerTaskHandle
-                0x3ffc2c58        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2c98        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.xTimerQueue
-                0x3ffc2c5c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2c9c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.pxOverflowTimerList
-                0x3ffc2c60        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2ca0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.pxCurrentTimerList
-                0x3ffc2c64        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2ca4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.xActiveTimerList2
-                0x3ffc2c68       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2ca8       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.xActiveTimerList1
-                0x3ffc2c7c       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
+                0x3ffc2cbc       0x14 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libfreertos.a(timers.c.obj)
  .bss.s_common_recursive_mutex
-                0x3ffc2c90       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(locks.c.obj)
-                0x3ffc2c90                __lock___env_recursive_mutex
-                0x3ffc2c90                __lock___sfp_recursive_mutex
-                0x3ffc2c90                __lock___atexit_recursive_mutex
-                0x3ffc2c90                __lock___malloc_recursive_mutex
-                0x3ffc2c90                __lock___sinit_recursive_mutex
+                0x3ffc2cd0       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(locks.c.obj)
+                0x3ffc2cd0                __lock___env_recursive_mutex
+                0x3ffc2cd0                __lock___sfp_recursive_mutex
+                0x3ffc2cd0                __lock___atexit_recursive_mutex
+                0x3ffc2cd0                __lock___malloc_recursive_mutex
+                0x3ffc2cd0                __lock___sinit_recursive_mutex
  .bss.s_common_mutex
-                0x3ffc2cec       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(locks.c.obj)
-                0x3ffc2cec                __lock___arc4random_mutex
-                0x3ffc2cec                __lock___dd_hash_mutex
-                0x3ffc2cec                __lock___at_quick_exit_mutex
-                0x3ffc2cec                __lock___tz_mutex
+                0x3ffc2d2c       0x5c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(locks.c.obj)
+                0x3ffc2d2c                __lock___arc4random_mutex
+                0x3ffc2d2c                __lock___dd_hash_mutex
+                0x3ffc2d2c                __lock___at_quick_exit_mutex
+                0x3ffc2d2c                __lock___tz_mutex
  .bss.s_time_lock
-                0x3ffc2d48        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
- *fill*         0x3ffc2d4c        0x4 
+                0x3ffc2d88        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
+ *fill*         0x3ffc2d8c        0x4 
  .bss.s_adjtime_total_correction_us
-                0x3ffc2d50        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
+                0x3ffc2d90        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
  .bss.s_adjtime_start_us
-                0x3ffc2d58        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
+                0x3ffc2d98        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(time.c.obj)
  .bss.s_boot_time_lock
-                0x3ffc2d60        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(esp_time_impl.c.obj)
- *fill*         0x3ffc2d64        0x4 
+                0x3ffc2da0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(esp_time_impl.c.obj)
+ *fill*         0x3ffc2da4        0x4 
  .bss.s_microseconds_offset
-                0x3ffc2d68        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(esp_time_impl.c.obj)
-                0x3ffc2d68                s_microseconds_offset
- .bss.s_keys    0x3ffc2d70        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libpthread.a(pthread_local_storage.c.obj)
-                0x3ffc2d70                s_keys
+                0x3ffc2da8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnewlib.a(esp_time_impl.c.obj)
+                0x3ffc2da8                s_microseconds_offset
+ .bss.s_keys    0x3ffc2db0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libpthread.a(pthread_local_storage.c.obj)
+                0x3ffc2db0                s_keys
  .bss.__dso_handle
-                0x3ffc2d74        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libcxx.a(cxx_guards.cpp.obj)
-                0x3ffc2d74                __dso_handle
+                0x3ffc2db4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libcxx.a(cxx_guards.cpp.obj)
+                0x3ffc2db4                __dso_handle
  .bss.s_correction_us
-                0x3ffc2d78        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(system_time.c.obj)
+                0x3ffc2db8        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(system_time.c.obj)
  .bss.s_alarm_handler
-                0x3ffc2d80        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer_impl_lac.c.obj)
+                0x3ffc2dc0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer_impl_lac.c.obj)
  .bss.s_timer_interrupt_handle
-                0x3ffc2d84        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer_impl_lac.c.obj)
+                0x3ffc2dc4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer_impl_lac.c.obj)
  .bss.s_psram_ctx
-                0x3ffc2d88       0x34 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_psram.a(esp_psram.c.obj)
+                0x3ffc2dc8       0x34 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_psram.a(esp_psram.c.obj)
  .bss.pat_flg$38
-                0x3ffc2dbc        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart.c.obj)
- *fill*         0x3ffc2dbd        0x3 
+                0x3ffc2dfc        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart.c.obj)
+ *fill*         0x3ffc2dfd        0x3 
  .bss.p_uart_obj
-                0x3ffc2dc0        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart.c.obj)
+                0x3ffc2e00        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart.c.obj)
  .bss.s_uart_select_count
-                0x3ffc2dcc        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
+                0x3ffc2e0c        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
  .bss.s_registered_select_num
-                0x3ffc2dd8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
+                0x3ffc2e18        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
  .bss.s_registered_selects
-                0x3ffc2ddc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
+                0x3ffc2e1c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_uart.a(uart_vfs.c.obj)
  .bss._ZN3nvs19NVSPartitionManager8instanceE
-                0x3ffc2de0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnvs_flash.a(nvs_partition_manager.cpp.obj)
-                0x3ffc2de0                nvs::NVSPartitionManager::instance
+                0x3ffc2e20        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnvs_flash.a(nvs_partition_manager.cpp.obj)
+                0x3ffc2e20                nvs::NVSPartitionManager::instance
  .bss._ZN3nvs4Lock10mSemaphoreE
-                0x3ffc2de4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnvs_flash.a(nvs_platform.cpp.obj)
-                0x3ffc2de4                nvs::Lock::mSemaphore
+                0x3ffc2e24        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libnvs_flash.a(nvs_platform.cpp.obj)
+                0x3ffc2e24                nvs::Lock::mSemaphore
  .bss.s_open_count
-                0x3ffc2de8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
+                0x3ffc2e28        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
  .bss.vfs_console
-                0x3ffc2dec        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
+                0x3ffc2e2c        0x8 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
  .bss.primary_vfs
-                0x3ffc2df4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
+                0x3ffc2e34        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_vfs_console.a(vfs_console.c.obj)
  .bss.s_fd_table_lock
-                0x3ffc2df8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
+                0x3ffc2e38        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
  .bss.s_vfs_count
-                0x3ffc2dfc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
- .bss.s_vfs     0x3ffc2e00       0x20 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
- .bss.g_fds     0x3ffc2e20        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(nullfs.c.obj)
+                0x3ffc2e3c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
+ .bss.s_vfs     0x3ffc2e40       0x20 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(vfs.c.obj)
+ .bss.g_fds     0x3ffc2e60        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libvfs.a(nullfs.c.obj)
  .bss.s_platform
-                0x3ffc2e24        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_rmt.a(rmt_common.c.obj)
+                0x3ffc2e64        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_driver_rmt.a(rmt_common.c.obj)
  .bss.s_adc_unit_claimed
-                0x3ffc2e30        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_adc.a(adc_oneshot.c.obj)
- *fill*         0x3ffc2e32        0x2 
- .bss.s_ctx     0x3ffc2e34       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_adc.a(adc_oneshot.c.obj)
+                0x3ffc2e70        0x2 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_adc.a(adc_oneshot.c.obj)
+ *fill*         0x3ffc2e72        0x2 
+ .bss.s_ctx     0x3ffc2e74       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_adc.a(adc_oneshot.c.obj)
  .bss.s_exc_frame
-                0x3ffc2e44        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_common.c.obj)
+                0x3ffc2e84        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_common.c.obj)
  .bss.s_core_flash_config
-                0x3ffc2e48       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_flash.c.obj)
+                0x3ffc2e88       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_flash.c.obj)
  .bss.name_buffer$6
-                0x3ffc2e58       0x20 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_elf.c.obj)
+                0x3ffc2e98       0x20 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_elf.c.obj)
  .bss.s_reg_dump$0
-                0x3ffc2e78      0x24c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
+                0x3ffc2eb8      0x24c C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
  .bss.s_extra_info
-                0x3ffc30c4       0x98 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
+                0x3ffc3104       0x98 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
  .bss.s_fake_stacks_num
-                0x3ffc315c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
+                0x3ffc319c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespcoredump.a(core_dump_port.c.obj)
  .bss.s_priv_data
-                0x3ffc3160       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespressif__esp_diagnostics.a(esp_diagnostics_log_hook.c.obj)
+                0x3ffc31a0       0x10 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libespressif__esp_diagnostics.a(esp_diagnostics_log_hook.c.obj)
  .bss.s_mmu_ctx
-                0x3ffc3170       0x80 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_mm.a(esp_mmu_map.c.obj)
+                0x3ffc31b0       0x80 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_mm.a(esp_mmu_map.c.obj)
  .bss.s_reset_reason
-                0x3ffc31f0        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(reset_reason.c.obj)
+                0x3ffc3230        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_system.a(reset_reason.c.obj)
  .bss.adc2_lock
-                0x3ffc31f4        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(adc_share_hw_ctrl.c.obj)
+                0x3ffc3234        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(adc_share_hw_ctrl.c.obj)
  .bss.adc1_lock
-                0x3ffc31f8        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(adc_share_hw_ctrl.c.obj)
+                0x3ffc3238        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_hw_support.a(adc_share_hw_ctrl.c.obj)
  .bss.s_timer_task
-                0x3ffc31fc        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer.c.obj)
- .bss.s_timers  0x3ffc3200        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer.c.obj)
+                0x3ffc323c        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer.c.obj)
+ .bss.s_timers  0x3ffc3240        0x4 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libesp_timer.a(esp_timer.c.obj)
  .bss.engines_in_use
-                0x3ffc3204        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libmbedcrypto.a(sha.c.obj)
- *fill*         0x3ffc3205        0x3 
+                0x3ffc3244        0x1 C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libmbedcrypto.a(sha.c.obj)
+ *fill*         0x3ffc3245        0x3 
  .bss.engine_states
-                0x3ffc3208        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libmbedcrypto.a(sha.c.obj)
+                0x3ffc3248        0xc C:\Users\robin\AppData\Local\Arduino15\packages\esp32\tools\esp32-libs\3.3.7/lib\libmbedcrypto.a(sha.c.obj)
  .bss._ZN12_GLOBAL__N_113__new_handlerE
-                0x3ffc3214        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(new_handler.o)
+                0x3ffc3254        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(new_handler.o)
  .bss._ZN12_GLOBAL__N_114emergency_poolE
-                0x3ffc3218       0x10 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_alloc.o)
- .bss._ZL4init  0x3ffc3228        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
+                0x3ffc3258       0x10 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_alloc.o)
+ .bss._ZL4init  0x3ffc3268        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
  .bss._ZN17__eh_globals_init7_S_initE
-                0x3ffc322c        0x1 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
-                0x3ffc322c                __eh_globals_init::_S_init
- *fill*         0x3ffc322d        0x3 
+                0x3ffc326c        0x1 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
+                0x3ffc326c                __eh_globals_init::_S_init
+ *fill*         0x3ffc326d        0x3 
  .bss._ZN12_GLOBAL__N_110eh_globalsE
-                0x3ffc3230        0x8 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
+                0x3ffc3270        0x8 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(eh_globals.o)
  .bss._ZNSs4_Rep20_S_empty_rep_storageE
-                0x3ffc3238       0x10 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(cow-string-inst.o)
-                0x3ffc3238                std::string::_Rep::_S_empty_rep_storage
- .bss           0x3ffc3248        0x8 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/esp32/no-rtti\libgcc.a(unwind-dw2-fde.o)
- .bss.__sf      0x3ffc3250      0x138 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-findfp.o)
-                0x3ffc3250                __sf
+                0x3ffc3278       0x10 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libstdc++.a(cow-string-inst.o)
+                0x3ffc3278                std::string::_Rep::_S_empty_rep_storage
+ .bss           0x3ffc3288        0x8 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/esp32/no-rtti\libgcc.a(unwind-dw2-fde.o)
+ .bss.__sf      0x3ffc3290      0x138 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-findfp.o)
+                0x3ffc3290                __sf
  .bss.__stdio_exit_handler
-                0x3ffc3388        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-findfp.o)
-                0x3ffc3388                __stdio_exit_handler
+                0x3ffc33c8        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-findfp.o)
+                0x3ffc33c8                __stdio_exit_handler
  .bss.__atexit0
-                0x3ffc338c       0x8c C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-__atexit.o)
-                0x3ffc338c                __atexit0
- .bss.__atexit  0x3ffc3418        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-__call_atexit.o)
-                0x3ffc3418                __atexit
+                0x3ffc33cc       0x8c C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-__atexit.o)
+                0x3ffc33cc                __atexit0
+ .bss.__atexit  0x3ffc3458        0x4 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-__call_atexit.o)
+                0x3ffc3458                __atexit
  .bss._on_exit_args_instance
-                0x3ffc341c      0x108 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-on_exit_args.o)
+                0x3ffc345c      0x108 C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bin/../lib/gcc/xtensa-esp-elf/14.2.0/../../../../xtensa-esp-elf/lib/esp32/no-rtti\libc.a(libc_a-on_exit_args.o)
  *(.dynbss .dynsbss .gnu.linkonce.b .gnu.linkonce.b.* .gnu.linkonce.sb .gnu.linkonce.sb.* .gnu.linkonce.sb2 .gnu.linkonce.sb2.* .sbss .sbss.* .sbss2 .sbss2.* .scommon .share.mem)
  *(.ext_ram.bss .ext_ram.bss.*)
  *(EXCLUDE_FILE(*libbtdm_app.a *libbt.a) COMMON)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_bss_start = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_bss_start = ABSOLUTE (.)
  *libbt.a:(.bss .bss.*)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_bss_end = ABSOLUTE (.)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_common_start = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_bss_end = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_common_start = ABSOLUTE (.)
  *libbt.a:(COMMON)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_common_end = ABSOLUTE (.)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_controller_bss_start = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_common_end = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_controller_bss_start = ABSOLUTE (.)
  *libbtdm_app.a:(.bss .bss.*)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_controller_bss_end = ABSOLUTE (.)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_controller_common_start = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_controller_bss_end = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_controller_common_start = ABSOLUTE (.)
  *libbtdm_app.a:(COMMON)
-                0x3ffc3524                        . = ALIGN (0x4)
-                0x3ffc3524                        _bt_controller_common_end = ABSOLUTE (.)
-                0x3ffc3528                        . = ALIGN (0x8)
- *fill*         0x3ffc3524        0x4 
-                0x3ffc3528                        _bss_end = ABSOLUTE (.)
+                0x3ffc3564                        . = ALIGN (0x4)
+                0x3ffc3564                        _bt_controller_common_end = ABSOLUTE (.)
+                0x3ffc3568                        . = ALIGN (0x8)
+ *fill*         0x3ffc3564        0x4 
+                0x3ffc3568                        _bss_end = ABSOLUTE (.)
                 0x00000001                        ASSERT (((_bss_end - ORIGIN (dram0_0_seg)) <= LENGTH (dram0_0_seg)), DRAM segment data does not fit.)
 
 .flash.appdesc  0x3f400020      0x100
@@ -75159,9 +75159,9 @@ LOAD C:/Users/robin/AppData/Local/Arduino15/packages/esp32/tools/esp-x32/2511/bi
                 0x40090608                        _iram_end = ABSOLUTE (.)
 
 .dram0.heap_start
-                0x3ffc3528        0x0
-                0x3ffc3528                        . = ALIGN (0x8)
-                0x3ffc3528                        _heap_low_start = ABSOLUTE (.)
+                0x3ffc3568        0x0
+                0x3ffc3568                        . = ALIGN (0x8)
+                0x3ffc3568                        _heap_low_start = ABSOLUTE (.)
 
 .noload         0x00000000        0x0
                 0x00000000                        _noload_keep_in_elf_start = ABSOLUTE (.)
