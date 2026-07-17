@@ -631,11 +631,11 @@ function App() {
                    </div>
 
                    {/* 8x8 Diagnostic Grid */}
-                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 w-full">
+                   <div className="grid grid-cols-8 gap-2 w-full">
                       {Array(8).fill(null).map((_, rIdx) => {
-                        const sensorRow = 7 - rIdx; // Display rank 8 down to 1
                         return Array(8).fill(null).map((_, cIdx) => {
-                          const sensorCol = cIdx; // Display file a to h
+                          const sensorRow = cIdx;
+                          const sensorCol = rIdx;
                           const rawAdc = state.physical.adc?.[sensorRow]?.[sensorCol] ?? 0;
                           const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
                           const baseline = state.physical.baselines?.[sensorRow]?.[sensorCol] ?? settings?.baselines?.[sensorRow]?.[sensorCol] ?? 1550;
