@@ -176,6 +176,10 @@ def get_led_indices(row, col):
     Strip 1: files a-d (col 0-3), starts at a8 (row 7, col 0) and ends at d8 (row 7, col 3).
     Strip 2: files e-h (col 4-7), starts at h8 (row 7, col 7) and ends at e8 (row 7, col 4).
     """
+    # Adjust for 180-degree board rotation relative to software coordinates
+    row = 7 - row
+    col = 7 - col
+
     # Mapping offsets inside a single 18-LED column
     offsets_normal = {
         0: [0, 1],
