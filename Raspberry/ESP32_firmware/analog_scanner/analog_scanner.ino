@@ -45,18 +45,16 @@ void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
 }
 
 void scanMatrix() {
-  for (int col = 0; col < 8; col++) {
-    setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, col);
-    for (int r = 0; r < 8; r++) {
-      // Hardware row mapping swap: 0-3 is reversed, 4-7 is direct
-      int hw_row = (r < 4) ? (3 - r) : r;
-      setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, hw_row);
+  for (int r = 0; r < 8; r++) {
+    setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
+    for (int col = 0; col < 8; col++) {
+      setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, col);
       
       delayMicroseconds(settle_us);
       
       // Double read to settle the internal ESP32 sample-and-hold circuit
       analogRead(MUX_ANALOG_IN);
-      latest_scan[col * 8 + r] = analogRead(MUX_ANALOG_IN);
+      latest_scan[r * 8 + col] = analogRead(MUX_ANALOG_IN);
     }
   }
 }
