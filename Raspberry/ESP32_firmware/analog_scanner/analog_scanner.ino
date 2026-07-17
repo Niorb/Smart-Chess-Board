@@ -46,7 +46,8 @@ void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
 
 void scanMatrix() {
   for (int r = 0; r < 8; r++) {
-    setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
+    // Row MUX is inverted: Channel 0 is Row 8, Channel 7 is Row 1
+    setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, 7 - r);
     for (int col = 0; col < 8; col++) {
       setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, col);
       
