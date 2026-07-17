@@ -34,8 +34,8 @@ const int COL_MUX_S3 = 19;
 // Default MUX settling delay (us)
 int settle_us = 100;
 
-// Cache to store the latest raw scan of the 4x8 matrix
-uint16_t latest_scan[32] = {0};
+// Cache to store the latest raw scan of the 8x8 matrix
+uint16_t latest_scan[64] = {0};
 
 void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
   digitalWrite(s0, (channel & 1) ? HIGH : LOW);
@@ -45,7 +45,7 @@ void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
 }
 
 void scanMatrix() {
-  for (int r = 0; r < 4; r++) {
+  for (int r = 0; r < 8; r++) {
     setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, r);
     for (int col = 0; col < 8; col++) {
       // Hardware column mapping swap: 0-3 is reversed, 4-7 is direct
@@ -99,8 +99,8 @@ void loop() {
       // Write binary packet header
       Serial.write(0xAA);
       Serial.write(0x55);
-      // Write 64 bytes of raw ADC data (32 uint16_t values)
-      Serial.write((uint8_t*)latest_scan, 64);
+      // Write 128 bytes of raw ADC data (64 uint16_t values)
+      Serial.write((uint8_t*)latest_scan, 128);
     } 
     else if (c == 'L') {
       // Set pixel color

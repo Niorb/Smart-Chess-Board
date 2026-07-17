@@ -43,7 +43,7 @@ from playwright_chesscom.led_helpers import init_strip, get_led_indices, Color
 BASELINE_SAMPLES = 10
 DIFF_LED_THRESHOLD = 150
 SCAN_INTERVAL_S = 0.02
-ACTIVE_ROWS = [0, 1, 2, 3]
+ACTIVE_ROWS = [0, 1, 2, 3, 4, 5, 6, 7]
 ACTIVE_COLS = [0, 1, 2, 3, 4, 5, 6, 7]
 LED_POSITIVE_COLOR = Color(255, 0, 0)  # Red for positive shift (> 150)
 LED_NEGATIVE_COLOR = Color(0, 255, 0)  # Green for negative shift (< -150)
@@ -118,15 +118,16 @@ def read_active_values(h, ser):
     # Request batch scan
     ser.write(b"B")
     
-    # Read binary packet: 2 header bytes + 64 data bytes
+    # Read binary packet: 2 header bytes + 128 data bytes (64 uint16_t values)
     header = ser.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        data = ser.read(64)
-        if len(data) == 64:
+        expected_bytes = 8 * 8 * 2
+        data = ser.read(expected_bytes)
+        if len(data) == expected_bytes:
             import struct
-            vals = struct.unpack('<32H', data)
+            vals = struct.unpack('<64H', data)
             idx = 0
-            for r in range(4):
+            for r in range(8):
                 for c in range(8):
                     val = vals[idx]
                     idx += 1

@@ -171,13 +171,14 @@ def get_raw_analog_matrix(h, serial_conn):
 
     serial_conn.write(b'B')
 
-    # Read binary packet: 2 header bytes + 64 data bytes
+    # Read binary packet: 2 header bytes + data bytes
     header = serial_conn.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        data = serial_conn.read(64)
-        if len(data) == 64:
+        expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+        data = serial_conn.read(expected_bytes)
+        if len(data) == expected_bytes:
             import struct
-            vals = struct.unpack('<32H', data)
+            vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
             idx = 0
             for r in range(BOARD_ROWS):
                 for c in range(BOARD_COLS):
@@ -228,13 +229,14 @@ def scan_board(h, serial_conn, raw_state):
 
     serial_conn.write(b'B')
 
-    # Read binary packet: 2 header bytes + 64 data bytes
+    # Read binary packet: 2 header bytes + data bytes
     header = serial_conn.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        data = serial_conn.read(64)
-        if len(data) == 64:
+        expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+        data = serial_conn.read(expected_bytes)
+        if len(data) == expected_bytes:
             import struct
-            vals = struct.unpack('<32H', data)
+            vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             idx = 0
             for r in range(BOARD_ROWS):
@@ -318,10 +320,11 @@ def calibrate_board(h, serial_conn, samples=5):
         serial_conn.write(b'B')
         header = serial_conn.read(2)
         if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-            data = serial_conn.read(64)
-            if len(data) == 64:
+            expected_bytes = BOARD_ROWS * BOARD_COLS * 2
+            data = serial_conn.read(expected_bytes)
+            if len(data) == expected_bytes:
                 import struct
-                vals = struct.unpack('<32H', data)
+                vals = struct.unpack(f'<{BOARD_ROWS * BOARD_COLS}H', data)
                 idx = 0
                 for r in range(BOARD_ROWS):
                     for c in range(BOARD_COLS):

@@ -446,35 +446,27 @@ function App() {
                 ))}
               </div>
 
-              {/* 8x4 Physical Overlay (Flips horizontally when playing as Black, hidden during active game) */}
+              {/* 8x8 Physical Overlay (Flips horizontally when playing as Black, hidden during active game) */}
               {state.status !== 'PLAYING' && (
-                <div className={state.my_color === 'black' 
-                   ? "absolute top-0 right-0 w-1/2 h-full bg-blue-500/10 border-2 border-blue-500/30 rounded-l-2xl backdrop-blur-[1px] z-10"
-                   : "absolute top-0 left-0 w-1/2 h-full bg-blue-500/10 border-2 border-blue-500/30 rounded-r-2xl backdrop-blur-[1px] z-10"
-                }>
-                    <div className={state.my_color === 'black'
-                       ? "absolute -top-6 right-2 bg-blue-500/90 text-[10px] font-bold px-2 py-0.5 rounded-t uppercase tracking-tighter"
-                       : "absolute -top-6 left-2 bg-blue-500/90 text-[10px] font-bold px-2 py-0.5 rounded-t uppercase tracking-tighter"
-                    }>
+                <div className="absolute top-0 left-0 w-full h-full bg-blue-500/5 border border-blue-500/20 rounded-xl backdrop-blur-[0.5px] z-10 pointer-events-none">
+                    <div className="absolute -top-6 left-2 bg-blue-500/90 text-[10px] font-bold px-2 py-0.5 rounded-t uppercase tracking-tighter">
                        Physical Sensors
                     </div>
-                    <div className="grid grid-cols-4 grid-rows-8 w-full h-full p-1 gap-1">
+                    <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
                        {Array(8).fill(null).map((_, rIdx) => (
-                         Array(4).fill(null).map((_, cIdx) => {
+                         Array(8).fill(null).map((_, cIdx) => {
                            const isFlipped = state.my_color === 'black';
                            
-                           // White: columns are files a-d (cIdx 0-3), rows are ranks 8-1 (rIdx 0-7)
-                           // Black: columns are files e-h (cIdx 0-3 representing files d-a flipped), rows are ranks 1-8 (rIdx 0-7)
-                           const fileIdx = isFlipped ? (3 - cIdx) : cIdx;
+                           // White: columns are files a-h (cIdx 0-7), rows are ranks 8-1 (rIdx 0-7)
+                           // Black: columns are files h-a (cIdx 0-7 flipped), rows are ranks 1-8 (rIdx 0-7)
+                           const fileIdx = isFlipped ? (7 - cIdx) : cIdx;
                            const rankIdx = isFlipped ? rIdx : (7 - rIdx);
                            
-                           // The physical grid has shape 4x8 (BOARD_ROWS = 4, BOARD_COLS = 8)
                            const sensorRow = rankIdx; 
                            const sensorCol = fileIdx; 
                            
-                           // Safe access: if sensorRow >= 4, it's not covered by physical sensors (idle/0)
-                           const sensorStateVal = (sensorRow < 4) ? (state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0) : 0;
-                           const isHighlighted = (sensorRow < 4) && (state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol);
+                           const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
+                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorRow && state.physical.highlighted_square?.[1] === sensorCol;
                            
                            let bgClass = 'bg-slate-900/40';
                            if (isHighlighted) {
@@ -488,12 +480,8 @@ function App() {
                            return (
                              <div 
                                key={`sensor-${rIdx}-${cIdx}`}
-                               onClick={() => {
-                                 if (sensorRow < 4) {
-                                   handleToggleHighlight(sensorRow, sensorCol);
-                                 }
-                               }}
-                               className={`rounded-sm transition-all duration-300 ${sensorRow < 4 ? 'cursor-pointer hover:bg-slate-800/50' : 'pointer-events-none'} ${bgClass}`}
+                               onClick={() => handleToggleHighlight(sensorRow, sensorCol)}
+                               className={`rounded-sm transition-all duration-300 cursor-pointer hover:bg-slate-800/50 ${bgClass}`}
                              />
                            );
                          })
@@ -642,18 +630,17 @@ function App() {
                       <span className="font-mono text-blue-400 font-bold">+{positiveThresh} / -{negativeThresh}</span>
                    </div>
 
-                   {/* 8x4 Diagnostic Grid */}
-                   <div className="grid grid-cols-4 gap-3 w-full">
-                      {Array(8).fill(null).map((_, rIdx) => (
-                        Array(4).fill(null).map((_, cIdx) => {
-                          const sensorRow = cIdx;
-                          const sensorCol = rIdx;
+                   {/* 8x8 Diagnostic Grid */}
+                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 w-full">
+                      {Array(8).fill(null).map((_, rIdx) => {
+                        const sensorRow = 7 - rIdx; // Display rank 8 down to 1
+                        return Array(8).fill(null).map((_, cIdx) => {
+                          const sensorCol = cIdx; // Display file a to h
                           const rawAdc = state.physical.adc?.[sensorRow]?.[sensorCol] ?? 0;
                           const sensorStateVal = state.physical.grid?.[sensorRow]?.[sensorCol] ?? 0;
                           const baseline = state.physical.baselines?.[sensorRow]?.[sensorCol] ?? settings?.baselines?.[sensorRow]?.[sensorCol] ?? 1550;
                           const diffVal = rawAdc - baseline;
                           
-                          // Map col 0-7 to a-h, row 0-3 to 1-4
                           const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorCol];
                           const rank = sensorRow + 1;
                           const chessCoord = `${file}${rank}`;
@@ -693,38 +680,38 @@ function App() {
                             <div 
                               key={`debug-sensor-${sensorRow}-${sensorCol}`}
                               onClick={() => handleToggleHighlight(sensorRow, sensorCol)}
-                              className={`flex flex-col justify-between p-2 rounded-xl border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${rowDiagClass}`}
+                              className={`flex flex-col justify-between p-1.5 rounded-lg border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${rowDiagClass}`}
                             >
                               <div className="flex justify-between items-center w-full">
-                                 <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">
+                                 <span className="text-[9px] uppercase font-bold text-slate-500 font-mono">
                                     {chessCoord}
                                  </span>
-                                 <span className="text-[8px] text-slate-600 font-mono">
+                                 <span className="text-[7px] text-slate-655 font-mono">
                                     [{sensorRow},{sensorCol}]
                                  </span>
                               </div>
                               
                               <div className="text-center my-auto py-1">
-                                 <span className={`text-xl font-bold font-mono tracking-tight block ${
+                                 <span className={`text-sm font-bold font-mono tracking-tight block ${
                                    isHighlighted ? 'text-orange-400' : sensorStateVal === 1 ? 'text-red-400' : sensorStateVal === -1 ? 'text-emerald-400' : 'text-slate-200'
                                  }`}>
                                     {diffVal > 0 ? `+${diffVal}` : diffVal}
                                  </span>
-                                 <span className="text-[9px] text-slate-500 font-mono block mt-0.5">
+                                 <span className="text-[7px] text-slate-600 font-mono block">
                                     Base: {baseline}
                                  </span>
                               </div>
 
-                              <div className="flex justify-between items-center w-full mt-1">
-                                 <span className={`text-[8px] font-bold uppercase ${statusColorClass}`}>
+                              <div className="flex justify-between items-center w-full mt-0.5">
+                                 <span className={`text-[7px] font-bold uppercase ${statusColorClass}`}>
                                     {statusText}
                                  </span>
-                                 <div className={`w-1.5 h-1.5 rounded-full ${dotColorClass}`} />
+                                 <div className={`w-1 h-1 rounded-full ${dotColorClass}`} />
                               </div>
                             </div>
                           );
-                        })
-                      ))}
+                        });
+                      })}
                    </div>
             </div>
           </div>
@@ -918,7 +905,7 @@ function App() {
                            <div className="flex flex-col gap-1.5 text-left transition-all duration-350 animate-fadeIn">
                               <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Row Select</label>
                               <div className="grid grid-cols-5 gap-1.5">
-                                 {[0, 1, 2, 3, -1].map((row) => (
+                                 {[0, 1, 2, 3, 4, 5, 6, 7, -1].map((row) => (
                                     <button
                                       key={`row-select-${row}`}
                                       onClick={() => handleManualRowChange(row)}

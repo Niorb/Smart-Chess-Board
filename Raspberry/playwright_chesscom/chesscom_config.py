@@ -30,7 +30,7 @@ BUTTON_DEBOUNCE_MS = 500  # Ignore presses within this window
 # LED STRIP (must match smart_chess_board.py / hardware_test.py)
 # =============================================================================
 
-BOARD_ROWS = 4
+BOARD_ROWS = 8
 BOARD_COLS = 8
 LED_ROWS = 8
 LED_COLS = 8
