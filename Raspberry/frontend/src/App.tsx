@@ -562,13 +562,13 @@ function App() {
                            const fileIdx = isFlipped ? (7 - cIdx) : cIdx;
                            const rankIdx = isFlipped ? rIdx : (7 - rIdx);
                            
-                           const sensorCol = rankIdx; 
-                           const sensorRow = fileIdx; 
+                           const sensorRank = rankIdx; 
+                           const sensorFile = fileIdx; 
                            
-                           const sensorStateVal = state.physical.grid?.[sensorCol]?.[sensorRow] ?? 0;
-                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorCol && state.physical.highlighted_square?.[1] === sensorRow;
+                           const sensorStateVal = state.physical.grid?.[sensorFile]?.[sensorRank] ?? 0;
+                           const isHighlighted = state.physical.highlighted_square?.[0] === sensorFile && state.physical.highlighted_square?.[1] === sensorRank;
                            const isDisabled = (state.physical.disabled_squares ?? []).some(
-                             (sq) => sq[0] === sensorCol && sq[1] === sensorRow
+                             (sq) => sq[0] === sensorFile && sq[1] === sensorRank
                            );
                            
                            let bgClass = 'bg-slate-900/40';
@@ -587,12 +587,12 @@ function App() {
                                key={`sensor-${rIdx}-${cIdx}`}
                                onClick={() => {
                                  if (!isDisabled) {
-                                   handleToggleHighlight(sensorCol, sensorRow);
+                                   handleToggleHighlight(sensorFile, sensorRank);
                                  }
                                }}
                                onContextMenu={(e) => {
                                  e.preventDefault();
-                                 handleToggleDisableSquare(sensorCol, sensorRow);
+                                 handleToggleDisableSquare(sensorFile, sensorRank);
                                }}
                                className={`rounded-sm transition-all duration-300 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/50'} ${bgClass}`}
                              />
@@ -747,26 +747,26 @@ function App() {
                    <div className="grid grid-cols-8 gap-2 w-full">
                       {Array(8).fill(null).map((_, rIdx) => {
                         return Array(8).fill(null).map((_, cIdx) => {
-                          const sensorCol = 7 - rIdx;
-                          const sensorRow = cIdx;
-                          const rawAdc = state.physical.adc?.[sensorCol]?.[sensorRow] ?? 0;
-                          const sensorStateVal = state.physical.grid?.[sensorCol]?.[sensorRow] ?? 0;
-                          const baseline = state.physical.baselines?.[sensorCol]?.[sensorRow] ?? settings?.baselines?.[sensorCol]?.[sensorRow] ?? 1550;
+                          const sensorRank = 7 - rIdx;
+                          const sensorFile = cIdx;
+                          const rawAdc = state.physical.adc?.[sensorFile]?.[sensorRank] ?? 0;
+                          const sensorStateVal = state.physical.grid?.[sensorFile]?.[sensorRank] ?? 0;
+                          const baseline = state.physical.baselines?.[sensorFile]?.[sensorRank] ?? settings?.baselines?.[sensorFile]?.[sensorRank] ?? 1550;
                           const diffVal = rawAdc - baseline;
                           
-                          const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorRow];
-                          const rank = sensorCol + 1;
+                          const file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'][sensorFile];
+                          const rank = sensorRank + 1;
                           const chessCoord = `${file}${rank}`;
 
-                          const isColActive = colMode === 'auto' || sensorCol === manualCol;
+                          const isColActive = colMode === 'auto' || sensorFile === manualCol;
                           let cardClass = 'bg-slate-950 border-slate-855 text-slate-300';
                           let statusText = 'IDLE';
                           let statusColorClass = 'text-slate-650';
                           let dotColorClass = 'bg-slate-800';
 
-                          const isHighlighted = state.physical.highlighted_square?.[0] === sensorCol && state.physical.highlighted_square?.[1] === sensorRow;
+                          const isHighlighted = state.physical.highlighted_square?.[0] === sensorFile && state.physical.highlighted_square?.[1] === sensorRank;
                           const isDisabled = (state.physical.disabled_squares ?? []).some(
-                            (sq) => sq[0] === sensorCol && sq[1] === sensorRow
+                            (sq) => sq[0] === sensorFile && sq[1] === sensorRank
                           );
 
                           if (isDisabled) {
@@ -799,15 +799,15 @@ function App() {
 
                           return (
                             <div 
-                              key={`debug-sensor-${sensorCol}-${sensorRow}`}
+                              key={`debug-sensor-${sensorFile}-${sensorRank}`}
                               onClick={() => {
                                 if (!isDisabled) {
-                                  handleToggleHighlight(sensorCol, sensorRow);
+                                  handleToggleHighlight(sensorFile, sensorRank);
                                 }
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
-                                handleToggleDisableSquare(sensorCol, sensorRow);
+                                handleToggleDisableSquare(sensorFile, sensorRank);
                               }}
                               className={`flex flex-col justify-between p-1.5 rounded-lg border transition-all duration-300 cursor-pointer hover:bg-slate-900/60 ${cardClass} ${colDiagClass}`}
                             >
@@ -816,7 +816,7 @@ function App() {
                                     {chessCoord}
                                  </span>
                                  <span className="text-[7px] text-slate-655 font-mono">
-                                    [{sensorCol},{sensorRow}]
+                                    [{sensorFile},{sensorRank}]
                                  </span>
                               </div>
                               
