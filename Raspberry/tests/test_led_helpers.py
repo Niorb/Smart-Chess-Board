@@ -32,5 +32,16 @@ def test_strip2_mapping():
     assert get_led_indices(0, 5) == [127, 128] # f1
 
     # 4. Next e1 (col=0, row=4) -> up to e8 (col=7, row=4) where it finishes
-    assert get_led_indices(0, 4) == [129, 130] # e1
-    assert get_led_indices(7, 4) == [146, 147] # e8 (Finishes Strip 2!)
+    assert get_led_indices(0, 4, swap_rows=False) == [129, 130] # e1
+    assert get_led_indices(7, 4, swap_rows=False) == [146, 147] # e8 (Finishes Strip 2!)
+
+def test_row_swap_mapping():
+    # When swap_rows=True, col (rank 0..7) is transformed: phys_col = (col + 4) % 8
+    # For a1 (col=0, row=0): non-swapped is [0, 1]. Swapped maps col 0 -> 4 (a5 position: [9, 10]).
+    assert get_led_indices(0, 0, swap_rows=True) == get_led_indices(4, 0, swap_rows=False)
+    assert get_led_indices(0, 0, swap_rows=True) == [9, 10]
+
+    # For a5 (col=4, row=0): Swapped maps col 4 -> 0 (a1 position: [0, 1]).
+    assert get_led_indices(4, 0, swap_rows=True) == get_led_indices(0, 0, swap_rows=False)
+    assert get_led_indices(4, 0, swap_rows=True) == [0, 1]
+

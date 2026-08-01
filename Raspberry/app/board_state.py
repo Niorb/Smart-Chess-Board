@@ -140,11 +140,11 @@ class BoardStateManager:
             
             frame = [Color(0, 0, 0)] * NUM_LEDS
             
-            for c in range(BOARD_COLS):
+            for c in range(BOARD_COLS):  # c is file index (0..7)
                 if col_mode == "manual" and c != manual_col:
                     continue
-                for r in range(BOARD_ROWS):
-                    if self.highlighted_square == (c, r):
+                for r in range(BOARD_ROWS):  # r is rank index (0..7)
+                    if self.highlighted_square == (r, c) or self.highlighted_square == (c, r):
                         # Orange color for highlighting
                         color = Color(255, 80, 0)
                     else:
@@ -156,7 +156,7 @@ class BoardStateManager:
                         else:
                             continue
                             
-                    for idx in get_led_indices(c, r):
+                    for idx in get_led_indices(r, c):
                         if 0 <= idx < NUM_LEDS:
                             frame[idx] = color
                             
