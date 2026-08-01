@@ -104,7 +104,10 @@ function App() {
         muxSettleMs,
         debounceThreshold,
         baselineWindowS,
-        nextDisabled
+        nextDisabled,
+        swapRowQuadrants,
+        swapRowQuadrantsLeft,
+        swapRowQuadrantsRight
       );
       if (res.status === 'success') {
         setSettings(res.settings);
@@ -132,6 +135,9 @@ function App() {
     debounce_threshold?: number;
     baseline_window_s?: number;
     disabled_squares?: number[][];
+    swap_row_quadrants?: boolean;
+    swap_row_quadrants_left?: boolean;
+    swap_row_quadrants_right?: boolean;
   } | null>(null);
   const [positiveThresh, setPositiveThresh] = useState<number>(150);
   const [negativeThresh, setNegativeThresh] = useState<number>(150);
@@ -141,6 +147,9 @@ function App() {
   const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
   const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
   const [baselineWindowS, setBaselineWindowS] = useState<number>(4);
+  const [swapRowQuadrants, setSwapRowQuadrants] = useState<boolean>(true);
+  const [swapRowQuadrantsLeft, setSwapRowQuadrantsLeft] = useState<boolean>(true);
+  const [swapRowQuadrantsRight, setSwapRowQuadrantsRight] = useState<boolean>(true);
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -158,6 +167,9 @@ function App() {
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
         setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 4);
+        setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true);
+        setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
+        setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -218,6 +230,7 @@ function App() {
 
   const handleSaveThresholds = async () => {
     setSettingsStatus("Saving thresholds...");
+    const currentDisabled = state.physical.disabled_squares ?? [];
     try {
       const res = await updateBoardSettings(
         positiveThresh,
@@ -227,7 +240,11 @@ function App() {
         scanDelay,
         muxSettleMs,
         debounceThreshold,
-        baselineWindowS
+        baselineWindowS,
+        currentDisabled,
+        swapRowQuadrants,
+        swapRowQuadrantsLeft,
+        swapRowQuadrantsRight
       );
       if (res.status === 'success') {
         setSettings(res.settings);
@@ -861,21 +878,52 @@ function App() {
                         </div>
 
                         {/* Baseline Window Slider */}
-                        <div className="flex flex-col gap-1.5 text-left">
-                           <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-400">Auto-Calib Window (sec)</span>
-                              <span className="font-mono text-amber-400 font-bold">{baselineWindowS}s</span>
-                           </div>
-                           <input 
-                             type="range"
-                             min="1"
-                             max="20"
-                             step="1"
-                             value={baselineWindowS}
-                             onChange={(e) => handleBaselineWindowSChange(parseInt(e.target.value))}
-                             className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                           />
-                        </div>
+                         <div className="flex flex-col gap-1.5 text-left">
+                            <div className="flex justify-between items-center text-xs">
+                               <span className="text-slate-400">Auto-Calib Window (sec)</span>
+                               <span className="font-mono text-amber-400 font-bold">{baselineWindowS}s</span>
+                            </div>
+                            <input 
+                              type="range"
+                              min="1"
+                              max="20"
+                              step="1"
+                              value={baselineWindowS}
+                              onChange={(e) => handleBaselineWindowSChange(parseInt(e.target.value))}
+                              className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                         </div>
+
+                         {/* Swap Row Quadrants Toggles (a-d vs e-h) */}
+                         <div className="flex items-center justify-between text-xs py-1">
+                            <span className="text-slate-400">Swap Row Quadrants a-d (1-4 ↔ 5-8)</span>
+                            <button
+                              type="button"
+                              onClick={() => setSwapRowQuadrantsLeft(!swapRowQuadrantsLeft)}
+                              className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
+                                swapRowQuadrantsLeft
+                                  ? 'bg-blue-600/30 border border-blue-500 text-blue-400'
+                                  : 'bg-slate-950 border border-slate-800 text-slate-500'
+                              }`}
+                            >
+                              {swapRowQuadrantsLeft ? 'Enabled' : 'Disabled'}
+                            </button>
+                         </div>
+                         <div className="flex items-center justify-between text-xs py-1">
+                            <span className="text-slate-400">Swap Row Quadrants e-h (1-4 ↔ 5-8)</span>
+                            <button
+                              type="button"
+                              onClick={() => setSwapRowQuadrantsRight(!swapRowQuadrantsRight)}
+                              className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
+                                swapRowQuadrantsRight
+                                  ? 'bg-blue-600/30 border border-blue-500 text-blue-400'
+                                  : 'bg-slate-950 border border-slate-800 text-slate-500'
+                              }`}
+                            >
+                              {swapRowQuadrantsRight ? 'Enabled' : 'Disabled'}
+                            </button>
+                         </div>
+
                        {/* Save Thresholds Button */}
                        <button
                          onClick={handleSaveThresholds}

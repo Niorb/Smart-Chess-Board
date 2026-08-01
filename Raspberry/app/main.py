@@ -87,12 +87,21 @@ class ThresholdSettings(BaseModel):
     mux_settle_ms: Optional[int] = None
     debounce_threshold: Optional[int] = None
     baseline_window_s: Optional[int] = None
+    swap_row_quadrants: Optional[bool] = None
+    swap_row_quadrants_left: Optional[bool] = None
+    swap_row_quadrants_right: Optional[bool] = None
     disabled_squares: Optional[List[List[int]]] = None
 
 @app.get("/api/board/physical")
 async def get_physical_board():
     """Returns the current sensor state of the physical board."""
     return state_manager.get_physical_payload()
+
+@app.get("/api/board/health")
+async def get_board_health():
+    """Returns detailed diagnostic health status of the board hardware and subsystems."""
+    return state_manager.get_health_status()
+
 
 @app.get("/api/board/settings")
 async def get_board_settings():
@@ -118,6 +127,12 @@ async def update_board_settings(body: ThresholdSettings):
         settings["debounce_threshold"] = body.debounce_threshold
     if body.baseline_window_s is not None:
         settings["baseline_window_s"] = body.baseline_window_s
+    if body.swap_row_quadrants is not None:
+        settings["swap_row_quadrants"] = body.swap_row_quadrants
+    if body.swap_row_quadrants_left is not None:
+        settings["swap_row_quadrants_left"] = body.swap_row_quadrants_left
+    if body.swap_row_quadrants_right is not None:
+        settings["swap_row_quadrants_right"] = body.swap_row_quadrants_right
     if body.disabled_squares is not None:
         settings["disabled_squares"] = body.disabled_squares
     await asyncio.to_thread(save_settings)

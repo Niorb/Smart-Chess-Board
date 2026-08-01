@@ -3,12 +3,9 @@ chesscom_session/
 profile.ps1
 ESP32_firmware/analog_scanner/build/
 .codebase_ignore
-.gemini/
-.agent_db/
-CLAUDE.md
-.claudeignore
-AGENTS.md
 *.png
 *.jpg
 *.jpeg
 *__pycache__
+.gemini/
+*.gemini

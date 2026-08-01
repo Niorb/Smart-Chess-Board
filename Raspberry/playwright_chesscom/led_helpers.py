@@ -220,10 +220,10 @@ def get_led_indices(col, row):
         base = 72 + c_rel * 19
         if c_rel % 2 == 0:
             # File h, f: starts at top (Rank 8) and goes down (Rank 1)
-            offset_idx = 7 - orig_col
+            offset_idx = orig_col
         else:
             # File g, e: starts at bottom (Rank 1) and goes up (Rank 8)
-            offset_idx = orig_col
+            offset_idx = 7 - orig_col
         return [base + o for o in offsets_strip2[offset_idx]]
 
 

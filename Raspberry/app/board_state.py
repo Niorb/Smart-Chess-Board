@@ -77,6 +77,54 @@ class BoardStateManager:
             "disabled_squares": settings.get("disabled_squares", [])
         }
 
+    def get_health_status(self):
+        import datetime
+        from board_hardware import settings
+
+        serial_status = "CONNECTED" if (self.ser is not None and getattr(self.ser, "is_open", True)) else "DISCONNECTED"
+        gpio_status = "CONNECTED" if self.h is not None else "DISCONNECTED"
+        led_status = "CONNECTED" if self.strip is not None else "DISCONNECTED"
+        engine_status = "CONNECTED" if getattr(chess_engine, "is_running", False) else "DISCONNECTED"
+
+        col_mode = settings.get("col_mode", "auto")
+        disabled_squares = settings.get("disabled_squares", [])
+        scan_delay_ms = settings.get("scan_delay", 100 if col_mode == "manual" else 10)
+
+        subsystems = {
+            "serial": serial_status,
+            "gpio": gpio_status,
+            "led_strip": led_status,
+            "chess_engine": engine_status,
+        }
+
+        matrix = {
+            "col_mode": col_mode,
+            "disabled_squares": disabled_squares,
+            "scan_delay_ms": scan_delay_ms,
+        }
+
+        if serial_status == "DISCONNECTED" or gpio_status == "DISCONNECTED":
+            overall_status = "DISCONNECTED"
+        elif (
+            led_status == "DISCONNECTED"
+            or engine_status == "DISCONNECTED"
+            or len(disabled_squares) > 0
+            or col_mode == "manual"
+        ):
+            overall_status = "DEGRADED"
+        else:
+            overall_status = "HEALTHY"
+
+        return {
+            "status": overall_status,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "subsystems": subsystems,
+            "matrix": matrix,
+        }
+
+
+
+
     def _update_leds(self):
         if not self.strip or self.led_test_active:
             return

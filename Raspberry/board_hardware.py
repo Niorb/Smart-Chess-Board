@@ -63,6 +63,9 @@ settings = {
     "mux_settle_us": 100,
     "debounce_threshold": 2,
     "baseline_window_s": 4,
+    "swap_row_quadrants": False,
+    "swap_row_quadrants_left": False,
+    "swap_row_quadrants_right": False,
     "disabled_squares": []
 }
 
@@ -89,6 +92,11 @@ def load_settings():
                     
                     if "disabled_squares" not in loaded:
                         loaded["disabled_squares"] = []
+                    
+                    if "swap_row_quadrants_left" not in loaded:
+                        loaded["swap_row_quadrants_left"] = loaded.get("swap_row_quadrants", False)
+                    if "swap_row_quadrants_right" not in loaded:
+                        loaded["swap_row_quadrants_right"] = loaded.get("swap_row_quadrants", False)
                     
                     settings.update(loaded)
                     logger.info(f"Loaded board settings from {SETTINGS_FILE}")
@@ -163,6 +171,12 @@ def init_mux_pins(h):
 # BOARD SCANNING (HYBRID)
 # =============================================================================
 
+def is_row_swapped(c):
+    if c < 4:
+        return settings.get("swap_row_quadrants_left", settings.get("swap_row_quadrants", False))
+    else:
+        return settings.get("swap_row_quadrants_right", settings.get("swap_row_quadrants", False))
+
 def get_raw_analog_matrix(h, serial_conn):
     """
     Scans the entire 8x8 matrix of analog sensors using the serial batch scan command.
@@ -196,15 +210,16 @@ def get_raw_analog_matrix(h, serial_conn):
             idx = 0
             for r in range(BOARD_ROWS):
                 for c in range(BOARD_COLS):
+                    target_r = (r + 4) % BOARD_ROWS if is_row_swapped(c) else r
                     val = vals[idx]
                     idx += 1
                     disabled_squares = settings.get("disabled_squares", [])
                     if col_mode == "manual" and c != manual_col:
-                        matrix[c][r] = settings["baselines"][c][r]
-                    elif [c, r] in disabled_squares or (c, r) in disabled_squares:
-                        matrix[c][r] = settings["baselines"][c][r]
+                        matrix[c][target_r] = settings["baselines"][c][target_r]
+                    elif [c, target_r] in disabled_squares or (c, target_r) in disabled_squares:
+                        matrix[c][target_r] = settings["baselines"][c][target_r]
                     else:
-                        matrix[c][r] = val
+                        matrix[c][target_r] = val
     else:
         logger.warning(f"Serial sync error: expected header 0xAA55, got {header.hex() if header else 'nothing'}")
         serial_conn.reset_input_buffer()
@@ -258,46 +273,47 @@ def scan_board(h, serial_conn, raw_state):
             idx = 0
             for r in range(BOARD_ROWS):
                 for c in range(BOARD_COLS):
+                    target_r = (r + 4) % BOARD_ROWS if is_row_swapped(c) else r
                     val = vals[idx]
                     idx += 1
 
                     if col_mode == "manual" and c != manual_col:
-                        matrix[c][r] = settings["baselines"][c][r]
-                        raw_state[c][r] = 0
+                        matrix[c][target_r] = settings["baselines"][c][target_r]
+                        raw_state[c][target_r] = 0
                         continue
 
                     disabled_squares = settings.get("disabled_squares", [])
-                    if [c, r] in disabled_squares or (c, r) in disabled_squares:
-                        matrix[c][r] = settings["baselines"][c][r]
-                        raw_state[c][r] = 0
+                    if [c, target_r] in disabled_squares or (c, target_r) in disabled_squares:
+                        matrix[c][target_r] = settings["baselines"][c][target_r]
+                        raw_state[c][target_r] = 0
                         continue
 
-                    matrix[c][r] = val
-                    diff = val - settings["baselines"][c][r]
+                    matrix[c][target_r] = val
+                    diff = val - settings["baselines"][c][target_r]
                     if diff > settings["threshold_positive"]:
-                        raw_state[c][r] = 1
+                        raw_state[c][target_r] = 1
                     elif diff < -settings["threshold_negative"]:
-                        raw_state[c][r] = -1
+                        raw_state[c][target_r] = -1
                     else:
-                        raw_state[c][r] = 0
+                        raw_state[c][target_r] = 0
 
                     # Dynamic baseline moving average update (4 seconds window)
                     now = time.time()
-                    detected = (raw_state[c][r] != 0)
+                    detected = (raw_state[c][target_r] != 0)
                     
-                    if (c, r) not in baseline_history:
-                        baseline_history[(c, r)] = []
+                    if (c, target_r) not in baseline_history:
+                        baseline_history[(c, target_r)] = []
                         
-                    baseline_history[(c, r)].append((now, val, detected))
+                    baseline_history[(c, target_r)].append((now, val, detected))
                     
                     # Keep only entries within the last baseline_window_s seconds
                     baseline_window = settings.get("baseline_window_s", 4)
-                    baseline_history[(c, r)] = [entry for entry in baseline_history[(c, r)] if now - entry[0] <= baseline_window]
-                    any_magnet = any(entry[2] for entry in baseline_history[(c, r)])
+                    baseline_history[(c, target_r)] = [entry for entry in baseline_history[(c, target_r)] if now - entry[0] <= baseline_window]
+                    any_magnet = any(entry[2] for entry in baseline_history[(c, target_r)])
                     
-                    if not any_magnet and len(baseline_history[(c, r)]) > 0:
-                        avg_val = sum(entry[1] for entry in baseline_history[(c, r)]) / len(baseline_history[(c, r)])
-                        settings["baselines"][c][r] = int(avg_val)
+                    if not any_magnet and len(baseline_history[(c, target_r)]) > 0:
+                        avg_val = sum(entry[1] for entry in baseline_history[(c, target_r)]) / len(baseline_history[(c, target_r)])
+                        settings["baselines"][c][target_r] = int(avg_val)
         else:
             diag["errors"] = non_mocked_count
             diag["status"] = "TIMEOUT"
@@ -351,10 +367,11 @@ def calibrate_board(h, serial_conn, samples=5):
                 idx = 0
                 for r in range(BOARD_ROWS):
                     for c in range(BOARD_COLS):
+                        target_r = (r + 4) % BOARD_ROWS if is_row_swapped(c) else r
                         val = vals[idx]
                         idx += 1
-                        sums[c][r] += val
-                        counts[c][r] += 1
+                        sums[c][target_r] += val
+                        counts[c][target_r] += 1
         time.sleep(0.02)
         
     # Update baselines
