@@ -112,7 +112,7 @@ async def get_board_settings():
 @app.post("/api/board/settings")
 async def update_board_settings(body: ThresholdSettings):
     """Updates the positive/negative deviation thresholds and column mode diagnostics."""
-    from board_hardware import settings, save_settings
+    from board_hardware import settings, save_settings, update_row_quadrant_settings
     settings["threshold_positive"] = body.threshold_positive
     settings["threshold_negative"] = body.threshold_negative
     if body.col_mode is not None:
@@ -129,10 +129,15 @@ async def update_board_settings(body: ThresholdSettings):
         settings["baseline_window_s"] = body.baseline_window_s
     if body.swap_row_quadrants is not None:
         settings["swap_row_quadrants"] = body.swap_row_quadrants
-    if body.swap_row_quadrants_left is not None:
-        settings["swap_row_quadrants_left"] = body.swap_row_quadrants_left
-    if body.swap_row_quadrants_right is not None:
-        settings["swap_row_quadrants_right"] = body.swap_row_quadrants_right
+        if body.swap_row_quadrants_left is None:
+            update_row_quadrant_settings(swap_left=body.swap_row_quadrants)
+        if body.swap_row_quadrants_right is None:
+            update_row_quadrant_settings(swap_right=body.swap_row_quadrants)
+    if body.swap_row_quadrants_left is not None or body.swap_row_quadrants_right is not None:
+        update_row_quadrant_settings(
+            swap_left=body.swap_row_quadrants_left,
+            swap_right=body.swap_row_quadrants_right
+        )
     if body.disabled_squares is not None:
         settings["disabled_squares"] = body.disabled_squares
     await asyncio.to_thread(save_settings)

@@ -332,6 +332,58 @@ function App() {
     }
   };
 
+  const handleRowQuadrantsLeftToggle = async (val: boolean) => {
+    setSwapRowQuadrantsLeft(val);
+    const currentDisabled = state.physical.disabled_squares ?? [];
+    try {
+      const res = await updateBoardSettings(
+        positiveThresh,
+        negativeThresh,
+        colMode,
+        manualCol,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS,
+        currentDisabled,
+        swapRowQuadrants,
+        val,
+        swapRowQuadrantsRight
+      );
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error toggling left row quadrant swap:", err);
+    }
+  };
+
+  const handleRowQuadrantsRightToggle = async (val: boolean) => {
+    setSwapRowQuadrantsRight(val);
+    const currentDisabled = state.physical.disabled_squares ?? [];
+    try {
+      const res = await updateBoardSettings(
+        positiveThresh,
+        negativeThresh,
+        colMode,
+        manualCol,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS,
+        currentDisabled,
+        swapRowQuadrants,
+        swapRowQuadrantsLeft,
+        val
+      );
+      if (res.status === 'success') {
+        setSettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error toggling right row quadrant swap:", err);
+    }
+  };
+
   // Helper to render the digital piece icons or characters
   const renderPiece = (p: string) => {
     if (p === '.') return null;
@@ -899,7 +951,7 @@ function App() {
                             <span className="text-slate-400">Swap Row Quadrants a-d (1-4 ↔ 5-8)</span>
                             <button
                               type="button"
-                              onClick={() => setSwapRowQuadrantsLeft(!swapRowQuadrantsLeft)}
+                              onClick={() => handleRowQuadrantsLeftToggle(!swapRowQuadrantsLeft)}
                               className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
                                 swapRowQuadrantsLeft
                                   ? 'bg-blue-600/30 border border-blue-500 text-blue-400'
@@ -913,7 +965,7 @@ function App() {
                             <span className="text-slate-400">Swap Row Quadrants e-h (1-4 ↔ 5-8)</span>
                             <button
                               type="button"
-                              onClick={() => setSwapRowQuadrantsRight(!swapRowQuadrantsRight)}
+                              onClick={() => handleRowQuadrantsRightToggle(!swapRowQuadrantsRight)}
                               className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
                                 swapRowQuadrantsRight
                                   ? 'bg-blue-600/30 border border-blue-500 text-blue-400'

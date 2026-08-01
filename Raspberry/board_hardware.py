@@ -130,6 +130,44 @@ load_settings()
 # Dynamic baseline history (timestamp, raw_value, detected_magnet) for each square
 baseline_history = {}
 
+
+def update_row_quadrant_settings(swap_left=None, swap_right=None):
+    """
+    Updates swap_row_quadrants_left and/or swap_row_quadrants_right.
+    When a quadrant swap state changes, baseline matrix rows 0..3 and 4..7
+    are swapped for affected columns so that raw sensor baseline voltages match
+    the new target row mapping without baseline offset errors.
+    """
+    global settings, baseline_history
+
+    if swap_left is not None and swap_left != settings.get("swap_row_quadrants_left", False):
+        settings["swap_row_quadrants_left"] = swap_left
+        # Swap baselines for left quadrant columns (files a-d: cols 0..3)
+        if "baselines" in settings and len(settings["baselines"]) == BOARD_COLS:
+            for c in range(4):
+                if len(settings["baselines"][c]) == BOARD_ROWS:
+                    for r in range(4):
+                        settings["baselines"][c][r], settings["baselines"][c][r + 4] = (
+                            settings["baselines"][c][r + 4],
+                            settings["baselines"][c][r]
+                        )
+                for r in range(BOARD_ROWS):
+                    baseline_history.pop((c, r), None)
+
+    if swap_right is not None and swap_right != settings.get("swap_row_quadrants_right", False):
+        settings["swap_row_quadrants_right"] = swap_right
+        # Swap baselines for right quadrant columns (files e-h: cols 4..7)
+        if "baselines" in settings and len(settings["baselines"]) == BOARD_COLS:
+            for c in range(4, 8):
+                if len(settings["baselines"][c]) == BOARD_ROWS:
+                    for r in range(4):
+                        settings["baselines"][c][r], settings["baselines"][c][r + 4] = (
+                            settings["baselines"][c][r + 4],
+                            settings["baselines"][c][r]
+                        )
+                for r in range(BOARD_ROWS):
+                    baseline_history.pop((c, r), None)
+
 # =============================================================================
 # MUX PIN ASSIGNMENTS (BCM numbering - swapped names)
 # =============================================================================
