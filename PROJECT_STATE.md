@@ -13,23 +13,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
-- [x] Analyzed existing project architecture across hardware, backend, frontend, and browser automation.
-- [x] Defined 6 specialized AI agent personas in `.agents/`.
-- [x] Updated `agent.md` with domain routing rules, handoff protocols, and Raspberry Pi SSH directives (`ssh pi`, `source ~/venv/chess/bin/activate`).
-- [x] Implemented core unit test suite in `Raspberry/tests/`.
-- [x] Implemented and verified `GET /api/board/health` diagnostic endpoint and unit test suite.
-- [x] Created and registered the **Creative Innovator** sub-agent (`.agents/creative.md`).
-- [x] Fixed LED Strip 2 serpentine index mapping (h8 -> h1 -> g1 -> g8 -> f8 -> f1 -> e1 -> e8) and added test suite `tests/test_led_helpers.py`.
-- [x] Created and registered the **Code Explorer** sub-agent (`.agents/explorer.md`).
-- [x] Implemented independent left (`a-d`) and right (`e-h`) row quadrant swap settings (`swap_row_quadrants_left` / `swap_row_quadrants_right`) across hardware driver, FastAPI backend, and React debug UI.
 - [x] Fixed persistent LED activation and desync issue by adding thread-safe serial locking (`serial_lock`), ESP32 RX buffer recovery on timeout, and reliable `shown_colors` cache updates.
 - [x] Reworked LED ordering to a clean 2 LEDs/square base for Strip 1 (files a-d) and disabled Strip 2 (files e-h) completely.
 - [x] Fixed software bug causing duplicate transposed square highlighting (e.g., lighting A4 also lighting D1) in `BoardStateManager._update_leds()`.
+- [x] Configured real 18-LED column offset positions for Strip 1 (accounting for 2 skipped OFF LEDs after Rank 7 and Rank 3).
 
 ## Task Backlog
-- [ ] Refine ESP32 matrix debouncing and serial packet framing (`.agents/hardware.md`).
-- [ ] Enhance Playwright Chess.com session resilience and DOM event listening (`.agents/automation.md`).
-- [ ] Integrate React frontend WebSocket state visualization with hardware debug controls (`.agents/dev.md`).
 
 ## Active Blockers
 - None
