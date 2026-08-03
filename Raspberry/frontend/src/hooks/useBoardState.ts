@@ -12,6 +12,7 @@ export interface BoardState {
     led_test_active?: boolean;
     testing_led_index?: number;
     disabled_squares?: number[][];
+    initial_calibrating?: boolean;
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;

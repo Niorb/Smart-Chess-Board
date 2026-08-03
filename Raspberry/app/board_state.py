@@ -81,6 +81,7 @@ class BoardStateManager:
             orig_pos = settings.get("threshold_positive", 150)
             orig_neg = settings.get("threshold_negative", 150)
 
+            self.initial_calibrating = True
             logger.info(f"Webapp connection detected! Setting thresholds to ±1000 for 5s (original: +{orig_pos}/-{orig_neg}).")
             settings["threshold_positive"] = 1000
             settings["threshold_negative"] = 1000
@@ -96,6 +97,7 @@ class BoardStateManager:
                 settings["threshold_positive"] = orig_pos
                 settings["threshold_negative"] = orig_neg
                 await asyncio.to_thread(save_settings)
+                self.initial_calibrating = False
                 logger.info(f"Recalibration window completed. Restored thresholds to +{orig_pos} / -{orig_neg}.")
 
     def get_physical_payload(self):
@@ -109,7 +111,8 @@ class BoardStateManager:
             "highlighted_square": self.highlighted_square,
             "led_test_active": self.led_test_active,
             "testing_led_index": self.testing_led_index,
-            "disabled_squares": settings.get("disabled_squares", [])
+            "disabled_squares": settings.get("disabled_squares", []),
+            "initial_calibrating": getattr(self, "initial_calibrating", False)
         }
 
     def get_health_status(self):

@@ -179,6 +179,35 @@ function App() {
     }
   }, [isConnected, activeTab]);
 
+  const isInitialCalibrating = !!state.physical?.initial_calibrating;
+  const prevInitialCalibratingRef = useRef(false);
+
+  useEffect(() => {
+    if (prevInitialCalibratingRef.current && !isInitialCalibrating) {
+      const fetchSettings = async () => {
+        try {
+          const res = await getBoardSettings();
+          setSettings(res);
+          setPositiveThresh(res.threshold_positive);
+          setNegativeThresh(res.threshold_negative);
+          setColMode(res.col_mode || 'auto');
+          setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
+          setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
+          setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
+          setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
+          setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
+          setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true);
+          setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
+          setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
+        } catch (err) {
+          console.error("Error fetching board settings after calibration:", err);
+        }
+      };
+      fetchSettings();
+    }
+    prevInitialCalibratingRef.current = isInitialCalibrating;
+  }, [isInitialCalibrating]);
+
 
   const handleSeek = async () => {
     setLoading(true);
@@ -497,6 +526,14 @@ function App() {
           </button>
         </div>
       </header>
+
+      {/* Initial Calibration Banner */}
+      {isInitialCalibrating && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-center gap-3 text-amber-300 text-xs font-semibold animate-pulse shadow-lg">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping flex-shrink-0" />
+          <span>⚡ Initial Board Calibration in Progress... Sensor thresholds set to ±1000 for 5s (Please keep board clear)</span>
+        </div>
+      )}
 
       {activeTab === 'play' ? (
         <main className="flex-grow p-4 md:p-8 flex flex-col md:flex-row items-center md:items-start justify-center gap-6 md:gap-10 max-w-md md:max-w-6xl mx-auto w-full">
