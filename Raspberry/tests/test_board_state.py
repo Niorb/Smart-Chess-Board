@@ -52,3 +52,26 @@ def test_health_status_evaluations():
     assert bsm.get_health_status()["subsystems"]["serial"] == "DISCONNECTED"
     assert bsm.get_health_status()["subsystems"]["gpio"] == "DISCONNECTED"
 
+
+def test_highlighted_square_single_square_update():
+    from unittest.mock import MagicMock
+    from playwright_chesscom.led_helpers import Color
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+
+    # Highlight square A4: file=0, rank=3
+    bsm.highlighted_square = (0, 3)
+    bsm._update_leds()
+
+    orange = Color(255, 80, 0)
+
+    # A4 (col=3, row=0) indices are [8, 9] in the new 2 LED/sq layout
+    bsm.strip.setPixelColor.assert_any_call(8, orange)
+    bsm.strip.setPixelColor.assert_any_call(9, orange)
+
+    # Verify D1 (col=0, row=3) indices [48, 49] were NOT set to orange
+    calls = bsm.strip.setPixelColor.call_args_list
+    d1_orange = any(call.args == (48, orange) or call.args == (49, orange) for call in calls)
+    assert not d1_orange, "Transposed square D1 was erroneously highlighted!"
+
+

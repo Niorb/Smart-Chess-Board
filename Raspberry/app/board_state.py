@@ -144,7 +144,7 @@ class BoardStateManager:
                 if col_mode == "manual" and c != manual_col:
                     continue
                 for r in range(BOARD_ROWS):  # r is rank index (0..7)
-                    if self.highlighted_square == (r, c) or self.highlighted_square == (c, r):
+                    if self.highlighted_square == (c, r):
                         # Orange color for highlighting
                         color = Color(255, 80, 0)
                     else:
