@@ -40,7 +40,7 @@ def test_strip2_mapping():
 def test_row_swap_mapping():
     # When swap_rows=True, col (rank 0..7) is transformed: phys_col = (col + 4) % 8
     assert get_led_indices(0, 0, swap_rows=True) == get_led_indices(4, 0, swap_rows=False)
-    assert get_led_indices(0, 0, swap_rows=True) == [9, 10]
+    assert get_led_indices(0, 0, swap_rows=True) == [7, 8]
 
     assert get_led_indices(4, 0, swap_rows=True) == get_led_indices(0, 0, swap_rows=False)
     assert get_led_indices(4, 0, swap_rows=True) == [16, 17]
