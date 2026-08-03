@@ -8,14 +8,23 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from playwright_chesscom.led_helpers import get_led_indices
 
 def test_strip1_mapping():
-    # Strip 1: files a-d (row 0-3), 2 LEDs per square
+    # Strip 1: files a-d (row 0-3), 18 LEDs per column (16 active + 2 skipped OFF LEDs)
     # File a (row 0): a8 (top, col 7) -> a1 (bottom, col 0)
     assert get_led_indices(7, 0, swap_rows=False) == [0, 1]    # a8
-    assert get_led_indices(0, 0, swap_rows=False) == [14, 15]  # a1
+    assert get_led_indices(6, 0, swap_rows=False) == [2, 3]    # a7
+    assert get_led_indices(0, 0, swap_rows=False) == [16, 17]  # a1
 
     # File b (row 1): b1 (bottom, col 0) -> b8 (top, col 7)
-    assert get_led_indices(0, 1, swap_rows=False) == [16, 17]  # b1
-    assert get_led_indices(7, 1, swap_rows=False) == [30, 31]  # b8
+    assert get_led_indices(0, 1, swap_rows=False) == [18, 19]  # b1
+    assert get_led_indices(7, 1, swap_rows=False) == [34, 35]  # b8
+
+    # File c (row 2): c8 (top, col 7) -> c1 (bottom, col 0)
+    assert get_led_indices(7, 2, swap_rows=False) == [36, 37]  # c8
+    assert get_led_indices(0, 2, swap_rows=False) == [52, 53]  # c1
+
+    # File d (row 3): d1 (bottom, col 0) -> d8 (top, col 7)
+    assert get_led_indices(0, 3, swap_rows=False) == [54, 55]  # d1
+    assert get_led_indices(7, 3, swap_rows=False) == [70, 71]  # d8
 
 def test_strip2_mapping():
     # Strip 2: files e-h (row 4-7) are kept completely OFF (return [])
@@ -31,10 +40,10 @@ def test_strip2_mapping():
 def test_row_swap_mapping():
     # When swap_rows=True, col (rank 0..7) is transformed: phys_col = (col + 4) % 8
     assert get_led_indices(0, 0, swap_rows=True) == get_led_indices(4, 0, swap_rows=False)
-    assert get_led_indices(0, 0, swap_rows=True) == [6, 7]
+    assert get_led_indices(0, 0, swap_rows=True) == [9, 10]
 
     assert get_led_indices(4, 0, swap_rows=True) == get_led_indices(0, 0, swap_rows=False)
-    assert get_led_indices(4, 0, swap_rows=True) == [14, 15]
+    assert get_led_indices(4, 0, swap_rows=True) == [16, 17]
 
 
 def test_dual_pixel_strip_lock_and_show():
