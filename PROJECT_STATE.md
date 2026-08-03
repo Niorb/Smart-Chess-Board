@@ -24,6 +24,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Implemented independent left (`a-d`) and right (`e-h`) row quadrant swap settings (`swap_row_quadrants_left` / `swap_row_quadrants_right`) across hardware driver, FastAPI backend, and React debug UI.
 - [x] Fixed persistent LED activation and desync issue by adding thread-safe serial locking (`serial_lock`), ESP32 RX buffer recovery on timeout, and reliable `shown_colors` cache updates.
 - [x] Reworked LED ordering to a clean 2 LEDs/square base for Strip 1 (files a-d) and disabled Strip 2 (files e-h) completely.
+- [x] Fixed software bug causing duplicate transposed square highlighting (e.g., lighting A4 also lighting D1) in `BoardStateManager._update_leds()`.
 
 ## Task Backlog
 - [ ] Refine ESP32 matrix debouncing and serial packet framing (`.agents/hardware.md`).
