@@ -22,6 +22,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Fixed LED Strip 2 serpentine index mapping (h8 -> h1 -> g1 -> g8 -> f8 -> f1 -> e1 -> e8) and added test suite `tests/test_led_helpers.py`.
 - [x] Created and registered the **Code Explorer** sub-agent (`.agents/explorer.md`).
 - [x] Implemented independent left (`a-d`) and right (`e-h`) row quadrant swap settings (`swap_row_quadrants_left` / `swap_row_quadrants_right`) across hardware driver, FastAPI backend, and React debug UI.
+- [x] Fixed persistent LED activation and desync issue by adding thread-safe serial locking (`serial_lock`), ESP32 RX buffer recovery on timeout, and reliable `shown_colors` cache updates.
 
 ## Task Backlog
 - [ ] Refine ESP32 matrix debouncing and serial packet framing (`.agents/hardware.md`).
