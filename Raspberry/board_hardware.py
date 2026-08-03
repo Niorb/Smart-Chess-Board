@@ -213,7 +213,8 @@ def is_row_swapped(c):
     if c < 4:
         return settings.get("swap_row_quadrants_left", settings.get("swap_row_quadrants", False))
     else:
-        return settings.get("swap_row_quadrants_right", settings.get("swap_row_quadrants", False))
+        # Right quadrant (files e-h / cols 4..7) is swapped by default (when swap_row_quadrants_right is False)
+        return not settings.get("swap_row_quadrants_right", settings.get("swap_row_quadrants", False))
 
 def get_raw_analog_matrix(h, serial_conn):
     """

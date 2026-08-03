@@ -83,9 +83,9 @@ def test_is_row_swapped_left_right():
     for c in range(4):
         assert is_row_swapped(c) is True
         
-    # Columns 4..7 (e-h) should be False
+    # Columns 4..7 (e-h) should be True (swapped by default when swap_row_quadrants_right is False)
     for c in range(4, 8):
-        assert is_row_swapped(c) is False
+        assert is_row_swapped(c) is True
         
     # Invert settings
     settings["swap_row_quadrants_left"] = False
@@ -94,7 +94,7 @@ def test_is_row_swapped_left_right():
     for c in range(4):
         assert is_row_swapped(c) is False
     for c in range(4, 8):
-        assert is_row_swapped(c) is True
+        assert is_row_swapped(c) is False
 
 def test_update_row_quadrant_settings_baseline_swap():
     from board_hardware import update_row_quadrant_settings, settings
