@@ -101,11 +101,13 @@ class DualPixelStrip:
     def __init__(self, num_leds_per_strip):
         self.num_leds_per_strip = num_leds_per_strip
         self.ser = None
+        self.lock = None
         self.current_colors = [0] * (2 * num_leds_per_strip)
         self.shown_colors = [0] * (2 * num_leds_per_strip)
 
-    def set_serial_conn(self, ser):
+    def set_serial_conn(self, ser, lock=None):
         self.ser = ser
+        self.lock = lock
 
     def begin(self):
         pass  # ESP32 does its own setup on boot
@@ -114,26 +116,33 @@ class DualPixelStrip:
         if not self.ser:
             return
         
-        changed = False
-        # Collect updates to send as few packets as possible
-        for idx in range(2 * self.num_leds_per_strip):
-            curr = self.current_colors[idx]
-            if curr != self.shown_colors[idx]:
-                changed = True
-                r = (curr >> 16) & 0xFF
-                g = (curr >> 8) & 0xFF
-                b = curr & 0xFF
-                try:
-                    self.ser.write(bytes([ord('L'), idx, r, g, b]))
-                except Exception as e:
-                    print(f"LED Wrapper: Error writing SetPixelColor command to serial: {e}")
-                self.shown_colors[idx] = curr
+        def _do_show():
+            changed = False
+            # Collect updates to send as few packets as possible
+            for idx in range(2 * self.num_leds_per_strip):
+                curr = self.current_colors[idx]
+                if curr != self.shown_colors[idx]:
+                    changed = True
+                    r = (curr >> 16) & 0xFF
+                    g = (curr >> 8) & 0xFF
+                    b = curr & 0xFF
+                    try:
+                        self.ser.write(bytes([ord('L'), idx, r, g, b]))
+                        self.shown_colors[idx] = curr
+                    except Exception as e:
+                        print(f"LED Wrapper: Error writing SetPixelColor command to serial: {e}")
 
-        if changed:
-            try:
-                self.ser.write(b'W')
-            except Exception as e:
-                print(f"LED Wrapper: Error writing Show command to serial: {e}")
+            if changed:
+                try:
+                    self.ser.write(b'W')
+                except Exception as e:
+                    print(f"LED Wrapper: Error writing Show command to serial: {e}")
+
+        if self.lock:
+            with self.lock:
+                _do_show()
+        else:
+            _do_show()
 
     def setPixelColor(self, index, color):
         if 0 <= index < len(self.current_colors):
@@ -246,15 +255,26 @@ def all_leds_off(strip):
     if not strip:
         return
     if hasattr(strip, 'ser') and strip.ser:
-        try:
-            strip.ser.write(b'C')
-            if hasattr(strip, 'current_colors'):
-                for i in range(len(strip.current_colors)):
-                    strip.current_colors[i] = 0
-                    strip.shown_colors[i] = 0
-            return
-        except Exception:
-            pass
+        def _do_off():
+            try:
+                strip.ser.write(b'C')
+                if hasattr(strip, 'current_colors'):
+                    for i in range(len(strip.current_colors)):
+                        strip.current_colors[i] = 0
+                        strip.shown_colors[i] = 0
+                return True
+            except Exception:
+                return False
+
+        lock = getattr(strip, 'lock', None)
+        if lock:
+            with lock:
+                if _do_off():
+                    return
+        else:
+            if _do_off():
+                return
+
     # Fallback
     for i in range(NUM_LEDS):
         strip.setPixelColor(i, Color(0, 0, 0))
@@ -268,15 +288,26 @@ def all_leds_color(strip, rgb):
     r, g, b = rgb
     val = (r << 16) | (g << 8) | b
     if hasattr(strip, 'ser') and strip.ser:
-        try:
-            strip.ser.write(bytes([ord('A'), r, g, b]))
-            if hasattr(strip, 'current_colors'):
-                for i in range(len(strip.current_colors)):
-                    strip.current_colors[i] = val
-                    strip.shown_colors[i] = val
-            return
-        except Exception:
-            pass
+        def _do_color():
+            try:
+                strip.ser.write(bytes([ord('A'), r, g, b]))
+                if hasattr(strip, 'current_colors'):
+                    for i in range(len(strip.current_colors)):
+                        strip.current_colors[i] = val
+                        strip.shown_colors[i] = val
+                return True
+            except Exception:
+                return False
+
+        lock = getattr(strip, 'lock', None)
+        if lock:
+            with lock:
+                if _do_color():
+                    return
+        else:
+            if _do_color():
+                return
+
     # Fallback
     for i in range(NUM_LEDS):
         strip.setPixelColor(i, Color(r, g, b))

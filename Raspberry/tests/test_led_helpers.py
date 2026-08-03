@@ -45,3 +45,38 @@ def test_row_swap_mapping():
     assert get_led_indices(4, 0, swap_rows=True) == get_led_indices(0, 0, swap_rows=False)
     assert get_led_indices(4, 0, swap_rows=True) == [0, 1]
 
+
+def test_dual_pixel_strip_lock_and_show():
+    from unittest.mock import MagicMock
+    import threading
+    from playwright_chesscom.led_helpers import DualPixelStrip, all_leds_off, all_leds_color
+
+    strip = DualPixelStrip(num_leds_per_strip=76)
+    mock_ser = MagicMock()
+    lock = threading.Lock()
+    strip.set_serial_conn(mock_ser, lock=lock)
+
+    # Set pixel 0 to red
+    strip.setPixelColor(0, (255, 0, 0))
+    strip.show()
+
+    # Check serial calls: L, 0, 255, 0, 0 followed by W
+    mock_ser.write.assert_any_call(bytes([ord('L'), 0, 255, 0, 0]))
+    mock_ser.write.assert_any_call(b'W')
+    assert strip.shown_colors[0] == (255 << 16)
+
+    # Test all_leds_off with lock
+    mock_ser.reset_mock()
+    all_leds_off(strip)
+    mock_ser.write.assert_called_with(b'C')
+    assert strip.current_colors[0] == 0
+    assert strip.shown_colors[0] == 0
+
+    # Test all_leds_color with lock
+    mock_ser.reset_mock()
+    all_leds_color(strip, (0, 255, 0))
+    mock_ser.write.assert_called_with(bytes([ord('A'), 0, 255, 0]))
+    assert strip.current_colors[0] == (255 << 8)
+    assert strip.shown_colors[0] == (255 << 8)
+
+

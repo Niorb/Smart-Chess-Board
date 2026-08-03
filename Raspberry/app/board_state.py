@@ -46,7 +46,7 @@ class BoardStateManager:
             self.strip = init_strip()
             if self.strip:
                 if self.ser:
-                    self.strip.set_serial_conn(self.ser)
+                    self.strip.set_serial_conn(self.ser, self.serial_lock)
                 logger.info("LED strip initialized successfully in BoardStateManager.")
             else:
                 logger.info("LED strip not initialized (mock or non-Pi).")

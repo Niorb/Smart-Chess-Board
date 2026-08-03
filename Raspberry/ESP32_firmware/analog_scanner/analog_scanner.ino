@@ -119,6 +119,11 @@ void loop() {
         } else if (idx >= NUM_LEDS_PER_STRIP && idx < 2 * NUM_LEDS_PER_STRIP) {
           strip2.setPixelColor(idx - NUM_LEDS_PER_STRIP, strip2.Color(r, g, b));
         }
+      } else {
+        // Timeout / framing error: clear RX buffer to resync
+        while (Serial.available() > 0) {
+          Serial.read();
+        }
       }
     }
     else if (c == 'W') {
@@ -151,6 +156,11 @@ void loop() {
         }
         strip1.show();
         strip2.show();
+      } else {
+        // Timeout / framing error: clear RX buffer to resync
+        while (Serial.available() > 0) {
+          Serial.read();
+        }
       }
     }
     else if (c == 'S') {
@@ -163,6 +173,11 @@ void loop() {
         int val = Serial.read();
         if (val >= 0 && val <= 255) {
           settle_us = val;
+        }
+      } else {
+        // Timeout / framing error: clear RX buffer to resync
+        while (Serial.available() > 0) {
+          Serial.read();
         }
       }
     }
