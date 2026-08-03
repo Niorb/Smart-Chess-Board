@@ -178,7 +178,7 @@ def get_led_indices(col, row, swap_rows=None):
     """
     Convert board [col, row] to serpentine LED strip indices.
     Strip 1 (files a-d / row 0-3): 18 LEDs per column (16 active + 2 skipped OFF LEDs after Rank 7 and Rank 3).
-    Strip 2 (files e-h / row 4-7): kept OFF completely (returns []).
+    Strip 2 (files e-h / row 4-7): 16 LEDs per column (2 LEDs / square base). Starts at h8 down to h1, g1 to g8, etc.
     
     col: rank index 0..7 (0 = Rank 1, 7 = Rank 8)
     row: file index 0..7 (0 = file a, 7 = file h)
@@ -194,35 +194,37 @@ def get_led_indices(col, row, swap_rows=None):
     if swap_rows:
         col = (col + 4) % 8
 
-    # Strip 2 (files e-h / row 4-7) is kept completely off for now
-    if row >= 4:
-        return []
-
-    # Mapping of relative square index along ribbon travel (0..7) to LED index offsets inside an 18-LED column
-    # Layout from entry point: 2 LEDs, 2 LEDs + 1 OFF, 2 LEDs, 2 LEDs, 2 LEDs, 2 LEDs + 1 OFF, 2 LEDs, 2 LEDs
-    offsets_strip1 = {
-        0: [0, 1],
-        1: [2, 3],
-        2: [5, 6],
-        3: [7, 8],
-        4: [9, 10],
-        5: [11, 12],
-        6: [14, 15],
-        7: [16, 17]
-    }
-
-    # Base index for file (18 LEDs per file)
-    base = row * 18
-
-    # Serpentine direction mapping:
-    # File a (row 0), file c (row 2): ribbon enters at top (Rank 8 / col 7) -> goes down to Rank 1 (col 0)
-    # File b (row 1), file d (row 3): ribbon enters at bottom (Rank 1 / col 0) -> goes up to Rank 8 (col 7)
-    if row % 2 == 0:
-        sq_idx = 7 - col
+    if row < 4:
+        # Strip 1 (files a-d / row 0-3)
+        offsets_strip1 = {
+            0: [0, 1],
+            1: [2, 3],
+            2: [5, 6],
+            3: [7, 8],
+            4: [9, 10],
+            5: [11, 12],
+            6: [14, 15],
+            7: [16, 17]
+        }
+        base = row * 18
+        if row % 2 == 0:
+            sq_idx = 7 - col
+        else:
+            sq_idx = col
+        return [base + o for o in offsets_strip1[sq_idx]]
     else:
-        sq_idx = col
-
-    return [base + o for o in offsets_strip1[sq_idx]]
+        # Strip 2 (files e-h / row 4-7)
+        # Relative column from right to left: h=0, g=1, f=2, e=3
+        c_rel = 7 - row
+        base = 76 + c_rel * 16
+        if c_rel % 2 == 0:
+            # File h, f: starts at top (Rank 8 / col 7) -> goes down to Rank 1 (col 0)
+            sq_idx = 7 - col
+        else:
+            # File g, e: starts at bottom (Rank 1 / col 0) -> goes up to Rank 8 (col 7)
+            sq_idx = col
+        first_led = base + sq_idx * 2
+        return [first_led, first_led + 1]
 
 
 def all_leds_off(strip):
