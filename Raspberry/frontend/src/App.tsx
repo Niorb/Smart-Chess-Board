@@ -146,7 +146,7 @@ function App() {
   const [scanDelay, setScanDelay] = useState<number>(100);
   const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
   const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
-  const [baselineWindowS, setBaselineWindowS] = useState<number>(4);
+  const [baselineWindowS, setBaselineWindowS] = useState<number>(2);
   const [swapRowQuadrants, setSwapRowQuadrants] = useState<boolean>(true);
   const [swapRowQuadrantsLeft, setSwapRowQuadrantsLeft] = useState<boolean>(true);
   const [swapRowQuadrantsRight, setSwapRowQuadrantsRight] = useState<boolean>(true);
@@ -166,7 +166,7 @@ function App() {
         setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
-        setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 4);
+        setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
         setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true);
         setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
         setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
@@ -214,7 +214,7 @@ function App() {
         setScanDelay(res.settings.scan_delay !== undefined ? res.settings.scan_delay : 100);
         setMuxSettleMs(res.settings.mux_settle_ms !== undefined ? res.settings.mux_settle_ms : 10);
         setDebounceThreshold(res.settings.debounce_threshold !== undefined ? res.settings.debounce_threshold : 2);
-        setBaselineWindowS(res.settings.baseline_window_s !== undefined ? res.settings.baseline_window_s : 4);
+        setBaselineWindowS(res.settings.baseline_window_s !== undefined ? res.settings.baseline_window_s : 2);
         setCalibrationStatus("Success: Baselines updated!");
       } else {
         setCalibrationStatus("Failed: " + res.message);

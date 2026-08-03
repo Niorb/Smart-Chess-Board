@@ -62,7 +62,7 @@ settings = {
     "scan_delay": 100,
     "mux_settle_us": 100,
     "debounce_threshold": 2,
-    "baseline_window_s": 4,
+    "baseline_window_s": 2,
     "swap_row_quadrants": False,
     "swap_row_quadrants_left": False,
     "swap_row_quadrants_right": False,
@@ -345,7 +345,7 @@ def scan_board(h, serial_conn, raw_state):
                     baseline_history[(c, target_r)].append((now, val, detected))
                     
                     # Keep only entries within the last baseline_window_s seconds
-                    baseline_window = settings.get("baseline_window_s", 4)
+                    baseline_window = settings.get("baseline_window_s", 2)
                     baseline_history[(c, target_r)] = [entry for entry in baseline_history[(c, target_r)] if now - entry[0] <= baseline_window]
                     any_magnet = any(entry[2] for entry in baseline_history[(c, target_r)])
                     
@@ -372,10 +372,10 @@ def scan_board(h, serial_conn, raw_state):
     return matrix, diag
 
 
-def calibrate_board(h, serial_conn, samples=5):
+def calibrate_board(h, serial_conn, duration_s=2.0):
     """
-    Reads multiple samples per channel using the batch scan command, averages them, 
-    and saves the new values as baselines in the persistent configuration settings.
+    Reads samples per channel continuously over a specified duration (default 2 seconds),
+    averages them, and saves the new values as baselines in the persistent configuration settings.
     """
     if serial_conn is None:
         logger.error("Calibration failed: serial connection not initialized.")
@@ -393,7 +393,8 @@ def calibrate_board(h, serial_conn, samples=5):
         serial_conn.write(b'S' + bytes([settle_us]))
         last_sent_settle_us = settle_us
 
-    for s in range(samples):
+    start_time = time.time()
+    while time.time() - start_time < duration_s:
         serial_conn.write(b'B')
         header = serial_conn.read(2)
         if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
@@ -410,7 +411,7 @@ def calibrate_board(h, serial_conn, samples=5):
                         idx += 1
                         sums[c][target_r] += val
                         counts[c][target_r] += 1
-        time.sleep(0.02)
+        time.sleep(0.01)
         
     # Update baselines
     for c in range(BOARD_COLS):
