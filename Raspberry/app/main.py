@@ -231,6 +231,7 @@ async def make_move_route(body: MoveRequest):
 @app.websocket("/ws/state")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    asyncio.create_task(state_manager.handle_webapp_connected())
     try:
         while True:
             # Keep alive and listen

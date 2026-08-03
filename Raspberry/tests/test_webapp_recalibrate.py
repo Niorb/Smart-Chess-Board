@@ -1,0 +1,29 @@
+import pytest
+import asyncio
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from app.board_state import BoardStateManager
+from board_hardware import settings
+
+@pytest.mark.asyncio
+async def test_handle_webapp_connected_threshold_sequence():
+    bsm = BoardStateManager()
+    bsm._safe_calibrate = MagicMock(return_value=True)
+
+    # Set initial test thresholds
+    settings["threshold_positive"] = 150
+    settings["threshold_negative"] = 120
+
+    # Run handle_webapp_connected
+    await bsm.handle_webapp_connected()
+
+    # Verify _safe_calibrate was called
+    bsm._safe_calibrate.assert_called_once()
+
+    # Verify thresholds were restored back to initial values after run
+    assert settings["threshold_positive"] == 150
+    assert settings["threshold_negative"] == 120

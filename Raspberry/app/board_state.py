@@ -63,6 +63,41 @@ class BoardStateManager:
             from board_hardware import calibrate_board
             return calibrate_board(self.h, self.ser)
 
+    async def handle_webapp_connected(self):
+        """
+        Triggered when a connection to the webapp is detected.
+        Sets upper and lower thresholds to ±1000 for 5 seconds to prevent false piece detections,
+        runs sensor recalibration, and restores original thresholds afterwards.
+        """
+        if not hasattr(self, "_recalibrate_lock") or self._recalibrate_lock is None:
+            self._recalibrate_lock = asyncio.Lock()
+
+        if self._recalibrate_lock.locked():
+            logger.info("Recalibration already in progress for a webapp connection.")
+            return
+
+        async with self._recalibrate_lock:
+            from board_hardware import settings, save_settings
+            orig_pos = settings.get("threshold_positive", 150)
+            orig_neg = settings.get("threshold_negative", 150)
+
+            logger.info(f"Webapp connection detected! Setting thresholds to ±1000 for 5s (original: +{orig_pos}/-{orig_neg}).")
+            settings["threshold_positive"] = 1000
+            settings["threshold_negative"] = 1000
+
+            try:
+                # Execute sensor matrix recalibration
+                await asyncio.to_thread(self._safe_calibrate)
+                # Hold ±1000 threshold window for 5 seconds total (2s calibration + 3s remaining)
+                await asyncio.sleep(3.0)
+            except Exception as e:
+                logger.error(f"Error during webapp connection recalibration: {e}")
+            finally:
+                settings["threshold_positive"] = orig_pos
+                settings["threshold_negative"] = orig_neg
+                await asyncio.to_thread(save_settings)
+                logger.info(f"Recalibration window completed. Restored thresholds to +{orig_pos} / -{orig_neg}.")
+
     def get_physical_payload(self):
         from board_hardware import settings
         return {
