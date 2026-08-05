@@ -169,6 +169,28 @@ def update_row_quadrant_settings(swap_left=None, swap_right=None):
                     baseline_history.pop((c, r), None)
 
 # =============================================================================
+# MUX PIN ASSIGNMENTS & COMPATIBILITY STUBS
+# =============================================================================
+
+COL_MUX_S0 = 17
+COL_MUX_S1 = 27
+COL_MUX_S2 = 22
+COL_MUX_S3 = 23
+
+ROW_MUX_S0 = 5
+ROW_MUX_S1 = 6
+ROW_MUX_S2 = 13
+ROW_MUX_S3 = 19
+
+def set_mux_channel(h, s0, s1, s2, s3, channel):
+    """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
+    pass
+
+def init_mux_pins(h):
+    """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
+    pass
+
+# =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
 
