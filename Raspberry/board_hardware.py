@@ -182,6 +182,8 @@ ROW_MUX_S1 = 6
 ROW_MUX_S2 = 13
 ROW_MUX_S3 = 19
 
+MUX_SETTLE_S = 0.0001  # 100us settling time default for faster scanning
+
 def set_mux_channel(h, s0, s1, s2, s3, channel):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
     pass
