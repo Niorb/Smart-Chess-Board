@@ -169,43 +169,6 @@ def update_row_quadrant_settings(swap_left=None, swap_right=None):
                     baseline_history.pop((c, r), None)
 
 # =============================================================================
-# MUX PIN ASSIGNMENTS (BCM numbering - swapped names)
-# =============================================================================
-
-COL_MUX_S0 = 17
-COL_MUX_S1 = 27
-COL_MUX_S2 = 22
-COL_MUX_S3 = 23
-
-ROW_MUX_S0 = 5
-ROW_MUX_S1 = 6
-ROW_MUX_S2 = 13
-ROW_MUX_S3 = 19
-
-# =============================================================================
-# TIMING
-# =============================================================================
-
-MUX_SETTLE_S = 0.0001  # 100us settling time default for faster scanning
-
-# =============================================================================
-# MUX CONTROL
-# =============================================================================
-
-def set_mux_channel(h, s0, s1, s2, s3, channel):
-    """No-op on the Pi — MUX is now controlled directly by the ESP32 coprocessor."""
-    pass
-
-# =============================================================================
-# GPIO SETUP
-# =============================================================================
-
-def init_mux_pins(h):
-    """No-op on the Pi — MUX is now controlled directly by the ESP32 coprocessor."""
-    pass
-
-
-# =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
 
@@ -216,57 +179,6 @@ def is_row_swapped(c):
         # Right quadrant (files e-h / cols 4..7) is swapped by default (when swap_row_quadrants_right is False)
         return not settings.get("swap_row_quadrants_right", settings.get("swap_row_quadrants", False))
 
-def get_raw_analog_matrix(h, serial_conn):
-    """
-    Scans the entire 8x8 matrix of analog sensors using the serial batch scan command.
-    """
-    matrix = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    if serial_conn is None:
-        return matrix
-
-    # Flush any stale serial data
-    serial_conn.reset_input_buffer()
-
-    col_mode = settings.get("col_mode", "auto")
-    manual_col = settings.get("manual_col", 0)
-    settle_us = settings.get("mux_settle_us", 100)
-
-    global last_sent_settle_us
-    if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([settle_us]))
-        last_sent_settle_us = settle_us
-
-    serial_conn.write(b'B')
-
-    # Read binary packet: 2 header bytes + data bytes
-    header = serial_conn.read(2)
-    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-        data = serial_conn.read(expected_bytes)
-        if len(data) == expected_bytes:
-            import struct
-            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-            idx = 0
-            for r in range(BOARD_ROWS):
-                for c in range(BOARD_COLS):
-                    target_r = (r + 4) % BOARD_ROWS if is_row_swapped(c) else r
-                    val = vals[idx]
-                    idx += 1
-                    disabled_squares = settings.get("disabled_squares", [])
-                    if col_mode == "manual" and c != manual_col:
-                        matrix[c][target_r] = settings["baselines"][c][target_r]
-                    elif [c, target_r] in disabled_squares or (c, target_r) in disabled_squares:
-                        matrix[c][target_r] = settings["baselines"][c][target_r]
-                    else:
-                        matrix[c][target_r] = val
-    else:
-        logger.warning(f"Serial sync error: expected header 0xAA55, got {header.hex() if header else 'nothing'}")
-        serial_conn.reset_input_buffer()
-        for c in range(BOARD_COLS):
-            for r in range(BOARD_ROWS):
-                matrix[c][r] = settings["baselines"][c][r]
-
-    return matrix
 
 
 def scan_board(h, serial_conn, raw_state):
@@ -347,11 +259,13 @@ def scan_board(h, serial_conn, raw_state):
                     
                     # Keep only entries within the last baseline_window_s seconds
                     baseline_window = settings.get("baseline_window_s", 2)
-                    baseline_history[(c, target_r)] = [entry for entry in baseline_history[(c, target_r)] if now - entry[0] <= baseline_window]
-                    any_magnet = any(entry[2] for entry in baseline_history[(c, target_r)])
+                    history = baseline_history[(c, target_r)]
+                    while history and (now - history[0][0]) > baseline_window:
+                        history.pop(0)
+                    any_magnet = any(entry[2] for entry in history)
                     
-                    if not any_magnet and len(baseline_history[(c, target_r)]) > 0:
-                        avg_val = sum(entry[1] for entry in baseline_history[(c, target_r)]) / len(baseline_history[(c, target_r)])
+                    if not any_magnet and len(history) > 0:
+                        avg_val = sum(entry[1] for entry in history) / len(history)
                         settings["baselines"][c][target_r] = int(avg_val)
         else:
             diag["errors"] = non_mocked_count

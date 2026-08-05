@@ -9,11 +9,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import serial
 import lgpio
-from board_hardware import scan_board, apply_debounce, BOARD_ROWS, BOARD_COLS, init_mux_pins
+from board_hardware import scan_board, apply_debounce, BOARD_ROWS, BOARD_COLS, init_mux_pins, settings
 from playwright_chesscom.chesscom_config import SERIAL_PORT, BAUD_RATE
 from .chess_engine_async import chess_engine
 
-POL_INTERVAL = 0.1
 logger = logging.getLogger("smart-chess-app.state")
 
 
@@ -250,7 +249,6 @@ class BoardStateManager:
                     raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state)
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
-                    from board_hardware import settings
                     col_mode = settings.get("col_mode", "auto")
                     manual_col = settings.get("manual_col", 0)
                     
@@ -302,7 +300,6 @@ class BoardStateManager:
                 await broadcast_callback(payload)
 
                 # Poll interval (read dynamically from settings)
-                from board_hardware import settings
                 col_mode = settings.get("col_mode", "auto")
                 if col_mode == "manual":
                     delay_ms = settings.get("scan_delay", 100)
