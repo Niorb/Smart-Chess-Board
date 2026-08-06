@@ -177,9 +177,9 @@ function App() {
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
         setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
-        setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true);
-        setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
-        setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
+        setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false);
+        setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
+        setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -206,9 +206,9 @@ function App() {
           setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
           setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
           setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
-          setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true);
-          setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
-          setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : true));
+          setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false);
+          setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
+          setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
         } catch (err) {
           console.error("Error fetching board settings after calibration:", err);
         }
