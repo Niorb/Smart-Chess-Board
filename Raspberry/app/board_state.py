@@ -68,7 +68,10 @@ class BoardStateManager:
             self.is_calibrating = True
             try:
                 from board_hardware import calibrate_board
-                return calibrate_board(self.h, self.ser)
+                res = calibrate_board(self.h, self.ser)
+                if res:
+                    self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+                return res
             finally:
                 self.is_calibrating = False
                 if self.strip:
