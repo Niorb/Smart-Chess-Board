@@ -18,7 +18,7 @@ logger = logging.getLogger("smart-chess-app.state")
 
 class BoardStateManager:
     def __init__(self):
-        self.serial_lock = threading.Lock()
+        self.serial_lock = threading.RLock()
         self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.raw_analog_values = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.digital_state = [["." for _ in range(8)] for _ in range(8)]

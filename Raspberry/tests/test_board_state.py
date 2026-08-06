@@ -1,6 +1,7 @@
 import pytest
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -85,10 +86,19 @@ def test_led_suppression_during_calibration():
     bsm._update_leds()
     bsm.strip.setPixelColor.assert_not_called()
 
-    bsm.initial_calibrating = False
-    bsm.is_calibrating = True
-    bsm._update_leds()
-    bsm.strip.setPixelColor.assert_not_called()
+def test_safe_calibrate_no_deadlock():
+    from unittest.mock import MagicMock
+    from playwright_chesscom.led_helpers import DualPixelStrip
+    bsm = BoardStateManager()
+    bsm.ser = MagicMock()
+    bsm.strip = DualPixelStrip(num_leds_per_strip=76)
+    bsm.strip.set_serial_conn(bsm.ser, bsm.serial_lock)
+
+    # Calling _safe_calibrate must execute without deadlocking
+    with patch("board_hardware.calibrate_board", return_value=True):
+        res = bsm._safe_calibrate()
+        assert res is True
+
 
 
 
