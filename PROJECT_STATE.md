@@ -25,7 +25,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Removed "Swap Row Quadrants a-d (1-4 ↔ 5-8)" and "Swap Row Quadrants e-h (1-4 ↔ 5-8)" options from the webapp frontend UI.
 - [x] Disabled and suppressed LED illumination during initial webapp connection recalibration and manual board baseline calibration.
 - [x] Fixed serial lock deadlock during webapp connection recalibration by upgrading `serial_lock` from non-reentrant `threading.Lock` to re-entrant `threading.RLock`.
-- [x] Fixed row 1-4 ↔ 5-8 quadrant swap mismatch between webapp and physical board by setting row quadrant swap flags to false by default and removing boolean inversion in `is_row_swapped()`.
+- [x] Fixed row 1-4 ↔ 5-8 quadrant swap mismatch between webapp and physical board by setting row quadrant swap flags to false by default and correcting Strip 1 serpentine `sq_idx` calculation in `led_helpers.py` so rank 1 (`col=0`) maps to physical LED index 0 at `a1` and rank 8 (`col=7`) maps to physical LED index 16 at `a8`.
 - [x] Added "Force All LEDs Off" button to webapp control interface and created corresponding `/api/board/clear_leds` backend endpoint.
 
 ## Task Backlog
