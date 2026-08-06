@@ -174,7 +174,7 @@ def init_strip():
     return strip
 
 
-def get_led_indices(col, row, swap_rows=None):
+def get_led_indices(col, row):
     """
     Convert board [col, row] to serpentine LED strip indices.
     Strip 1 (files a-d / row 0-3): 18 LEDs per column (16 active + 2 skipped OFF LEDs after Rank 7 and Rank 3).
@@ -182,18 +182,7 @@ def get_led_indices(col, row, swap_rows=None):
     
     col: rank index 0..7 (0 = Rank 1, 7 = Rank 8)
     row: file index 0..7 (0 = file a, 7 = file h)
-    swap_rows: optional boolean overriding automatic row quadrant swap check
     """
-    if swap_rows is None:
-        try:
-            from board_hardware import is_row_swapped
-            swap_rows = is_row_swapped(row)
-        except Exception:
-            swap_rows = False
-
-    if swap_rows:
-        col = (col + 4) % 8
-
     if row < 4:
         # Strip 1 (files a-d / row 0-3)
         offsets_strip1 = {

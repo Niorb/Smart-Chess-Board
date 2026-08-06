@@ -45,15 +45,13 @@ def test_settings_update_route():
     payload = {
         "threshold_positive": 130,
         "threshold_negative": 130,
-        "swap_row_quadrants_left": True,
-        "swap_row_quadrants_right": False
     }
     response = client.post("/api/board/settings", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert data["settings"]["swap_row_quadrants_left"] is True
-    assert data["settings"]["swap_row_quadrants_right"] is False
+    assert data["settings"]["threshold_positive"] == 130
+    assert data["settings"]["threshold_negative"] == 130
 
 
 def test_clear_leds_route():

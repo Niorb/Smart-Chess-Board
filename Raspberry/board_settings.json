@@ -49,8 +49,5 @@
     "mux_settle_ms": 10,
     "debounce_threshold": 4,
     "baseline_window_s": 2,
-    "swap_row_quadrants": false,
-    "swap_row_quadrants_left": false,
-    "swap_row_quadrants_right": false,
     "disabled_squares": []
 }

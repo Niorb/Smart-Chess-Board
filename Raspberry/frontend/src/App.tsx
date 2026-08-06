@@ -114,10 +114,7 @@ function App() {
         muxSettleMs,
         debounceThreshold,
         baselineWindowS,
-        nextDisabled,
-        swapRowQuadrants,
-        swapRowQuadrantsLeft,
-        swapRowQuadrantsRight
+        nextDisabled
       );
       if (res.status === 'success') {
         setSettings(res.settings);
@@ -145,9 +142,6 @@ function App() {
     debounce_threshold?: number;
     baseline_window_s?: number;
     disabled_squares?: number[][];
-    swap_row_quadrants?: boolean;
-    swap_row_quadrants_left?: boolean;
-    swap_row_quadrants_right?: boolean;
   } | null>(null);
   const [positiveThresh, setPositiveThresh] = useState<number>(150);
   const [negativeThresh, setNegativeThresh] = useState<number>(150);
@@ -157,9 +151,6 @@ function App() {
   const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
   const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
   const [baselineWindowS, setBaselineWindowS] = useState<number>(2);
-  const [swapRowQuadrants, setSwapRowQuadrants] = useState<boolean>(true);
-  const [swapRowQuadrantsLeft, setSwapRowQuadrantsLeft] = useState<boolean>(true);
-  const [swapRowQuadrantsRight, setSwapRowQuadrantsRight] = useState<boolean>(true);
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -177,9 +168,6 @@ function App() {
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
         setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
-        setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false);
-        setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
-        setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -206,9 +194,6 @@ function App() {
           setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
           setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
           setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
-          setSwapRowQuadrants(res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false);
-          setSwapRowQuadrantsLeft(res.swap_row_quadrants_left !== undefined ? res.swap_row_quadrants_left : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
-          setSwapRowQuadrantsRight(res.swap_row_quadrants_right !== undefined ? res.swap_row_quadrants_right : (res.swap_row_quadrants !== undefined ? res.swap_row_quadrants : false));
         } catch (err) {
           console.error("Error fetching board settings after calibration:", err);
         }
@@ -280,10 +265,7 @@ function App() {
         muxSettleMs,
         debounceThreshold,
         baselineWindowS,
-        currentDisabled,
-        swapRowQuadrants,
-        swapRowQuadrantsLeft,
-        swapRowQuadrantsRight
+        currentDisabled
       );
       if (res.status === 'success') {
         setSettings(res.settings);

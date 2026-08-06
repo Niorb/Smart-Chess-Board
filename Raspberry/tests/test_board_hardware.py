@@ -68,53 +68,6 @@ def test_settings_defaults():
     assert "threshold_positive" in settings
     assert "threshold_negative" in settings
     assert "baselines" in settings
-    assert "swap_row_quadrants_left" in settings
-    assert "swap_row_quadrants_right" in settings
     assert len(settings["baselines"]) == BOARD_COLS
     assert len(settings["baselines"][0]) == BOARD_ROWS
-
-def test_is_row_swapped_left_right():
-    from board_hardware import is_row_swapped
-    
-    settings["swap_row_quadrants_left"] = True
-    settings["swap_row_quadrants_right"] = False
-    
-    # Columns 0..3 (a-d) should be True
-    for c in range(4):
-        assert is_row_swapped(c) is True
-        
-    # Columns 4..7 (e-h) should be False when swap_row_quadrants_right is False
-    for c in range(4, 8):
-        assert is_row_swapped(c) is False
-        
-    # Invert settings
-    settings["swap_row_quadrants_left"] = False
-    settings["swap_row_quadrants_right"] = True
-    
-    for c in range(4):
-        assert is_row_swapped(c) is False
-    for c in range(4, 8):
-        assert is_row_swapped(c) is True
-
-def test_update_row_quadrant_settings_baseline_swap():
-    from board_hardware import update_row_quadrant_settings, settings
-
-    settings["swap_row_quadrants_left"] = False
-    settings["swap_row_quadrants_right"] = False
-    settings["baselines"] = [[1000 + c * 10 + r for r in range(8)] for c in range(8)]
-
-    orig_left_r0 = settings["baselines"][0][0]  # 1000
-    orig_left_r4 = settings["baselines"][0][4]  # 1004
-
-    # Enable left quadrant swap
-    update_row_quadrant_settings(swap_left=True)
-    assert settings["swap_row_quadrants_left"] is True
-    assert settings["baselines"][0][0] == orig_left_r4
-    assert settings["baselines"][0][4] == orig_left_r0
-
-    # Toggle back
-    update_row_quadrant_settings(swap_left=False)
-    assert settings["swap_row_quadrants_left"] is False
-    assert settings["baselines"][0][0] == orig_left_r0
-    assert settings["baselines"][0][4] == orig_left_r4
 

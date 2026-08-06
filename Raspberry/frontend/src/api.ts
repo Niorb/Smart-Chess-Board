@@ -31,10 +31,7 @@ export async function updateBoardSettings(
   muxSettleMs?: number,
   debounceThreshold?: number,
   baselineWindowS?: number,
-  disabledSquares?: number[][],
-  swapRowQuadrants?: boolean,
-  swapRowQuadrantsLeft?: boolean,
-  swapRowQuadrantsRight?: boolean
+  disabledSquares?: number[][]
 ) {
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',
@@ -49,9 +46,6 @@ export async function updateBoardSettings(
       debounce_threshold: debounceThreshold,
       baseline_window_s: baselineWindowS,
       disabled_squares: disabledSquares,
-      swap_row_quadrants: swapRowQuadrants,
-      swap_row_quadrants_left: swapRowQuadrantsLeft,
-      swap_row_quadrants_right: swapRowQuadrantsRight,
     }),
   });
   return response.json();
