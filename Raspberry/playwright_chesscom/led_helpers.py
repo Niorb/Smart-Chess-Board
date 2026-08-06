@@ -208,9 +208,9 @@ def get_led_indices(col, row, swap_rows=None):
         }
         base = row * 18
         if row % 2 == 0:
-            sq_idx = 7 - col
-        else:
             sq_idx = col
+        else:
+            sq_idx = 7 - col
         return [base + o for o in offsets_strip1[sq_idx]]
     else:
         # Strip 2 (files e-h / row 4-7)
