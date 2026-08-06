@@ -5,15 +5,17 @@ You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your
 
 ## Remote Environment & SSH Directives
 > [!IMPORTANT]
-> The project backend, GPIO hardware drivers, and tests run on a physical **Raspberry Pi**.
-> Whenever running commands, SSH into the Pi using `ssh pi` and activate the python environment with `source ~/venv/chess/bin/activate`.
+> The project backend, GPIO hardware drivers, tests, and web builds run on a physical **Raspberry Pi**.
+> **STRICT RULE**: NEVER run `npm` commands (install, build, dev, etc.) or `pytest` on the local machine. ALL `npm` and `pytest` operations MUST ONLY be executed remotely on the Raspberry Pi over SSH (`ssh pi@pi`).
+> Whenever running backend/build commands, SSH into the Pi using `ssh pi@pi` and activate the python environment with `source ~/venv/chess/bin/activate`.
 >
 > **Mandatory Post-Change Deployment Workflow:**
 > After making any code changes, ALWAYS execute the following deployment steps:
 > 1. Stage, commit, and push changes locally to GitHub (`git push origin main`).
-> 2. SSH into the Raspberry Pi (`ssh pi`) and navigate to `~/chess_git`.
+> 2. SSH into the Raspberry Pi (`ssh pi@pi`) and navigate to `~/chess_git`.
 > 3. Pull the updated code (`git pull`), stashing/preserving hardware calibration in `Raspberry/board_settings.json` if needed.
-> 4. Activate the virtual environment (`source ~/venv/chess/bin/activate`) and run tests (`pytest`) on the Pi to verify.
+> 4. Run `npm` operations (e.g. `npm run build` in `Raspberry/frontend`) on the Pi.
+> 5. Activate the virtual environment (`source ~/venv/chess/bin/activate`) and run tests (`pytest`) on the Pi to verify.
 
 ## Agent Roster
 When tasked with a job, delegate thinking and implementation to the appropriate sub-agent context in `.agents/`:
