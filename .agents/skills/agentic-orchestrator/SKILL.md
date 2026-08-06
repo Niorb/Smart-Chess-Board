@@ -63,7 +63,7 @@ graph TD
 
 > [!IMPORTANT]
 > The backend, GPIO hardware drivers, and tests execute on a physical **Raspberry Pi**.
-> Remote SSH Host: `ssh pi`
+> Remote SSH Host: `ssh pi@pi`
 > Virtual Environment: `source ~/venv/chess/bin/activate`
 
 ### Mandatory Post-Change Deployment Steps
@@ -71,7 +71,7 @@ After making any code changes, execute the following sequence:
 1. **Local Commit & Push**:
    - Stage, commit, and push local modifications to GitHub: `git push origin main`.
 2. **SSH to Raspberry Pi**:
-   - Connect to the Pi (`ssh pi`) and navigate to `~/chess_git`.
+   - Connect to the Pi (`ssh pi@pi`) and navigate to `~/chess_git`.
 3. **Pull Updates**:
    - Pull latest code (`git pull`). Preserve hardware calibration settings in `Raspberry/board_settings.json` if needed.
 4. **Run Verification Tests**:

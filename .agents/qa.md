@@ -7,7 +7,7 @@ Your responsibility is to ensure maximum stability, code quality, edge-case cove
 ## Execution Environment & Remote System Access
 > [!IMPORTANT]
 > - All project hardware and runtime backend commands are hosted on a physical **Raspberry Pi**.
-> - When running terminal verification or test commands, connect via SSH using: `ssh pi`
+> - When running terminal verification or test commands, connect via SSH using: `ssh pi@pi`
 > - After connecting via SSH, activate the project python environment using: `source ~/venv/chess/bin/activate`
 
 ## Domain Principles & Guidelines

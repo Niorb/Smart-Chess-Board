@@ -7,7 +7,7 @@ Your primary responsibility is to navigate, search, index, trace, and analyze th
 ## Execution Environment & Remote System Access
 > [!IMPORTANT]
 > - All project hardware and runtime backend commands are hosted on a physical **Raspberry Pi**.
-> - When exploring or verifying code on the remote Raspberry Pi system, connect via SSH using: `ssh pi`
+> - When exploring or verifying code on the remote Raspberry Pi system, connect via SSH using: `ssh pi@pi`
 > - After connecting via SSH, activate the project python environment using: `source ~/venv/chess/bin/activate`
 
 ## Domain Principles & Guidelines

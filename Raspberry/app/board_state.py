@@ -59,8 +59,24 @@ class BoardStateManager:
 
     def _safe_calibrate(self):
         with self.serial_lock:
-            from board_hardware import calibrate_board
-            return calibrate_board(self.h, self.ser)
+            if self.strip:
+                try:
+                    from playwright_chesscom.led_helpers import all_leds_off
+                    all_leds_off(self.strip)
+                except Exception as e:
+                    logger.error(f"Error turning off LEDs before calibration: {e}")
+            self.is_calibrating = True
+            try:
+                from board_hardware import calibrate_board
+                return calibrate_board(self.h, self.ser)
+            finally:
+                self.is_calibrating = False
+                if self.strip:
+                    try:
+                        from playwright_chesscom.led_helpers import all_leds_off
+                        all_leds_off(self.strip)
+                    except Exception as e:
+                        logger.error(f"Error turning off LEDs after calibration: {e}")
 
     async def handle_webapp_connected(self):
         """
@@ -81,6 +97,13 @@ class BoardStateManager:
             orig_neg = settings.get("threshold_negative", 150)
 
             self.initial_calibrating = True
+            if self.strip:
+                try:
+                    from playwright_chesscom.led_helpers import all_leds_off
+                    all_leds_off(self.strip)
+                except Exception as e:
+                    logger.error(f"Error turning off LEDs during initial webapp connect calibration: {e}")
+
             logger.info(f"Webapp connection detected! Setting thresholds to ±1000 for 5s (original: +{orig_pos}/-{orig_neg}).")
             settings["threshold_positive"] = 1000
             settings["threshold_negative"] = 1000
@@ -97,6 +120,12 @@ class BoardStateManager:
                 settings["threshold_negative"] = orig_neg
                 await asyncio.to_thread(save_settings)
                 self.initial_calibrating = False
+                if self.strip:
+                    try:
+                        from playwright_chesscom.led_helpers import all_leds_off
+                        all_leds_off(self.strip)
+                    except Exception as e:
+                        logger.error(f"Error turning off LEDs after webapp connect calibration: {e}")
                 logger.info(f"Recalibration window completed. Restored thresholds to +{orig_pos} / -{orig_neg}.")
 
     def get_physical_payload(self):
@@ -163,7 +192,7 @@ class BoardStateManager:
 
 
     def _update_leds(self):
-        if not self.strip or self.led_test_active:
+        if not self.strip or self.led_test_active or getattr(self, "initial_calibrating", False) or getattr(self, "is_calibrating", False):
             return
             
         try:

@@ -75,3 +75,20 @@ def test_highlighted_square_single_square_update():
     assert not d1_orange, "Transposed square D1 was erroneously highlighted!"
 
 
+def test_led_suppression_during_calibration():
+    from unittest.mock import MagicMock
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.highlighted_square = (0, 3)
+
+    bsm.initial_calibrating = True
+    bsm._update_leds()
+    bsm.strip.setPixelColor.assert_not_called()
+
+    bsm.initial_calibrating = False
+    bsm.is_calibrating = True
+    bsm._update_leds()
+    bsm.strip.setPixelColor.assert_not_called()
+
+
+

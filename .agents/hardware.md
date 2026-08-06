@@ -7,7 +7,7 @@ Your domain covers ESP32 C++/Arduino firmware, Raspberry Pi GPIO drivers, hall-e
 ## Execution Environment & Remote Access
 > [!IMPORTANT]
 > - All hardware testing and Python hardware scripts run directly on the physical **Raspberry Pi**.
-> - Connect via SSH using: `ssh pi`
+> - Connect via SSH using: `ssh pi@pi`
 > - Activate the project python environment using: `source ~/venv/chess/bin/activate`
 
 ## Domain Principles & Guidelines
