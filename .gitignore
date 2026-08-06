@@ -2,6 +2,8 @@ Raspberry/test.py
 chesscom_session/
 profile.ps1
 ESP32_firmware/analog_scanner/build/
+Raspberry/ESP32_firmware/analog_scanner/build/
+build/
 .codebase_ignore
 *.png
 *.jpg
@@ -9,3 +11,4 @@ ESP32_firmware/analog_scanner/build/
 *__pycache__
 .gemini/
 *.gemini
+
