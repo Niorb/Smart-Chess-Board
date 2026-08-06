@@ -71,3 +71,31 @@ def test_settings_defaults():
     assert len(settings["baselines"]) == BOARD_COLS
     assert len(settings["baselines"][0]) == BOARD_ROWS
 
+def test_calibrate_board_clears_baseline_history():
+    from unittest.mock import MagicMock
+    import struct
+    from board_hardware import calibrate_board, baseline_history, settings
+
+    # Seed baseline_history with stale pre-calibration data
+    baseline_history[(0, 0)] = [(100.0, 1200, False)]
+
+    mock_ser = MagicMock()
+    # Mock header 0xAA 0x55 + 64 uint16_t values (all set to 1900)
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *([1900] * 64))
+
+    def mock_read(n):
+        if n == 2:
+            return packet_header
+        elif n == 128:
+            return packet_data
+        return b''
+
+    mock_ser.read.side_effect = mock_read
+
+    res = calibrate_board("mock_h", mock_ser, duration_s=0.05)
+    assert res is True
+    assert settings["baselines"][0][0] == 1900
+    assert len(baseline_history) == 0
+
+

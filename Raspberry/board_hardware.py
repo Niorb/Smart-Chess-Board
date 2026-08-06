@@ -295,8 +295,17 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                         idx += 1
                         sums[c][r] += val
                         counts[c][r] += 1
+            else:
+                serial_conn.reset_input_buffer()
+        else:
+            serial_conn.reset_input_buffer()
         time.sleep(0.01)
         
+    total_valid_samples = sum(sum(counts[c]) for c in range(BOARD_COLS))
+    if total_valid_samples == 0:
+        logger.error("Calibration failed: no valid data packets received from hardware.")
+        return False
+
     # Update baselines
     for c in range(BOARD_COLS):
         for r in range(BOARD_ROWS):
@@ -310,6 +319,11 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                 settings["baselines"][c][r] = 1550
                     
     save_settings()
+
+    # Clear rolling baseline history so scan_board doesn't immediately overwrite new baselines with pre-calibration averages
+    global baseline_history
+    baseline_history.clear()
+
     return True
 
 
