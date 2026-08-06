@@ -361,57 +361,7 @@ function App() {
     }
   };
 
-  const handleRowQuadrantsLeftToggle = async (val: boolean) => {
-    setSwapRowQuadrantsLeft(val);
-    const currentDisabled = state.physical.disabled_squares ?? [];
-    try {
-      const res = await updateBoardSettings(
-        positiveThresh,
-        negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        currentDisabled,
-        swapRowQuadrants,
-        val,
-        swapRowQuadrantsRight
-      );
-      if (res.status === 'success') {
-        setSettings(res.settings);
-      }
-    } catch (err) {
-      console.error("Error toggling left row quadrant swap:", err);
-    }
-  };
 
-  const handleRowQuadrantsRightToggle = async (val: boolean) => {
-    setSwapRowQuadrantsRight(val);
-    const currentDisabled = state.physical.disabled_squares ?? [];
-    try {
-      const res = await updateBoardSettings(
-        positiveThresh,
-        negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        currentDisabled,
-        swapRowQuadrants,
-        swapRowQuadrantsLeft,
-        val
-      );
-      if (res.status === 'success') {
-        setSettings(res.settings);
-      }
-    } catch (err) {
-      console.error("Error toggling right row quadrant swap:", err);
-    }
-  };
 
   // Helper to render the digital piece icons or characters
   const renderPiece = (p: string) => {
@@ -981,36 +931,6 @@ function App() {
                               onChange={(e) => handleBaselineWindowSChange(parseInt(e.target.value))}
                               className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-amber-500"
                             />
-                         </div>
-
-                         {/* Swap Row Quadrants Toggles (a-d vs e-h) */}
-                         <div className="flex items-center justify-between text-xs py-1">
-                            <span className="text-slate-400">Swap Row Quadrants a-d (1-4 ↔ 5-8)</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRowQuadrantsLeftToggle(!swapRowQuadrantsLeft)}
-                              className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
-                                swapRowQuadrantsLeft
-                                  ? 'bg-blue-600/30 border border-blue-500 text-blue-400'
-                                  : 'bg-slate-950 border border-slate-800 text-slate-500'
-                              }`}
-                            >
-                              {swapRowQuadrantsLeft ? 'Enabled' : 'Disabled'}
-                            </button>
-                         </div>
-                         <div className="flex items-center justify-between text-xs py-1">
-                            <span className="text-slate-400">Swap Row Quadrants e-h (1-4 ↔ 5-8)</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRowQuadrantsRightToggle(!swapRowQuadrantsRight)}
-                              className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase transition-all ${
-                                swapRowQuadrantsRight
-                                  ? 'bg-blue-600/30 border border-blue-500 text-blue-400'
-                                  : 'bg-slate-950 border border-slate-800 text-slate-500'
-                              }`}
-                            >
-                              {swapRowQuadrantsRight ? 'Enabled' : 'Disabled'}
-                            </button>
                          </div>
 
                        {/* Save Thresholds Button */}
