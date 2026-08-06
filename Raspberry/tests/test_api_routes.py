@@ -56,3 +56,14 @@ def test_settings_update_route():
     assert data["settings"]["swap_row_quadrants_right"] is False
 
 
+def test_clear_leds_route():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    response = client.post("/api/board/clear_leds")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["message"] == "All LEDs turned off"
+
+

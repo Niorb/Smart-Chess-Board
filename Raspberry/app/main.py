@@ -176,6 +176,15 @@ async def test_leds_route():
     asyncio.create_task(state_manager.run_led_test())
     return {"status": "success", "message": "LED test initiated"}
 
+@app.post("/api/board/clear_leds")
+async def clear_leds_route():
+    """Forces all physical LEDs off."""
+    success = state_manager.clear_all_leds()
+    if success:
+        return {"status": "success", "message": "All LEDs turned off"}
+    else:
+        return {"status": "error", "message": "Failed to clear LEDs"}
+
 @app.get("/api/board/digital")
 async def get_digital_board():
     """Returns the current state of the board on chess.com."""

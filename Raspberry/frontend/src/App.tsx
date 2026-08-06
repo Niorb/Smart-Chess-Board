@@ -8,7 +8,8 @@ import {
   calibrateBoard,
   makeMove,
   highlightSquare,
-  testLeds
+  testLeds,
+  clearAllLeds
 } from './api'
 import { 
   Play, 
@@ -20,7 +21,8 @@ import {
   Terminal,
   Activity,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  PowerOff
 } from 'lucide-react'
 
 function App() {
@@ -81,6 +83,14 @@ function App() {
       await testLeds();
     } catch (err) {
       console.error("Error running LED test:", err);
+    }
+  };
+
+  const handleClearLeds = async () => {
+    try {
+      await clearAllLeds();
+    } catch (err) {
+      console.error("Error turning off LEDs:", err);
     }
   };
 
@@ -977,6 +987,16 @@ function App() {
                         >
                            <Activity size={14} />
                            {state.physical.led_test_active ? `Testing LED ${state.physical.testing_led_index}...` : 'Diagnostic LED Test'}
+                        </button>
+
+                        {/* Force All LEDs Off button */}
+                        <button
+                          onClick={handleClearLeds}
+                          disabled={loading || calibrating || !isConnected}
+                          className="w-full bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/20 disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-800 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-rose-950/10"
+                        >
+                           <PowerOff size={14} />
+                           Force All LEDs Off
                         </button>
                     </div>
                  </div>

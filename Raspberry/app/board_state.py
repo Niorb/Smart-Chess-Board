@@ -263,6 +263,20 @@ class BoardStateManager:
             self.testing_led_index = -1
             logger.info("Sequential LED strip test completed.")
 
+    def clear_all_leds(self):
+        """Forces all physical LEDs off and clears any highlighted square."""
+        self.highlighted_square = None
+        if self.strip:
+            try:
+                from playwright_chesscom.led_helpers import all_leds_off
+                all_leds_off(self.strip)
+                logger.info("Forced all LEDs off.")
+                return True
+            except Exception as e:
+                logger.error(f"Error clearing LEDs: {e}")
+                return False
+        return True
+
     async def update_loop(self, broadcast_callback):
         """Background task to poll hardware/digital board and broadcast state."""
         raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]

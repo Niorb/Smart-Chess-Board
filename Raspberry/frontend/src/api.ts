@@ -90,3 +90,11 @@ export async function testLeds() {
   });
   return response.json();
 }
+
+export async function clearAllLeds() {
+  const response = await fetch(`${API_BASE}/board/clear_leds`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
