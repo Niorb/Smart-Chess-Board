@@ -66,9 +66,9 @@ def test_highlighted_square_single_square_update():
 
     orange = Color(255, 80, 0)
 
-    # A4 (col=3, row=0) indices are [9, 10] in 18-LED column layout
-    bsm.strip.setPixelColor.assert_any_call(9, orange)
-    bsm.strip.setPixelColor.assert_any_call(10, orange)
+    # A4 (col=3, row=0) indices are [7, 8] in 18-LED column layout
+    bsm.strip.setPixelColor.assert_any_call(7, orange)
+    bsm.strip.setPixelColor.assert_any_call(8, orange)
 
     # Verify D1 (col=0, row=3) indices [54, 55] were NOT set to orange
     calls = bsm.strip.setPixelColor.call_args_list
