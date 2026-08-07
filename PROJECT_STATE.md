@@ -33,6 +33,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Updated [`Raspberry/ESP32_firmware/WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt) to reflect 8x8 matrix topology using analog linear Hall effect sensors (VCC/2 ratiometric output), active ADC reading on `GPIO 34`, and current [`analog_scanner.ino`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino) pinouts.
 - [x] Migrated `WIRING_GUIDE.txt` to [`Raspberry/ESP32_firmware/WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt) and deleted the obsolete top-level `ESP32/` prototype directory.
 - [x] Increased upper and lower deviation threshold limits to 3000 in the webapp UI (range sliders up to 3000 and direct numeric inputs).
+- [x] Fixed row/column transposition between physical board and webapp by updating MUX scan order (`file_idx` outer loop, `rank_idx` inner loop) in [`analog_scanner.ino`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino) and [`board_hardware.py`](file:///home/robin/Smart-Chess-Board/Raspberry/board_hardware.py) so selecting a column in webapp manual mode activates the corresponding column (Files a-h) on the physical board.
 
 ## Task Backlog
 

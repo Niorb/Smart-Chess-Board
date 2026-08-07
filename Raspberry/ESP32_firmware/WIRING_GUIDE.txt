@@ -18,15 +18,15 @@ PIN ASSIGNMENTS — ESP32 to MUX & PERIPHERALS (analog_scanner.ino)
 
   ESP32 GPIO    Function                     Direction
   ----------    ---------------------------  ---------
-  GPIO 25       Col MUX S0 (Ranks 1-8)       OUTPUT
-  GPIO 26       Col MUX S1 (Ranks 1-8)       OUTPUT
-  GPIO 27       Col MUX S2 (Ranks 1-8)       OUTPUT
-  GPIO 14       Col MUX S3 (Ranks 1-8)       OUTPUT
+  GPIO 25       Col MUX S0 (Files a-h)       OUTPUT
+  GPIO 26       Col MUX S1 (Files a-h)       OUTPUT
+  GPIO 27       Col MUX S2 (Files a-h)       OUTPUT
+  GPIO 14       Col MUX S3 (Files a-h)       OUTPUT
 
-  GPIO 16       Row MUX S0 (Files a-h)       OUTPUT
-  GPIO 17       Row MUX S1 (Files a-h)       OUTPUT
-  GPIO 18       Row MUX S2 (Files a-h)       OUTPUT
-  GPIO 19       Row MUX S3 (Files a-h)       OUTPUT
+  GPIO 16       Row MUX S0 (Ranks 1-8)       OUTPUT
+  GPIO 17       Row MUX S1 (Ranks 1-8)       OUTPUT
+  GPIO 18       Row MUX S2 (Ranks 1-8)       OUTPUT
+  GPIO 19       Row MUX S3 (Ranks 1-8)       OUTPUT
 
   GPIO 34       MUX Analog Read (Col SIG)    INPUT (ADC1_CH6)
   GPIO 23       WS2812B Strip 1 Data (a-d)   OUTPUT

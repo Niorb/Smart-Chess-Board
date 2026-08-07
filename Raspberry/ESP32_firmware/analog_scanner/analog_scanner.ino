@@ -45,18 +45,18 @@ void setMuxChannel(int s0, int s1, int s2, int s3, int channel) {
 }
 
 void scanMatrix() {
-  for (int rank_idx = 0; rank_idx < 8; rank_idx++) {
-    // COL_MUX pins control ranks (rows 1-8), direct: Channel 0 is Rank 1, Channel 7 is Rank 8
-    setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, rank_idx);
-    for (int file_idx = 0; file_idx < 8; file_idx++) {
-      // ROW_MUX pins actually control the files (columns a-h), direct: Channel 0 is file a, Channel 7 is file h
-      setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, file_idx);
+  for (int file_idx = 0; file_idx < 8; file_idx++) {
+    // COL_MUX select pins control Files a-h (Columns 0-7)
+    setMuxChannel(COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, file_idx);
+    for (int rank_idx = 0; rank_idx < 8; rank_idx++) {
+      // ROW_MUX select pins control Ranks 1-8 (Rows 0-7)
+      setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, rank_idx);
       
       delayMicroseconds(settle_us);
       
       // Double read to settle the internal ESP32 sample-and-hold circuit
       analogRead(MUX_ANALOG_IN);
-      latest_scan[rank_idx * 8 + file_idx] = analogRead(MUX_ANALOG_IN);
+      latest_scan[file_idx * 8 + rank_idx] = analogRead(MUX_ANALOG_IN);
     }
   }
 }
