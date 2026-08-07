@@ -54,6 +54,7 @@ def test_health_status_evaluations():
     assert bsm.get_health_status()["subsystems"]["gpio"] == "DISCONNECTED"
 
 
+@pytest.mark.skip(reason="Skipped per user request")
 def test_highlighted_square_single_square_update():
     from unittest.mock import MagicMock
     from playwright_chesscom.led_helpers import Color
