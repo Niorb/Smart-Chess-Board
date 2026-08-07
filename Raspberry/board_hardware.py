@@ -193,7 +193,7 @@ def scan_board(h, serial_conn, raw_state):
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             idx = 0
-            for c in range(BOARD_COLS):
+            for c in range(BOARD_COLS - 1, -1, -1):
                 for r in range(BOARD_ROWS):
                     val = vals[idx]
                     idx += 1
@@ -289,7 +289,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 idx = 0
-                for c in range(BOARD_COLS):
+                for c in range(BOARD_COLS - 1, -1, -1):
                     for r in range(BOARD_ROWS):
                         val = vals[idx]
                         idx += 1
