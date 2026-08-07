@@ -225,7 +225,7 @@ class BoardStateManager:
                         else:
                             continue
                             
-                    for idx in get_led_indices(r, c):
+                    for idx in get_led_indices(c, r):
                         if 0 <= idx < NUM_LEDS:
                             frame[idx] = color
                             
