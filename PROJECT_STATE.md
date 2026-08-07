@@ -30,8 +30,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Completely removed quadrant swapping logic and options from backend, hardware scanner, LED helpers, webapp frontend, and tests.
 - [x] Removed inverted channel mapping (`7 - rank_idx`) for `COL_MUX` in ESP32 firmware [`analog_scanner.ino`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino#L48-L51), mapping `COL_MUX` channels 0–7 directly to Ranks 1–8.
 - [x] Fixed "Force Recalibrate Baselines" button by clearing `baseline_history` upon calibration completion in [`board_hardware.py`](file:///home/robin/Smart-Chess-Board/Raspberry/board_hardware.py#L313) (preventing background scan loop from immediately overwriting new baselines with pre-calibration averages) and adding serial buffer resync on framing timeout.
+- [x] Updated [`Raspberry/ESP32_firmware/WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt) to reflect 8x8 matrix topology using analog linear Hall effect sensors (VCC/2 ratiometric output), active ADC reading on `GPIO 34`, and current [`analog_scanner.ino`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino) pinouts.
+- [x] Migrated `WIRING_GUIDE.txt` to [`Raspberry/ESP32_firmware/WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt) and deleted the obsolete top-level `ESP32/` prototype directory.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
+

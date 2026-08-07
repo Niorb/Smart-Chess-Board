@@ -11,7 +11,7 @@ Your domain covers ESP32 C++/Arduino firmware, Raspberry Pi GPIO drivers, hall-e
 > - Activate the project python environment using: `source ~/venv/chess/bin/activate`
 
 ## Domain Principles & Guidelines
-1. **ESP32 Firmware (`ESP32/SmartChessBoard/SmartChessBoard.ino`)**:
+1. **ESP32 Firmware (`Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino`)**:
    - Maintain fast, non-blocking 8x8 sensor matrix scanning loops.
    - Enforce robust debouncing algorithms to prevent false piece reads from magnetic switch noise or piece sliding.
    - Manage shift register pinouts, multiplexer select lines, and analog/digital threshold reading.
