@@ -862,12 +862,25 @@ function App() {
                        <div className="flex flex-col gap-1.5 text-left">
                           <div className="flex justify-between items-center text-xs">
                              <span className="text-slate-400">Upper Threshold (+)</span>
-                             <span className="font-mono text-red-400 font-bold">+{positiveThresh}</span>
+                             <div className="flex items-center gap-1 font-mono text-red-400 font-bold">
+                                <span>+</span>
+                                <input
+                                  type="number"
+                                  min="50"
+                                  max="3000"
+                                  value={positiveThresh}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setPositiveThresh(isNaN(val) ? 0 : Math.min(3000, Math.max(0, val)));
+                                  }}
+                                  className="w-16 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-right text-xs font-mono text-red-400 font-bold focus:outline-none focus:border-red-500"
+                                />
+                             </div>
                           </div>
                           <input 
                             type="range"
                             min="50"
-                            max="500"
+                            max="3000"
                             step="10"
                             value={positiveThresh}
                             onChange={(e) => setPositiveThresh(parseInt(e.target.value))}
@@ -879,12 +892,25 @@ function App() {
                        <div className="flex flex-col gap-1.5 text-left">
                           <div className="flex justify-between items-center text-xs">
                              <span className="text-slate-400">Lower Threshold (-)</span>
-                             <span className="font-mono text-emerald-400 font-bold">-{negativeThresh}</span>
+                             <div className="flex items-center gap-1 font-mono text-emerald-400 font-bold">
+                                <span>-</span>
+                                <input
+                                  type="number"
+                                  min="50"
+                                  max="3000"
+                                  value={negativeThresh}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setNegativeThresh(isNaN(val) ? 0 : Math.min(3000, Math.max(0, val)));
+                                  }}
+                                  className="w-16 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-right text-xs font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
+                                />
+                             </div>
                           </div>
                           <input 
                             type="range"
                             min="50"
-                            max="500"
+                            max="3000"
                             step="10"
                             value={negativeThresh}
                             onChange={(e) => setNegativeThresh(parseInt(e.target.value))}

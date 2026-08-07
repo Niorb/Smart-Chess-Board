@@ -43,15 +43,15 @@ def test_settings_update_route():
     client = TestClient(app)
     
     payload = {
-        "threshold_positive": 130,
-        "threshold_negative": 130,
+        "threshold_positive": 3000,
+        "threshold_negative": 3000,
     }
     response = client.post("/api/board/settings", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert data["settings"]["threshold_positive"] == 130
-    assert data["settings"]["threshold_negative"] == 130
+    assert data["settings"]["threshold_positive"] == 3000
+    assert data["settings"]["threshold_negative"] == 3000
 
 
 def test_clear_leds_route():
