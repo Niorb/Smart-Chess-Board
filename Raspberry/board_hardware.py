@@ -6,11 +6,10 @@ Controls the MUX via lgpio on the Pi, but requests the analog value
 from the ESP32 over a Serial Request-Response protocol.
 """
 
-import time
-import serial
 import json
-import os
 import logging
+import os
+import time
 
 logger = logging.getLogger("smart-chess-app.hardware")
 
@@ -33,18 +32,12 @@ except ImportError:
 
 try:
     from playwright_chesscom.chesscom_config import (
-        BOARD_ROWS,
         BOARD_COLS,
-        ANALOG_THRESHOLD,
-        ADC_BASELINE,
-        ADC_DEVIATION,
+        BOARD_ROWS,
     )
 except ImportError:
     BOARD_ROWS = 8
     BOARD_COLS = 8
-    ANALOG_THRESHOLD = 2000
-    ADC_BASELINE = 1550
-    ADC_DEVIATION = 150
 
 # =============================================================================
 # PERSISTENT SETTINGS
@@ -72,9 +65,9 @@ def load_settings():
     global settings
     if os.path.exists(SETTINGS_FILE):
         try:
-            with open(SETTINGS_FILE, "r") as f:
+            with open(SETTINGS_FILE) as f:
                 loaded = json.load(f)
-                
+
                 # Check for legacy row terminology keys and migrate them
                 if "row_mode" in loaded:
                     loaded["col_mode"] = loaded["row_mode"]
@@ -86,10 +79,10 @@ def load_settings():
                 if "baselines" in loaded and "threshold_positive" in loaded and "threshold_negative" in loaded:
                     if "mux_settle_ms" in loaded and "mux_settle_us" not in loaded:
                         loaded["mux_settle_us"] = min(255, int(loaded["mux_settle_ms"] * 1000))
-                    
+
                     if "disabled_squares" not in loaded:
                         loaded["disabled_squares"] = []
-                    
+
                     settings.update(loaded)
                     logger.info(f"Loaded board settings from {SETTINGS_FILE}")
                 else:
@@ -120,7 +113,7 @@ def save_settings():
 load_settings()
 
 # Dynamic baseline history (timestamp, raw_value, detected_magnet) for each square
-baseline_history = {}
+baseline_history: dict = {}
 
 # =============================================================================
 # MUX PIN ASSIGNMENTS & COMPATIBILITY STUBS
@@ -138,13 +131,11 @@ ROW_MUX_S3 = 19
 
 MUX_SETTLE_S = 0.0001  # 100us settling time default for faster scanning
 
-def set_mux_channel(h, s0, s1, s2, s3, channel):
+def set_mux_channel(_h, _s0, _s1, _s2, _s3, _channel):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
-    pass
 
-def init_mux_pins(h):
+def init_mux_pins(_h):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
-    pass
 
 # =============================================================================
 # BOARD SCANNING (HYBRID)
@@ -221,19 +212,19 @@ def scan_board(h, serial_conn, raw_state):
                     # Dynamic baseline moving average update (4 seconds window)
                     now = time.time()
                     detected = (raw_state[c][r] != 0)
-                    
+
                     if (c, r) not in baseline_history:
                         baseline_history[(c, r)] = []
-                        
+
                     baseline_history[(c, r)].append((now, val, detected))
-                    
+
                     # Keep only entries within the last baseline_window_s seconds
                     baseline_window = settings.get("baseline_window_s", 2)
                     history = baseline_history[(c, r)]
                     while history and (now - history[0][0]) > baseline_window:
                         history.pop(0)
                     any_magnet = any(entry[2] for entry in history)
-                    
+
                     if not any_magnet and len(history) > 0:
                         avg_val = sum(entry[1] for entry in history) / len(history)
                         settings["baselines"][c][r] = int(avg_val)
@@ -265,13 +256,13 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
     if serial_conn is None:
         logger.error("Calibration failed: serial connection not initialized.")
         return False
-        
+
     sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    
+
     # Flush buffers
     serial_conn.reset_input_buffer()
-    
+
     settle_us = settings.get("mux_settle_us", 100)
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
@@ -300,7 +291,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
         else:
             serial_conn.reset_input_buffer()
         time.sleep(0.01)
-        
+
     total_valid_samples = sum(sum(counts[c]) for c in range(BOARD_COLS))
     if total_valid_samples == 0:
         logger.error("Calibration failed: no valid data packets received from hardware.")
@@ -317,7 +308,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                     settings["baselines"][c][r] = 1550
             else:
                 settings["baselines"][c][r] = 1550
-                    
+
     save_settings()
 
     # Clear rolling baseline history so scan_board doesn't immediately overwrite new baselines with pre-calibration averages

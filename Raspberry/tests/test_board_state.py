@@ -1,12 +1,14 @@
-import pytest
 import os
 import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.board_state import BoardStateManager
+
 
 def test_board_state_manager_init():
     # Instantiate board state manager (with mock/missing hardware gracefully handled)
@@ -45,7 +47,7 @@ def test_health_status_structure():
 
 def test_health_status_evaluations():
     bsm = BoardStateManager()
-    
+
     # Force DISCONNECTED by removing serial & gpio
     bsm.ser = None
     bsm.h = None
@@ -56,7 +58,6 @@ def test_health_status_evaluations():
 
 @pytest.mark.skip(reason="Skipped per user request")
 def test_highlighted_square_single_square_update():
-    from unittest.mock import MagicMock
     from playwright_chesscom.led_helpers import Color
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -78,7 +79,6 @@ def test_highlighted_square_single_square_update():
 
 
 def test_led_suppression_during_calibration():
-    from unittest.mock import MagicMock
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
     bsm.highlighted_square = (0, 3)
@@ -88,7 +88,6 @@ def test_led_suppression_during_calibration():
     bsm.strip.setPixelColor.assert_not_called()
 
 def test_safe_calibrate_no_deadlock():
-    from unittest.mock import MagicMock
     from playwright_chesscom.led_helpers import DualPixelStrip
     bsm = BoardStateManager()
     bsm.ser = MagicMock()

@@ -8,80 +8,58 @@ All public functions accept strip=None gracefully (no-op when hardware
 is unavailable), so callers on non-Pi machines work without changes.
 """
 
-import time
 import threading
+import time
 
 try:
     from playwright_chesscom.chesscom_config import (
-        BOARD_ROWS,
-        BOARD_COLS,
-        LED_ROWS,
-        LED_COLS,
-        NUM_LEDS,
-        LED_PIN,
-        LED_PIN_2,
-        LED_BRIGHTNESS,
-        LED_FREQ_HZ,
-        LED_DMA,
-        LED_DMA_2,
-        LED_INVERT,
-        LED_CHANNEL,
-        LED_CHANNEL_2,
-        COLOR_CONNECTING,
-        COLOR_CONNECTED,
-        COLOR_SEARCHING,
-        COLOR_FOUND_WHITE,
-        COLOR_FOUND_BLACK,
         COLOR_CANCELLED,
+        COLOR_CONNECTED,
+        COLOR_CONNECTING,
         COLOR_ERROR,
+        COLOR_FOUND_BLACK,
+        COLOR_FOUND_WHITE,
         COLOR_IDLE,
+        COLOR_SEARCHING,
+        CONNECT_PULSE_STEP_S,
+        FLASH_COUNT_CANCEL,
+        FLASH_COUNT_CONNECT,
+        FLASH_COUNT_ERROR,
+        FLASH_COUNT_FOUND,
+        FLASH_OFF_S,
+        FLASH_ON_S,
         IDLE_PULSE_MAX_FRAC,
         IDLE_PULSE_STEP_S,
         IDLE_PULSE_STEPS,
-        CONNECT_PULSE_STEP_S,
+        LED_COLS,
+        LED_ROWS,
+        NUM_LEDS,
         SEARCH_CHASE_DELAY_S,
-        FLASH_ON_S,
-        FLASH_OFF_S,
-        FLASH_COUNT_FOUND,
-        FLASH_COUNT_ERROR,
-        FLASH_COUNT_CANCEL,
-        FLASH_COUNT_CONNECT,
     )
 except ImportError:
-    from chesscom_config import (
-        BOARD_ROWS,
-        BOARD_COLS,
-        LED_ROWS,
-        LED_COLS,
-        NUM_LEDS,
-        LED_PIN,
-        LED_PIN_2,
-        LED_BRIGHTNESS,
-        LED_FREQ_HZ,
-        LED_DMA,
-        LED_DMA_2,
-        LED_INVERT,
-        LED_CHANNEL,
-        LED_CHANNEL_2,
-        COLOR_CONNECTING,
-        COLOR_CONNECTED,
-        COLOR_SEARCHING,
-        COLOR_FOUND_WHITE,
-        COLOR_FOUND_BLACK,
+    from .chesscom_config import (
         COLOR_CANCELLED,
+        COLOR_CONNECTED,
+        COLOR_CONNECTING,
         COLOR_ERROR,
+        COLOR_FOUND_BLACK,
+        COLOR_FOUND_WHITE,
         COLOR_IDLE,
+        COLOR_SEARCHING,
+        CONNECT_PULSE_STEP_S,
+        FLASH_COUNT_CANCEL,
+        FLASH_COUNT_CONNECT,
+        FLASH_COUNT_ERROR,
+        FLASH_COUNT_FOUND,
+        FLASH_OFF_S,
+        FLASH_ON_S,
         IDLE_PULSE_MAX_FRAC,
         IDLE_PULSE_STEP_S,
         IDLE_PULSE_STEPS,
-        CONNECT_PULSE_STEP_S,
+        LED_COLS,
+        LED_ROWS,
+        NUM_LEDS,
         SEARCH_CHASE_DELAY_S,
-        FLASH_ON_S,
-        FLASH_OFF_S,
-        FLASH_COUNT_FOUND,
-        FLASH_COUNT_ERROR,
-        FLASH_COUNT_CANCEL,
-        FLASH_COUNT_CONNECT,
     )
 
 # Try to import LED hardware — degrades gracefully on non-Pi machines
@@ -115,7 +93,7 @@ class DualPixelStrip:
     def show(self):
         if not self.ser:
             return
-        
+
         def _do_show():
             changed = False
             # Collect updates to send as few packets as possible
@@ -179,7 +157,7 @@ def get_led_indices(col, row):
     Convert board [col, row] to serpentine LED strip indices.
     Strip 1 (files a-d / row 0-3): 18 LEDs per column (16 active + 2 skipped OFF LEDs after Rank 7 and Rank 3).
     Strip 2 (files e-h / row 4-7): 16 LEDs per column (2 LEDs / square base). Starts at h8 down to h1, g1 to g8, etc.
-    
+
     col: rank index 0..7 (0 = Rank 1, 7 = Rank 8)
     row: file index 0..7 (0 = file a, 7 = file h)
     """

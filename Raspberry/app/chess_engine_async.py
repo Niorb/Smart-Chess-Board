@@ -1,25 +1,25 @@
 import asyncio
-import logging
-import sys
-import os
-import threading
-import queue
 import concurrent.futures
+import logging
+import os
+import queue
+import sys
+import threading
 
 # Ensure we can import from the parent and the playwright directory
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "playwright_chesscom"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from chesscom_browser import (
-    launch,
+    cancel_search,
     close,
+    detect_my_color,
     is_logged_in,
+    launch,
+    read_board,
+    read_clocks,
     seek_game,
     wait_for_game,
-    cancel_search,
-    read_board,
-    detect_my_color,
-    read_clocks,
 )
 
 logger = logging.getLogger("smart-chess-app.engine")
@@ -31,7 +31,7 @@ class ChessEngineAsync:
         self.is_running = False
         self.my_color = None
         self._cancel_event = threading.Event()
-        
+
         # Dedicated thread worker queue & thread
         self.task_queue = queue.Queue()
         self.worker_thread = None
@@ -44,7 +44,7 @@ class ChessEngineAsync:
                 task = self.task_queue.get()
                 if task is None:
                     break
-                
+
                 func, args, kwargs, future = task
                 try:
                     res = func(*args, **kwargs)
@@ -68,35 +68,35 @@ class ChessEngineAsync:
     async def start(self):
         if self.is_running:
             return
-        
+
         # Start the worker thread
         self.worker_thread = threading.Thread(target=self._run_worker, name="PlaywrightWorker", daemon=True)
         self.worker_thread.start()
-        
+
         logger.info("Launching Playwright on worker thread...")
         def _launch():
             return launch(headless=True)
-            
+
         self.context, self.page = await self.run_on_worker_async(_launch)
         self.is_running = True
 
     async def stop(self):
         if not self.is_running:
             return
-            
+
         def _close():
             close(self.context)
-            
+
         try:
             await self.run_on_worker_async(_close)
         except Exception as e:
             logger.error(f"Error closing Playwright context: {e}")
-            
+
         # Stop worker thread
         self.task_queue.put(None)
         if self.worker_thread:
             self.worker_thread.join(timeout=2.0)
-            
+
         self.is_running = False
         self.page = None
         self.context = None
@@ -105,10 +105,10 @@ class ChessEngineAsync:
     async def check_login(self):
         if not self.is_running:
             await self.start()
-            
+
         def _check():
             return is_logged_in(self.page)
-            
+
         return await self.run_on_worker_async(_check)
 
     async def seek(self, state_manager, time_control=None):
@@ -127,11 +127,11 @@ class ChessEngineAsync:
         logger.info(f"Seeking game with time control: {time_control or 'default'}...")
         self._cancel_event.clear()
         state_manager.game_status = "SEEKING"
-        
+
         try:
             def _seek():
                 return seek_game(self.page, time_control)
-                
+
             if not await self.run_on_worker_async(_seek):
                 logger.error("Failed to initiate seek.")
                 state_manager.game_status = "IDLE"
@@ -140,9 +140,9 @@ class ChessEngineAsync:
             # Wait for game on the worker thread
             def _wait():
                 return wait_for_game(self.page, cancel_event=self._cancel_event)
-                
+
             game_found = await self.run_on_worker_async(_wait)
-            
+
             if game_found:
                 state_manager.game_status = "PLAYING"
                 def _detect_color():
@@ -179,33 +179,33 @@ class ChessEngineAsync:
         """Returns the current 8x8 piece map from chess.com."""
         if not self.is_running or not self.page:
             return [["."]*8 for _ in range(8)]
-            
+
         def _get_board():
             if "/play" in self.page.url:
                  return read_board(self.page)
             return [["."]*8 for _ in range(8)]
-            
+
         return await self.run_on_worker_async(_get_board)
 
     async def get_clocks(self):
         """Returns the remaining times for both players (white, black) from chess.com."""
         if not self.is_running or not self.page:
             return "?", "?"
-            
+
         def _get_clocks():
             return read_clocks(self.page, self.my_color or "white")
-            
+
         return await self.run_on_worker_async(_get_clocks)
 
     async def make_move(self, from_file, from_rank, to_file, to_rank):
         """Clicks on the board in chess.com to execute a move."""
         if not self.is_running or not self.page:
             return False
-            
+
         from chesscom_browser import make_move as play_move
         def _make_move():
             return play_move(self.page, from_file, from_rank, to_file, to_rank, self.my_color or "white")
-            
+
         return await self.run_on_worker_async(_make_move)
 
 # Global instance

@@ -1,13 +1,13 @@
-import pytest
 import asyncio
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.board_state import BoardStateManager
 from board_hardware import settings
+
 
 def test_handle_webapp_connected_threshold_sequence():
     async def _run_test():

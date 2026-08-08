@@ -7,10 +7,18 @@ import threading
 # Ensure we can import from parent directory
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import serial
 import lgpio
-from board_hardware import scan_board, apply_debounce, BOARD_ROWS, BOARD_COLS, init_mux_pins, settings
-from playwright_chesscom.chesscom_config import SERIAL_PORT, BAUD_RATE
+import serial
+from board_hardware import (
+    BOARD_COLS,
+    BOARD_ROWS,
+    apply_debounce,
+    init_mux_pins,
+    scan_board,
+    settings,
+)
+from playwright_chesscom.chesscom_config import BAUD_RATE, SERIAL_PORT
+
 from .chess_engine_async import chess_engine
 
 logger = logging.getLogger("smart-chess-app.state")
@@ -95,7 +103,7 @@ class BoardStateManager:
             return
 
         async with self._recalibrate_lock:
-            from board_hardware import settings, save_settings
+            from board_hardware import save_settings, settings
             orig_pos = settings.get("threshold_positive", 150)
             orig_neg = settings.get("threshold_negative", 150)
 
@@ -134,8 +142,8 @@ class BoardStateManager:
     def get_physical_payload(self):
         from board_hardware import settings
         return {
-            "rows": BOARD_ROWS, 
-            "cols": BOARD_COLS, 
+            "rows": BOARD_ROWS,
+            "cols": BOARD_COLS,
             "grid": self.physical_state,
             "adc": self.raw_analog_values,
             "baselines": settings.get("baselines"),
@@ -148,6 +156,7 @@ class BoardStateManager:
 
     def get_health_status(self):
         import datetime
+
         from board_hardware import settings
 
         serial_status = "CONNECTED" if (self.ser is not None and getattr(self.ser, "is_open", True)) else "DISCONNECTED"
@@ -197,18 +206,18 @@ class BoardStateManager:
     def _update_leds(self):
         if not self.strip or self.led_test_active or getattr(self, "initial_calibrating", False) or getattr(self, "is_calibrating", False):
             return
-            
+
         try:
-            from playwright_chesscom.led_helpers import get_led_indices
-            from playwright_chesscom.chesscom_config import NUM_LEDS
-            from rpi_ws281x import Color
             from board_hardware import settings
-            
+            from playwright_chesscom.chesscom_config import NUM_LEDS
+            from playwright_chesscom.led_helpers import get_led_indices
+            from rpi_ws281x import Color
+
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
-            
+
             frame = [Color(0, 0, 0)] * NUM_LEDS
-            
+
             for c in range(BOARD_COLS):  # c is file index (0..7)
                 if col_mode == "manual" and c != manual_col:
                     continue
@@ -224,11 +233,11 @@ class BoardStateManager:
                             color = Color(0, 255, 0)    # Green for South
                         else:
                             continue
-                            
+
                     for idx in get_led_indices(r, c):
                         if 0 <= idx < NUM_LEDS:
                             frame[idx] = color
-                            
+
             for idx, color in enumerate(frame):
                 self.strip.setPixelColor(idx, color)
             self.strip.show()
@@ -238,19 +247,19 @@ class BoardStateManager:
     async def run_led_test(self):
         if not self.strip or self.led_test_active:
             return
-            
+
         self.led_test_active = True
         logger.info("Starting sequential LED strip test...")
         try:
-            from rpi_ws281x import Color
             from playwright_chesscom.chesscom_config import NUM_LEDS
-            
+            from rpi_ws281x import Color
+
             # Turn off all first
             for idx in range(NUM_LEDS):
                 self.strip.setPixelColor(idx, Color(0, 0, 0))
             self.strip.show()
             await asyncio.sleep(0.2)
-            
+
             for idx in range(NUM_LEDS):
                 self.testing_led_index = idx
                 self.strip.setPixelColor(idx, Color(255, 80, 0))  # Orange
@@ -297,7 +306,7 @@ class BoardStateManager:
                     diag_info = scan_diag
                     col_mode = settings.get("col_mode", "auto")
                     manual_col = settings.get("manual_col", 0)
-                    
+
                     # Instantly clear raw state, physical state, and stable counts for inactive columns
                     for c in range(BOARD_COLS):
                         if col_mode == "manual" and c != manual_col:

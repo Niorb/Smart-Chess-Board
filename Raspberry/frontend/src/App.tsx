@@ -124,11 +124,8 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (state.status !== 'PLAYING') {
-      setSelectedSquare(null);
-    }
-  }, [state.status]);
+  // Derived selection state: selection is only valid when state.status === 'PLAYING'
+  const activeSelectedSquare = state.status === 'PLAYING' ? selectedSquare : null;
 
   // Settings & Calibration
   const [settings, setSettings] = useState<{
@@ -513,7 +510,7 @@ function App() {
                         key={`${rIdx}-${cIdx}`}
                         onClick={() => handleSquareClick(displayCol, displayRow)}
                         className={`flex items-center justify-center relative cursor-pointer ${isDark ? 'bg-slate-700' : 'bg-slate-600'} ${
-                          selectedSquare?.col === displayCol && selectedSquare?.row === displayRow
+                          activeSelectedSquare?.col === displayCol && activeSelectedSquare?.row === displayRow
                             ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-400/20'
                             : ''
                         }`}
@@ -771,7 +768,7 @@ function App() {
                           }
 
                           // Highlight col selection visually in manual mode
-                          let colDiagClass = isColActive ? 'opacity-100 scale-100' : 'opacity-25 scale-95 border-slate-900/60 pointer-events-none select-none';
+                          const colDiagClass = isColActive ? 'opacity-100 scale-100' : 'opacity-25 scale-95 border-slate-900/60 pointer-events-none select-none';
                           if (colMode === 'manual' && isColActive && !isHighlighted && !isDisabled) {
                             cardClass += ' ring-2 ring-blue-500/40 bg-slate-900/20';
                           }

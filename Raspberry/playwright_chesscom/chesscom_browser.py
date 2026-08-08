@@ -18,20 +18,21 @@ Requires: pip3 install playwright && playwright install chromium
 
 import os
 import time
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 from chesscom_config import (
-    USER_DATA_DIR,
+    BROWSER_LOCALE,
     CHESS_COM_PLAY_URL,
-    VIEWPORT_WIDTH,
-    VIEWPORT_HEIGHT,
     GAME_SEARCH_TIMEOUT,
+    LOCATORS,
+    MOVE_CLICK_DELAY_S,
     POLL_INTERVAL,
     TIME_CONTROL,
-    MOVE_CLICK_DELAY_S,
-    LOCATORS,
-    BROWSER_LOCALE,
+    USER_DATA_DIR,
+    VIEWPORT_HEIGHT,
+    VIEWPORT_WIDTH,
 )
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
 
 # Keep a module-level reference so the Playwright context manager stays alive
 _playwright_instance = None
@@ -425,16 +426,16 @@ def read_clocks(page, color="white"):
 
     white = read_clock(LOCATORS.get(f"white_clock_{color}"))
     black = read_clock(LOCATORS.get(f"black_clock_{color}"))
-    
+
     # Fallback to generic top/bottom containers if specific selectors failed
     if not white or white == "?":
         sel = "#board-layout-player-bottom .clock-component" if color == "white" else "#board-layout-player-top .clock-component"
         white = read_clock(sel) or "?"
-        
+
     if not black or black == "?":
         sel = "#board-layout-player-top .clock-component" if color == "white" else "#board-layout-player-bottom .clock-component"
         black = read_clock(sel) or "?"
-        
+
     return white, black
 
 

@@ -1,4 +1,3 @@
-import pytest
 import os
 import sys
 
@@ -6,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from playwright_chesscom.led_helpers import get_led_indices
+
 
 def test_strip1_mapping():
     # Strip 1: files a-d (row 0-3), 18 LEDs per column (16 active + 2 skipped OFF LEDs)
@@ -46,9 +46,14 @@ def test_strip2_mapping():
 
 
 def test_dual_pixel_strip_lock_and_show():
-    from unittest.mock import MagicMock
     import threading
-    from playwright_chesscom.led_helpers import DualPixelStrip, all_leds_off, all_leds_color
+    from unittest.mock import MagicMock
+
+    from playwright_chesscom.led_helpers import (
+        DualPixelStrip,
+        all_leds_color,
+        all_leds_off,
+    )
 
     strip = DualPixelStrip(num_leds_per_strip=76)
     mock_ser = MagicMock()

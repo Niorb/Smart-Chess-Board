@@ -8,10 +8,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "playwright_chessc
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from typing import List
 
 from .board_state import state_manager
 from .chess_engine_async import chess_engine
@@ -49,7 +49,7 @@ app.add_middleware(
 # --- WebSocket Connections Manager ---
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -79,18 +79,17 @@ async def api_root():
 
 from pydantic import BaseModel
 
-from typing import Optional
 
 class ThresholdSettings(BaseModel):
     threshold_positive: int
     threshold_negative: int
-    col_mode: Optional[str] = None
-    manual_col: Optional[int] = None
-    scan_delay: Optional[int] = None
-    mux_settle_ms: Optional[int] = None
-    debounce_threshold: Optional[int] = None
-    baseline_window_s: Optional[int] = None
-    disabled_squares: Optional[List[List[int]]] = None
+    col_mode: str | None = None
+    manual_col: int | None = None
+    scan_delay: int | None = None
+    mux_settle_ms: int | None = None
+    debounce_threshold: int | None = None
+    baseline_window_s: int | None = None
+    disabled_squares: list[list[int]] | None = None
 
 @app.get("/api/board/physical")
 async def get_physical_board():
@@ -112,7 +111,7 @@ async def get_board_settings():
 @app.post("/api/board/settings")
 async def update_board_settings(body: ThresholdSettings):
     """Updates the positive/negative deviation thresholds and column mode diagnostics."""
-    from board_hardware import settings, save_settings
+    from board_hardware import save_settings, settings
     settings["threshold_positive"] = body.threshold_positive
     settings["threshold_negative"] = body.threshold_negative
     if body.col_mode is not None:
@@ -177,14 +176,14 @@ async def get_digital_board():
     return {"grid": state_manager.digital_state}
 
 class SeekRequest(BaseModel):
-    time_control: str = None
+    time_control: str | None = None
 
 @app.post("/api/game/seek")
-async def seek_game_route(body: SeekRequest = None):
+async def seek_game_route(body: SeekRequest | None = None):
     """Triggers a search for a new game on chess.com."""
     if state_manager.game_status != "IDLE":
         return {"status": "error", "message": f"Cannot seek while status is {state_manager.game_status}"}
-    
+
     time_control = body.time_control if body else None
     # Run seek in the background
     asyncio.create_task(chess_engine.seek(state_manager, time_control=time_control))
@@ -205,7 +204,7 @@ async def make_move_route(body: MoveRequest):
     """Executes a move on chess.com from the webapp."""
     if state_manager.game_status != "PLAYING":
         return {"status": "error", "message": "No active game"}
-        
+
     def parse_sq(sq):
         sq = sq.strip().lower()
         if len(sq) != 2:
@@ -214,12 +213,12 @@ async def make_move_route(body: MoveRequest):
         if file_ch not in "abcdefgh" or rank_ch not in "12345678":
             return None
         return ord(file_ch) - ord("a") + 1, int(rank_ch)
-        
+
     src = parse_sq(body.from_square)
     dst = parse_sq(body.to_square)
     if not src or not dst:
         return {"status": "error", "message": "Invalid squares"}
-        
+
     success = await chess_engine.make_move(src[0], src[1], dst[0], dst[1])
     if success:
         return {"status": "success"}

@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+ignore = [
+    "BLE001",  # Do not catch blind exception (intentional in hardware/serial fallbacks)
+    "EXE001",  # Shebang on non-executable files
+    "E501",    # Line length
+    "E402",    # Module level import not at top of file (sys.path manipulation)
+    "SIM102",  # Nested if statements
+    "SIM105",  # Use contextlib.suppress
+    "SIM108",  # Use ternary operator
+]
+select = [
+    "E", "F", "W", "I", "UP", "B", "SIM"
+]

@@ -1,4 +1,3 @@
-import pytest
 import os
 import sys
 
@@ -27,8 +26,8 @@ def test_parse_sq_invalid():
     assert parse_sq("e44") is None
 
 def test_health_route():
-    from fastapi.testclient import TestClient
     from app.main import app
+    from fastapi.testclient import TestClient
     client = TestClient(app)
     response = client.get("/api/board/health")
     assert response.status_code == 200
@@ -38,10 +37,10 @@ def test_health_route():
     assert "matrix" in data
 
 def test_settings_update_route():
-    from fastapi.testclient import TestClient
     from app.main import app
+    from fastapi.testclient import TestClient
     client = TestClient(app)
-    
+
     payload = {
         "threshold_positive": 3000,
         "threshold_negative": 3000,
@@ -55,8 +54,8 @@ def test_settings_update_route():
 
 
 def test_clear_leds_route():
-    from fastapi.testclient import TestClient
     from app.main import app
+    from fastapi.testclient import TestClient
     client = TestClient(app)
     response = client.post("/api/board/clear_leds")
     assert response.status_code == 200

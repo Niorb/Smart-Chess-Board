@@ -42,6 +42,7 @@ export function useBoardState() {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -74,9 +75,8 @@ export function useBoardState() {
     ws.onclose = () => {
       console.log('WebSocket Disconnected. Reconnecting in 3s...');
       setIsConnected(false);
-      // Use window.setTimeout for Node/Browser compatibility types
       reconnectTimeoutRef.current = window.setTimeout(() => {
-        connect();
+        connectRef.current();
       }, 3000);
     };
 
@@ -86,12 +86,17 @@ export function useBoardState() {
     };
 
     wsRef.current = ws;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();
     return () => {
       if (wsRef.current) wsRef.current.close();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
   }, [connect]);
 

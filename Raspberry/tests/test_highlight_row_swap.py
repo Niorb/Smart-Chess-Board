@@ -1,10 +1,10 @@
-import pytest
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from playwright_chesscom.led_helpers import get_led_indices
+
 
 def test_highlight_led_indices():
     # For a1 (rank=0, file=0): mapped to physical LEDs 0, 1

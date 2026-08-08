@@ -14,40 +14,38 @@ Usage:
 
 import re
 import sys
-import time
 import threading
+import time
 
-from chesscom_config import (
-    LOCATORS,
-    CHESS_COM_PLAY_URL,
-    TIME_CONTROL,
-    COLOR_FOUND_WHITE,
-    COLOR_FOUND_BLACK,
-)
 from chesscom_browser import (
-    launch,
     close,
-    is_logged_in,
     detect_my_color,
-    read_board,
-    print_board,
-    read_clocks,
+    is_logged_in,
+    launch,
     make_move,
+    print_board,
+    read_board,
+    read_clocks,
+)
+from chesscom_config import (
+    COLOR_FOUND_BLACK,
+    COLOR_FOUND_WHITE,
+    LOCATORS,
+    TIME_CONTROL,
 )
 from led_helpers import (
-    init_strip,
     all_leds_off,
-    flash_leds,
-    signal_connected,
-    signal_game_found,
-    signal_error,
     animate_connecting,
-    animate_search,
     animate_idle,
+    animate_search,
+    flash_leds,
+    init_strip,
+    signal_connected,
+    signal_error,
+    signal_game_found,
     start_animation,
     stop_animation,
 )
-
 
 # =============================================================================
 # HELPERS

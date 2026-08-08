@@ -1,4 +1,3 @@
-import pytest
 import os
 import sys
 
@@ -6,12 +5,12 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from board_hardware import (
-    apply_debounce,
-    BOARD_ROWS,
     BOARD_COLS,
+    BOARD_ROWS,
+    apply_debounce,
     settings,
-    load_settings,
 )
+
 
 def test_board_dimensions():
     assert BOARD_ROWS == 8
@@ -72,9 +71,10 @@ def test_settings_defaults():
     assert len(settings["baselines"][0]) == BOARD_ROWS
 
 def test_calibrate_board_clears_baseline_history():
-    from unittest.mock import MagicMock
     import struct
-    from board_hardware import calibrate_board, baseline_history, settings
+    from unittest.mock import MagicMock
+
+    from board_hardware import baseline_history, calibrate_board, settings
 
     # Seed baseline_history with stale pre-calibration data
     baseline_history[(0, 0)] = [(100.0, 1200, False)]

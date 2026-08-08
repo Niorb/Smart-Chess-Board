@@ -18,31 +18,31 @@ Requires:
 """
 
 import sys
-import time
 import threading
-import lgpio
+import time
 
-from chesscom_config import BUTTON_PIN, BUTTON_DEBOUNCE_MS
+import lgpio
 from chesscom_browser import (
-    launch,
+    cancel_search,
     close,
-    is_logged_in,
+    detect_my_color,
     do_first_login,
+    is_logged_in,
+    launch,
     seek_game,
     wait_for_game,
-    cancel_search,
-    detect_my_color,
 )
+from chesscom_config import BUTTON_DEBOUNCE_MS, BUTTON_PIN
 from led_helpers import (
-    init_strip,
     all_leds_off,
-    signal_connected,
-    signal_game_found,
-    signal_cancelled,
-    signal_error,
     animate_connecting,
-    animate_search,
     animate_idle,
+    animate_search,
+    init_strip,
+    signal_cancelled,
+    signal_connected,
+    signal_error,
+    signal_game_found,
     start_animation,
     stop_animation,
 )
@@ -69,7 +69,7 @@ def run(first_login=False):
     button_event = threading.Event()
     last_press_time = [0.0]
 
-    def on_button_press(chip, gpio, level, tick):
+    def on_button_press(_chip, _gpio, _level, _tick):
         now = time.monotonic()
         dt_ms = (now - last_press_time[0]) * 1000
         print(f"button pressed, dt_ms={dt_ms}")

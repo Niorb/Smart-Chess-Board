@@ -12,33 +12,22 @@ import time
 
 import lgpio
 import serial
-
 from board_hardware import (
     COL_MUX_S0,
     COL_MUX_S1,
     COL_MUX_S2,
     COL_MUX_S3,
-    MUX_SETTLE_S,
-    ROW_MUX_S0,
-    ROW_MUX_S1,
-    ROW_MUX_S2,
-    ROW_MUX_S3,
     init_mux_pins,
     set_mux_channel,
 )
 from playwright_chesscom.chesscom_config import (
     BAUD_RATE,
-    LED_BRIGHTNESS,
-    LED_CHANNEL,
-    LED_DMA,
-    LED_FREQ_HZ,
-    LED_INVERT,
     LED_PIN,
     LED_PIN_2,
     NUM_LEDS,
     SERIAL_PORT,
 )
-from playwright_chesscom.led_helpers import init_strip, get_led_indices, Color
+from playwright_chesscom.led_helpers import Color, get_led_indices, init_strip
 
 BASELINE_SAMPLES = 10
 DIFF_LED_THRESHOLD = 150
@@ -117,7 +106,7 @@ def read_active_values(h, ser):
 
     # Request batch scan
     ser.write(b"B")
-    
+
     # Read binary packet: 2 header bytes + 128 data bytes (64 uint16_t values)
     header = ser.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
