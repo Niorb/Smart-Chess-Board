@@ -110,8 +110,9 @@ def test_scan_board_binary_packet_mapping():
 
     # 64 uint16_t values: all equal to baseline except index 0 (a1, file_idx=0, rank_idx=0)
     base_val = settings["baselines"][0][0]
+    thresh = settings.get("threshold_positive", 150)
     vals = [base_val] * 64
-    vals[0] = base_val + 500  # Magnet detected on a1 (c=0, r=0)
+    vals[0] = base_val + thresh + 500  # Magnet detected on a1 (c=0, r=0)
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *vals)
@@ -128,7 +129,7 @@ def test_scan_board_binary_packet_mapping():
     matrix, diag = scan_board("mock_h", mock_ser, raw_state)
     assert diag["status"] == "OK"
     # Square a1 (c=0, r=0) should register magnet
-    assert matrix[0][0] == base_val + 500
+    assert matrix[0][0] == base_val + thresh + 500
     assert raw_state[0][0] == 1
     # Square h1 (c=7, r=0) should NOT register magnet
     assert matrix[7][0] == base_val
