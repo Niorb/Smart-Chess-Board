@@ -17,7 +17,9 @@ from board_hardware import (
     scan_board,
     settings,
 )
-from playwright_chesscom.chesscom_config import BAUD_RATE, SERIAL_PORT
+from playwright_chesscom.chesscom_config import BAUD_RATE, NUM_LEDS, SERIAL_PORT
+from playwright_chesscom.led_helpers import all_leds_off, get_led_indices, init_strip
+from rpi_ws281x import Color
 
 from .chess_engine_async import chess_engine
 
@@ -35,6 +37,9 @@ class BoardStateManager:
         self.highlighted_square = None
         self.led_test_active = False
         self.testing_led_index = -1
+        self.is_calibrating: bool = False
+        self.initial_calibrating: bool = False
+        self._recalibrate_lock: asyncio.Lock | None = None
 
         # Hardware init (Serial for board + lgpio for MUX)
         try:
@@ -49,7 +54,6 @@ class BoardStateManager:
 
         # LED strip initialization
         try:
-            from playwright_chesscom.led_helpers import init_strip
             self.strip = init_strip()
             if self.strip:
                 if self.ser:
@@ -69,7 +73,6 @@ class BoardStateManager:
         with self.serial_lock:
             if self.strip:
                 try:
-                    from playwright_chesscom.led_helpers import all_leds_off
                     all_leds_off(self.strip)
                 except Exception as e:
                     logger.error(f"Error turning off LEDs before calibration: {e}")
@@ -84,7 +87,6 @@ class BoardStateManager:
                 self.is_calibrating = False
                 if self.strip:
                     try:
-                        from playwright_chesscom.led_helpers import all_leds_off
                         all_leds_off(self.strip)
                     except Exception as e:
                         logger.error(f"Error turning off LEDs after calibration: {e}")
@@ -95,7 +97,7 @@ class BoardStateManager:
         Sets upper and lower thresholds to ±1000 for 5 seconds to prevent false piece detections,
         runs sensor recalibration, and restores original thresholds afterwards.
         """
-        if not hasattr(self, "_recalibrate_lock") or self._recalibrate_lock is None:
+        if self._recalibrate_lock is None:
             self._recalibrate_lock = asyncio.Lock()
 
         if self._recalibrate_lock.locked():
@@ -110,7 +112,6 @@ class BoardStateManager:
             self.initial_calibrating = True
             if self.strip:
                 try:
-                    from playwright_chesscom.led_helpers import all_leds_off
                     all_leds_off(self.strip)
                 except Exception as e:
                     logger.error(f"Error turning off LEDs during initial webapp connect calibration: {e}")
@@ -133,7 +134,6 @@ class BoardStateManager:
                 self.initial_calibrating = False
                 if self.strip:
                     try:
-                        from playwright_chesscom.led_helpers import all_leds_off
                         all_leds_off(self.strip)
                     except Exception as e:
                         logger.error(f"Error turning off LEDs after webapp connect calibration: {e}")
@@ -204,14 +204,11 @@ class BoardStateManager:
 
 
     def _update_leds(self):
-        if not self.strip or self.led_test_active or getattr(self, "initial_calibrating", False) or getattr(self, "is_calibrating", False):
+        if not self.strip or self.led_test_active or self.initial_calibrating or self.is_calibrating:
             return
 
         try:
             from board_hardware import settings
-            from playwright_chesscom.chesscom_config import NUM_LEDS
-            from playwright_chesscom.led_helpers import get_led_indices
-            from rpi_ws281x import Color
 
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
@@ -251,9 +248,6 @@ class BoardStateManager:
         self.led_test_active = True
         logger.info("Starting sequential LED strip test...")
         try:
-            from playwright_chesscom.chesscom_config import NUM_LEDS
-            from rpi_ws281x import Color
-
             # Turn off all first
             for idx in range(NUM_LEDS):
                 self.strip.setPixelColor(idx, Color(0, 0, 0))
@@ -280,7 +274,6 @@ class BoardStateManager:
         self.highlighted_square = None
         if self.strip:
             try:
-                from playwright_chesscom.led_helpers import all_leds_off
                 all_leds_off(self.strip)
                 logger.info("Forced all LEDs off.")
                 return True
@@ -369,7 +362,6 @@ class BoardStateManager:
                 lgpio.gpiochip_close(self.h)
             if self.strip:
                 try:
-                    from playwright_chesscom.led_helpers import all_leds_off
                     all_leds_off(self.strip)
                 except Exception as e:
                     logger.error(f"Error turning off LEDs on exit: {e}")

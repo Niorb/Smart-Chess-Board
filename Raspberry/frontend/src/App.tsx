@@ -172,7 +172,7 @@ function App() {
     if (isConnected) {
       fetchSettings();
     }
-  }, [isConnected, activeTab]);
+  }, [isConnected]);
 
   const isInitialCalibrating = !!state.physical?.initial_calibrating;
   const prevInitialCalibratingRef = useRef(false);
@@ -352,28 +352,26 @@ function App() {
 
 
 
-  // Helper to render the digital piece icons or characters
-  const renderPiece = (p: string) => {
-    if (p === '.') return null;
-    const isWhite = p === p.toUpperCase();
-    const piece = p.toLowerCase();
-    
-    // Simple mapping to Unicode chess pieces for now
-    const icons: Record<string, string> = {
-      p: isWhite ? '♙' : '♟',
-      r: isWhite ? '♖' : '♜',
-      n: isWhite ? '♘' : '♞',
-      b: isWhite ? '♗' : '♝',
-      q: isWhite ? '♕' : '♛',
-      k: isWhite ? '♔' : '♚'
-    };
-    
-    return (
-      <span className={`text-4xl ${isWhite ? 'text-white' : 'text-slate-900'} drop-shadow-md select-none`}>
-        {icons[piece] || p}
-      </span>
-    );
-  };
+// Helper to render the digital piece icons or characters
+const PIECE_ICONS_WHITE: Record<string, string> = {
+  p: '♙', r: '♖', n: '♘', b: '♗', q: '♕', k: '♔'
+};
+const PIECE_ICONS_BLACK: Record<string, string> = {
+  p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚'
+};
+
+function renderPiece(p: string) {
+  if (p === '.') return null;
+  const isWhite = p === p.toUpperCase();
+  const piece = p.toLowerCase();
+  const icon = isWhite ? PIECE_ICONS_WHITE[piece] : PIECE_ICONS_BLACK[piece];
+
+  return (
+    <span className={`text-4xl ${isWhite ? 'text-white' : 'text-slate-900'} drop-shadow-md select-none`}>
+      {icon || p}
+    </span>
+  );
+}
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans">

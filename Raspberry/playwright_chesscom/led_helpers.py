@@ -91,7 +91,8 @@ class DualPixelStrip:
         pass  # ESP32 does its own setup on boot
 
     def show(self):
-        if not self.ser:
+        ser = self.ser
+        if ser is None:
             return
 
         def _do_show():
@@ -105,14 +106,14 @@ class DualPixelStrip:
                     g = (curr >> 8) & 0xFF
                     b = curr & 0xFF
                     try:
-                        self.ser.write(bytes([ord('L'), idx, r, g, b]))
+                        ser.write(bytes([ord('L'), idx, r, g, b]))
                         self.shown_colors[idx] = curr
                     except Exception as e:
                         print(f"LED Wrapper: Error writing SetPixelColor command to serial: {e}")
 
             if changed:
                 try:
-                    self.ser.write(b'W')
+                    ser.write(b'W')
                 except Exception as e:
                     print(f"LED Wrapper: Error writing Show command to serial: {e}")
 
@@ -134,8 +135,12 @@ class DualPixelStrip:
                     val = 0
             self.current_colors[index] = val
 
+    set_pixel_color = setPixelColor
+
     def numPixels(self):
         return 2 * self.num_leds_per_strip
+
+    num_pixels = numPixels
 
 
 # =============================================================================
@@ -148,8 +153,7 @@ def init_strip():
     if not HAS_LEDS:
         return None
     # Initialize the DualPixelStrip wrapper which controls both halves of the board
-    strip = DualPixelStrip(num_leds_per_strip=76)
-    return strip
+    return DualPixelStrip(num_leds_per_strip=76)
 
 
 def get_led_indices(col, row):
@@ -174,24 +178,16 @@ def get_led_indices(col, row):
             7: [16, 17]
         }
         base = row * 18
-        if row % 2 == 0:
-            sq_idx = col
-        else:
-            sq_idx = 7 - col
+        sq_idx = col if row % 2 == 0 else 7 - col
         return [base + o for o in offsets_strip1[sq_idx]]
-    else:
-        # Strip 2 (files e-h / row 4-7)
-        # Relative column from right to left: h=0, g=1, f=2, e=3
-        c_rel = 7 - row
-        base = 76 + c_rel * 16
-        if c_rel % 2 == 0:
-            # File h, f: starts at top (Rank 8 / col 7) -> goes down to Rank 1 (col 0)
-            sq_idx = 7 - col
-        else:
-            # File g, e: starts at bottom (Rank 1 / col 0) -> goes up to Rank 8 (col 7)
-            sq_idx = col
-        first_led = base + sq_idx * 2
-        return [first_led, first_led + 1]
+
+    # Strip 2 (files e-h / row 4-7)
+    # Relative column from right to left: h=0, g=1, f=2, e=3
+    c_rel = 7 - row
+    base = 76 + c_rel * 16
+    sq_idx = 7 - col if c_rel % 2 == 0 else col
+    first_led = base + sq_idx * 2
+    return [first_led, first_led + 1]
 
 
 def all_leds_off(strip):

@@ -116,8 +116,8 @@ def read_active_values(h, ser):
             import struct
             vals = struct.unpack('<64H', data)
             idx = 0
-            for r in range(8):
-                for c in range(8):
+            for c in range(8):
+                for r in range(8):
                     val = vals[idx]
                     idx += 1
                     if c in values:
@@ -147,7 +147,7 @@ def calibrate_baseline(h, ser):
         print(f"Baseline sample {sample_num + 1}/{BASELINE_SAMPLES}: {values}")
         time.sleep(0.1)
 
-    baseline = {}
+    baseline: dict[int, list[float | None]] = {}
     for col in ACTIVE_COLS:
         baseline[col] = []
         for row_index in range(len(ACTIVE_ROWS)):
@@ -162,7 +162,7 @@ def calibrate_baseline(h, ser):
 
 def build_difference_values(values, baseline):
     """Subtract the calibrated baseline from the latest readings."""
-    differences = {}
+    differences: dict[int, list[float | None]] = {}
 
     for col in ACTIVE_COLS:
         differences[col] = []

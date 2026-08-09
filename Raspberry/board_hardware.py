@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+from typing import Any
 
 logger = logging.getLogger("smart-chess-app.hardware")
 
@@ -46,7 +47,7 @@ except ImportError:
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "board_settings.json")
 
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
-settings = {
+settings: dict[str, Any] = {
     "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
     "threshold_positive": 150,
     "threshold_negative": 150,
@@ -124,13 +125,6 @@ COL_MUX_S1 = 27
 COL_MUX_S2 = 22
 COL_MUX_S3 = 23
 
-ROW_MUX_S0 = 5
-ROW_MUX_S1 = 6
-ROW_MUX_S2 = 13
-ROW_MUX_S3 = 19
-
-MUX_SETTLE_S = 0.0001  # 100us settling time default for faster scanning
-
 def set_mux_channel(_h, _s0, _s1, _s2, _s3, _channel):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
 
@@ -184,7 +178,7 @@ def scan_board(h, serial_conn, raw_state):
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             idx = 0
-            for c in range(BOARD_COLS - 1, -1, -1):
+            for c in range(BOARD_COLS):
                 for r in range(BOARD_ROWS):
                     val = vals[idx]
                     idx += 1
@@ -280,7 +274,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 idx = 0
-                for c in range(BOARD_COLS - 1, -1, -1):
+                for c in range(BOARD_COLS):
                     for r in range(BOARD_ROWS):
                         val = vals[idx]
                         idx += 1

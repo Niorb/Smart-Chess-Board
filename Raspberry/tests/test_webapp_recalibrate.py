@@ -12,7 +12,8 @@ from board_hardware import settings
 def test_handle_webapp_connected_threshold_sequence():
     async def _run_test():
         bsm = BoardStateManager()
-        bsm._safe_calibrate = MagicMock(return_value=True)
+        mock_calibrate = MagicMock(return_value=True)
+        bsm._safe_calibrate = mock_calibrate  # type: ignore[assignment]
 
         # Set initial test thresholds
         settings["threshold_positive"] = 150
@@ -22,7 +23,7 @@ def test_handle_webapp_connected_threshold_sequence():
         await bsm.handle_webapp_connected()
 
         # Verify _safe_calibrate was called
-        bsm._safe_calibrate.assert_called_once()
+        mock_calibrate.assert_called_once()
 
         # Verify thresholds were restored back to initial values after run
         assert settings["threshold_positive"] == 150

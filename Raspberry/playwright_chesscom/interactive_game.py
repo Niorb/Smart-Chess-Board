@@ -123,11 +123,6 @@ STARTING_POSITION = [
 ]
 
 
-def count_differences(a, b):
-    """Count squares that differ between two 8x8 boards."""
-    return sum(a[r][c] != b[r][c] for r in range(8) for c in range(8))
-
-
 def print_clocks(page, color):
     """Read and print both player clocks."""
     white, black = read_clocks(page, color)

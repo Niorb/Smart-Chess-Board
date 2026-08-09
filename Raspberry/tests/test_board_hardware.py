@@ -87,7 +87,7 @@ def test_calibrate_board_clears_baseline_history():
     def mock_read(n):
         if n == 2:
             return packet_header
-        elif n == 128:
+        if n == 128:
             return packet_data
         return b''
 
@@ -97,5 +97,41 @@ def test_calibrate_board_clears_baseline_history():
     assert res is True
     assert settings["baselines"][0][0] == 1900
     assert len(baseline_history) == 0
+
+
+def test_scan_board_binary_packet_mapping():
+    import struct
+    from unittest.mock import MagicMock
+
+    from board_hardware import scan_board, settings
+
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    mock_ser = MagicMock()
+
+    # 64 uint16_t values: all equal to baseline except index 0 (a1, file_idx=0, rank_idx=0)
+    base_val = settings["baselines"][0][0]
+    vals = [base_val] * 64
+    vals[0] = base_val + 500  # Magnet detected on a1 (c=0, r=0)
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *vals)
+
+    def mock_read(n):
+        if n == 2:
+            return packet_header
+        if n == 128:
+            return packet_data
+        return b''
+
+    mock_ser.read.side_effect = mock_read
+
+    matrix, diag = scan_board("mock_h", mock_ser, raw_state)
+    assert diag["status"] == "OK"
+    # Square a1 (c=0, r=0) should register magnet
+    assert matrix[0][0] == base_val + 500
+    assert raw_state[0][0] == 1
+    # Square h1 (c=7, r=0) should NOT register magnet
+    assert matrix[7][0] == base_val
+    assert raw_state[7][0] == 0
 
 

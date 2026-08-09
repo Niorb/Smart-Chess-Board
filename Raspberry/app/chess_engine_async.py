@@ -5,6 +5,7 @@ import os
 import queue
 import sys
 import threading
+from typing import Any
 
 # Ensure we can import from the parent and the playwright directory
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "playwright_chesscom"))
@@ -33,7 +34,7 @@ class ChessEngineAsync:
         self._cancel_event = threading.Event()
 
         # Dedicated thread worker queue & thread
-        self.task_queue = queue.Queue()
+        self.task_queue: queue.Queue[tuple[Any, tuple[Any, ...], dict[str, Any], concurrent.futures.Future[Any]] | None] = queue.Queue()
         self.worker_thread = None
 
     def _run_worker(self):
@@ -61,7 +62,7 @@ class ChessEngineAsync:
         """Run a function on the dedicated worker thread non-blockingly."""
         if not self.worker_thread or not self.worker_thread.is_alive():
             raise RuntimeError("Playwright worker thread is not running.")
-        future = concurrent.futures.Future()
+        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
         self.task_queue.put((func, args, kwargs, future))
         return await asyncio.wrap_future(future)
 
@@ -181,7 +182,7 @@ class ChessEngineAsync:
             return [["."]*8 for _ in range(8)]
 
         def _get_board():
-            if "/play" in self.page.url:
+            if self.page is not None and "/play" in self.page.url:
                  return read_board(self.page)
             return [["."]*8 for _ in range(8)]
 
