@@ -183,11 +183,21 @@ def get_led_indices(col, row):
 
     # Strip 2 (files e-h / row 4-7)
     # Relative column from right to left: h=0, g=1, f=2, e=3
+    # 19 LEDs per column (16 active + 3 skipped LEDs at ranks 7, 5, 2 in physical direction)
+    offsets_strip2 = {
+        0: [0, 1],    # Square 0 (2 LEDs)
+        1: [2, 3],    # Square 1 (2 active + 1 extra/skipped at offset 4)
+        2: [5, 6],    # Square 2 (2 LEDs)
+        3: [7, 8],    # Square 3 (2 active + 1 OFF/skipped at offset 9)
+        4: [10, 11],  # Square 4 (2 LEDs)
+        5: [12, 13],  # Square 5 (2 LEDs)
+        6: [14, 15],  # Square 6 (2 active + 1 extra/skipped at offset 16)
+        7: [17, 18],  # Square 7 (2 LEDs)
+    }
     c_rel = 7 - row
-    base = 76 + c_rel * 16
+    base = 76 + c_rel * 19
     sq_idx = 7 - col if c_rel % 2 == 0 else col
-    first_led = base + sq_idx * 2
-    return [first_led, first_led + 1]
+    return [base + o for o in offsets_strip2[sq_idx]]
 
 
 def all_leds_off(strip):

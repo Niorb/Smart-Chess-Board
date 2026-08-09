@@ -27,22 +27,22 @@ def test_strip1_mapping():
     assert get_led_indices(7, 3) == [70, 71]  # d8
 
 def test_strip2_mapping():
-    # Strip 2: files e-h (row 4-7), 2 LEDs per square base (base offset = 76)
+    # Strip 2: files e-h (row 4-7), 19 LEDs per column (16 active + 3 skipped LEDs at ranks 7, 5, 2)
     # File h (row 7, c_rel 0): h8 (top, col 7) -> h1 (bottom, col 0)
     assert get_led_indices(7, 7) == [76, 77]    # h8 (Starts Strip 2!)
-    assert get_led_indices(0, 7) == [90, 91]    # h1
+    assert get_led_indices(0, 7) == [93, 94]    # h1
 
     # File g (row 6, c_rel 1): g1 (bottom, col 0) -> g8 (top, col 7)
-    assert get_led_indices(0, 6) == [92, 93]    # g1
-    assert get_led_indices(7, 6) == [106, 107]  # g8
+    assert get_led_indices(0, 6) == [95, 96]    # g1
+    assert get_led_indices(7, 6) == [112, 113]  # g8
 
     # File f (row 5, c_rel 2): f8 (top, col 7) -> f1 (bottom, col 0)
-    assert get_led_indices(7, 5) == [108, 109]  # f8
-    assert get_led_indices(0, 5) == [122, 123]  # f1
+    assert get_led_indices(7, 5) == [114, 115]  # f8
+    assert get_led_indices(0, 5) == [131, 132]  # f1
 
     # File e (row 4, c_rel 3): e1 (bottom, col 0) -> e8 (top, col 7)
-    assert get_led_indices(0, 4) == [124, 125]  # e1
-    assert get_led_indices(7, 4) == [138, 139]  # e8 (Finishes Strip 2!)
+    assert get_led_indices(0, 4) == [133, 134]  # e1
+    assert get_led_indices(7, 4) == [150, 151]  # e8 (Finishes Strip 2!)
 
 
 def test_dual_pixel_strip_lock_and_show():

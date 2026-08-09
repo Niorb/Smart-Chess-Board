@@ -87,11 +87,12 @@ WS2812B LED STRIP LAYOUT & SERPENTINE ROUTING
       * File c: Starts at c8 (LED 36, 37) and goes DOWN to c1 (LED 52, 53)
       * File d: Starts at d1 (LED 54, 55) and goes UP to d8 (LED 70, 71)
 
-  - Strip 2 (GPIO 22 / Files e-h): Total 76 LEDs (16 LEDs/column, 2 LEDs/square base, base offset +76)
-      * File h: Starts at h8 (LED 76, 77) and goes DOWN to h1 (LED 90, 91)
-      * File g: Starts at g1 (LED 92, 93) and goes UP to g8 (LED 106, 107)
-      * File f: Starts at f8 (LED 108, 109) and goes DOWN to f1 (LED 122, 123)
-      * File e: Starts at e1 (LED 124, 125) and goes UP to e8 (LED 138, 139)
+  - Strip 2 (GPIO 22 / Files e-h): Total 76 LEDs (19 LEDs/column: 16 active + 3 skipped LEDs at physical squares 1, 3, 6, base offset +76)
+      * Physical column layout (Rank 8->1): 2 LEDs, 3 LEDs (2 active + 1 extra), 2 LEDs, 3 LEDs (2 active + 1 OFF), 2 LEDs, 2 LEDs, 3 LEDs (2 active + 1 extra), 2 LEDs
+      * File h: Starts at h8 (LED 76, 77) and goes DOWN to h1 (LED 93, 94)
+      * File g: Starts at g1 (LED 95, 96) and goes UP to g8 (LED 112, 113)
+      * File f: Starts at f8 (LED 114, 115) and goes DOWN to f1 (LED 131, 132)
+      * File e: Starts at e1 (LED 133, 134) and goes UP to e8 (LED 150, 151)
 
 
 ================================================================================

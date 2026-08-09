@@ -15,7 +15,7 @@ def test_highlight_led_indices():
     leds_a1 = get_led_indices(0, 0)
     assert leds_a1 == [16, 17]
 
-    # For e1 (rank=0, file=4): mapped to physical LEDs 124, 125
+    # For e1 (rank=0, file=4): mapped to physical LEDs 133, 134
     leds_e1 = get_led_indices(0, 4)
-    assert leds_e1 == [124, 125]
+    assert leds_e1 == [133, 134]
 
