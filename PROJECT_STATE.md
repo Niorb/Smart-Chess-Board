@@ -37,6 +37,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Created `codebase-optimization` skill (`.agents/skills/codebase-optimization/SKILL.md`), reference guides (`python-optimization.md`, `typescript-optimization.md`), and automated static analysis audit script (`run_audit.py`).
 - [x] Executed full codebase optimization pass across Python backend, hardware drivers, Playwright scripts, and React frontend: eliminated dead functions/unused constants, resolved all Mypy static type errors, removed inline module imports from tight loop execution paths, and optimized React state/effect dependencies and piece rendering allocations. All audit gates (`ruff`, `vulture`, `mypy --check-untyped-defs`, `tsc`, `knip`, `eslint`, `vite build`) pass cleanly with 0 errors.
 - [x] Fixed file-axis (column) reversal in `board_hardware.py` (`scan_board` & `calibrate_board`) and `hardware_test.py` (`read_active_values`) where `c` was iterated in reverse (`range(BOARD_COLS - 1, -1, -1)`). This ensures magnet detection on square `a1` correctly maps to `matrix[0][0]` and illuminates LEDs on square `a1` (instead of `h1`). All 34 pytest unit test suites pass on the physical Raspberry Pi over SSH and Playwright browser integration tests pass.
+- [x] Configured exact serpentine physical LED strip routing in [`led_helpers.py`](file:///home/robin/Smart-Chess-Board/Raspberry/playwright_chesscom/led_helpers.py) and documented in [`WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt):
+  - **Strip 1 (left side / files a-d)**: Starts at `a8` (LED 0, 1) -> `a1` (LED 16, 17) [Down], `b1` -> `b8` [Up], `c8` -> `c1` [Down], `d1` -> `d8` [Up].
+  - **Strip 2 (right side / files e-h)**: Starts at `h8` (LED 76, 77) -> `h1` (LED 90, 91) [Down], `g1` -> `g8` [Up], `f8` -> `f1` [Down], `e1` -> `e8` [Up].
+
 
 
 ## Task Backlog
