@@ -78,13 +78,20 @@ ANALOG HALL EFFECT SENSOR OPERATION
 
 
 ================================================================================
-WS2812B LED STRIP LAYOUT
+WS2812B LED STRIP LAYOUT & SERPENTINE ROUTING
 ================================================================================
 
-  - Strip 1 (GPIO 23): Drives files a-d under ranks 1-8.
-  - Strip 2 (GPIO 22): Drives files e-h under ranks 1-8.
-  - Density: 2 LEDs per board square in a serpentine routing pattern.
-  - Power: WS2812B strips run on external 5V power with shared GND.
+  - Strip 1 (GPIO 23 / Files a-d): Total 76 LEDs (18 LEDs/column with 2 skipped OFF LEDs after Rank 7 and Rank 3)
+      * File a: Starts at a8 (LED 0, 1) and goes DOWN to a1 (LED 16, 17)
+      * File b: Starts at b1 (LED 18, 19) and goes UP to b8 (LED 34, 35)
+      * File c: Starts at c8 (LED 36, 37) and goes DOWN to c1 (LED 52, 53)
+      * File d: Starts at d1 (LED 54, 55) and goes UP to d8 (LED 70, 71)
+
+  - Strip 2 (GPIO 22 / Files e-h): Total 76 LEDs (16 LEDs/column, 2 LEDs/square base, base offset +76)
+      * File h: Starts at h8 (LED 76, 77) and goes DOWN to h1 (LED 90, 91)
+      * File g: Starts at g1 (LED 92, 93) and goes UP to g8 (LED 106, 107)
+      * File f: Starts at f8 (LED 108, 109) and goes DOWN to f1 (LED 122, 123)
+      * File e: Starts at e1 (LED 124, 125) and goes UP to e8 (LED 138, 139)
 
 
 ================================================================================
