@@ -7,9 +7,13 @@ from playwright_chesscom.led_helpers import get_led_indices
 
 
 def test_highlight_led_indices():
-    # For a1 (rank=0, file=0): mapped to physical LEDs 0, 1
+    # For a8 (rank=7, file=0): starts Strip 1 at physical LEDs 0, 1
+    leds_a8 = get_led_indices(7, 0)
+    assert leds_a8 == [0, 1]
+
+    # For a1 (rank=0, file=0): mapped to physical LEDs 16, 17
     leds_a1 = get_led_indices(0, 0)
-    assert leds_a1 == [0, 1]
+    assert leds_a1 == [16, 17]
 
     # For e1 (rank=0, file=4): mapped to physical LEDs 124, 125
     leds_e1 = get_led_indices(0, 4)
