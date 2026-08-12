@@ -4,18 +4,24 @@ chesscom_browser.py
 Playwright-based browser automation for chess.com.
 Handles session persistence, login detection, game seeking, and color detection.
 
-This module is synchronous and has no GPIO/LED knowledge.
-It is imported by game_seeker.py (and later by smart_chess_board.py for Phase 2).
+This module is asynchronous and has no GPIO/LED knowledge.
+It is imported by game_seeker.py and app/chess_engine_async.py.
 
 Usage (standalone test on any machine):
+    import asyncio
     from chesscom_browser import launch, is_logged_in, close
-    browser, page = launch(headless=False)
-    print("Logged in:", is_logged_in(page))
-    close(browser)
+
+    async def main():
+        browser, page = await launch(headless=False)
+        print("Logged in:", await is_logged_in(page))
+        await close(browser)
+
+    asyncio.run(main())
 
 Requires: pip3 install playwright && playwright install chromium
 """
 
+import asyncio
 import os
 import time
 
@@ -31,8 +37,8 @@ from chesscom_config import (
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
 )
-from playwright.sync_api import TimeoutError as PlaywrightTimeout
-from playwright.sync_api import sync_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright
 
 # Keep a module-level reference so the Playwright context manager stays alive
 _playwright_instance = None
@@ -42,9 +48,9 @@ _playwright_instance = None
 # =============================================================================
 
 
-def launch(headless=True):
+async def launch(headless=True):
     """
-    Launch a Chromium browser with a persistent user profile.
+    Launch a Chromium browser with a persistent user profile asynchronously.
     Cookies and localStorage are saved in USER_DATA_DIR and reused
     on subsequent runs (no re-login needed).
 
@@ -54,13 +60,13 @@ def launch(headless=True):
 
     user_data_dir = os.path.abspath(USER_DATA_DIR)
 
-    _playwright_instance = sync_playwright().start()
+    if _playwright_instance is None:
+        _playwright_instance = await async_playwright().start()
 
-    context = _playwright_instance.chromium.launch_persistent_context(
+    context = await _playwright_instance.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
         headless=headless,
         locale=BROWSER_LOCALE,
-        # executable_path="/usr/bin/chromium",
         viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
         args=[
             f"--lang={BROWSER_LOCALE}",
@@ -81,21 +87,22 @@ def launch(headless=True):
     )
 
     # Use the default page or create one
-    page = context.pages[0] if context.pages else context.new_page()
+    page = context.pages[0] if context.pages else await context.new_page()
 
     return context, page
 
 
-def close(browser_context):
+async def close(browser_context):
     """Clean shutdown: close browser and free resources."""
     global _playwright_instance
     try:
-        browser_context.close()
+        if browser_context:
+            await browser_context.close()
     except Exception:
         pass
     try:
         if _playwright_instance:
-            _playwright_instance.stop()
+            await _playwright_instance.stop()
             _playwright_instance = None
     except Exception:
         pass
@@ -106,7 +113,7 @@ def close(browser_context):
 # =============================================================================
 
 
-def is_logged_in(page):
+async def is_logged_in(page):
     """
     Check if the user is currently logged in to chess.com.
     Navigates to the play page if not already there, then checks whether
@@ -116,13 +123,13 @@ def is_logged_in(page):
     Returns: True if logged in, False otherwise.
     """
     if CHESS_COM_PLAY_URL not in page.url:
-        page.goto(CHESS_COM_PLAY_URL)
-        page.wait_for_load_state("domcontentloaded", timeout=60000)
+        await page.goto(CHESS_COM_PLAY_URL)
+        await page.wait_for_load_state("domcontentloaded", timeout=60000)
 
     return "/login" not in page.url and "/register" not in page.url
 
 
-def do_first_login():
+async def do_first_login():
     """
     Open a visible Playwright browser so the user can log in to chess.com.
     The persistent context saves cookies automatically. After the user logs
@@ -140,13 +147,13 @@ def do_first_login():
     print("Once logged in, come back here and press ENTER.")
     print()
 
-    context, page = launch(headless=False)
-    page.goto(CHESS_COM_PLAY_URL)
+    context, page = await launch(headless=False)
+    await page.goto(CHESS_COM_PLAY_URL)
 
     input()  # Block until user presses Enter
 
-    logged_in = is_logged_in(page)
-    close(context)
+    logged_in = await is_logged_in(page)
+    await close(context)
 
     if logged_in:
         print("Login saved successfully.")
@@ -161,14 +168,14 @@ def do_first_login():
 # =============================================================================
 
 
-def navigate_to_play(page):
+async def navigate_to_play(page):
     """Navigate to the chess.com play page if not already there."""
     if "/play" not in page.url:
-        page.goto(CHESS_COM_PLAY_URL)
-        page.wait_for_load_state("load")
+        await page.goto(CHESS_COM_PLAY_URL)
+        await page.wait_for_load_state("load")
 
 
-def seek_game(page, time_control=None):
+async def seek_game(page, time_control=None):
     """
     Start searching for a game on chess.com.
     Navigates to the play page, selects the time control, and clicks Play.
@@ -176,7 +183,7 @@ def seek_game(page, time_control=None):
     Returns: True if the search was initiated, False on error.
     """
     try:
-        navigate_to_play(page)
+        await navigate_to_play(page)
 
         if time_control:
             print(f"Selecting time control: {time_control}")
@@ -185,27 +192,27 @@ def seek_game(page, time_control=None):
             try:
                 # 1. Click the dropdown trigger
                 trigger = page.get_by_text(dropdown_pattern)
-                trigger.click()
-                time.sleep(0.5)
+                await trigger.click()
+                await asyncio.sleep(0.5)
                 # 2. Click the option (e.g. "10 min", "3 min", "1 min")
                 selector = page.get_by_role("button", name=time_control, exact=True)
-                selector.first.click(timeout=8000)
+                await selector.first.click(timeout=8000)
                 print(f"Selected time control: {time_control}")
             except Exception as e:
                 print(f"WARNING: Dynamic time control selection failed ({e}), trying standard select...")
                 try:
-                    page.get_by_role("button", name=time_control, exact=True).click(timeout=5000)
+                    await page.get_by_role("button", name=time_control, exact=True).click(timeout=5000)
                 except Exception:
                     pass
         else:
             # Select default time control from config
             try:
                 # Open dropdown menu
-                page.get_by_role(
+                await page.get_by_role(
                     "button", name=LOCATORS["time_control_show_options"]
                 ).click(timeout=5000)
                 # Click the option whose visible text matches TIME_CONTROL (e.g. "10 min")
-                page.get_by_role("button", name=TIME_CONTROL, exact=True).click(
+                await page.get_by_role("button", name=TIME_CONTROL, exact=True).click(
                     timeout=5000
                 )
             except PlaywrightTimeout:
@@ -214,7 +221,7 @@ def seek_game(page, time_control=None):
                 )
 
         # Click Play
-        page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
+        await page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
             timeout=10000
         )
         print("Searching for a game...")
@@ -228,7 +235,7 @@ def seek_game(page, time_control=None):
         return False
 
 
-def wait_for_game(page, timeout=None, cancel_event=None):
+async def wait_for_game(page, timeout=None, cancel_event=None):
     """
     Wait for a game to start (board container becomes visible).
     Polls at POLL_INTERVAL. Can be cancelled by setting cancel_event.
@@ -236,7 +243,7 @@ def wait_for_game(page, timeout=None, cancel_event=None):
     Args:
         page: Playwright Page instance
         timeout: Max seconds to wait (default: GAME_SEARCH_TIMEOUT)
-        cancel_event: threading.Event — if set, stop waiting and return None
+        cancel_event: asyncio.Event or threading.Event — if set, stop waiting and return None
 
     Returns: True if game found, False if timeout, None if cancelled.
     """
@@ -252,24 +259,30 @@ def wait_for_game(page, timeout=None, cancel_event=None):
             return None
 
         try:
-            if board_locator.is_visible():
+            if await board_locator.is_visible():
                 return True
         except Exception:
             pass
 
         if cancel_event:
-            cancel_event.wait(POLL_INTERVAL)
+            if isinstance(cancel_event, asyncio.Event):
+                try:
+                    await asyncio.wait_for(cancel_event.wait(), timeout=POLL_INTERVAL)
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(POLL_INTERVAL)
         else:
-            time.sleep(POLL_INTERVAL)
+            await asyncio.sleep(POLL_INTERVAL)
 
     print("Search timed out — no game found.")
     return False
 
 
-def cancel_search(page):
+async def cancel_search(page):
     """Cancel an active game search by clicking the cancel button."""
     try:
-        page.get_by_role("button", name=LOCATORS["cancel_search"]).click(timeout=5000)
+        await page.get_by_role("button", name=LOCATORS["cancel_search"]).click(timeout=5000)
         print("Search cancelled.")
         return True
     except PlaywrightTimeout:
@@ -282,7 +295,7 @@ def cancel_search(page):
 # =============================================================================
 
 
-def detect_my_color(page):
+async def detect_my_color(page):
     """
     Detect whether the player is White or Black in the current game.
     Checks if the board element has ALL the classes listed in board_flipped_class
@@ -295,19 +308,23 @@ def detect_my_color(page):
     board_selector = LOCATORS["board_container"]
 
     try:
-        board = page.query_selector(board_selector)
-        class_attr = board.get_attribute("class") or ""
-        element_classes = class_attr.split()
-        is_flipped = all(cls in element_classes for cls in flipped_classes)
-        color = "black" if is_flipped else "white"
-        print(f"Game found! Playing as {color.upper()}.")
-        return color
+        board = await page.query_selector(board_selector)
+        if board:
+            class_attr = (await board.get_attribute("class")) or ""
+            element_classes = class_attr.split()
+            is_flipped = all(cls in element_classes for cls in flipped_classes)
+            color = "black" if is_flipped else "white"
+            print(f"Game found! Playing as {color.upper()}.")
+            return color
+        else:
+            print("WARNING: Board element not found, defaulting to white.")
+            return "white"
     except Exception as e:
         print(f"WARNING: Could not detect color ({e}), defaulting to white.")
         return "white"
 
 
-def read_board(page):
+async def read_board(page):
     """
     Read the current board position from the chess.com game page.
 
@@ -343,9 +360,10 @@ def read_board(page):
     pieces_selector = LOCATORS["board_container"] + " .piece"
 
     try:
-        elements = page.query_selector_all(pieces_selector)
+        elements = await page.query_selector_all(pieces_selector)
         for el in elements:
-            classes = (el.get_attribute("class") or "").split()
+            class_attr = (await el.get_attribute("class")) or ""
+            classes = class_attr.split()
 
             piece_code = None
             square_code = None
@@ -406,7 +424,7 @@ def print_board(piece_map, color="white"):
 # =============================================================================
 
 
-def read_clocks(page, color="white"):
+async def read_clocks(page, color="white"):
     """
     Read both player clocks from the current game page.
 
@@ -415,26 +433,29 @@ def read_clocks(page, color="white"):
     Returns "?" for any clock that cannot be read.
     """
 
-    def read_clock(selector):
+    async def read_clock(selector):
+        if not selector:
+            return None
         try:
-            el = page.query_selector(selector)
+            el = await page.query_selector(selector)
             if el:
-                return el.inner_text().strip()
+                text = await el.inner_text()
+                return text.strip()
         except Exception:
             pass
         return None
 
-    white = read_clock(LOCATORS.get(f"white_clock_{color}"))
-    black = read_clock(LOCATORS.get(f"black_clock_{color}"))
+    white = await read_clock(LOCATORS.get(f"white_clock_{color}"))
+    black = await read_clock(LOCATORS.get(f"black_clock_{color}"))
 
     # Fallback to generic top/bottom containers if specific selectors failed
     if not white or white == "?":
         sel = "#board-layout-player-bottom .clock-component" if color == "white" else "#board-layout-player-top .clock-component"
-        white = read_clock(sel) or "?"
+        white = (await read_clock(sel)) or "?"
 
     if not black or black == "?":
         sel = "#board-layout-player-top .clock-component" if color == "white" else "#board-layout-player-bottom .clock-component"
-        black = read_clock(sel) or "?"
+        black = (await read_clock(sel)) or "?"
 
     return white, black
 
@@ -444,7 +465,7 @@ def read_clocks(page, color="white"):
 # =============================================================================
 
 
-def make_move(page, from_file, from_rank, to_file, to_rank, color):
+async def make_move(page, from_file, from_rank, to_file, to_rank, color):
     """
     Make a move on chess.com by clicking source then destination square.
 
@@ -457,7 +478,7 @@ def make_move(page, from_file, from_rank, to_file, to_rank, color):
     Returns: True if both clicks were issued, False on error.
     """
     try:
-        box = page.locator(LOCATORS["board_container"]).bounding_box()
+        box = await page.locator(LOCATORS["board_container"]).bounding_box()
         if box is None:
             print("ERROR: Board not visible, cannot make move.")
             return False
@@ -481,9 +502,9 @@ def make_move(page, from_file, from_rank, to_file, to_rank, color):
         src_x, src_y = to_pixel(from_file, from_rank)
         dst_x, dst_y = to_pixel(to_file, to_rank)
 
-        page.mouse.click(src_x, src_y)
-        time.sleep(MOVE_CLICK_DELAY_S)
-        page.mouse.click(dst_x, dst_y)
+        await page.mouse.click(src_x, src_y)
+        await asyncio.sleep(MOVE_CLICK_DELAY_S)
+        await page.mouse.click(dst_x, dst_y)
 
         return True
 

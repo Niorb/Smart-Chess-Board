@@ -13,9 +13,9 @@ Usage:
 """
 
 import argparse
+import asyncio
 import os
 import sys
-import time
 
 # Ensure we can import modules from this directory regardless of execution context
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +32,7 @@ from chesscom_browser import (
 from chesscom_config import CHESS_COM_PLAY_URL, TIME_CONTROL, USER_DATA_DIR
 
 
-def run_test(headless=True, force_login=False):
+async def run_test(headless=True, force_login=False):
     print("=" * 60)
     print("        CHESS.COM PLAYWRIGHT CONNECTION TESTER")
     print("=" * 60)
@@ -47,7 +47,7 @@ def run_test(headless=True, force_login=False):
     # 1. Handle explicit login routine
     if force_login:
         print("[*] Running login setup (opening a visible browser)...")
-        success = do_first_login()
+        success = await do_first_login()
         if success:
             print("[+] Login verified and saved successfully!")
         else:
@@ -58,7 +58,7 @@ def run_test(headless=True, force_login=False):
     print(f"[*] Launching browser (headless={headless})...")
     context = None
     try:
-        context, page = launch(headless=headless)
+        context, page = await launch(headless=headless)
         print("[+] Browser launched successfully!")
     except Exception as e:
         print(f"[-] ERROR: Failed to launch browser: {e}")
@@ -70,7 +70,7 @@ def run_test(headless=True, force_login=False):
     try:
         # Check login status
         print("[*] Navigating to Chess.com and checking login status...")
-        logged_in = is_logged_in(page)
+        logged_in = await is_logged_in(page)
 
         if logged_in:
             print("[+] STATUS: Logged in!")
@@ -78,11 +78,12 @@ def run_test(headless=True, force_login=False):
 
             # Test navigation to play page
             print("[*] Navigating to Play Online section...")
-            navigate_to_play(page)
-            print(f"[+] Loaded: {page.title()} ({page.url})")
+            await navigate_to_play(page)
+            page_title = await page.title()
+            print(f"[+] Loaded: {page_title} ({page.url})")
 
             # Wait for a couple of seconds to ensure page stabilizes
-            time.sleep(2)
+            await asyncio.sleep(2)
             print("[+] Test completed successfully! Playwright connection is operational.")
         else:
             print("[-] STATUS: NOT Logged in.")
@@ -94,11 +95,11 @@ def run_test(headless=True, force_login=False):
         print(f"[-] ERROR: Exception occurred during connection test: {e}")
     finally:
         if context:
-            input("\n[!] Connection test complete. Press Enter to close the browser and exit...")
             print("[*] Closing browser...")
-            close(context)
+            await close(context)
             print("[+] Browser closed.")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test Playwright connection to Chess.com.")
@@ -114,7 +115,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # If --login is requested, force headless=False
-    headless_mode = not args.visible if not args.login else False
-
-    run_test(headless=headless_mode, force_login=args.login)
+    headless_mode = not args.visible
+    asyncio.run(run_test(headless=headless_mode, force_login=args.login))

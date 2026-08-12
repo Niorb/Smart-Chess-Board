@@ -17,11 +17,16 @@ Requires:
   playwright install chromium
 """
 
+import asyncio
 import sys
 import threading
 import time
 
-import lgpio
+try:
+    import lgpio
+except ImportError:
+    lgpio = None
+
 from chesscom_browser import (
     cancel_search,
     close,
@@ -52,21 +57,14 @@ from led_helpers import (
 # =============================================================================
 
 
-def run(first_login=False):
+async def run(first_login=False):
     """Main state machine: IDLE -> SEEKING -> GAME_FOUND -> IDLE."""
-
-    # ---- lgpio setup ----
-    try:
-        h = lgpio.gpiochip_open(0)
-    except lgpio.error as e:
-        print(f"ERROR: Could not open GPIO chip: {e}")
-        return
-
-    # Claim button pin as input with pull-up and edge detection
-    lgpio.gpio_claim_alert(h, BUTTON_PIN, lgpio.FALLING_EDGE, lgpio.SET_PULL_UP)
+    loop = asyncio.get_running_loop()
+    h = None
+    cb = None
 
     # Button event — set by lgpio callback, consumed by main loop
-    button_event = threading.Event()
+    button_event = asyncio.Event()
     last_press_time = [0.0]
 
     def on_button_press(_chip, _gpio, _level, _tick):
@@ -76,9 +74,17 @@ def run(first_login=False):
         if dt_ms < BUTTON_DEBOUNCE_MS:
             return
         last_press_time[0] = now
-        button_event.set()
+        loop.call_soon_threadsafe(button_event.set)
 
-    cb = lgpio.callback(h, BUTTON_PIN, lgpio.FALLING_EDGE, on_button_press)
+    # ---- lgpio setup ----
+    if lgpio:
+        try:
+            h = lgpio.gpiochip_open(0)
+            lgpio.gpio_claim_alert(h, BUTTON_PIN, lgpio.FALLING_EDGE, lgpio.SET_PULL_UP)
+            cb = lgpio.callback(h, BUTTON_PIN, lgpio.FALLING_EDGE, on_button_press)
+        except Exception as e:
+            print(f"WARNING: Could not initialize GPIO: {e}")
+            h = None
 
     # ---- LED setup ----
     strip = init_strip()
@@ -86,10 +92,12 @@ def run(first_login=False):
 
     # ---- Browser setup ----
     if first_login:
-        if not do_first_login():
+        if not await do_first_login():
             signal_error(strip)
-            cb.cancel()
-            lgpio.gpiochip_close(h)
+            if cb:
+                cb.cancel()
+            if h is not None:
+                lgpio.gpiochip_close(h)
             return
 
     # Start connecting animation while the browser launches
@@ -98,13 +106,15 @@ def run(first_login=False):
 
     print("Launching browser (headless)...")
     try:
-        context, page = launch(headless=True)
+        context, page = await launch(headless=True)
     except Exception as e:
         stop_animation(stop_connect_anim, connect_thread)
         print(f"ERROR: Browser failed to launch: {e}")
         signal_error(strip)
-        cb.cancel()
-        lgpio.gpiochip_close(h)
+        if cb:
+            cb.cancel()
+        if h is not None:
+            lgpio.gpiochip_close(h)
         return
 
     # Pre-initialize so the finally block can always call .set()
@@ -116,7 +126,7 @@ def run(first_login=False):
     try:
         # ---- Check login ----
         print("Checking session...")
-        logged_in = is_logged_in(page)
+        logged_in = await is_logged_in(page)
 
         # Stop connecting animation
         stop_animation(stop_connect_anim, connect_thread)
@@ -140,19 +150,19 @@ def run(first_login=False):
             idle_thread = start_animation(animate_idle, strip, stop_idle)
 
             button_event.clear()
-            button_event.wait()
+            await button_event.wait()
 
             # Button pressed — stop idle pulse
             stop_animation(stop_idle, idle_thread)
 
             # CHECK_LOGIN
-            if not is_logged_in(page):
+            if not await is_logged_in(page):
                 print("Session expired! Re-run with --first-login.")
                 signal_error(strip)
                 continue
 
             # SEEKING
-            success = seek_game(page)
+            success = await seek_game(page)
             if not success:
                 signal_error(strip)
                 continue
@@ -163,14 +173,14 @@ def run(first_login=False):
 
             # Wait for game, allowing cancellation via button
             button_event.clear()
-            result = wait_for_game(page, cancel_event=button_event)
+            result = await wait_for_game(page, cancel_event=button_event)
 
             # Stop LED animation
             stop_animation(stop_anim, anim_thread)
 
             if result is True:
                 # GAME_FOUND
-                color = detect_my_color(page)
+                color = await detect_my_color(page)
                 signal_game_found(strip, color)
                 print(f"Game started — playing as {color.upper()}.")
                 print("(Phase 2 will add move sync. For now, play on chess.com.)")
@@ -178,16 +188,16 @@ def run(first_login=False):
                 print("Press button to seek another game when this one ends.")
             elif result is None:
                 # CANCELLED (button pressed during search)
-                cancel_search(page)
+                await cancel_search(page)
                 signal_cancelled(strip)
             else:
                 # TIMEOUT / ERROR
                 signal_error(strip)
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         print("\nExiting...")
     finally:
-        # Stop connecting animation if it is still running (e.g. exception in is_logged_in)
+        # Stop connecting animation if it is still running
         stop_connect_anim.set()
         connect_thread.join(timeout=2)
         # Stop any running LED animation threads
@@ -198,9 +208,11 @@ def run(first_login=False):
         if anim_thread:
             anim_thread.join(timeout=2)
         all_leds_off(strip)
-        cb.cancel()
-        lgpio.gpiochip_close(h)
-        close(context)
+        if cb:
+            cb.cancel()
+        if h is not None:
+            lgpio.gpiochip_close(h)
+        await close(context)
         print("Cleanup complete.")
 
 
@@ -210,4 +222,4 @@ def run(first_login=False):
 
 if __name__ == "__main__":
     first_login = "--first-login" in sys.argv
-    run(first_login=first_login)
+    asyncio.run(run(first_login=first_login))

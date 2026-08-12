@@ -12,6 +12,7 @@ Usage:
   python3 interactive_game.py --time "10 min"        # override time control
 """
 
+import asyncio
 import re
 import sys
 import threading
@@ -87,7 +88,7 @@ def parse_move(text):
     return src[0], src[1], dst[0], dst[1]
 
 
-def wait_for_game_start(page, timeout=120):
+async def wait_for_game_start(page, timeout=120):
     """
     Poll until the resign button is visible (game has started).
     Returns True if the game started, False on timeout.
@@ -97,13 +98,13 @@ def wait_for_game_start(page, timeout=120):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            el = page.query_selector(resign_selector)
-            el2 = page.query_selector(resign2_selector)
-            if (el and el.is_visible()) or (el2 and el2.is_visible()):
+            el = await page.query_selector(resign_selector)
+            el2 = await page.query_selector(resign2_selector)
+            if (el and await el.is_visible()) or (el2 and await el2.is_visible()):
                 return True
         except Exception:
             pass
-        time.sleep(0.5)
+        await asyncio.sleep(0.5)
     return False
 
 
@@ -123,13 +124,13 @@ STARTING_POSITION = [
 ]
 
 
-def print_clocks(page, color):
+async def print_clocks(page, color):
     """Read and print both player clocks."""
-    white, black = read_clocks(page, color)
+    white, black = await read_clocks(page, color)
     print(f"  Clocks — White: {white}  Black: {black}")
 
 
-def wait_for_opponent(page, pre_move_board, my_color):
+async def wait_for_opponent(page, pre_move_board, my_color):
     """
     Poll board every 0.5 s until the opponent has moved.
 
@@ -161,8 +162,8 @@ def wait_for_opponent(page, pre_move_board, my_color):
     baseline = STARTING_POSITION if pre_move_board is None else pre_move_board
 
     while True:
-        time.sleep(0.5)
-        current = read_board(page)
+        await asyncio.sleep(0.5)
+        current = await read_board(page)
         if has_opponent_moved(baseline, current):
             return current
 
@@ -172,7 +173,7 @@ def wait_for_opponent(page, pre_move_board, my_color):
 # =============================================================================
 
 
-def select_time_control(page, time_control):
+async def select_time_control(page, time_control):
     """
     Open the time control dropdown and select the given time control.
     Returns the label that was actually clicked (as shown in the UI), or None on failure.
@@ -183,9 +184,9 @@ def select_time_control(page, time_control):
     dropdown_pattern = re.compile(r"^(?:\d+\s*min|\d+\s*\|\s*\d+)\s*\([^)]*\)$")
     try:
         trigger = page.get_by_text(dropdown_pattern)
-        current_label = trigger.inner_text()
-        trigger.click()
-        time.sleep(0.5)
+        current_label = await trigger.inner_text()
+        await trigger.click()
+        await asyncio.sleep(0.5)
         print(f"  Dropdown opened (was: {current_label!r})")
     except Exception as e:
         print(f"  FAIL — could not open time control dropdown: {e}")
@@ -193,13 +194,13 @@ def select_time_control(page, time_control):
 
     try:
         selector = page.get_by_role("button", name=time_control, exact=True)
-        count = selector.count()
+        count = await selector.count()
         print(f"Amount of 10 min: {count}")
-        time.sleep(1)
-        selector.first.click(timeout=20000)
+        await asyncio.sleep(1)
+        await selector.first.click(timeout=20000)
         print(f"  OK — selected time control: {time_control!r}")
         trigger = page.get_by_text(dropdown_pattern)
-        current_label = trigger.inner_text()
+        current_label = await trigger.inner_text()
         print(f"  Dropdown closed (now: {current_label!r})")
         return time_control
     except Exception as e:
@@ -207,7 +208,7 @@ def select_time_control(page, time_control):
         return None
 
 
-def main():
+async def main():
     visible = "--visible" in sys.argv
 
     # Optional: --time "10 min" overrides TIME_CONTROL from config
@@ -233,12 +234,12 @@ def main():
     stop_connect = threading.Event()
     connect_thread = start_animation(animate_connecting, strip, stop_connect)
     print("  Launching Chromium...")
-    context, page = launch(headless=headless)
+    context, page = await launch(headless=headless)
 
     try:
         # --- Login check ---
         print("  Checking login...")
-        if not is_logged_in(page):
+        if not await is_logged_in(page):
             stop_animation(stop_connect, connect_thread)
             signal_error(strip)
             print("  ERROR: Not logged in to chess.com.")
@@ -246,13 +247,13 @@ def main():
             return
         stop_animation(stop_connect, connect_thread)
         signal_connected(strip)
-        time.sleep(1)
+        await asyncio.sleep(1)
         print("  OK — logged in.")
         stop2_connect = threading.Event()
         connect2_thread = start_animation(animate_connecting, strip, stop2_connect)
         # --- Select time control ---
         print(f"  Selecting time control: {time_control!r}")
-        selected = select_time_control(page, time_control)
+        selected = await select_time_control(page, time_control)
         if selected is None:
             print("  WARNING — proceeding with whatever time control is currently set.")
 
@@ -264,7 +265,7 @@ def main():
         stop_animation(stop_idle, idle_thread)
 
         try:
-            page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
+            await page.get_by_role("button", name=LOCATORS["play_button"], exact=True).click(
                 timeout=8000
             )
             print("  OK — Play button clicked, searching for a game...")
@@ -277,7 +278,7 @@ def main():
         stop_search = threading.Event()
         search_thread = start_animation(animate_search, strip, stop_search)
         print("  Searching for a game...")
-        game_started = wait_for_game_start(page)
+        game_started = await wait_for_game_start(page)
         stop_animation(stop_search, search_thread)
 
         if not game_started:
@@ -287,14 +288,14 @@ def main():
         print("  OK — game started!")
 
         # --- Detect color and flash the result ---
-        color = detect_my_color(page)
+        color = await detect_my_color(page)
         signal_game_found(strip, color)
-        board = read_board(page)
+        board = await read_board(page)
 
         print()
         print(f"  Playing as: {color.upper()}")
         print_board(board, color)
-        print_clocks(page, color)
+        await print_clocks(page, color)
 
         # --- Game loop ---
         # White moves first; if we're Black we wait for opponent's first move.
@@ -321,7 +322,7 @@ def main():
 
                 from_file, from_rank, to_file, to_rank = parsed
                 pre_move_board = board  # snapshot before clicking
-                ok = make_move(page, from_file, from_rank, to_file, to_rank, color)
+                ok = await make_move(page, from_file, from_rank, to_file, to_rank, color)
                 if not ok:
                     signal_error(strip)
                     print("  ERROR: make_move failed — is the game still active?")
@@ -331,10 +332,10 @@ def main():
                 flash_leds(strip, COLOR_FOUND_WHITE, 1)
 
                 # Show board after our move (may already include an opponent premove)
-                time.sleep(0.3)
-                board = read_board(page)
+                await asyncio.sleep(0.3)
+                board = await read_board(page)
                 print_board(board, color)
-                print_clocks(page, color)
+                await print_clocks(page, color)
                 my_turn = False
 
             else:
@@ -342,7 +343,7 @@ def main():
                 stop_search = threading.Event()
                 search_thread = start_animation(animate_search, strip, stop_search)
 
-                board = wait_for_opponent(page, pre_move_board, color)
+                board = await wait_for_opponent(page, pre_move_board, color)
 
                 stop_animation(stop_search, search_thread)
                 # Single green flash signals the opponent has moved
@@ -350,16 +351,16 @@ def main():
 
                 print("\n  Opponent moved:")
                 print_board(board, color)
-                print_clocks(page, color)
+                await print_clocks(page, color)
                 my_turn = True
 
     except KeyboardInterrupt:
         print("\n\n  Interrupted — closing browser.")
     finally:
         all_leds_off(strip)
-        close(context)
+        await close(context)
         print("  Done.")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
