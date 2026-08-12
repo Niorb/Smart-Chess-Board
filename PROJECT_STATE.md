@@ -44,6 +44,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Implemented thread-safe `SettingsManager` in `board_hardware.py` with atomic JSON persistence, locking controls, auto-migration, and backward-compatible dictionary magic methods.
 - [x] Cleaned up fragile `sys.path.append` hacks across FastAPI `main.py`, `board_state.py`, and `chess_engine_async.py`.
 - [x] Successfully deployed and verified code changes on Raspberry Pi over SSH: frontend build succeeded (`vite build`) and all 34 pytest unit/integration tests passed cleanly.
+- [x] Migrated Playwright browser automation driver (`chesscom_browser.py`, `game_seeker.py`, `interactive_game.py`, `test_connection.py`, `chess_engine_async.py`) from synchronous `playwright.sync_api` to asynchronous `playwright.async_api`, enabling native `asyncio` execution in FastAPI without thread starvation. Verified via 34 passing pytest tests on Raspberry Pi over SSH.
 
 
 
