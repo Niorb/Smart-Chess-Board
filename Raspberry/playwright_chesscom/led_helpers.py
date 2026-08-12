@@ -33,6 +33,8 @@ try:
         IDLE_PULSE_STEPS,
         LED_COLS,
         LED_ROWS,
+        LEDS_PER_STRIP,
+        LED_STRIP_COUNT,
         NUM_LEDS,
         SEARCH_CHASE_DELAY_S,
     )
@@ -58,6 +60,8 @@ except ImportError:
         IDLE_PULSE_STEPS,
         LED_COLS,
         LED_ROWS,
+        LEDS_PER_STRIP,
+        LED_STRIP_COUNT,
         NUM_LEDS,
         SEARCH_CHASE_DELAY_S,
     )
@@ -153,7 +157,7 @@ def init_strip():
     if not HAS_LEDS:
         return None
     # Initialize the DualPixelStrip wrapper which controls both halves of the board
-    return DualPixelStrip(num_leds_per_strip=76)
+    return DualPixelStrip(num_leds_per_strip=LEDS_PER_STRIP)
 
 
 def get_led_indices(col, row):
@@ -195,7 +199,7 @@ def get_led_indices(col, row):
         7: [17, 18],  # Square 7 (2 LEDs)
     }
     c_rel = 7 - row
-    base = 76 + c_rel * 19
+    base = LEDS_PER_STRIP + c_rel * 19
     sq_idx = 7 - col if c_rel % 2 == 0 else col
     return [base + o for o in offsets_strip2[sq_idx]]
 

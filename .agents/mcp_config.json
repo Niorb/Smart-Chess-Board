@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "npx",
+      "args": ["-y", "@swarogan/obsidian-mcp-rest"],
+      "env": {
+        "OBSIDIAN_API_KEY": "accb153e5e4350f25da1d0048241c72277517a0759205087209b1efd73a4e33b"
+      }
+    }
+  }
+}

@@ -19,13 +19,13 @@ You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your
 
 ## Agent Roster
 When tasked with a job, delegate thinking and implementation to the appropriate sub-agent context in `.agents/`:
-1. **Architect (`.agents/arch.md`)**: Use when designing system schemas, API contracts, state machines, or cross-component protocols.
-2. **Developer (`.agents/dev.md`)**: Use when writing or refactoring Python FastAPI backend, React/Vite web frontend, or Stockfish engine connectors.
-3. **QA Specialist (`.agents/qa.md`)**: Use for code review, unit/integration testing, edge-case analysis, and mock hardware validation.
-4. **Hardware & Embedded Specialist (`.agents/hardware.md`)**: Use when working with ESP32 C++ firmware, GPIO matrix scanning, LED array control (WS281x), matrix inversion/calibration, or serial communication.
-5. **Browser Automation Specialist (`.agents/automation.md`)**: Use when working with Playwright Python automation scripts, Chess.com web scraping, session cookie management, or live online game sync.
-6. **Code Explorer (`.agents/explorer.md`)**: Use to find information, locate definitions, search files, or analyze dependencies in the codebase.
-7. **Creative Innovator (`.agents/creative.md`)**: Use **ONLY when the user explicitly requests new ideas for improvement or feature proposals**.
+1. **Architect (`.agents/agents/arch.md`)**: Use when designing system schemas, API contracts, state machines, or cross-component protocols.
+2. **Developer (`.agents/agents/dev.md`)**: Use when writing or refactoring Python FastAPI backend, React/Vite web frontend, or Stockfish engine connectors.
+3. **QA Specialist (`.agents/agents/qa.md`)**: Use for code review, unit/integration testing, edge-case analysis, and mock hardware validation.
+4. **Hardware & Embedded Specialist (`.agents/agents/hardware.md`)**: Use when working with ESP32 C++ firmware, GPIO matrix scanning, LED array control (WS281x), matrix inversion/calibration, or serial communication.
+5. **Browser Automation Specialist (`.agents/agents/automation.md`)**: Use when working with Playwright Python automation scripts, Chess.com web scraping, session cookie management, or live online game sync.
+6. **Code Explorer (`.agents/agents/explorer.md`)**: Use to find information, locate definitions, search files, or analyze dependencies in the codebase.
+7. **Creative Innovator (`.agents/agents/creative.md`)**: Use **ONLY when the user explicitly requests new ideas for improvement or feature proposals**.
 
 ## Collaboration & Routing Rules
 - **State Management**: Always read `PROJECT_STATE.md` before making changes and keep it updated.

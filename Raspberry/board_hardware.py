@@ -44,7 +44,18 @@ except ImportError:
 # PERSISTENT SETTINGS
 # =============================================================================
 
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "board_settings.json")
+SETTINGS_FILE = os.environ.get(
+    "BOARD_SETTINGS_PATH",
+    os.path.join(os.path.dirname(__file__), "board_settings.json")
+)
+
+
+def get_settings_filepath():
+    return os.environ.get(
+        "BOARD_SETTINGS_PATH",
+        SETTINGS_FILE
+    )
+
 
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {
@@ -62,11 +73,13 @@ settings: dict[str, Any] = {
 
 last_sent_settle_us = None
 
+
 def load_settings():
     global settings
-    if os.path.exists(SETTINGS_FILE):
+    filepath = get_settings_filepath()
+    if os.path.exists(filepath):
         try:
-            with open(SETTINGS_FILE) as f:
+            with open(filepath) as f:
                 loaded = json.load(f)
 
                 # Check for legacy row terminology keys and migrate them
@@ -77,38 +90,82 @@ def load_settings():
                     loaded["manual_col"] = loaded["manual_row"]
                     del loaded["manual_row"]
 
-                if "baselines" in loaded and "threshold_positive" in loaded and "threshold_negative" in loaded:
-                    if "mux_settle_ms" in loaded and "mux_settle_us" not in loaded:
-                        loaded["mux_settle_us"] = min(255, int(loaded["mux_settle_ms"] * 1000))
-
-                    if "disabled_squares" not in loaded:
-                        loaded["disabled_squares"] = []
-
-                    settings.update(loaded)
-                    logger.info(f"Loaded board settings from {SETTINGS_FILE}")
+                # Auto-migration for legacy mux_settle_ms -> mux_settle_us if absent
+                if "mux_settle_us" not in loaded:
+                    if "mux_settle_ms" in loaded:
+                        try:
+                            ms_val = float(loaded["mux_settle_ms"])
+                            loaded["mux_settle_us"] = min(255, max(0, int(ms_val * 1000)))
+                        except (TypeError, ValueError):
+                            loaded["mux_settle_us"] = 100
+                    else:
+                        loaded["mux_settle_us"] = 100
                 else:
-                    logger.warning(f"Settings file {SETTINGS_FILE} is missing required fields. Using defaults.")
+                    try:
+                        loaded["mux_settle_us"] = min(255, max(0, int(loaded["mux_settle_us"])))
+                    except (TypeError, ValueError):
+                        loaded["mux_settle_us"] = 100
+
+                if "disabled_squares" not in loaded:
+                    loaded["disabled_squares"] = []
+
+                # Validate baseline matrix shape (8 rows x 8 columns)
+                baselines = loaded.get("baselines")
+                is_valid_baselines = (
+                    isinstance(baselines, list)
+                    and len(baselines) == BOARD_COLS
+                    and all(
+                        isinstance(col, list) and len(col) == BOARD_ROWS
+                        for col in baselines
+                    )
+                )
+                if not is_valid_baselines:
+                    logger.warning(
+                        f"Invalid baselines matrix shape in {filepath}. Using standard default matrix."
+                    )
+                    loaded["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+                settings.update(loaded)
+                logger.info(f"Loaded board settings from {filepath}")
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
 
-    # Ensure baselines match current BOARD_COLS and BOARD_ROWS dimensions
-    if len(settings["baselines"]) != BOARD_COLS:
+    # Ensure baseline matrix shape is valid in settings
+    baselines = settings.get("baselines")
+    is_valid_baselines = (
+        isinstance(baselines, list)
+        and len(baselines) == BOARD_COLS
+        and all(
+            isinstance(col, list) and len(col) == BOARD_ROWS
+            for col in baselines
+        )
+    )
+    if not is_valid_baselines:
+        logger.warning("Baselines shape invalid in settings dictionary. Falling back to default matrix.")
         settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    else:
-        for c in range(BOARD_COLS):
-            if len(settings["baselines"][c]) != BOARD_ROWS:
-                if len(settings["baselines"][c]) < BOARD_ROWS:
-                    settings["baselines"][c] = settings["baselines"][c] + [1550] * (BOARD_ROWS - len(settings["baselines"][c]))
-                else:
-                    settings["baselines"][c] = settings["baselines"][c][:BOARD_ROWS]
+
 
 def save_settings():
+    filepath = get_settings_filepath()
+    tmp_path = filepath + ".tmp"
     try:
-        with open(SETTINGS_FILE, "w") as f:
+        target_dir = os.path.dirname(filepath)
+        if target_dir:
+            os.makedirs(target_dir, exist_ok=True)
+
+        with open(tmp_path, "w") as f:
             json.dump(settings, f, indent=4)
-        logger.info(f"Saved board settings to {SETTINGS_FILE}")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
+        logger.info(f"Saved board settings to {filepath}")
     except Exception as e:
         logger.error(f"Error saving settings: {e}")
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 # Initial load on module import
 load_settings()
@@ -158,12 +215,12 @@ def scan_board(h, serial_conn, raw_state):
 
     col_mode = settings.get("col_mode", "auto")
     manual_col = settings.get("manual_col", 0)
-    settle_us = settings.get("mux_settle_us", 100)
+    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     non_mocked_count = (1 if col_mode == "manual" else BOARD_COLS) * BOARD_ROWS
 
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([settle_us]))
+        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
         last_sent_settle_us = settle_us
 
     serial_conn.write(b'B')
@@ -257,10 +314,10 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
     # Flush buffers
     serial_conn.reset_input_buffer()
 
-    settle_us = settings.get("mux_settle_us", 100)
+    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([settle_us]))
+        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
         last_sent_settle_us = settle_us
 
     start_time = time.time()

@@ -136,3 +136,46 @@ def test_scan_board_binary_packet_mapping():
     assert raw_state[7][0] == 0
 
 
+def test_settle_us_auto_migration_and_atomic_save(tmp_path=None):
+    import json
+    import tempfile
+    from board_hardware import load_settings, save_settings, settings
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        settings_path = os.path.join(tmpdir, "test_settings.json")
+        os.environ["BOARD_SETTINGS_PATH"] = settings_path
+
+        # Write legacy settings file with mux_settle_ms and invalid shape baselines
+        legacy_content = {
+            "mux_settle_ms": 0.15,
+            "baselines": [[1500] * 4 for _ in range(4)]  # Invalid 4x4 matrix
+        }
+        with open(settings_path, "w") as f:
+            json.dump(legacy_content, f)
+
+        load_settings()
+
+        # Check auto-migration: 0.15 ms * 1000 = 150 us
+        assert settings["mux_settle_us"] == 150
+        # Check matrix shape validation fallback to 8x8
+        assert len(settings["baselines"]) == 8
+        assert len(settings["baselines"][0]) == 8
+
+        # Test atomic save_settings
+        settings["threshold_positive"] = 222
+        save_settings()
+
+        assert os.path.exists(settings_path)
+        # Ensure temporary file was removed after atomic replace
+        assert not os.path.exists(settings_path + ".tmp")
+
+        with open(settings_path) as f:
+            saved_data = json.load(f)
+        assert saved_data["threshold_positive"] == 222
+        assert saved_data["mux_settle_us"] == 150
+
+        # Clean up env var
+        del os.environ["BOARD_SETTINGS_PATH"]
+
+
+
