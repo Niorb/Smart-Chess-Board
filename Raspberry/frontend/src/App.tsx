@@ -157,8 +157,8 @@ function App() {
       try {
         const res = await getBoardSettings();
         setSettings(res);
-        setPositiveThresh(res.threshold_positive);
-        setNegativeThresh(res.threshold_negative);
+        setPositiveThresh(res.threshold_positive ?? 150);
+        setNegativeThresh(res.threshold_negative ?? 150);
         setColMode(res.col_mode || 'auto');
         setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
         setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);

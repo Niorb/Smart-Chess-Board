@@ -81,14 +81,14 @@ from pydantic import BaseModel
 
 
 class ThresholdSettings(BaseModel):
-    threshold_positive: int
-    threshold_negative: int
+    threshold_positive: int | float | None = None
+    threshold_negative: int | float | None = None
     col_mode: str | None = None
-    manual_col: int | None = None
-    scan_delay: int | None = None
-    mux_settle_ms: int | None = None
-    debounce_threshold: int | None = None
-    baseline_window_s: int | None = None
+    manual_col: int | float | None = None
+    scan_delay: int | float | None = None
+    mux_settle_ms: int | float | None = None
+    debounce_threshold: int | float | None = None
+    baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
 
 @app.get("/api/board/physical")
@@ -112,20 +112,22 @@ async def get_board_settings():
 async def update_board_settings(body: ThresholdSettings):
     """Updates the positive/negative deviation thresholds and column mode diagnostics."""
     from board_hardware import save_settings, settings
-    settings["threshold_positive"] = body.threshold_positive
-    settings["threshold_negative"] = body.threshold_negative
+    if body.threshold_positive is not None:
+        settings["threshold_positive"] = int(body.threshold_positive)
+    if body.threshold_negative is not None:
+        settings["threshold_negative"] = int(body.threshold_negative)
     if body.col_mode is not None:
         settings["col_mode"] = body.col_mode
     if body.manual_col is not None:
-        settings["manual_col"] = body.manual_col
+        settings["manual_col"] = int(body.manual_col)
     if body.scan_delay is not None:
-        settings["scan_delay"] = body.scan_delay
+        settings["scan_delay"] = int(body.scan_delay)
     if body.mux_settle_ms is not None:
-        settings["mux_settle_ms"] = body.mux_settle_ms
+        settings["mux_settle_ms"] = int(body.mux_settle_ms)
     if body.debounce_threshold is not None:
-        settings["debounce_threshold"] = body.debounce_threshold
+        settings["debounce_threshold"] = int(body.debounce_threshold)
     if body.baseline_window_s is not None:
-        settings["baseline_window_s"] = body.baseline_window_s
+        settings["baseline_window_s"] = int(body.baseline_window_s)
     if body.disabled_squares is not None:
         settings["disabled_squares"] = body.disabled_squares
     await asyncio.to_thread(save_settings)

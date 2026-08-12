@@ -23,8 +23,8 @@ export async function getBoardSettings() {
 }
 
 export async function updateBoardSettings(
-  positive: number,
-  negative: number,
+  positive?: number | null,
+  negative?: number | null,
   colMode?: 'auto' | 'manual',
   manualCol?: number,
   scanDelay?: number,
@@ -33,20 +33,21 @@ export async function updateBoardSettings(
   baselineWindowS?: number,
   disabledSquares?: number[][]
 ) {
+  const body: Record<string, unknown> = {};
+  if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
+  if (negative !== undefined && negative !== null && !isNaN(negative)) body.threshold_negative = negative;
+  if (colMode !== undefined && colMode !== null) body.col_mode = colMode;
+  if (manualCol !== undefined && manualCol !== null) body.manual_col = manualCol;
+  if (scanDelay !== undefined && scanDelay !== null) body.scan_delay = scanDelay;
+  if (muxSettleMs !== undefined && muxSettleMs !== null) body.mux_settle_ms = muxSettleMs;
+  if (debounceThreshold !== undefined && debounceThreshold !== null) body.debounce_threshold = debounceThreshold;
+  if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
+  if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
+
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      threshold_positive: positive,
-      threshold_negative: negative,
-      col_mode: colMode,
-      manual_col: manualCol,
-      scan_delay: scanDelay,
-      mux_settle_ms: muxSettleMs,
-      debounce_threshold: debounceThreshold,
-      baseline_window_s: baselineWindowS,
-      disabled_squares: disabledSquares,
-    }),
+    body: JSON.stringify(body),
   });
   return response.json();
 }

@@ -53,6 +53,32 @@ def test_settings_update_route():
     assert data["settings"]["threshold_negative"] == 3000
 
 
+def test_settings_update_route_partial_and_floats():
+    from app.main import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+
+    # Test float conversion
+    payload_floats = {"threshold_positive": 2500.7, "threshold_negative": 1500.2}
+    response = client.post("/api/board/settings", json=payload_floats)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["threshold_positive"] == 2500
+    assert data["settings"]["threshold_negative"] == 1500
+
+    # Test partial update
+    payload_partial = {"scan_delay": 150.0}
+    response = client.post("/api/board/settings", json=payload_partial)
+    assert response.status_code == 200
+    assert response.json()["settings"]["scan_delay"] == 150
+
+    # Test null payload tolerance
+    payload_null = {"threshold_positive": None, "threshold_negative": None}
+    response = client.post("/api/board/settings", json=payload_null)
+    assert response.status_code == 200
+
+
 def test_clear_leds_route():
     from app.main import app
     from fastapi.testclient import TestClient
