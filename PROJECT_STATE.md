@@ -40,6 +40,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Configured exact serpentine physical LED strip routing in [`led_helpers.py`](file:///home/robin/Smart-Chess-Board/Raspberry/playwright_chesscom/led_helpers.py) and documented in [`WIRING_GUIDE.txt`](file:///home/robin/Smart-Chess-Board/Raspberry/ESP32_firmware/WIRING_GUIDE.txt):
   - **Strip 1 (left side / files a-d)**: Starts at `a8` (LED 0, 1) -> `a1` (LED 16, 17) [Down], `b1` -> `b8` [Up], `c8` -> `c1` [Down], `d1` -> `d8` [Up].
   - **Strip 2 (right side / files e-h)**: Starts at `h8` (LED 76, 77) -> `h1` (LED 90, 91) [Down], `g1` -> `g8` [Up], `f8` -> `f1` [Down], `e1` -> `e8` [Up].
+- [x] Standardized Antigravity Custom Agent YAML frontmatter format across all agent files in `.agents/agents/` (`arch.md`, `automation.md`, `creative.md`, `dev.md`, `explorer.md`, `hardware.md`, `qa.md`).
+- [x] Implemented thread-safe `SettingsManager` in `board_hardware.py` with atomic JSON persistence, locking controls, auto-migration, and backward-compatible dictionary magic methods.
+- [x] Cleaned up fragile `sys.path.append` hacks across FastAPI `main.py`, `board_state.py`, and `chess_engine_async.py`.
+- [x] Successfully deployed and verified code changes on Raspberry Pi over SSH: frontend build succeeded (`vite build`) and all 34 pytest unit/integration tests passed cleanly.
 
 
 
