@@ -1,14 +1,45 @@
+"""
+app/board_state.py
+
+State manager for the Smart Chess Board.
+Maintains physical sensor matrix, virtual-only simulation state, WS2812B LED frame rendering,
+and real-time synchronization with the Lichess engine.
+"""
+
 import asyncio
+import datetime
 import logging
 import os
 import sys
 import threading
 
-# Ensure we can import from parent directory
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+# Ensure parent directory is accessible for local imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import lgpio
-import serial
+try:
+    import lgpio
+except ImportError:
+    class MockLgpio:
+        def gpiochip_open(self, _): return "mock_chip"
+        def gpiochip_close(self, _): pass
+        def gpio_claim_output(self, *args): pass
+        def gpio_claim_input(self, *args): pass
+        def gpio_write(self, *args): pass
+        def gpio_read(self, *args): return 1
+        def callback(self, *args): pass
+        error = Exception
+        FALLING_EDGE = 1
+        SET_PULL_UP = 1
+    lgpio = MockLgpio()
+
+try:
+    import serial
+except ImportError:
+    serial = None
+
+from app.config import BAUD_RATE, NUM_LEDS, SERIAL_PORT
+from app.led_helpers import Color, all_leds_off, get_led_indices, init_strip
+from app.lichess_engine import lichess_engine
 from board_hardware import (
     BOARD_COLS,
     BOARD_ROWS,
@@ -17,11 +48,6 @@ from board_hardware import (
     scan_board,
     settings,
 )
-from playwright_chesscom.chesscom_config import BAUD_RATE, NUM_LEDS, SERIAL_PORT
-from playwright_chesscom.led_helpers import all_leds_off, get_led_indices, init_strip
-from rpi_ws281x import Color
-
-from .chess_engine_async import chess_engine
 
 logger = logging.getLogger("smart-chess-app.state")
 
@@ -32,7 +58,8 @@ class BoardStateManager:
         self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.raw_analog_values = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.digital_state = [["." for _ in range(8)] for _ in range(8)]
-        self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, SETUP
+        self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, GAME_OVER, SETUP
+        self.virtual_only: bool = False
         self.clocks = {"white": "?", "black": "?"}
         self.highlighted_square = None
         self.led_test_active = False
@@ -41,11 +68,14 @@ class BoardStateManager:
         self.initial_calibrating: bool = False
         self._recalibrate_lock: asyncio.Lock | None = None
 
-        # Hardware init (Serial for board + lgpio for MUX)
+        # Hardware initialization (Serial for board + lgpio for MUX)
         try:
             self.h = lgpio.gpiochip_open(0)
             init_mux_pins(self.h)
-            self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1.0)
+            if serial:
+                self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1.0)
+            else:
+                self.ser = None
             logger.info(f"Hybrid board hardware initialized (MUX: lgpio, ADC: {SERIAL_PORT}).")
         except Exception as e:
             logger.error(f"Hardware init failed: {e}")
@@ -94,9 +124,11 @@ class BoardStateManager:
     async def handle_webapp_connected(self):
         """
         Triggered when a connection to the webapp is detected.
-        Sets upper and lower thresholds to ±1000 for 5 seconds to prevent false piece detections,
-        runs sensor recalibration, and restores original thresholds afterwards.
+        Runs sensor recalibration with temporary high thresholds to prevent false positives.
         """
+        if self.virtual_only:
+            return
+
         if self._recalibrate_lock is None:
             self._recalibrate_lock = asyncio.Lock()
 
@@ -121,9 +153,7 @@ class BoardStateManager:
             settings["threshold_negative"] = 1000
 
             try:
-                # Execute sensor matrix recalibration
                 await asyncio.to_thread(self._safe_calibrate)
-                # Hold ±1000 threshold window for 5 seconds total (2s calibration + 3s remaining)
                 await asyncio.sleep(3.0)
             except Exception as e:
                 logger.error(f"Error during webapp connection recalibration: {e}")
@@ -151,18 +181,17 @@ class BoardStateManager:
             "led_test_active": self.led_test_active,
             "testing_led_index": self.testing_led_index,
             "disabled_squares": settings.get("disabled_squares", []),
-            "initial_calibrating": getattr(self, "initial_calibrating", False)
+            "initial_calibrating": getattr(self, "initial_calibrating", False),
+            "virtual_only": self.virtual_only,
         }
 
     def get_health_status(self):
-        import datetime
-
         from board_hardware import settings
 
         serial_status = "CONNECTED" if (self.ser is not None and getattr(self.ser, "is_open", True)) else "DISCONNECTED"
         gpio_status = "CONNECTED" if self.h is not None else "DISCONNECTED"
         led_status = "CONNECTED" if self.strip is not None else "DISCONNECTED"
-        engine_status = "CONNECTED" if getattr(chess_engine, "is_running", False) else "DISCONNECTED"
+        engine_status = "CONNECTED" if getattr(lichess_engine, "is_running", False) else "DISCONNECTED"
 
         col_mode = settings.get("col_mode", "auto")
         disabled_squares = settings.get("disabled_squares", [])
@@ -173,15 +202,19 @@ class BoardStateManager:
             "gpio": gpio_status,
             "led_strip": led_status,
             "chess_engine": engine_status,
+            "lichess_engine": engine_status,
         }
 
         matrix = {
             "col_mode": col_mode,
             "disabled_squares": disabled_squares,
             "scan_delay_ms": scan_delay_ms,
+            "virtual_only": self.virtual_only,
         }
 
-        if serial_status == "DISCONNECTED" or gpio_status == "DISCONNECTED":
+        if self.virtual_only:
+            overall_status = "HEALTHY" if engine_status == "CONNECTED" else "DEGRADED"
+        elif serial_status == "DISCONNECTED" or gpio_status == "DISCONNECTED":
             overall_status = "DISCONNECTED"
         elif (
             led_status == "DISCONNECTED"
@@ -195,16 +228,13 @@ class BoardStateManager:
 
         return {
             "status": overall_status,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "subsystems": subsystems,
             "matrix": matrix,
         }
 
-
-
-
     def _update_leds(self):
-        if not self.strip or self.led_test_active or self.initial_calibrating or self.is_calibrating:
+        if self.virtual_only or not self.strip or self.led_test_active or self.initial_calibrating or self.is_calibrating:
             return
 
         try:
@@ -220,14 +250,13 @@ class BoardStateManager:
                     continue
                 for r in range(BOARD_ROWS):  # r is rank index (0..7)
                     if self.highlighted_square == (c, r):
-                        # Orange color for highlighting
-                        color = Color(255, 80, 0)
+                        color = Color(255, 80, 0)  # Orange for highlight
                     else:
                         val = self.physical_state[c][r]
                         if val == 1:
-                            color = Color(255, 0, 0)    # Red for North
+                            color = Color(255, 0, 0)  # Red for North
                         elif val == -1:
-                            color = Color(0, 255, 0)    # Green for South
+                            color = Color(0, 255, 0)  # Green for South
                         else:
                             continue
 
@@ -248,7 +277,6 @@ class BoardStateManager:
         self.led_test_active = True
         logger.info("Starting sequential LED strip test...")
         try:
-            # Turn off all first
             for idx in range(NUM_LEDS):
                 self.strip.setPixelColor(idx, Color(0, 0, 0))
             self.strip.show()
@@ -286,14 +314,21 @@ class BoardStateManager:
         """Background task to poll hardware/digital board and broadcast state."""
         raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-        diag_info = {"status": "NO_HARDWARE", "last_raw_line": "", "timeouts": 16, "errors": 0}
+        diag_info = {"status": "NO_HARDWARE", "last_raw_line": "", "timeouts": 0, "errors": 0}
 
         logger.info("Starting background state update loop.")
 
         try:
             while True:
-                # 1. Physical Hardware Scan
-                if self.ser and self.h:
+                # 1. Physical Hardware Scan (skip if in virtual-only mode)
+                if self.virtual_only:
+                    diag_info = {
+                        "status": "VIRTUAL_ONLY",
+                        "last_raw_line": "VIRTUAL_ONLY",
+                        "timeouts": 0,
+                        "errors": 0,
+                    }
+                elif self.ser and self.h:
                     raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state)
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
@@ -318,36 +353,33 @@ class BoardStateManager:
                         "status": "DISCONNECTED" if not self.ser else "NO_GPIO",
                         "last_raw_line": "",
                         "timeouts": 16,
-                        "errors": 0
+                        "errors": 0,
                     }
 
-                # 2. Digital Board Scan (only if a game is active)
+                # 2. Digital Board Sync with Lichess Engine
                 if self.game_status == "PLAYING":
-                    self.digital_state = await chess_engine.get_board()
-                    try:
-                        white_time, black_time = await chess_engine.get_clocks()
-                        self.clocks = {"white": white_time, "black": black_time}
-                    except Exception as e:
-                        logger.error(f"Error reading clocks: {e}")
+                    self.digital_state = lichess_engine.get_board()
+                    self.clocks = lichess_engine.clocks
                 else:
-                    # Clear digital board if not playing
                     self.digital_state = [["." for _ in range(8)] for _ in range(8)]
                     self.clocks = {"white": "?", "black": "?"}
 
-                # 3. Construct full state payload
+                # 3. Construct unified broadcast payload
                 payload = {
                     "status": self.game_status,
+                    "virtual_only": self.virtual_only,
                     "physical": self.get_physical_payload(),
                     "digital": self.digital_state,
                     "clocks": self.clocks,
-                    "my_color": chess_engine.my_color,
-                    "diagnostics": diag_info
+                    "my_color": lichess_engine.my_color,
+                    "game": lichess_engine.get_game_payload(),
+                    "diagnostics": diag_info,
                 }
 
-                # 4. Broadcast state to all connected clients
+                # 4. Broadcast state to all connected WebSocket clients
                 await broadcast_callback(payload)
 
-                # Poll interval (read dynamically from settings)
+                # Poll interval
                 col_mode = settings.get("col_mode", "auto")
                 if col_mode == "manual":
                     delay_ms = settings.get("scan_delay", 100)
@@ -369,5 +401,5 @@ class BoardStateManager:
             logger.error(f"Error in state update loop: {e}")
 
 
-# Global instance
+# Global singleton state manager
 state_manager = BoardStateManager()

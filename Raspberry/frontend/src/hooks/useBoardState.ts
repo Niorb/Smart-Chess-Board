@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface BoardState {
-  status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP';
+  status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER';
+  virtual_only?: boolean;
   physical: {
     rows: number;
     cols: number;
@@ -13,12 +14,31 @@ export interface BoardState {
     testing_led_index?: number;
     disabled_squares?: number[][];
     initial_calibrating?: boolean;
+    virtual_only?: boolean;
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;
   clocks?: {
     white: string;
     black: string;
+  };
+  game?: {
+    game_id: string | null;
+    rated: boolean;
+    speed?: string | null;
+    turn: 'white' | 'black';
+    my_color: 'white' | 'black' | null;
+    opponent?: {
+      username: string;
+      rating: number;
+      title?: string | null;
+    };
+    last_move?: string | null;
+    legal_moves?: string[];
+    is_check?: boolean;
+    is_game_over?: boolean;
+    winner?: 'white' | 'black' | 'draw' | null;
+    end_reason?: string | null;
   };
   diagnostics?: {
     status: string;
@@ -30,11 +50,26 @@ export interface BoardState {
 
 const DEFAULT_STATE: BoardState = {
   status: 'IDLE',
-  physical: { rows: 8, cols: 8, grid: [], led_test_active: false, testing_led_index: -1 },
+  virtual_only: false,
+  physical: { rows: 8, cols: 8, grid: [], led_test_active: false, testing_led_index: -1, virtual_only: false },
   digital: Array(8).fill(null).map(() => Array(8).fill('.')),
   my_color: null,
   clocks: { white: '?', black: '?' },
-  diagnostics: { status: 'UNKNOWN', last_raw_line: '', timeouts: 0, errors: 0 }
+  game: {
+    game_id: null,
+    rated: false,
+    speed: 'rapid',
+    turn: 'white',
+    my_color: null,
+    opponent: { username: 'Opponent', rating: 1500, title: null },
+    last_move: null,
+    legal_moves: [],
+    is_check: false,
+    is_game_over: false,
+    winner: null,
+    end_reason: null,
+  },
+  diagnostics: { status: 'UNKNOWN', last_raw_line: '', timeouts: 0, errors: 0 },
 };
 
 export function useBoardState() {
@@ -66,7 +101,14 @@ export function useBoardState() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        setState(data);
+        setState((prev) => ({
+          ...prev,
+          ...data,
+          game: {
+            ...prev.game,
+            ...(data.game || {}),
+          },
+        }));
       } catch (err) {
         console.error('Failed to parse WebSocket message', err);
       }

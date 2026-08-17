@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from playwright_chesscom.led_helpers import get_led_indices
+from app.led_helpers import get_led_indices
 
 
 def test_highlight_led_indices():
@@ -18,4 +18,3 @@ def test_highlight_led_indices():
     # For e1 (rank=0, file=4): mapped to physical LEDs 133, 134
     leds_e1 = get_led_indices(0, 4)
     assert leds_e1 == [133, 134]
-

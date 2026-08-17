@@ -1,10 +1,39 @@
 const API_BASE = `http://${window.location.hostname || 'localhost'}:8000/api`;
 
-export async function seekGame(timeControl?: string) {
+export interface LichessAccount {
+  username: string;
+  rating: number;
+  title?: string | null;
+  online: boolean;
+  authenticated: boolean;
+  perfs?: {
+    rapid?: number;
+    blitz?: number;
+    bullet?: number;
+  };
+  error?: string;
+}
+
+export async function getLichessAccount(): Promise<LichessAccount> {
+  const response = await fetch(`${API_BASE}/lichess/account`);
+  return response.json();
+}
+
+export async function seekGame(options?: {
+  timeControl?: string;
+  increment?: number;
+  rated?: boolean;
+  color?: string;
+}) {
   const response = await fetch(`${API_BASE}/game/seek`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ time_control: timeControl }),
+    body: JSON.stringify({
+      time_control: options?.timeControl ?? '10+0',
+      increment: options?.increment ?? 0,
+      rated: options?.rated ?? false,
+      color: options?.color ?? 'random',
+    }),
   });
   return response.json();
 }
@@ -13,6 +42,45 @@ export async function cancelGame() {
   const response = await fetch(`${API_BASE}/game/cancel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
+export async function resignGame() {
+  const response = await fetch(`${API_BASE}/game/resign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
+export async function offerDraw(accept: boolean = true) {
+  const response = await fetch(`${API_BASE}/game/draw`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accept }),
+  });
+  return response.json();
+}
+
+export async function makeMove(fromSquare: string, toSquare: string, promotion?: string) {
+  const response = await fetch(`${API_BASE}/game/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from_square: fromSquare,
+      to_square: toSquare,
+      promotion: promotion ?? null,
+    }),
+  });
+  return response.json();
+}
+
+export async function setGameMode(virtualOnly: boolean) {
+  const response = await fetch(`${API_BASE}/game/mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ virtual_only: virtualOnly }),
   });
   return response.json();
 }
@@ -56,15 +124,6 @@ export async function calibrateBoard() {
   const response = await fetch(`${API_BASE}/board/calibrate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
-}
-
-export async function makeMove(fromSquare: string, toSquare: string) {
-  const response = await fetch(`${API_BASE}/game/move`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from_square: fromSquare, to_square: toSquare }),
   });
   return response.json();
 }

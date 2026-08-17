@@ -12,3 +12,9 @@ build/
 .gemini/
 *.gemini
 
+# Environment and Secrets
+.env
+.env.*
+*.token
+*.secret
+

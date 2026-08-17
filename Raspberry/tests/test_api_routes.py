@@ -1,22 +1,21 @@
 import os
 import sys
+from unittest.mock import AsyncMock, patch
+
+from fastapi.testclient import TestClient
+import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-def parse_sq(sq):
-    sq = sq.strip().lower()
-    if len(sq) != 2:
-        return None
-    file_ch, rank_ch = sq[0], sq[1]
-    if file_ch not in "abcdefgh" or rank_ch not in "12345678":
-        return None
-    return ord(file_ch) - ord("a") + 1, int(rank_ch)
+from app.main import app, parse_sq
+
 
 def test_parse_sq_valid():
     assert parse_sq("a1") == (1, 1)
     assert parse_sq("h8") == (8, 8)
     assert parse_sq("e4") == (5, 4)
     assert parse_sq("  E4 ") == (5, 4)
+
 
 def test_parse_sq_invalid():
     assert parse_sq("") is None
@@ -25,9 +24,8 @@ def test_parse_sq_invalid():
     assert parse_sq("a9") is None
     assert parse_sq("e44") is None
 
+
 def test_health_route():
-    from app.main import app
-    from fastapi.testclient import TestClient
     client = TestClient(app)
     response = client.get("/api/board/health")
     assert response.status_code == 200
@@ -36,9 +34,8 @@ def test_health_route():
     assert "subsystems" in data
     assert "matrix" in data
 
+
 def test_settings_update_route():
-    from app.main import app
-    from fastapi.testclient import TestClient
     client = TestClient(app)
 
     payload = {
@@ -54,11 +51,8 @@ def test_settings_update_route():
 
 
 def test_settings_update_route_partial_and_floats():
-    from app.main import app
-    from fastapi.testclient import TestClient
     client = TestClient(app)
 
-    # Test float conversion
     payload_floats = {"threshold_positive": 2500.7, "threshold_negative": 1500.2}
     response = client.post("/api/board/settings", json=payload_floats)
     assert response.status_code == 200
@@ -67,21 +61,17 @@ def test_settings_update_route_partial_and_floats():
     assert data["settings"]["threshold_positive"] == 2500
     assert data["settings"]["threshold_negative"] == 1500
 
-    # Test partial update
     payload_partial = {"scan_delay": 150.0}
     response = client.post("/api/board/settings", json=payload_partial)
     assert response.status_code == 200
     assert response.json()["settings"]["scan_delay"] == 150
 
-    # Test null payload tolerance
     payload_null = {"threshold_positive": None, "threshold_negative": None}
     response = client.post("/api/board/settings", json=payload_null)
     assert response.status_code == 200
 
 
 def test_clear_leds_route():
-    from app.main import app
-    from fastapi.testclient import TestClient
     client = TestClient(app)
     response = client.post("/api/board/clear_leds")
     assert response.status_code == 200
@@ -90,3 +80,50 @@ def test_clear_leds_route():
     assert data["message"] == "All LEDs turned off"
 
 
+def test_lichess_account_route():
+    client = TestClient(app)
+    with patch("app.main.lichess_engine.get_account", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = {
+            "username": "MockMaster",
+            "rating": 1850,
+            "authenticated": True,
+            "online": True,
+        }
+        response = client.get("/api/lichess/account")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "MockMaster"
+        assert data["rating"] == 1850
+        assert data["authenticated"] is True
+
+
+def test_game_seek_and_cancel_routes():
+    client = TestClient(app)
+    with patch("app.main.lichess_engine.seek", new_callable=AsyncMock) as mock_seek:
+        mock_seek.return_value = True
+        response = client.post("/api/game/seek", json={"time_control": "5+3", "rated": True, "color": "white"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "seeking_initiated"
+        assert data["time_control"] == "5+3"
+        assert data["rated"] is True
+
+    with patch("app.main.lichess_engine.cancel", new_callable=AsyncMock) as mock_cancel:
+        mock_cancel.return_value = None
+        response = client.post("/api/game/cancel")
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelled"
+
+
+def test_game_mode_switch_route():
+    client = TestClient(app)
+    response = client.post("/api/game/mode", json={"virtual_only": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["virtual_only"] is True
+
+    # Restore to false
+    response = client.post("/api/game/mode", json={"virtual_only": False})
+    assert response.status_code == 200
+    assert response.json()["virtual_only"] is False

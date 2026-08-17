@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Lead System Architect for designing system schemas, API contracts, state machines, and hardware-software protocols.
-model: pro
+model: inherit
 subagent: true
 ---
 

@@ -115,47 +115,17 @@ CADENCE = GetCadence(TIME_CONTROL)
 # =============================================================================
 # Describes chess.com UI elements using ARIA roles and visible text labels
 # rather than fragile CSS paths.
-#
-# When chess.com updates their UI, only these values need updating — no
-# code changes required. To find the right label, open chess.com in a browser,
-# hover over or inspect the target element, and look at its visible text or
-# aria-label attribute.
-#
-# How each value is used in chesscom_browser.py:
-#   plain text string → page.get_by_role("button", name=value)
-#   CSS selector (#…)  → page.locator(value)   or   page.query_selector(value)
-#   class name string  → element.get_attribute("class") check
-#
-# Login detection is handled by URL check ("/login" in page.url) — no DOM
-# selector needed.
-#
-# The time control option button is looked up dynamically from TIME_CONTROL,
-# so it has no entry here.
 
 LOCATORS = {
-    # Button that opens the time control dropdown panel.
     "logged_in_indicator": "#sidebar-main-menu > a:nth-child(10)",
-    # Clocks when playing as White (white at bottom, black at top)
     "white_clock_white": "#board-layout-player-bottom > div.clock-component.clock-bottom.clock-white > span",
     "black_clock_white": "#board-layout-player-top > div.clock-component.clock-top.clock-black > span",
-    # Clocks when playing as Black (board flipped: black at bottom, white at top)
     "black_clock_black": "#board-layout-player-bottom > div.clock-component.clock-bottom.clock-black > span",
     "white_clock_black": "#board-layout-player-top > div.clock-component.clock-top.clock-white.clock-player-turn > span",
-    # Update "Time" if chess.com renames or relabels this button.
-    # "time_control_show_options": f"{TIME_CONTROL} ({CADENCE})",  # e.g. "10 min (Rapid)",
-    # Real time control option button
-    # "time_control_select": TIME_CONTROL,
-    # The main "Play" button that starts matchmaking.
     "play_button": "Start Game",
-    # Button to cancel matchmaking (appears during search).
     "cancel_search": "Cancel",
-    # The board container element (visible = game has started).
-    # Stable chess.com element ID — kept as a CSS selector.
     "resign_button": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > button.resign-button-component > span.resign-button-label",
     "second_resign_button": "#board-layout-sidebar > div.sidebar-content > div.game-icons-container-component > div:nth-child(2) > span > button > span.resign-button-label",
-    # Board container
     "board_container": "#board-single",
-    # CSS class on the board element when you play as Black (board is flipped).
-    # This is a CLASS NAME, not a full selector.
     "board_flipped_class": "flipped",
 }

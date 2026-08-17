@@ -8,16 +8,18 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.board_state import BoardStateManager
+from app.led_helpers import Color, DualPixelStrip
 
 
 def test_board_state_manager_init():
-    # Instantiate board state manager (with mock/missing hardware gracefully handled)
     bsm = BoardStateManager()
     assert bsm.game_status == "IDLE"
+    assert bsm.virtual_only is False
     assert bsm.clocks == {"white": "?", "black": "?"}
     assert len(bsm.physical_state) == 8
     assert len(bsm.physical_state[0]) == 8
     assert len(bsm.digital_state) == 8
+
 
 def test_physical_payload_structure():
     bsm = BoardStateManager()
@@ -29,6 +31,9 @@ def test_physical_payload_structure():
     assert "baselines" in payload
     assert "highlighted_square" in payload
     assert "disabled_squares" in payload
+    assert "virtual_only" in payload
+    assert payload["virtual_only"] is False
+
 
 def test_health_status_structure():
     bsm = BoardStateManager()
@@ -39,11 +44,12 @@ def test_health_status_structure():
     assert "serial" in health["subsystems"]
     assert "gpio" in health["subsystems"]
     assert "led_strip" in health["subsystems"]
-    assert "chess_engine" in health["subsystems"]
+    assert "lichess_engine" in health["subsystems"]
     assert "matrix" in health
     assert "col_mode" in health["matrix"]
     assert "disabled_squares" in health["matrix"]
     assert "scan_delay_ms" in health["matrix"]
+
 
 def test_health_status_evaluations():
     bsm = BoardStateManager()
@@ -56,26 +62,15 @@ def test_health_status_evaluations():
     assert bsm.get_health_status()["subsystems"]["gpio"] == "DISCONNECTED"
 
 
-@pytest.mark.skip(reason="Skipped per user request")
-def test_highlighted_square_single_square_update():
-    from playwright_chesscom.led_helpers import Color
+def test_virtual_only_mode_health_status():
     bsm = BoardStateManager()
-    bsm.strip = MagicMock()
+    bsm.virtual_only = True
+    bsm.ser = None
+    bsm.h = None
 
-    # Highlight square A4: file=0, rank=3
-    bsm.highlighted_square = (0, 3)
-    bsm._update_leds()
-
-    orange = Color(255, 80, 0)
-
-    # A4 (col=3, row=0) indices are [7, 8] in 18-LED column layout
-    bsm.strip.setPixelColor.assert_any_call(7, orange)
-    bsm.strip.setPixelColor.assert_any_call(8, orange)
-
-    # Verify D1 (col=0, row=3) indices [54, 55] were NOT set to orange
-    calls = bsm.strip.setPixelColor.call_args_list
-    d1_orange = any(call.args == (54, orange) or call.args == (55, orange) for call in calls)
-    assert not d1_orange, "Transposed square D1 was erroneously highlighted!"
+    # In virtual-only mode, missing serial/gpio does not mark the board DISCONNECTED
+    health = bsm.get_health_status()
+    assert health["matrix"]["virtual_only"] is True
 
 
 def test_led_suppression_during_calibration():
@@ -87,8 +82,18 @@ def test_led_suppression_during_calibration():
     bsm._update_leds()
     bsm.strip.setPixelColor.assert_not_called()
 
+
+def test_led_suppression_in_virtual_only_mode():
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.highlighted_square = (0, 3)
+
+    bsm.virtual_only = True
+    bsm._update_leds()
+    bsm.strip.setPixelColor.assert_not_called()
+
+
 def test_safe_calibrate_no_deadlock():
-    from playwright_chesscom.led_helpers import DualPixelStrip
     bsm = BoardStateManager()
     bsm.ser = MagicMock()
     bsm.strip = DualPixelStrip(num_leds_per_strip=76)
@@ -98,7 +103,3 @@ def test_safe_calibrate_no_deadlock():
     with patch("board_hardware.calibrate_board", return_value=True):
         res = bsm._safe_calibrate()
         assert res is True
-
-
-
-

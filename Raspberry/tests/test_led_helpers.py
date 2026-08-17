@@ -4,7 +4,7 @@ import sys
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from playwright_chesscom.led_helpers import get_led_indices
+from app.led_helpers import get_led_indices
 
 
 def test_strip1_mapping():
@@ -25,6 +25,7 @@ def test_strip1_mapping():
     # File d (row 3): d1 (bottom, col 0) -> d8 (top, col 7)
     assert get_led_indices(0, 3) == [54, 55]  # d1
     assert get_led_indices(7, 3) == [70, 71]  # d8
+
 
 def test_strip2_mapping():
     # Strip 2: files e-h (row 4-7), 19 LEDs per column (16 active + 3 skipped LEDs at ranks 7, 5, 2)
@@ -49,7 +50,7 @@ def test_dual_pixel_strip_lock_and_show():
     import threading
     from unittest.mock import MagicMock
 
-    from playwright_chesscom.led_helpers import (
+    from app.led_helpers import (
         DualPixelStrip,
         all_leds_color,
         all_leds_off,
@@ -82,5 +83,3 @@ def test_dual_pixel_strip_lock_and_show():
     mock_ser.write.assert_called_with(bytes([ord('A'), 0, 255, 0]))
     assert strip.current_colors[0] == (255 << 8)
     assert strip.shown_colors[0] == (255 << 8)
-
-

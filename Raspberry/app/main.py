@@ -1,43 +1,50 @@
+"""
+app/main.py
+
+FastAPI backend server for the Smart Chess Board.
+Provides WebSocket real-time state broadcast, REST endpoints for hardware settings,
+Lichess Board API proxying, move execution, and frontend static asset delivery.
+"""
+
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 import os
 import sys
 
-# Inject paths immediately so imports in dependencies don't fail with ModuleNotFoundError
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "playwright_chesscom"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
-from contextlib import asynccontextmanager
+# Ensure project root is in sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from .board_state import state_manager
-from .chess_engine_async import chess_engine
+from .lichess_engine import lichess_engine
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smart-chess-app")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start background loop
-    logger.info("Starting background state manager loop...")
+    logger.info("Starting background state manager loop and Lichess engine...")
+    await lichess_engine.start()
     task = asyncio.create_task(state_manager.update_loop(manager.broadcast))
     yield
-    # Cleanup
-    logger.info("Stopping background loop and Playwright...")
+    logger.info("Stopping background loop and Lichess engine...")
     task.cancel()
-    await chess_engine.stop()
+    await lichess_engine.stop()
     try:
         await task
     except asyncio.CancelledError:
         pass
 
+
 app = FastAPI(title="Smart Chess Board API", lifespan=lifespan)
 
-# Allow all origins for the phone app (PWA/React Native)
+# Allow CORS for mobile app, PWA, and external browsers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,7 +53,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- WebSocket Connections Manager ---
+
+# --- WebSocket Connection Manager ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
@@ -56,7 +64,8 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
         stale_connections = []
@@ -69,17 +78,11 @@ class ConnectionManager:
             if dead in self.active_connections:
                 self.active_connections.remove(dead)
 
+
 manager = ConnectionManager()
 
-# --- API Routes ---
 
-@app.get("/api")
-async def api_root():
-    return {"status": "ok", "message": "Smart Chess Board API is running"}
-
-from pydantic import BaseModel
-
-
+# --- Pydantic Request Models ---
 class ThresholdSettings(BaseModel):
     threshold_positive: int | float | None = None
     threshold_negative: int | float | None = None
@@ -91,26 +94,80 @@ class ThresholdSettings(BaseModel):
     baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
 
+
+class HighlightRequest(BaseModel):
+    col: int
+    row: int
+
+
+class SeekRequest(BaseModel):
+    time_control: str | None = "10+0"
+    increment: int | None = 0
+    rated: bool | None = False
+    color: str | None = "random"
+
+
+class MoveRequest(BaseModel):
+    from_square: str
+    to_square: str
+    promotion: str | None = None
+
+
+class DrawRequest(BaseModel):
+    accept: bool = True
+
+
+class ModeRequest(BaseModel):
+    virtual_only: bool
+
+
+# --- Helper Functions ---
+def parse_sq(sq: str) -> tuple[int, int] | None:
+    """Parses standard algebraic chess notation (e.g. 'e4') into 1-indexed (file, rank)."""
+    sq = sq.strip().lower()
+    if len(sq) != 2:
+        return None
+    file_ch, rank_ch = sq[0], sq[1]
+    if file_ch not in "abcdefgh" or rank_ch not in "12345678":
+        return None
+    return ord(file_ch) - ord("a") + 1, int(rank_ch)
+
+
+# --- REST API Endpoints ---
+
+@app.get("/api")
+async def api_root():
+    return {"status": "ok", "message": "Smart Chess Board API is operational"}
+
+
+@app.get("/api/lichess/account")
+async def get_lichess_account():
+    """Returns profile and ratings for the authenticated Lichess account."""
+    return await lichess_engine.get_account()
+
+
 @app.get("/api/board/physical")
 async def get_physical_board():
     """Returns the current sensor state of the physical board."""
     return state_manager.get_physical_payload()
 
+
 @app.get("/api/board/health")
 async def get_board_health():
-    """Returns detailed diagnostic health status of the board hardware and subsystems."""
+    """Returns diagnostic health metrics for all subsystems."""
     return state_manager.get_health_status()
 
 
 @app.get("/api/board/settings")
 async def get_board_settings():
-    """Returns the current board calibration settings."""
+    """Returns current calibration settings."""
     from board_hardware import settings
     return settings
 
+
 @app.post("/api/board/settings")
 async def update_board_settings(body: ThresholdSettings):
-    """Updates the positive/negative deviation thresholds and column mode diagnostics."""
+    """Updates analog thresholds, scan timings, and active column configurations."""
     from board_hardware import save_settings, settings
     if body.threshold_positive is not None:
         settings["threshold_positive"] = int(body.threshold_positive)
@@ -133,9 +190,10 @@ async def update_board_settings(body: ThresholdSettings):
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 
+
 @app.post("/api/board/calibrate")
 async def calibrate_board_route():
-    """Triggers the sensor matrix calibration to establish new baselines."""
+    """Triggers sensor matrix baseline recalibration."""
     success = await asyncio.to_thread(state_manager._safe_calibrate)
     if success:
         from board_hardware import settings
@@ -143,13 +201,10 @@ async def calibrate_board_route():
     else:
         return {"status": "error", "message": "Calibration failed"}
 
-class HighlightRequest(BaseModel):
-    col: int
-    row: int
 
 @app.post("/api/board/highlight")
 async def highlight_square_route(body: HighlightRequest):
-    """Highlights or toggles a physical square with orange LEDs."""
+    """Highlights or toggles an LED indicator on a board square."""
     current = state_manager.highlighted_square
     if current == (body.col, body.row):
         state_manager.highlighted_square = None
@@ -157,75 +212,104 @@ async def highlight_square_route(body: HighlightRequest):
         state_manager.highlighted_square = (body.col, body.row)
     return {"status": "success", "highlighted_square": state_manager.highlighted_square}
 
+
 @app.post("/api/board/test_leds")
 async def test_leds_route():
-    """Triggers a sequential LED test to light up every LED in order."""
+    """Runs a sequential animation testing all WS2812B LEDs."""
     asyncio.create_task(state_manager.run_led_test())
     return {"status": "success", "message": "LED test initiated"}
 
+
 @app.post("/api/board/clear_leds")
 async def clear_leds_route():
-    """Forces all physical LEDs off."""
+    """Turns off all physical LEDs."""
     success = state_manager.clear_all_leds()
     if success:
         return {"status": "success", "message": "All LEDs turned off"}
     else:
         return {"status": "error", "message": "Failed to clear LEDs"}
 
+
 @app.get("/api/board/digital")
 async def get_digital_board():
-    """Returns the current state of the board on chess.com."""
+    """Returns 8x8 piece grid representing the active digital board position."""
     return {"grid": state_manager.digital_state}
 
-class SeekRequest(BaseModel):
-    time_control: str | None = None
+
+# --- Game Matchmaking & Interaction Endpoints ---
 
 @app.post("/api/game/seek")
 async def seek_game_route(body: SeekRequest | None = None):
-    """Triggers a search for a new game on chess.com."""
-    if state_manager.game_status != "IDLE":
+    """Initiates an online matchmaking seek on Lichess."""
+    if state_manager.game_status not in ["IDLE", "GAME_OVER"]:
         return {"status": "error", "message": f"Cannot seek while status is {state_manager.game_status}"}
 
-    time_control = body.time_control if body else None
-    # Run seek in the background
-    asyncio.create_task(chess_engine.seek(state_manager, time_control=time_control))
-    return {"status": "seeking initiated"}
+    tc = body.time_control if body and body.time_control else "10+0"
+    rated = body.rated if body and body.rated is not None else False
+    color = body.color if body and body.color else "random"
+
+    await lichess_engine.seek(state_manager, time_control=tc, rated=rated, color=color)
+    return {"status": "seeking_initiated", "time_control": tc, "rated": rated, "color": color}
+
 
 @app.post("/api/game/cancel")
 async def cancel_game_route():
-    """Cancels the current search or resigns the active game."""
-    await chess_engine.cancel(state_manager)
+    """Cancels the active seek or resigns the ongoing game."""
+    await lichess_engine.cancel(state_manager)
     return {"status": "cancelled"}
 
-class MoveRequest(BaseModel):
-    from_square: str
-    to_square: str
 
 @app.post("/api/game/move")
 async def make_move_route(body: MoveRequest):
-    """Executes a move on chess.com from the webapp."""
+    """Submits a move to the active Lichess game."""
     if state_manager.game_status != "PLAYING":
         return {"status": "error", "message": "No active game"}
-
-    def parse_sq(sq):
-        sq = sq.strip().lower()
-        if len(sq) != 2:
-            return None
-        file_ch, rank_ch = sq[0], sq[1]
-        if file_ch not in "abcdefgh" or rank_ch not in "12345678":
-            return None
-        return ord(file_ch) - ord("a") + 1, int(rank_ch)
 
     src = parse_sq(body.from_square)
     dst = parse_sq(body.to_square)
     if not src or not dst:
-        return {"status": "error", "message": "Invalid squares"}
+        return {"status": "error", "message": "Invalid square coordinates"}
 
-    success = await chess_engine.make_move(src[0], src[1], dst[0], dst[1])
+    success = await lichess_engine.make_move(
+        src[0], src[1], dst[0], dst[1], promotion=body.promotion
+    )
     if success:
         return {"status": "success"}
     else:
-        return {"status": "error", "message": "Failed to execute move on Chess.com"}
+        return {"status": "error", "message": "Move was rejected by Lichess"}
+
+
+@app.post("/api/game/resign")
+async def resign_game_route():
+    """Resigns the active game on Lichess."""
+    if state_manager.game_status != "PLAYING":
+        return {"status": "error", "message": "No active game to resign"}
+
+    success = await lichess_engine.resign(state_manager)
+    return {"status": "resigned" if success else "error"}
+
+
+@app.post("/api/game/draw")
+async def draw_game_route(body: DrawRequest | None = None):
+    """Offers or accepts a draw on Lichess."""
+    if state_manager.game_status != "PLAYING":
+        return {"status": "error", "message": "No active game to offer draw"}
+
+    accept = body.accept if body else True
+    success = await lichess_engine.draw(state_manager, accept=accept)
+    return {"status": "success" if success else "error"}
+
+
+@app.post("/api/game/mode")
+async def set_game_mode_route(body: ModeRequest):
+    """Switches between Hardware-Integrated and Virtual-Only simulation modes."""
+    state_manager.virtual_only = body.virtual_only
+    if body.virtual_only and state_manager.strip:
+        state_manager.clear_all_leds()
+    return {"status": "success", "virtual_only": state_manager.virtual_only}
+
+
+# --- WebSocket Stream ---
 
 @app.websocket("/ws/state")
 async def websocket_endpoint(websocket: WebSocket):
@@ -233,31 +317,29 @@ async def websocket_endpoint(websocket: WebSocket):
     asyncio.create_task(state_manager.handle_webapp_connected())
     try:
         while True:
-            # Keep alive and listen
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# --- Static Frontend Serving ---
+
+# --- Frontend Static Assets Serving ---
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_path):
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
-        # 1. Check if it's an API route (should be handled by other decorators, but for safety)
         if full_path.startswith("api") or full_path.startswith("ws"):
-            return None # Should not happen due to route priority
+            return None
 
-        # 2. Check if the literal file exists in dist
         file_path = os.path.join(frontend_path, full_path)
         if full_path and os.path.isfile(file_path):
             return FileResponse(file_path)
 
-        # 3. Fallback to index.html for SPA routing
         return FileResponse(os.path.join(frontend_path, "index.html"))
 else:
-    logger.warning(f"Frontend build not found at {frontend_path}. API only mode.")
+    logger.warning(f"Frontend build not found at {frontend_path}. Operating in API-only mode.")
+
     @app.get("/")
     async def api_fallback():
-        return {"status": "api-only", "warning": "Frontend not built"}
+        return {"status": "api-only", "warning": "Frontend assets not built in dist/"}

@@ -2,16 +2,42 @@
 """
 hardware_test.py
 
-ULTRA-SIMPLIFIED diagnostic tool for the Smart Chess Board.
-Goal: Keep Row 0 selected, scan Column MUX channels 0-3, calibrate a per-square
-baseline from the first 10 readings, print differences from that baseline, and light
-squares whose absolute difference exceeds the configured threshold.
+Diagnostic tool for the Smart Chess Board.
+Scans the 8x8 sensor matrix, calibrates per-square baselines,
+prints differences from baseline, and illuminates squares with significant magnetic deviation.
 """
 
 import time
 
-import lgpio
-import serial
+try:
+    import lgpio
+except ImportError:
+    class MockLgpio:
+        def gpiochip_open(self, _): return "mock_chip"
+        def gpiochip_close(self, _): pass
+        def gpio_claim_output(self, *args): pass
+        def gpio_claim_input(self, *args): pass
+        def gpio_write(self, *args): pass
+        def gpio_read(self, *args): return 1
+        def callback(self, *args): pass
+        error = Exception
+        FALLING_EDGE = 1
+        SET_PULL_UP = 1
+    lgpio = MockLgpio()
+
+try:
+    import serial
+except ImportError:
+    serial = None
+
+from app.config import (
+    BAUD_RATE,
+    LED_PIN,
+    LED_PIN_2,
+    NUM_LEDS,
+    SERIAL_PORT,
+)
+from app.led_helpers import Color, get_led_indices, init_strip
 from board_hardware import (
     COL_MUX_S0,
     COL_MUX_S1,
@@ -20,14 +46,6 @@ from board_hardware import (
     init_mux_pins,
     set_mux_channel,
 )
-from playwright_chesscom.chesscom_config import (
-    BAUD_RATE,
-    LED_PIN,
-    LED_PIN_2,
-    NUM_LEDS,
-    SERIAL_PORT,
-)
-from playwright_chesscom.led_helpers import Color, get_led_indices, init_strip
 
 BASELINE_SAMPLES = 10
 DIFF_LED_THRESHOLD = 150
@@ -70,8 +88,6 @@ def update_leds_from_differences(strip, differences, previous_frame):
     if strip is None:
         return previous_frame
 
-    # Build the whole LED frame in memory, then call show() once only if it changed.
-    # This avoids visible off/on flicker and avoids unnecessarily refreshing WS2812 data.
     frame = [LED_OFF_COLOR] * NUM_LEDS
 
     from board_hardware import settings
@@ -102,12 +118,12 @@ def update_leds_from_differences(strip, differences, previous_frame):
 def read_active_values(h, ser):
     """Read all configured active columns/rows into a column-specific dictionary using batch read."""
     values = {col: [None] * len(ACTIVE_ROWS) for col in ACTIVE_COLS}
-    ser.reset_input_buffer()
+    if ser is None:
+        return values
 
-    # Request batch scan
+    ser.reset_input_buffer()
     ser.write(b"B")
 
-    # Read binary packet: 2 header bytes + 128 data bytes (64 uint16_t values)
     header = ser.read(2)
     if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
         expected_bytes = 8 * 8 * 2
@@ -205,11 +221,9 @@ def main():
         print(f"ERROR: LED init fail: {e}")
         print("Continuing without LED output.")
 
-    # 1. Initialize GPIO
     try:
         h = lgpio.gpiochip_open(0)
         init_mux_pins(h)
-        # Start on the first active column.
         set_mux_channel(
             h, COL_MUX_S0, COL_MUX_S1, COL_MUX_S2, COL_MUX_S3, ACTIVE_COLS[0]
         )
@@ -224,8 +238,7 @@ def main():
 
     try:
         while True:
-            # 2. Maintain Serial Connection
-            if ser is None:
+            if ser is None and serial:
                 try:
                     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
                     print(f"Serial: Connected to {SERIAL_PORT} at {BAUD_RATE}")
@@ -237,7 +250,6 @@ def main():
                     time.sleep(1)
                     continue
 
-            # 3. Calibrate once, then print differences from the default baseline.
             try:
                 if baseline is None:
                     baseline = calibrate_baseline(h, ser)
@@ -254,7 +266,8 @@ def main():
                 print_diff_grid(differences)
             except Exception as e:
                 print(f"Serial: Read error: {e}")
-                ser.close()
+                if ser:
+                    ser.close()
                 ser = None
 
             time.sleep(SCAN_INTERVAL_S)

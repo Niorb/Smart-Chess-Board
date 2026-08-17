@@ -45,9 +45,11 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Cleaned up fragile `sys.path.append` hacks across FastAPI `main.py`, `board_state.py`, and `chess_engine_async.py`.
 - [x] Successfully deployed and verified code changes on Raspberry Pi over SSH: frontend build succeeded (`vite build`) and all 34 pytest unit/integration tests passed cleanly.
 - [x] Migrated Playwright browser automation driver (`chesscom_browser.py`, `game_seeker.py`, `interactive_game.py`, `test_connection.py`, `chess_engine_async.py`) from synchronous `playwright.sync_api` to asynchronous `playwright.async_api`, enabling native `asyncio` execution in FastAPI without thread starvation. Verified via 34 passing pytest tests on Raspberry Pi over SSH.
-- [x] Fixed `422 Unprocessable Content` error on `POST /api/board/settings` by updating Pydantic model `ThresholdSettings` to make all fields optional (`int | float | None = None`), filtering out undefined/null fields in frontend payload (`api.ts`), adding fallback threshold defaults (`App.tsx`), and adding unit tests for partial updates and float parameters (`test_api_routes.py`). All 35 pytest unit tests pass on Raspberry Pi.
-
-
+- [x] Implemented Lichess Board API async integration (`Raspberry/app/lichess_engine.py`), replacing legacy Playwright automation with direct NDJSON streaming and OAuth authentication.
+- [x] Created centralized config (`Raspberry/app/config.py`) and standalone LED helper library (`Raspberry/app/led_helpers.py`), decoupling board hardware from web scrapers.
+- [x] Archived legacy Playwright automation scripts into `Raspberry/legacy_chesscom_backup/` and updated `.gitignore` and `Raspberry/requirements.txt`.
+- [x] Implemented Virtual-Only mode with real-time UI toggle, pawn promotion modal dialog, active turn clock glowing indicator with low-time warning, check indicator ring, and legal move dots in `Raspberry/frontend/src/App.tsx`.
+- [x] Added unit tests for Lichess engine (`test_lichess_engine.py`) and updated test suites (`test_board_state.py`, `test_api_routes.py`, `test_led_helpers.py`, `test_highlight_row_swap.py`).
 
 ## Task Backlog
 

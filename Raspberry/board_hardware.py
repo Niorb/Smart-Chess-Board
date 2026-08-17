@@ -32,7 +32,7 @@ except ImportError:
     print("WARNING: lgpio not found. Using MockLgpio.")
 
 try:
-    from playwright_chesscom.chesscom_config import (
+    from app.config import (
         BOARD_COLS,
         BOARD_ROWS,
     )
@@ -191,8 +191,6 @@ def init_mux_pins(_h):
 # =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
-
-
 
 def scan_board(h, serial_conn, raw_state):
     """
@@ -362,7 +360,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
 
     save_settings()
 
-    # Clear rolling baseline history so scan_board doesn't immediately overwrite new baselines with pre-calibration averages
+    # Clear rolling baseline history
     global baseline_history
     baseline_history.clear()
 
