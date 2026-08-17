@@ -104,20 +104,21 @@ def test_game_seek_and_cancel_routes():
         response = client.post(
             "/api/game/seek",
             json={
-                "time_control": "5+3",
+                "time_control": "15+10",
                 "rated": True,
                 "color": "white",
-                "opponent": "ai",
+                "opponent": "human",
                 "ai_level": 5,
+                "rating_range": "1400-1800",
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "seeking_initiated"
-        assert data["time_control"] == "5+3"
+        assert data["time_control"] == "15+10"
         assert data["rated"] is True
-        assert data["opponent"] == "ai"
-        assert data["ai_level"] == 5
+        assert data["opponent"] == "human"
+        assert data["rating_range"] == "1400-1800"
 
     with patch("app.main.lichess_engine.cancel", new_callable=AsyncMock) as mock_cancel:
         mock_cancel.return_value = None

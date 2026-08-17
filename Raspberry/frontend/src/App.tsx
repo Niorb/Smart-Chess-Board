@@ -31,7 +31,8 @@ import {
   Layers,
   CheckCircle2,
   Bot,
-  Zap
+  Zap,
+  Target
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -69,6 +70,30 @@ function App() {
   const [selectedColor, setSelectedColor] = useState<'random' | 'white' | 'black'>('random');
   const [opponentMode, setOpponentMode] = useState<'auto' | 'ai' | 'human'>('auto');
   const [aiLevel, setAiLevel] = useState<number>(3);
+  const [ratingBoundary, setRatingBoundary] = useState<'any' | '100' | '200' | '300' | '500' | 'custom'>('any');
+  const [customMinRating, setCustomMinRating] = useState<string>('1200');
+  const [customMaxRating, setCustomMaxRating] = useState<string>('1800');
+
+  // Calculate target rating range string for Lichess seek (e.g., "1350-1750")
+  const computedRatingRange = useMemo(() => {
+    if (ratingBoundary === 'any') return undefined;
+    if (ratingBoundary === 'custom') {
+      const min = parseInt(customMinRating);
+      const max = parseInt(customMaxRating);
+      if (!isNaN(min) && !isNaN(max) && min < max) {
+        return `${min}-${max}`;
+      }
+      return undefined;
+    }
+    const delta = parseInt(ratingBoundary);
+    if (!isNaN(delta)) {
+      const userRating = account?.rating || 1500;
+      const min = Math.max(800, userRating - delta);
+      const max = Math.min(2900, userRating + delta);
+      return `${min}-${max}`;
+    }
+    return undefined;
+  }, [ratingBoundary, customMinRating, customMaxRating, account?.rating]);
 
   // Click to Move state
   const [selectedSquare, setSelectedSquare] = useState<{ col: number; row: number } | null>(null);
@@ -226,6 +251,7 @@ function App() {
         color: selectedColor,
         opponent: opponentMode,
         aiLevel: aiLevel,
+        ratingRange: computedRatingRange,
       });
     } catch (err) {
       console.error("Error seeking match:", err);
@@ -905,6 +931,73 @@ function App() {
                       <span>{isRated ? 'Rated Match' : 'Casual Match'}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Rating Boundaries (ELO Interval) */}
+                <div className="flex flex-col gap-2 pt-1 border-t border-slate-800/80">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Target size={12} className="text-amber-400" />
+                      ELO Rating Boundaries
+                    </label>
+                    <span className="text-[10px] text-amber-300/90 font-mono font-semibold">
+                      {ratingBoundary === 'any' ? 'Any Rating (Default)' : computedRatingRange ? `${computedRatingRange} ELO` : 'Custom'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-6 gap-1">
+                    {[
+                      { id: 'any', label: 'Any' },
+                      { id: '100', label: '±100' },
+                      { id: '200', label: '±200' },
+                      { id: '300', label: '±300' },
+                      { id: '500', label: '±500' },
+                      { id: 'custom', label: 'Custom' },
+                    ].map((boundary) => (
+                      <button
+                        key={boundary.id}
+                        onClick={() => setRatingBoundary(boundary.id as typeof ratingBoundary)}
+                        className={`py-1.5 text-[10px] font-bold rounded-lg border transition-all ${
+                          ratingBoundary === boundary.id
+                            ? 'bg-amber-600/30 border-amber-400 text-amber-200 shadow-sm'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {boundary.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {ratingBoundary === 'custom' && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Min:</span>
+                        <input
+                          type="number"
+                          value={customMinRating}
+                          onChange={(e) => setCustomMinRating(e.target.value)}
+                          className="w-full bg-transparent text-xs font-mono font-bold text-slate-200 outline-none"
+                          placeholder="800"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">Max:</span>
+                        <input
+                          type="number"
+                          value={customMaxRating}
+                          onChange={(e) => setCustomMaxRating(e.target.value)}
+                          className="w-full bg-transparent text-xs font-mono font-bold text-slate-200 outline-none"
+                          placeholder="2500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[9px] text-slate-500 leading-tight">
+                    {ratingBoundary === 'any'
+                      ? 'Default: Unrestricted matching on Lichess (matches with any active player).'
+                      : `Only seeks human opponents within ${computedRatingRange || 'custom range'} ELO on Lichess.`}
+                  </p>
                 </div>
 
                 {/* Seek / Start Match Button */}

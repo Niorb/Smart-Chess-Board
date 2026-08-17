@@ -254,3 +254,26 @@ def test_seek_routing_explicit_opponent_mode():
                 color="random",
             )
     asyncio.run(_test())
+
+
+def test_seek_with_rating_range():
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+
+        with patch.object(engine, "_seek_and_stream", new_callable=AsyncMock) as mock_seek:
+            await engine.seek(
+                mock_state_mgr,
+                time_control="15+10",
+                opponent="human",
+                rating_range="1400-1800",
+            )
+            mock_seek.assert_called_once_with(
+                mock_state_mgr,
+                15,
+                10,
+                False,
+                "random",
+                rating_range="1400-1800",
+            )
+    asyncio.run(_test())

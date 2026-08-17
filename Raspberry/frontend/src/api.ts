@@ -26,6 +26,7 @@ export async function seekGame(options?: {
   color?: string;
   opponent?: 'auto' | 'ai' | 'human';
   aiLevel?: number;
+  ratingRange?: string;
 }) {
   const response = await fetch(`${API_BASE}/game/seek`, {
     method: 'POST',
@@ -37,6 +38,7 @@ export async function seekGame(options?: {
       color: options?.color ?? 'random',
       opponent: options?.opponent ?? 'auto',
       ai_level: options?.aiLevel ?? 3,
+      rating_range: options?.ratingRange,
     }),
   });
   return response.json();

@@ -107,6 +107,7 @@ class SeekRequest(BaseModel):
     color: str | None = "random"
     opponent: str | None = "auto"
     ai_level: int | None = 3
+    rating_range: str | None = None
 
 
 class MoveRequest(BaseModel):
@@ -251,6 +252,7 @@ async def seek_game_route(body: SeekRequest | None = None):
     color = body.color if body and body.color else "random"
     opponent = body.opponent if body and body.opponent else "auto"
     ai_level = body.ai_level if body and body.ai_level is not None else 3
+    rating_range = body.rating_range if body and body.rating_range else None
 
     await lichess_engine.seek(
         state_manager,
@@ -259,6 +261,7 @@ async def seek_game_route(body: SeekRequest | None = None):
         color=color,
         opponent=opponent,
         ai_level=ai_level,
+        rating_range=rating_range,
     )
     return {
         "status": "seeking_initiated",
@@ -267,6 +270,7 @@ async def seek_game_route(body: SeekRequest | None = None):
         "color": color,
         "opponent": opponent,
         "ai_level": ai_level,
+        "rating_range": rating_range,
     }
 
 

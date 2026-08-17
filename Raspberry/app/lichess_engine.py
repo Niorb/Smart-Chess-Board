@@ -300,6 +300,7 @@ class LichessEngine:
         color: str = "random",
         opponent: str = "auto",
         ai_level: int = 3,
+        rating_range: str | None = None,
     ) -> bool:
         """Initiates a matchmaking search or AI challenge on Lichess."""
         if not self.is_running or not self.client:
@@ -324,7 +325,7 @@ class LichessEngine:
             )
 
         logger.info(
-            f"Seeking live human match: {time_mins}m+{inc_secs}s, rated={rated}, color={color}"
+            f"Seeking live human match: {time_mins}m+{inc_secs}s, rated={rated}, color={color}, ratingRange={rating_range}"
         )
 
         self._cancel_event.clear()
@@ -334,7 +335,7 @@ class LichessEngine:
             self._seek_task.cancel()
 
         self._seek_task = asyncio.create_task(
-            self._seek_and_stream(state_manager, time_mins, inc_secs, rated, color)
+            self._seek_and_stream(state_manager, time_mins, inc_secs, rated, color, rating_range=rating_range)
         )
         return True
 
@@ -345,6 +346,7 @@ class LichessEngine:
         inc_secs: int,
         rated: bool,
         color: str,
+        rating_range: str | None = None,
     ):
         """Streams the human matchmaking seek response and connects to game stream once matched."""
         form_data = {
@@ -353,6 +355,8 @@ class LichessEngine:
             "rated": "true" if rated else "false",
             "color": color,
         }
+        if rating_range and "-" in str(rating_range):
+            form_data["ratingRange"] = str(rating_range).strip()
 
         headers = self._get_headers()
         headers["Accept"] = "application/x-ndjson"
