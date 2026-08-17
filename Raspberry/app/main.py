@@ -105,6 +105,8 @@ class SeekRequest(BaseModel):
     increment: int | None = 0
     rated: bool | None = False
     color: str | None = "random"
+    opponent: str | None = "auto"
+    ai_level: int | None = 3
 
 
 class MoveRequest(BaseModel):
@@ -240,16 +242,32 @@ async def get_digital_board():
 
 @app.post("/api/game/seek")
 async def seek_game_route(body: SeekRequest | None = None):
-    """Initiates an online matchmaking seek on Lichess."""
+    """Initiates an online matchmaking seek or Stockfish AI challenge on Lichess."""
     if state_manager.game_status not in ["IDLE", "GAME_OVER"]:
         return {"status": "error", "message": f"Cannot seek while status is {state_manager.game_status}"}
 
     tc = body.time_control if body and body.time_control else "10+0"
     rated = body.rated if body and body.rated is not None else False
     color = body.color if body and body.color else "random"
+    opponent = body.opponent if body and body.opponent else "auto"
+    ai_level = body.ai_level if body and body.ai_level is not None else 3
 
-    await lichess_engine.seek(state_manager, time_control=tc, rated=rated, color=color)
-    return {"status": "seeking_initiated", "time_control": tc, "rated": rated, "color": color}
+    await lichess_engine.seek(
+        state_manager,
+        time_control=tc,
+        rated=rated,
+        color=color,
+        opponent=opponent,
+        ai_level=ai_level,
+    )
+    return {
+        "status": "seeking_initiated",
+        "time_control": tc,
+        "rated": rated,
+        "color": color,
+        "opponent": opponent,
+        "ai_level": ai_level,
+    }
 
 
 @app.post("/api/game/cancel")

@@ -29,7 +29,9 @@ import {
   User,
   Shield,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  Bot,
+  Zap
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -65,6 +67,8 @@ function App() {
   const [selectedTC, setSelectedTC] = useState<string>('10+0');
   const [isRated, setIsRated] = useState<boolean>(false);
   const [selectedColor, setSelectedColor] = useState<'random' | 'white' | 'black'>('random');
+  const [opponentMode, setOpponentMode] = useState<'auto' | 'ai' | 'human'>('auto');
+  const [aiLevel, setAiLevel] = useState<number>(3);
 
   // Click to Move state
   const [selectedSquare, setSelectedSquare] = useState<{ col: number; row: number } | null>(null);
@@ -139,7 +143,6 @@ function App() {
     if (!selectedSquare) {
       const piece = state.digital[col]?.[row];
       if (piece && piece !== '.') {
-        // Only select pieces belonging to the current turn / player
         const isWhitePiece = piece === piece.toUpperCase();
         const isMyPiece = state.my_color 
           ? (state.my_color === 'white' ? isWhitePiece : !isWhitePiece)
@@ -221,6 +224,8 @@ function App() {
         timeControl: selectedTC,
         rated: isRated,
         color: selectedColor,
+        opponent: opponentMode,
+        aiLevel: aiLevel,
       });
     } catch (err) {
       console.error("Error seeking match:", err);
@@ -719,7 +724,11 @@ function App() {
                 <div className="bg-blue-900/30 border border-blue-500/40 rounded-xl p-3 flex items-center gap-3 animate-pulse">
                   <RefreshCw className="text-blue-400 animate-spin flex-shrink-0" size={20} />
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-blue-200">Seeking Match on Lichess...</span>
+                    <span className="text-xs font-bold text-blue-200">
+                      {opponentMode === 'ai' || selectedTC.startsWith('1+') || selectedTC.startsWith('3+') || selectedTC.startsWith('5+')
+                        ? 'Initiating match against Stockfish AI...'
+                        : 'Seeking Live Match on Lichess...'}
+                    </span>
                     <span className="text-[10px] text-blue-300/80 font-mono">
                       {selectedTC} • {isRated ? 'Rated' : 'Casual'} • {selectedColor}
                     </span>
@@ -762,6 +771,14 @@ function App() {
             {(state.status === 'IDLE' || state.status === 'GAME_OVER') && (
               <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-4 text-left">
                 
+                {/* Lichess Board API Guidance Banner */}
+                <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3 flex items-start gap-2.5">
+                  <Zap className="text-amber-400 flex-shrink-0 mt-0.5" size={16} />
+                  <p className="text-[11px] text-indigo-200 leading-snug">
+                    <strong className="text-white">Smart Matchmaking:</strong> Fast matches under 8 min (<span className="text-amber-300 font-mono">Bullet &amp; Blitz</span>) play instantly against <span className="text-amber-300 font-semibold">Stockfish AI</span>. For live human matchmaking on the Board API, select <span className="text-emerald-300 font-mono">Rapid (10+0 or 15+10)</span>.
+                  </p>
+                </div>
+
                 {/* Time Control Buttons */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -792,6 +809,60 @@ function App() {
                         <span className="text-[8px] uppercase tracking-wider opacity-70">{tc.sub}</span>
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Opponent Mode & AI Level */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Opponent Mode
+                    </label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[
+                        { id: 'auto', label: 'Auto' },
+                        { id: 'ai', label: 'AI' },
+                        { id: 'human', label: 'Human' },
+                      ].map((mode) => (
+                        <button
+                          key={mode.id}
+                          onClick={() => setOpponentMode(mode.id as 'auto' | 'ai' | 'human')}
+                          className={`py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
+                            opponentMode === mode.id
+                              ? 'bg-blue-600 border-blue-400 text-white shadow-sm'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* AI Difficulty Level (Active for AI / Auto fast matches) */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Bot size={12} className="text-indigo-400" />
+                        AI Level
+                      </span>
+                      <span className="font-mono text-indigo-300 font-bold">Lvl {aiLevel}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {[1, 3, 5, 8].map((lvl) => (
+                        <button
+                          key={lvl}
+                          onClick={() => setAiLevel(lvl)}
+                          className={`py-1.5 text-[10px] font-bold rounded-lg border transition-all ${
+                            aiLevel === lvl
+                              ? 'bg-indigo-600 border-indigo-400 text-white'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {lvl === 1 ? '1' : lvl === 3 ? '3' : lvl === 5 ? '5' : '8 (Max)'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -836,14 +907,14 @@ function App() {
                   </div>
                 </div>
 
-                {/* Seek Match Button */}
+                {/* Seek / Start Match Button */}
                 <button
                   onClick={handleSeek}
                   disabled={loading || !isConnected}
                   className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-extrabold text-base py-3.5 rounded-xl shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                 >
                   <Play size={18} fill="currentColor" />
-                  <span>Seek Match ({selectedTC})</span>
+                  <span>Start Match ({selectedTC})</span>
                 </button>
               </div>
             )}

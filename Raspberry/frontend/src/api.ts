@@ -24,6 +24,8 @@ export async function seekGame(options?: {
   increment?: number;
   rated?: boolean;
   color?: string;
+  opponent?: 'auto' | 'ai' | 'human';
+  aiLevel?: number;
 }) {
   const response = await fetch(`${API_BASE}/game/seek`, {
     method: 'POST',
@@ -33,6 +35,8 @@ export async function seekGame(options?: {
       increment: options?.increment ?? 0,
       rated: options?.rated ?? false,
       color: options?.color ?? 'random',
+      opponent: options?.opponent ?? 'auto',
+      ai_level: options?.aiLevel ?? 3,
     }),
   });
   return response.json();

@@ -1,6 +1,9 @@
+import asyncio
 import os
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -120,6 +123,34 @@ def test_handle_game_full_event():
     assert mock_state_mgr.clocks == {"white": "3:00", "black": "3:00"}
 
 
+def test_handle_game_full_event_ai_opponent():
+    engine = LichessEngine()
+    engine.username = "RobinPi"
+    mock_state_mgr = MagicMock()
+
+    event = {
+        "type": "gameFull",
+        "id": "aiGame456",
+        "rated": False,
+        "speed": "bullet",
+        "white": {"name": "RobinPi", "rating": 1650},
+        "black": {"aiLevel": 4},
+        "state": {
+            "moves": "e2e4",
+            "wtime": 60000,
+            "btime": 60000,
+            "status": "started",
+        },
+    }
+
+    engine.current_game_id = "aiGame456"
+    engine._handle_game_full(event, mock_state_mgr)
+
+    assert engine.my_color == "white"
+    assert "Stockfish AI Level 4" in engine.game_info["opponent"]["username"]
+    assert engine.game_info["opponent"]["title"] == "BOT"
+
+
 def test_handle_game_state_event():
     engine = LichessEngine()
     engine.username = "RobinPi"
@@ -157,3 +188,66 @@ def test_get_game_payload():
     assert len(payload["legal_moves"]) > 0
     assert payload["is_check"] is False
     assert payload["is_game_over"] is False
+
+
+@pytest.mark.asyncio
+async def test_seek_routing_under_8_mins_to_ai():
+    engine = LichessEngine()
+    mock_state_mgr = MagicMock()
+
+    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
+        mock_challenge.return_value = True
+
+        # 3+0 = 180s (< 480s) -> routes to AI
+        await engine.seek(mock_state_mgr, time_control="3+0", opponent="auto", ai_level=4)
+        mock_challenge.assert_called_once_with(
+            mock_state_mgr,
+            level=4,
+            time_mins=3,
+            inc_secs=0,
+            color="random",
+        )
+
+        mock_challenge.reset_mock()
+        # 1+0 = 60s (< 480s) -> routes to AI
+        await engine.seek(mock_state_mgr, time_control="1+0", opponent="auto", ai_level=2)
+        mock_challenge.assert_called_once_with(
+            mock_state_mgr,
+            level=2,
+            time_mins=1,
+            inc_secs=0,
+            color="random",
+        )
+
+
+@pytest.mark.asyncio
+async def test_seek_routing_over_8_mins_to_human():
+    engine = LichessEngine()
+    mock_state_mgr = MagicMock()
+
+    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge, \
+         patch.object(engine, "_seek_and_stream", new_callable=AsyncMock) as mock_seek_stream:
+
+        # 10+0 = 600s (>= 480s) -> routes to live human seek
+        await engine.seek(mock_state_mgr, time_control="10+0", opponent="auto")
+        mock_challenge.assert_not_called()
+        assert mock_state_mgr.game_status == "SEEKING"
+
+
+@pytest.mark.asyncio
+async def test_seek_routing_explicit_opponent_mode():
+    engine = LichessEngine()
+    mock_state_mgr = MagicMock()
+
+    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
+        mock_challenge.return_value = True
+
+        # 10+0 with explicit opponent="ai" -> routes to AI
+        await engine.seek(mock_state_mgr, time_control="10+0", opponent="ai", ai_level=5)
+        mock_challenge.assert_called_once_with(
+            mock_state_mgr,
+            level=5,
+            time_mins=10,
+            inc_secs=0,
+            color="random",
+        )

@@ -2,8 +2,9 @@
 app/lichess_engine.py
 
 Lichess Board API async integration for the Smart Chess Board.
-Handles OAuth authentication, matchmaking seeks, real-time NDJSON game streams,
-move validation/execution, clock synchronization, and resignation/draw offers.
+Handles OAuth authentication, matchmaking seeks (human & Stockfish AI),
+real-time NDJSON game streams, move validation/execution, clock synchronization,
+and resignation/draw offers.
 """
 
 import asyncio
@@ -17,12 +18,17 @@ import chess
 from dotenv import load_dotenv
 import httpx
 
-# Load environment variables from .env in Raspberry root or project root
-env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
-if os.path.exists(env_path):
-    load_dotenv(env_path)
-else:
-    load_dotenv()
+# Multi-path .env loading
+env_candidates = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env")),
+    os.path.expanduser("~/.env"),
+    os.path.expanduser("~/chess_git/Raspberry/.env"),
+    os.path.join(os.getcwd(), ".env"),
+]
+for p in env_candidates:
+    if os.path.exists(p):
+        load_dotenv(p)
 
 logger = logging.getLogger("smart-chess-app.lichess")
 
@@ -142,7 +148,6 @@ class LichessEngine:
         self.is_running = True
         logger.info("Lichess engine initialized.")
 
-        # Attempt to retrieve account info
         try:
             account = await self.get_account()
             if account.get("authenticated"):
@@ -228,20 +233,98 @@ class LichessEngine:
                 "error": str(e),
             }
 
+    async def challenge_ai(
+        self,
+        state_manager,
+        level: int = 3,
+        time_mins: int = 10,
+        inc_secs: int = 0,
+        color: str = "random",
+    ) -> bool:
+        """Creates an immediate match against Stockfish AI on Lichess."""
+        if not self.is_running or not self.client:
+            await self.start()
+
+        level = max(1, min(8, int(level)))
+        total_seconds = time_mins * 60
+        logger.info(
+            f"Challenging Stockfish AI Level {level} ({time_mins}m+{inc_secs}s, color={color})..."
+        )
+
+        self._cancel_event.clear()
+        state_manager.game_status = "SEEKING"
+
+        form_data: dict[str, Any] = {
+            "level": str(level),
+            "color": color,
+        }
+        if total_seconds > 0:
+            form_data["clock.limit"] = str(total_seconds)
+            form_data["clock.increment"] = str(inc_secs)
+
+        headers = self._get_headers()
+        try:
+            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=10.0) as client:
+                res = await client.post("/api/challenge/ai", data=form_data)
+                if res.status_code in [200, 201]:
+                    data = res.json()
+                    game_id = data.get("id") or data.get("gameId") or data.get("challenge", {}).get("id")
+                    if not game_id:
+                        logger.error(f"No game ID returned in AI challenge response: {data}")
+                        state_manager.game_status = "IDLE"
+                        return False
+
+                    logger.info(f"AI Match started! Game ID: {game_id}")
+                    self.current_game_id = game_id
+                    state_manager.game_status = "PLAYING"
+                    if self._stream_task and not self._stream_task.done():
+                        self._stream_task.cancel()
+                    self._stream_task = asyncio.create_task(
+                        self.stream_game(game_id, state_manager)
+                    )
+                    return True
+                else:
+                    logger.error(f"Failed to challenge AI: HTTP {res.status_code} - {res.text}")
+                    state_manager.game_status = "IDLE"
+                    return False
+        except Exception as e:
+            logger.error(f"Error challenging AI: {e}")
+            state_manager.game_status = "IDLE"
+            return False
+
     async def seek(
         self,
         state_manager,
         time_control: str = "10+0",
         rated: bool = False,
         color: str = "random",
+        opponent: str = "auto",
+        ai_level: int = 3,
     ) -> bool:
-        """Initiates a matchmaking search on Lichess."""
+        """Initiates a matchmaking search or AI challenge on Lichess."""
         if not self.is_running or not self.client:
             await self.start()
 
         time_mins, inc_secs = parse_time_control(time_control)
+        estimated_duration_s = time_mins * 60 + inc_secs * 40
+
+        # Automatic Routing: < 8 mins or opponent == "ai" plays against Stockfish AI
+        should_play_ai = (opponent == "ai") or (opponent == "auto" and estimated_duration_s < 480)
+
+        if should_play_ai:
+            logger.info(
+                f"Routing to Stockfish AI level {ai_level} (Estimated duration: {estimated_duration_s}s, opponent='{opponent}')"
+            )
+            return await self.challenge_ai(
+                state_manager,
+                level=ai_level,
+                time_mins=time_mins,
+                inc_secs=inc_secs,
+                color=color,
+            )
+
         logger.info(
-            f"Seeking Lichess match: {time_mins}m+{inc_secs}s, rated={rated}, color={color}"
+            f"Seeking live human match: {time_mins}m+{inc_secs}s, rated={rated}, color={color}"
         )
 
         self._cancel_event.clear()
@@ -263,7 +346,7 @@ class LichessEngine:
         rated: bool,
         color: str,
     ):
-        """Streams the seek response and connects to game stream once matched."""
+        """Streams the human matchmaking seek response and connects to game stream once matched."""
         form_data = {
             "time": str(time_mins),
             "increment": str(inc_secs),
@@ -390,7 +473,12 @@ class LichessEngine:
         white_user = (white_info.get("name") or white_info.get("id") or "").lower()
         black_user = (black_info.get("name") or black_info.get("id") or "").lower()
 
-        if my_user and my_user == white_user:
+        # Check AI indicator if applicable
+        if white_info.get("aiLevel"):
+            self.my_color = "black"
+        elif black_info.get("aiLevel"):
+            self.my_color = "white"
+        elif my_user and my_user == white_user:
             self.my_color = "white"
         elif my_user and my_user == black_user:
             self.my_color = "black"
@@ -398,11 +486,18 @@ class LichessEngine:
             self.my_color = "white"  # Default fallback
 
         opp_info = black_info if self.my_color == "white" else white_info
-        opponent = {
-            "username": opp_info.get("name") or opp_info.get("id", "Opponent"),
-            "rating": opp_info.get("rating", 1500),
-            "title": opp_info.get("title"),
-        }
+        if opp_info.get("aiLevel"):
+            opponent = {
+                "username": f"Stockfish AI Level {opp_info.get('aiLevel')}",
+                "rating": 1500,
+                "title": "BOT",
+            }
+        else:
+            opponent = {
+                "username": opp_info.get("name") or opp_info.get("id", "Opponent"),
+                "rating": opp_info.get("rating", 1500),
+                "title": opp_info.get("title"),
+            }
 
         self.game_info["game_id"] = self.current_game_id
         self.game_info["rated"] = event.get("rated", False)
