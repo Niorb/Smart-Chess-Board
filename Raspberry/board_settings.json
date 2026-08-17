@@ -90,5 +90,6 @@
     "debounce_threshold": 4,
     "baseline_window_s": 2,
     "disabled_squares": [],
-    "mux_settle_ms": 10
+    "mux_settle_ms": 10,
+    "col_mux_map": [7, 6, 5, 4, 3, 2, 1, 0]
 }

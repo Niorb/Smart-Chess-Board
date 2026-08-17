@@ -57,6 +57,8 @@ def get_settings_filepath():
     )
 
 
+DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]
+
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {
     "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
@@ -68,7 +70,8 @@ settings: dict[str, Any] = {
     "mux_settle_us": 100,
     "debounce_threshold": 2,
     "baseline_window_s": 2,
-    "disabled_squares": []
+    "disabled_squares": [],
+    "col_mux_map": list(DEFAULT_COL_MUX_MAP),
 }
 
 last_sent_settle_us = None
@@ -109,6 +112,23 @@ def load_settings():
                 if "disabled_squares" not in loaded:
                     loaded["disabled_squares"] = []
 
+                # Validate col_mux_map
+                col_mux_map = loaded.get("col_mux_map")
+                is_valid_col_mux_map = (
+                    isinstance(col_mux_map, list)
+                    and len(col_mux_map) == BOARD_COLS
+                    and all(
+                        isinstance(x, int) and 0 <= x < BOARD_COLS
+                        for x in col_mux_map
+                    )
+                )
+                if not is_valid_col_mux_map:
+                    if "col_mux_map" in loaded:
+                        logger.warning(
+                            f"Invalid col_mux_map in {filepath}. Using standard default mapping."
+                        )
+                    loaded["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+
                 # Validate baseline matrix shape (8 rows x 8 columns)
                 baselines = loaded.get("baselines")
                 is_valid_baselines = (
@@ -129,6 +149,20 @@ def load_settings():
                 logger.info(f"Loaded board settings from {filepath}")
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
+
+    # Ensure col_mux_map is valid in settings
+    col_mux_map = settings.get("col_mux_map")
+    is_valid_col_mux_map = (
+        isinstance(col_mux_map, list)
+        and len(col_mux_map) == BOARD_COLS
+        and all(
+            isinstance(x, int) and 0 <= x < BOARD_COLS
+            for x in col_mux_map
+        )
+    )
+    if not is_valid_col_mux_map:
+        logger.warning("col_mux_map invalid in settings dictionary. Falling back to default mapping.")
+        settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
     # Ensure baseline matrix shape is valid in settings
     baselines = settings.get("baselines")
@@ -213,6 +247,7 @@ def scan_board(h, serial_conn, raw_state):
 
     col_mode = settings.get("col_mode", "auto")
     manual_col = settings.get("manual_col", 0)
+    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
     settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     non_mocked_count = (1 if col_mode == "manual" else BOARD_COLS) * BOARD_ROWS
 
@@ -232,11 +267,10 @@ def scan_board(h, serial_conn, raw_state):
             import struct
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
-            idx = 0
-            for c in range(BOARD_COLS):
+            for mux_ch in range(BOARD_COLS):
+                c = col_mux_map[mux_ch]
                 for r in range(BOARD_ROWS):
-                    val = vals[idx]
-                    idx += 1
+                    val = vals[mux_ch * BOARD_ROWS + r]
 
                     if col_mode == "manual" and c != manual_col:
                         matrix[c][r] = settings["baselines"][c][r]
@@ -312,6 +346,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
     # Flush buffers
     serial_conn.reset_input_buffer()
 
+    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
     settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
@@ -328,11 +363,10 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
             if len(data) == expected_bytes:
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-                idx = 0
-                for c in range(BOARD_COLS):
+                for mux_ch in range(BOARD_COLS):
+                    c = col_mux_map[mux_ch]
                     for r in range(BOARD_ROWS):
-                        val = vals[idx]
-                        idx += 1
+                        val = vals[mux_ch * BOARD_ROWS + r]
                         sums[c][r] += val
                         counts[c][r] += 1
             else:

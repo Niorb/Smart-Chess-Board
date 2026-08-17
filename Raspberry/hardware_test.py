@@ -43,8 +43,10 @@ from board_hardware import (
     COL_MUX_S1,
     COL_MUX_S2,
     COL_MUX_S3,
+    DEFAULT_COL_MUX_MAP,
     init_mux_pins,
     set_mux_channel,
+    settings,
 )
 
 BASELINE_SAMPLES = 10
@@ -121,6 +123,8 @@ def read_active_values(h, ser):
     if ser is None:
         return values
 
+    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
+
     ser.reset_input_buffer()
     ser.write(b"B")
 
@@ -131,11 +135,10 @@ def read_active_values(h, ser):
         if len(data) == expected_bytes:
             import struct
             vals = struct.unpack('<64H', data)
-            idx = 0
-            for c in range(8):
+            for mux_ch in range(8):
+                c = col_mux_map[mux_ch]
                 for r in range(8):
-                    val = vals[idx]
-                    idx += 1
+                    val = vals[mux_ch * 8 + r]
                     if c in values:
                         if r in ACTIVE_ROWS:
                             row_idx = ACTIVE_ROWS.index(r)
