@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useBoardState } from './hooks/useBoardState'
 import { 
   seekGame, 
@@ -13,16 +13,14 @@ import {
   makeMove,
   highlightSquare,
   testLeds,
-  clearAllLeds,
-  LichessAccount
+  clearAllLeds
 } from './api'
+import type { LichessAccount } from './api'
 import { 
   Play, 
   XCircle, 
   Flag,
   Handshake,
-  Cpu, 
-  AlertTriangle,
   Terminal,
   Activity,
   Sliders,
@@ -92,14 +90,6 @@ function App() {
     const file = String.fromCharCode(97 + row);
     const rank = col + 1;
     return `${file}${rank}`;
-  };
-
-  const parseChessCoord = (sq: string): { col: number; row: number } | null => {
-    if (sq.length < 2) return null;
-    const file = sq.charCodeAt(0) - 97;
-    const rank = parseInt(sq[1]) - 1;
-    if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
-    return { col: rank, row: file };
   };
 
   // Compute legal destination squares for the currently selected square
