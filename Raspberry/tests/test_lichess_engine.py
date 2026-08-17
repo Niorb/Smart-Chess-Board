@@ -190,64 +190,67 @@ def test_get_game_payload():
     assert payload["is_game_over"] is False
 
 
-@pytest.mark.asyncio
-async def test_seek_routing_under_8_mins_to_ai():
-    engine = LichessEngine()
-    mock_state_mgr = MagicMock()
+def test_seek_routing_under_8_mins_to_ai():
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
 
-    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
-        mock_challenge.return_value = True
+        with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
+            mock_challenge.return_value = True
 
-        # 3+0 = 180s (< 480s) -> routes to AI
-        await engine.seek(mock_state_mgr, time_control="3+0", opponent="auto", ai_level=4)
-        mock_challenge.assert_called_once_with(
-            mock_state_mgr,
-            level=4,
-            time_mins=3,
-            inc_secs=0,
-            color="random",
-        )
+            # 3+0 = 180s (< 480s) -> routes to AI
+            await engine.seek(mock_state_mgr, time_control="3+0", opponent="auto", ai_level=4)
+            mock_challenge.assert_called_once_with(
+                mock_state_mgr,
+                level=4,
+                time_mins=3,
+                inc_secs=0,
+                color="random",
+            )
 
-        mock_challenge.reset_mock()
-        # 1+0 = 60s (< 480s) -> routes to AI
-        await engine.seek(mock_state_mgr, time_control="1+0", opponent="auto", ai_level=2)
-        mock_challenge.assert_called_once_with(
-            mock_state_mgr,
-            level=2,
-            time_mins=1,
-            inc_secs=0,
-            color="random",
-        )
-
-
-@pytest.mark.asyncio
-async def test_seek_routing_over_8_mins_to_human():
-    engine = LichessEngine()
-    mock_state_mgr = MagicMock()
-
-    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge, \
-         patch.object(engine, "_seek_and_stream", new_callable=AsyncMock) as mock_seek_stream:
-
-        # 10+0 = 600s (>= 480s) -> routes to live human seek
-        await engine.seek(mock_state_mgr, time_control="10+0", opponent="auto")
-        mock_challenge.assert_not_called()
-        assert mock_state_mgr.game_status == "SEEKING"
+            mock_challenge.reset_mock()
+            # 1+0 = 60s (< 480s) -> routes to AI
+            await engine.seek(mock_state_mgr, time_control="1+0", opponent="auto", ai_level=2)
+            mock_challenge.assert_called_once_with(
+                mock_state_mgr,
+                level=2,
+                time_mins=1,
+                inc_secs=0,
+                color="random",
+            )
+    asyncio.run(_test())
 
 
-@pytest.mark.asyncio
-async def test_seek_routing_explicit_opponent_mode():
-    engine = LichessEngine()
-    mock_state_mgr = MagicMock()
+def test_seek_routing_over_8_mins_to_human():
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
 
-    with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
-        mock_challenge.return_value = True
+        with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge, \
+             patch.object(engine, "_seek_and_stream", new_callable=AsyncMock) as mock_seek_stream:
 
-        # 10+0 with explicit opponent="ai" -> routes to AI
-        await engine.seek(mock_state_mgr, time_control="10+0", opponent="ai", ai_level=5)
-        mock_challenge.assert_called_once_with(
-            mock_state_mgr,
-            level=5,
-            time_mins=10,
-            inc_secs=0,
-            color="random",
-        )
+            # 10+0 = 600s (>= 480s) -> routes to live human seek
+            await engine.seek(mock_state_mgr, time_control="10+0", opponent="auto")
+            mock_challenge.assert_not_called()
+            assert mock_state_mgr.game_status == "SEEKING"
+    asyncio.run(_test())
+
+
+def test_seek_routing_explicit_opponent_mode():
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+
+        with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge:
+            mock_challenge.return_value = True
+
+            # 10+0 with explicit opponent="ai" -> routes to AI
+            await engine.seek(mock_state_mgr, time_control="10+0", opponent="ai", ai_level=5)
+            mock_challenge.assert_called_once_with(
+                mock_state_mgr,
+                level=5,
+                time_mins=10,
+                inc_secs=0,
+                color="random",
+            )
+    asyncio.run(_test())
