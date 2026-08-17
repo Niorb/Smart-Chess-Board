@@ -54,7 +54,7 @@ def test_get_health_status_structure():
 
 
 @patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
-@patch("app.board_state.chess_engine")
+@patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_healthy(mock_engine):
     """Verify HEALTHY status when all subsystems are operational and settings normal."""
     mock_engine.is_running = True
@@ -69,7 +69,7 @@ def test_health_status_evaluation_healthy(mock_engine):
 
 
 @patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
-@patch("app.board_state.chess_engine")
+@patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_missing_led_strip(mock_engine):
     """Verify DEGRADED status when LED strip is missing/not initialized."""
     mock_engine.is_running = True
@@ -82,7 +82,7 @@ def test_health_status_evaluation_degraded_missing_led_strip(mock_engine):
 
 
 @patch("board_hardware.settings", {"col_mode": "manual", "disabled_squares": [], "scan_delay": 100})
-@patch("app.board_state.chess_engine")
+@patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_manual_col_mode(mock_engine):
     """Verify DEGRADED status when board is in manual column mode."""
     mock_engine.is_running = True
@@ -94,7 +94,7 @@ def test_health_status_evaluation_degraded_manual_col_mode(mock_engine):
 
 
 @patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [[0, 1]], "scan_delay": 10})
-@patch("app.board_state.chess_engine")
+@patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_disabled_squares(mock_engine):
     """Verify DEGRADED status when disabled squares are present."""
     mock_engine.is_running = True
@@ -106,7 +106,7 @@ def test_health_status_evaluation_degraded_disabled_squares(mock_engine):
 
 
 @patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
-@patch("app.board_state.chess_engine")
+@patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_engine_stopped(mock_engine):
     """Verify DEGRADED status when chess engine is not running."""
     mock_engine.is_running = False

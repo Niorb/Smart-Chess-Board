@@ -228,7 +228,7 @@ class BoardStateManager:
 
         return {
             "status": overall_status,
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
             "subsystems": subsystems,
             "matrix": matrix,
         }
