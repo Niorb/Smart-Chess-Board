@@ -50,6 +50,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Archived legacy Playwright automation scripts into `Raspberry/legacy_chesscom_backup/` and updated `.gitignore` and `Raspberry/requirements.txt`.
 - [x] Implemented Virtual-Only mode with real-time UI toggle, pawn promotion modal dialog, active turn clock glowing indicator with low-time warning, check indicator ring, and legal move dots in `Raspberry/frontend/src/App.tsx`.
 - [x] Added unit tests for Lichess engine (`test_lichess_engine.py`) and updated test suites (`test_board_state.py`, `test_api_routes.py`, `test_led_helpers.py`, `test_highlight_row_swap.py`).
+- [x] Resolved Lichess Board API time control restriction (`Invalid time control` on Blitz seeks) by adding native Stockfish AI challenge support (`POST /api/challenge/ai`), difficulty levels 1–8, and auto-routing matches < 8 minutes (Bullet/Blitz) to instant AI play while preserving live human matchmaking for Rapid/Classical. Verified live virtual board game creation, move execution (`e2e4` -> Stockfish `e7e5`), and 52 passing pytest tests on the Raspberry Pi over SSH.
 
 ## Task Backlog
 
