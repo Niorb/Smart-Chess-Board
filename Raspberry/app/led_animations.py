@@ -127,27 +127,6 @@ def blend_square_in_frame(frame: List[int], c: int, r: int, color_val: int, alph
 # MOVE TRACE RENDERER
 # =============================================================================
 
-def render_move_trace(
-    path: List[Tuple[int, int]],
-    now: float,
-    frame: List[int],
-    trace_color: int = COLOR_INT_MOVE_TRACE,
-    period: float = MOVE_TRACE_PERIOD_S,
-    blend_arrival: bool = True,
-) -> None:
-    """
-    Renders an animated comet traveling along path coordinates from origin to destination.
-
-    Intermediate squares receive a traveling Gaussian comet glow.
-    The destination/arrival square pulses with an additive luminance flare upon comet arrival.
-
-    Args:
-        path: Ordered list of (file, rank) tuples from origin to destination (len >= 2).
-        now: Current timestamp in seconds (time.time()).
-        frame: LED frame buffer (list of integer colors).
-        trace_color: Color of the moving pulse.
-        period: Time in seconds for one complete traversal and decay cycle.
-        blend_arrival: Whether to blend the arrival pulse onto the existing target square color.
 def _render_sub_trace(
     path: List[Tuple[int, int]],
     sub_tau: float,
