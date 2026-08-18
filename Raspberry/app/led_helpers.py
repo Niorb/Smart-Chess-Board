@@ -12,13 +12,23 @@ import time
 try:
     from app.config import (
         COLOR_CANCELLED,
+        COLOR_CHECK,
         COLOR_CONNECTED,
         COLOR_CONNECTING,
         COLOR_ERROR,
         COLOR_FOUND_BLACK,
         COLOR_FOUND_WHITE,
+        COLOR_HIGHLIGHT,
         COLOR_IDLE,
+        COLOR_ILLEGAL,
+        COLOR_LEGAL_TARGET,
+        COLOR_OFF,
+        COLOR_OPPONENT_FROM,
+        COLOR_OPPONENT_TO,
+        COLOR_PIECE_LIFTED,
         COLOR_SEARCHING,
+        COLOR_SETUP_MISPLACED,
+        COLOR_SETUP_MISSING,
         CONNECT_PULSE_STEP_S,
         FLASH_COUNT_CANCEL,
         FLASH_COUNT_CONNECT,
@@ -39,13 +49,23 @@ try:
 except ImportError:
     from .config import (
         COLOR_CANCELLED,
+        COLOR_CHECK,
         COLOR_CONNECTED,
         COLOR_CONNECTING,
         COLOR_ERROR,
         COLOR_FOUND_BLACK,
         COLOR_FOUND_WHITE,
+        COLOR_HIGHLIGHT,
         COLOR_IDLE,
+        COLOR_ILLEGAL,
+        COLOR_LEGAL_TARGET,
+        COLOR_OFF,
+        COLOR_OPPONENT_FROM,
+        COLOR_OPPONENT_TO,
+        COLOR_PIECE_LIFTED,
         COLOR_SEARCHING,
+        COLOR_SETUP_MISPLACED,
+        COLOR_SETUP_MISSING,
         CONNECT_PULSE_STEP_S,
         FLASH_COUNT_CANCEL,
         FLASH_COUNT_CONNECT,
@@ -73,6 +93,27 @@ except ImportError:
 
     def Color(red, green, blue, white=0):
         return (white << 24) | (red << 16) | (green << 8) | blue
+
+
+# Integer color constants for layered rendering pipeline
+COLOR_INT_OFF = Color(0, 0, 0)
+COLOR_INT_IDLE = Color(*COLOR_IDLE)
+COLOR_INT_CONNECTING = Color(*COLOR_CONNECTING)
+COLOR_INT_CONNECTED = Color(*COLOR_CONNECTED)
+COLOR_INT_SEARCHING = Color(*COLOR_SEARCHING)
+COLOR_INT_FOUND_WHITE = Color(*COLOR_FOUND_WHITE)
+COLOR_INT_FOUND_BLACK = Color(*COLOR_FOUND_BLACK)
+COLOR_INT_CANCELLED = Color(*COLOR_CANCELLED)
+COLOR_INT_ERROR = Color(*COLOR_ERROR)
+COLOR_INT_SETUP_MISSING = Color(*COLOR_SETUP_MISSING)
+COLOR_INT_SETUP_MISPLACED = Color(*COLOR_SETUP_MISPLACED)
+COLOR_INT_PIECE_LIFTED = Color(*COLOR_PIECE_LIFTED)
+COLOR_INT_LEGAL_TARGET = Color(*COLOR_LEGAL_TARGET)
+COLOR_INT_OPPONENT_FROM = Color(*COLOR_OPPONENT_FROM)
+COLOR_INT_OPPONENT_TO = Color(*COLOR_OPPONENT_TO)
+COLOR_INT_CHECK = Color(*COLOR_CHECK)
+COLOR_INT_HIGHLIGHT = Color(*COLOR_HIGHLIGHT)
+COLOR_INT_ILLEGAL = Color(*COLOR_ILLEGAL)
 
 
 class DualPixelStrip:
@@ -235,8 +276,15 @@ def all_leds_color(strip, rgb):
     """Set all LEDs to the same color using hardware batch command 'A' when possible."""
     if not strip:
         return
-    r, g, b = rgb
-    val = (r << 16) | (g << 8) | b
+    if isinstance(rgb, int):
+        r = (rgb >> 16) & 0xFF
+        g = (rgb >> 8) & 0xFF
+        b = rgb & 0xFF
+        val = rgb
+    else:
+        r, g, b = rgb
+        val = (r << 16) | (g << 8) | b
+
     if hasattr(strip, 'ser') and strip.ser:
         def _do_color():
             try:

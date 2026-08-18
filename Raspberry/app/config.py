@@ -57,6 +57,17 @@ COLOR_FOUND_BLACK = (0, 255, 0)  # Green flash — playing Black
 COLOR_CANCELLED = (255, 0, 0)  # Red flash — search cancelled
 COLOR_ERROR = (255, 0, 0)  # Red flash — error occurred
 
+# Setup & Game State Layered LED Colors — (R, G, B) tuples
+COLOR_SETUP_MISSING = (20, 20, 20)  # Dim white for missing starting pieces (not full power)
+COLOR_SETUP_MISPLACED = (35, 10, 0)  # Dim amber warning for misplaced pieces during setup
+COLOR_PIECE_LIFTED = (180, 100, 0)  # Amber / Gold for lifted piece origin
+COLOR_LEGAL_TARGET = (0, 30, 60)  # Subtle deep cyan for legal target dots
+COLOR_OPPONENT_FROM = (220, 70, 0)  # Orange for opponent move origin
+COLOR_OPPONENT_TO = (0, 140, 220)  # Cyan/blue for opponent move destination
+COLOR_CHECK = (220, 0, 0)  # Red highlight on King in check
+COLOR_HIGHLIGHT = (255, 80, 0)  # Orange for diagnostic highlight
+COLOR_ILLEGAL = (180, 0, 0)  # Red for invalid placement
+
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
 # =============================================================================

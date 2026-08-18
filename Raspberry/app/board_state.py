@@ -2,8 +2,8 @@
 app/board_state.py
 
 State manager for the Smart Chess Board.
-Maintains physical sensor matrix, virtual-only simulation state, WS2812B LED frame rendering,
-and real-time synchronization with the Lichess engine.
+Maintains physical sensor matrix, virtual-only simulation state, layered WS2812B LED frame rendering,
+setup verification, move tracking, and real-time synchronization with the Lichess engine.
 """
 
 import asyncio
@@ -12,6 +12,8 @@ import logging
 import os
 import sys
 import threading
+
+import chess
 
 # Ensure parent directory is accessible for local imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -37,9 +39,30 @@ try:
 except ImportError:
     serial = None
 
-from app.config import BAUD_RATE, NUM_LEDS, SERIAL_PORT
-from app.led_helpers import Color, all_leds_off, get_led_indices, init_strip
+from app.config import (
+    BAUD_RATE,
+    NUM_LEDS,
+    SERIAL_PORT,
+)
+from app.led_helpers import (
+    COLOR_INT_CHECK,
+    COLOR_INT_HIGHLIGHT,
+    COLOR_INT_ILLEGAL,
+    COLOR_INT_LEGAL_TARGET,
+    COLOR_INT_OFF,
+    COLOR_INT_OPPONENT_FROM,
+    COLOR_INT_OPPONENT_TO,
+    COLOR_INT_PIECE_LIFTED,
+    COLOR_INT_SETUP_MISPLACED,
+    COLOR_INT_SETUP_MISSING,
+    Color,
+    all_leds_off,
+    get_led_indices,
+    init_strip,
+)
 from app.lichess_engine import lichess_engine
+from app.physical_tracker import PhysicalMoveTracker
+from app.setup_validator import SetupResult, SetupValidator
 from board_hardware import (
     BOARD_COLS,
     BOARD_ROWS,
@@ -67,6 +90,11 @@ class BoardStateManager:
         self.is_calibrating: bool = False
         self.initial_calibrating: bool = False
         self._recalibrate_lock: asyncio.Lock | None = None
+
+        # Setup verification and move tracking subsystems
+        self.setup_validator = SetupValidator()
+        self.move_tracker = PhysicalMoveTracker()
+        self.setup_result: SetupResult = self.setup_validator.validate(self.physical_state)
 
         # Hardware initialization (Serial for board + lgpio for MUX)
         try:
@@ -112,6 +140,7 @@ class BoardStateManager:
                 res = calibrate_board(self.h, self.ser)
                 if res:
                     self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+                    self.move_tracker.reset()
                 return res
             finally:
                 self.is_calibrating = False
@@ -171,6 +200,11 @@ class BoardStateManager:
 
     def get_physical_payload(self):
         from board_hardware import settings
+        setup_data = (
+            self.setup_result.to_dict()
+            if hasattr(self, "setup_result") and self.setup_result
+            else self.setup_validator.validate(self.physical_state).to_dict()
+        )
         return {
             "rows": BOARD_ROWS,
             "cols": BOARD_COLS,
@@ -183,6 +217,11 @@ class BoardStateManager:
             "disabled_squares": settings.get("disabled_squares", []),
             "initial_calibrating": getattr(self, "initial_calibrating", False),
             "virtual_only": self.virtual_only,
+            "setup": setup_data,
+            "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
+            "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
+            "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
+            "pending_opponent_move": self.move_tracker.pending_opponent_move,
         }
 
     def get_health_status(self):
@@ -234,7 +273,19 @@ class BoardStateManager:
         }
 
     def _update_leds(self):
-        if self.virtual_only or not self.strip or self.led_test_active or self.initial_calibrating or self.is_calibrating:
+        """
+        Renders the layered physical WS2812B LED frame:
+        1. Base Layer (IDLE/SETUP): Starting squares missing pieces / misplaced pieces.
+        2. Game Layer (PLAYING): King check, pending opponent move, lifted piece & legal target dots.
+        3. Diagnostic Override: highlighted_square.
+        """
+        if (
+            self.virtual_only
+            or not self.strip
+            or self.led_test_active
+            or self.initial_calibrating
+            or self.is_calibrating
+        ):
             return
 
         try:
@@ -243,26 +294,60 @@ class BoardStateManager:
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
 
-            frame = [Color(0, 0, 0)] * NUM_LEDS
+            frame = [COLOR_INT_OFF] * NUM_LEDS
 
-            for c in range(BOARD_COLS):  # c is file index (0..7)
+            def set_square_leds(c: int, r: int, color_val: int):
                 if col_mode == "manual" and c != manual_col:
-                    continue
-                for r in range(BOARD_ROWS):  # r is rank index (0..7)
-                    if self.highlighted_square == (c, r):
-                        color = Color(255, 80, 0)  # Orange for highlight
-                    else:
-                        val = self.physical_state[c][r]
-                        if val == 1:
-                            color = Color(255, 0, 0)  # Red for North
-                        elif val == -1:
-                            color = Color(0, 255, 0)  # Green for South
-                        else:
-                            continue
+                    return
+                for idx in get_led_indices(r, c):
+                    if 0 <= idx < NUM_LEDS:
+                        frame[idx] = color_val
 
-                    for idx in get_led_indices(r, c):
-                        if 0 <= idx < NUM_LEDS:
-                            frame[idx] = color
+            # Layer 1: Setup / Idle Board Validation
+            if self.game_status in ["IDLE", "SETUP"]:
+                self.setup_result = self.setup_validator.validate(self.physical_state)
+                if not self.setup_result.is_setup_ready:
+                    # Dim white for missing starting pieces
+                    for c, r in self.setup_result.missing_white + self.setup_result.missing_black:
+                        set_square_leds(c, r, COLOR_INT_SETUP_MISSING)
+                    # Red for misplaced pieces
+                    for c, r in self.setup_result.misplaced_pieces:
+                        set_square_leds(c, r, COLOR_INT_SETUP_MISPLACED)
+                # When setup is ready, all LEDs remain off
+
+            # Layer 2: Playing State Highlights
+            elif self.game_status == "PLAYING":
+                # 1. Opponent Move Indication
+                if self.move_tracker.pending_opponent_move:
+                    opp_from = self.move_tracker.pending_opponent_move["from"]
+                    opp_to = self.move_tracker.pending_opponent_move["to"]
+                    set_square_leds(opp_from[0], opp_from[1], COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(opp_to[0], opp_to[1], COLOR_INT_OPPONENT_TO)
+
+                # 2. King in Check Indicator
+                if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
+                    king_sq = lichess_engine.board.king(lichess_engine.board.turn)
+                    if king_sq is not None:
+                        k_c = chess.square_file(king_sq)
+                        k_r = chess.square_rank(king_sq)
+                        set_square_leds(k_c, k_r, COLOR_INT_CHECK)
+
+                # 3. Lifted Piece & Legal Target Dots
+                if self.move_tracker.lifted_square:
+                    l_c, l_r = self.move_tracker.lifted_square
+                    set_square_leds(l_c, l_r, COLOR_INT_PIECE_LIFTED)
+                    for t_c, t_r in self.move_tracker.legal_targets:
+                        set_square_leds(t_c, t_r, COLOR_INT_LEGAL_TARGET)
+
+                # 4. Invalid Placement Indicator
+                if self.move_tracker.invalid_placement:
+                    inv_c, inv_r = self.move_tracker.invalid_placement
+                    set_square_leds(inv_c, inv_r, COLOR_INT_ILLEGAL)
+
+            # Layer 3: Diagnostic override (highest priority)
+            if self.highlighted_square:
+                h_c, h_r = self.highlighted_square
+                set_square_leds(h_c, h_r, COLOR_INT_HIGHLIGHT)
 
             for idx, color in enumerate(frame):
                 self.strip.setPixelColor(idx, color)
@@ -347,6 +432,24 @@ class BoardStateManager:
                     apply_debounce(
                         raw_state, self.physical_state, stable_count, debounce_thresh
                     )
+
+                    # Physical Move Tracking during PLAYING state
+                    if self.game_status == "PLAYING":
+                        self.move_tracker.sync_game(lichess_engine)
+                        move_result = self.move_tracker.process_physical_state(
+                            self.physical_state, lichess_engine
+                        )
+                        if move_result:
+                            from_f, from_r, to_f, to_r, promo = move_result
+                            logger.info(
+                                f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                            )
+                            asyncio.create_task(
+                                lichess_engine.make_move(from_f, from_r, to_f, to_r, promo)
+                            )
+                    else:
+                        self.move_tracker.reset()
+
                     self._update_leds()
                 else:
                     diag_info = {

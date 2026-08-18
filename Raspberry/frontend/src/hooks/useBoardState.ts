@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+export interface SetupStatus {
+  is_setup_ready: boolean;
+  missing_white: [number, number][];
+  missing_black: [number, number][];
+  misplaced_pieces: [number, number][];
+  white_count?: number;
+  black_count?: number;
+}
+
 export interface BoardState {
   status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER';
   virtual_only?: boolean;
@@ -15,6 +24,15 @@ export interface BoardState {
     disabled_squares?: number[][];
     initial_calibrating?: boolean;
     virtual_only?: boolean;
+    setup?: SetupStatus;
+    lifted_square?: [number, number] | null;
+    legal_targets?: [number, number][];
+    invalid_placement?: [number, number] | null;
+    pending_opponent_move?: {
+      uci: string;
+      from: [number, number];
+      to: [number, number];
+    } | null;
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;
