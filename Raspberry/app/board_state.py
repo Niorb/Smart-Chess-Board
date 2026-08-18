@@ -77,13 +77,12 @@ from app.led_helpers import (
 )
 from app.coach_engine import MoveQuality, coach_engine
 from app.led_animations import (
-    get_castle_rook_move,
-    interpolate_move_path,
     render_castle_trace,
     render_move_trace,
     scale_color,
 )
 from app.lichess_engine import lichess_engine
+from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import SetupResult, SetupValidator
 from board_hardware import (
