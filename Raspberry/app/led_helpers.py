@@ -142,26 +142,33 @@ class DualPixelStrip:
             return
 
         def _do_show():
-            changed = False
-            # Send differential pixel updates ('L' command)
-            for idx in range(2 * self.num_leds_per_strip):
-                curr = self.current_colors[idx]
-                if curr != self.shown_colors[idx]:
-                    changed = True
-                    r = (curr >> 16) & 0xFF
-                    g = (curr >> 8) & 0xFF
-                    b = curr & 0xFF
-                    try:
-                        ser.write(bytes([ord('L'), idx, r, g, b]))
-                        self.shown_colors[idx] = curr
-                    except Exception as e:
-                        print(f"LED Wrapper: Error writing SetPixelColor command: {e}")
+            # Check if frame changed
+            if self.current_colors == self.shown_colors:
+                return
 
-            if changed:
-                try:
+            active_pixels = [
+                (idx, self.current_colors[idx])
+                for idx in range(len(self.current_colors))
+                if self.current_colors[idx] != 0
+            ]
+
+            try:
+                if len(active_pixels) == 0:
+                    # All LEDs should be OFF -> send fast hardware clear 'C'
+                    ser.write(b'C')
+                else:
+                    # Clear all LEDs first to guarantee no stale LEDs remain
+                    ser.write(b'C')
+                    for idx, curr in active_pixels:
+                        r = (curr >> 16) & 0xFF
+                        g = (curr >> 8) & 0xFF
+                        b = curr & 0xFF
+                        ser.write(bytes([ord('L'), idx, r, g, b]))
                     ser.write(b'W')  # Commit show
-                except Exception as e:
-                    print(f"LED Wrapper: Error writing Show command: {e}")
+
+                self.shown_colors = list(self.current_colors)
+            except Exception as e:
+                print(f"LED Wrapper: Error writing LED commands: {e}")
 
         if self.lock:
             with self.lock:

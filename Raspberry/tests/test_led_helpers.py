@@ -65,7 +65,8 @@ def test_dual_pixel_strip_lock_and_show():
     strip.setPixelColor(0, (255, 0, 0))
     strip.show()
 
-    # Check serial calls: L, 0, 255, 0, 0 followed by W
+    # Check serial calls: C, then L, 0, 255, 0, 0, then W
+    mock_ser.write.assert_any_call(b'C')
     mock_ser.write.assert_any_call(bytes([ord('L'), 0, 255, 0, 0]))
     mock_ser.write.assert_any_call(b'W')
     assert strip.shown_colors[0] == (255 << 16)
