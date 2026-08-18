@@ -7,6 +7,7 @@ and synchronization of opponent moves between the Lichess/UCI engine and the phy
 """
 
 import logging
+import time
 from typing import Any
 
 import chess
@@ -33,6 +34,22 @@ class PhysicalMoveTracker:
         self.invalid_placement: tuple[int, int] | None = None
         self.pending_opponent_move: dict[str, Any] | None = None
         self._last_synced_move_uci: str | None = None
+        self.in_flight_move: dict[str, Any] | None = None
+
+    def set_in_flight_move(
+        self, from_c: int, from_r: int, to_c: int, to_r: int, uci: str
+    ) -> None:
+        """Sets the currently in-flight move awaiting engine confirmation."""
+        self.in_flight_move = {
+            "from": (from_c, from_r),
+            "to": (to_c, to_r),
+            "uci": uci,
+            "timestamp": time.time(),
+        }
+
+    def clear_in_flight_move(self) -> None:
+        """Clears the in-flight move lock."""
+        self.in_flight_move = None
 
     def reset(self) -> None:
         """Resets all move tracking states."""
@@ -41,10 +58,12 @@ class PhysicalMoveTracker:
         self.invalid_placement = None
         self.pending_opponent_move = None
         self._last_synced_move_uci = None
+        self.in_flight_move = None
 
     def sync_game(self, engine: Any) -> None:
         """
         Detects when opponent makes a move online and sets pending_opponent_move.
+        Also clears in-flight moves once reflected in engine.
         
         Args:
             engine: LichessEngine or chess engine instance containing .game_info, .my_color, .board.
@@ -56,6 +75,20 @@ class PhysicalMoveTracker:
         last_move_uci = game_info.get("last_move")
         my_color = getattr(engine, "my_color", None)
         turn = game_info.get("turn")
+
+        # In-flight move resolution check
+        if self.in_flight_move is not None:
+            in_flight_uci = self.in_flight_move.get("uci")
+            board_last_move_uci = None
+            if hasattr(engine.board, "move_stack") and len(engine.board.move_stack) > 0:
+                board_last_move_uci = engine.board.peek().uci()
+
+            if (last_move_uci and last_move_uci == in_flight_uci) or (
+                board_last_move_uci and board_last_move_uci == in_flight_uci
+            ):
+                logger.info(f"In-flight move {in_flight_uci} confirmed by engine.")
+                self._last_synced_move_uci = in_flight_uci
+                self.in_flight_move = None
 
         if not last_move_uci or len(last_move_uci) < 4:
             return
@@ -98,6 +131,19 @@ class PhysicalMoveTracker:
         """
         if not engine or not getattr(engine, "board", None):
             return None
+
+        # ---------------------------------------------------------------------
+        # 0. Handle In-Flight Move Lock
+        # ---------------------------------------------------------------------
+        if self.in_flight_move is not None:
+            elapsed = time.time() - self.in_flight_move.get("timestamp", 0.0)
+            if elapsed > 5.0:
+                logger.warning(
+                    f"In-flight move lock timed out after {elapsed:.1f}s: {self.in_flight_move.get('uci')}. Releasing lock."
+                )
+                self.in_flight_move = None
+            else:
+                return None
 
         board: chess.Board = engine.board
 
@@ -188,8 +234,11 @@ class PhysicalMoveTracker:
                     ]
                     promo = "q" if promo_moves else None
 
+                    uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{promo or ''}"
+                    self.set_in_flight_move(from_c, from_r, t_c, t_r, uci_move)
+
                     move_result = (from_c + 1, from_r + 1, t_c + 1, t_r + 1, promo)
-                    logger.info(f"Physical move completed: ({from_c},{from_r}) -> ({t_c},{t_r}) promo={promo}")
+                    logger.info(f"Physical move completed: ({from_c},{from_r}) -> ({t_c},{t_r}) promo={promo} uci={uci_move}")
 
                     self.lifted_square = None
                     self.legal_targets = []
@@ -226,4 +275,14 @@ class PhysicalMoveTracker:
             "legal_targets": [list(sq) for sq in self.legal_targets],
             "invalid_placement": list(self.invalid_placement) if self.invalid_placement else None,
             "pending_opponent_move": self.pending_opponent_move,
+            "in_flight_move": (
+                {
+                    "from": list(self.in_flight_move["from"]),
+                    "to": list(self.in_flight_move["to"]),
+                    "uci": self.in_flight_move["uci"],
+                    "timestamp": self.in_flight_move.get("timestamp", 0.0),
+                }
+                if self.in_flight_move
+                else None
+            ),
         }

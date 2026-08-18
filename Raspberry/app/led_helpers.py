@@ -146,24 +146,27 @@ class DualPixelStrip:
             if self.current_colors == self.shown_colors:
                 return
 
-            active_pixels = [
-                (idx, self.current_colors[idx])
-                for idx in range(len(self.current_colors))
-                if self.current_colors[idx] != 0
-            ]
-
             try:
-                if len(active_pixels) == 0:
-                    # All LEDs should be OFF -> send fast hardware clear 'C'
-                    ser.write(b'C')
-                else:
-                    # Clear all LEDs first to guarantee no stale LEDs remain
-                    ser.write(b'C')
-                    for idx, curr in active_pixels:
+                all_current_off = not any(self.current_colors)
+                all_shown_off = not any(self.shown_colors)
+
+                if all_current_off:
+                    if not all_shown_off:
+                        ser.write(b'C')
+                    self.shown_colors = list(self.current_colors)
+                    return
+
+                changed = False
+                for idx in range(len(self.current_colors)):
+                    curr = self.current_colors[idx]
+                    if curr != self.shown_colors[idx]:
+                        changed = True
                         r = (curr >> 16) & 0xFF
                         g = (curr >> 8) & 0xFF
                         b = curr & 0xFF
                         ser.write(bytes([ord('L'), idx, r, g, b]))
+
+                if changed:
                     ser.write(b'W')  # Commit show
 
                 self.shown_colors = list(self.current_colors)

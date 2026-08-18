@@ -198,6 +198,16 @@ class BoardStateManager:
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
+            "in_flight_move": (
+                {
+                    "from": list(self.move_tracker.in_flight_move["from"]),
+                    "to": list(self.move_tracker.in_flight_move["to"]),
+                    "uci": self.move_tracker.in_flight_move["uci"],
+                    "timestamp": self.move_tracker.in_flight_move.get("timestamp", 0.0),
+                }
+                if self.move_tracker.in_flight_move
+                else None
+            ),
         }
 
     def get_health_status(self):
@@ -419,8 +429,19 @@ class BoardStateManager:
                             logger.info(
                                 f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
                             )
+
+                            async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
+                                try:
+                                    success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                                    if not success:
+                                        logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                        self.move_tracker.clear_in_flight_move()
+                                except Exception as err:
+                                    logger.error(f"Unexpected error dispatching move: {err}")
+                                    self.move_tracker.clear_in_flight_move()
+
                             asyncio.create_task(
-                                lichess_engine.make_move(from_f, from_r, to_f, to_r, promo)
+                                _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
                             )
                     else:
                         self.move_tracker.reset()

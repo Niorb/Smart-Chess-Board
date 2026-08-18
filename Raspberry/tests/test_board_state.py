@@ -32,6 +32,7 @@ def test_physical_payload_structure():
     assert "highlighted_square" in payload
     assert "disabled_squares" in payload
     assert "virtual_only" in payload
+    assert "in_flight_move" in payload
     assert payload["virtual_only"] is False
 
 

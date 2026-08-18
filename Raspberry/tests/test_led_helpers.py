@@ -61,17 +61,25 @@ def test_dual_pixel_strip_lock_and_show():
     lock = threading.Lock()
     strip.set_serial_conn(mock_ser, lock=lock)
 
-    # Set pixel 0 to red
+    # Set pixel 0 to red (from initial all-off)
     strip.setPixelColor(0, (255, 0, 0))
     strip.show()
 
-    # Check serial calls: C, then L, 0, 255, 0, 0, then W
-    mock_ser.write.assert_any_call(b'C')
+    # Differential check: L 0 255 0 0, then W (NO 'C' blackout!)
+    assert b'C' not in [call.args[0] for call in mock_ser.write.call_args_list]
     mock_ser.write.assert_any_call(bytes([ord('L'), 0, 255, 0, 0]))
     mock_ser.write.assert_any_call(b'W')
     assert strip.shown_colors[0] == (255 << 16)
 
-    # Test all_leds_off with lock
+    # Change pixel 0 to green
+    mock_ser.reset_mock()
+    strip.setPixelColor(0, (0, 255, 0))
+    strip.show()
+    assert b'C' not in [call.args[0] for call in mock_ser.write.call_args_list]
+    mock_ser.write.assert_any_call(bytes([ord('L'), 0, 0, 255, 0]))
+    mock_ser.write.assert_any_call(b'W')
+
+    # Test all_leds_off with lock -> transitions to all-off, so 'C' is sent
     mock_ser.reset_mock()
     all_leds_off(strip)
     mock_ser.write.assert_called_with(b'C')

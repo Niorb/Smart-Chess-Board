@@ -36,6 +36,12 @@ export interface BoardState {
       from: [number, number];
       to: [number, number];
     } | null;
+    in_flight_move?: {
+      uci: string;
+      from: [number, number];
+      to: [number, number];
+      timestamp?: number;
+    } | null;
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;

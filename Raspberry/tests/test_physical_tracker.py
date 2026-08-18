@@ -149,3 +149,66 @@ def test_opponent_move_sync_and_mirror(initial_physical_state, mock_engine):
     assert res is None
     # Pending opponent move should now be cleared!
     assert tracker.pending_opponent_move is None
+
+
+def test_in_flight_move_locking_and_sync(initial_physical_state, mock_engine):
+    tracker = PhysicalMoveTracker()
+
+    # 1. Lift e2
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0
+    tracker.process_physical_state(state, mock_engine)
+
+    # 2. Place on e4 (e2e4)
+    state[4][3] = -1
+    res = tracker.process_physical_state(state, mock_engine)
+    assert res == (5, 2, 5, 4, None)
+
+    # Tracker should now be in IN-FLIGHT state
+    assert tracker.in_flight_move is not None
+    assert tracker.in_flight_move["uci"] == "e2e4"
+    assert tracker.in_flight_move["from"] == (4, 1)
+    assert tracker.in_flight_move["to"] == (4, 3)
+
+    # 3. Next 10ms scan loop while network request is in-flight:
+    # Sensor still has e2 empty and e4 occupied, but mock_engine.board hasn't updated yet!
+    res_subsequent = tracker.process_physical_state(state, mock_engine)
+    # MUST return None and NOT re-lift e2!
+    assert res_subsequent is None
+    assert tracker.lifted_square is None
+    assert len(tracker.legal_targets) == 0
+
+    # 4. Engine receives confirmation and updates
+    mock_engine.board.push_san("e4")
+    mock_engine.game_info["last_move"] = "e2e4"
+    mock_engine.game_info["turn"] = "black"
+
+    tracker.sync_game(mock_engine)
+    # In-flight lock should now be cleared
+    assert tracker.in_flight_move is None
+
+
+def test_in_flight_move_safety_timeout(initial_physical_state, mock_engine):
+    import time
+    tracker = PhysicalMoveTracker()
+
+    # Manually set an in-flight move with an old timestamp (> 5s ago)
+    tracker.set_in_flight_move(4, 1, 4, 3, "e2e4")
+    tracker.in_flight_move["timestamp"] = time.time() - 6.0
+
+    state = [row[:] for row in initial_physical_state]
+    # In-flight lock should time out and release
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.in_flight_move is None
+
+
+def test_tracker_to_dict_and_reset(initial_physical_state, mock_engine):
+    tracker = PhysicalMoveTracker()
+    tracker.set_in_flight_move(4, 1, 4, 3, "e2e4")
+    payload = tracker.to_dict()
+    assert payload["in_flight_move"] is not None
+    assert payload["in_flight_move"]["uci"] == "e2e4"
+
+    tracker.reset()
+    assert tracker.in_flight_move is None
+    assert tracker.to_dict()["in_flight_move"] is None
