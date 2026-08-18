@@ -229,5 +229,139 @@ def test_settle_us_auto_migration_and_atomic_save(tmp_path=None):
         del os.environ["BOARD_SETTINGS_PATH"]
 
 
+def test_scan_board_immutability_of_baselines():
+    """Verify that active scan_board iterations do not mutate baseline values in settings."""
+    import struct
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, scan_board, settings
+
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    # Set a distinct baseline matrix
+    initial_baselines = [[1600 + c * 10 + r for r in range(BOARD_ROWS)] for c in range(BOARD_COLS)]
+    settings["baselines"] = [row.copy() for row in initial_baselines]
+
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    mock_ser = MagicMock()
+
+    # Create raw scan values with drift/fluctuations
+    raw_vals = [0] * 64
+    for mux_ch in range(8):
+        c = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r in range(8):
+            raw_vals[mux_ch * 8 + r] = initial_baselines[c][r] + 50
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    def mock_read(n):
+        if n == 2:
+            return packet_header
+        if n == 128:
+            return packet_data
+        return b''
+
+    mock_ser.read.side_effect = mock_read
+
+    # Run multiple scan cycles
+    for _ in range(10):
+        scan_board("mock_h", mock_ser, raw_state)
+
+    # Baselines MUST remain identical to initial_baselines
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            assert settings["baselines"][c][r] == initial_baselines[c][r]
+
+
+def test_starting_position_piece_detection_after_piece_calibration():
+    """Verify piece calibration, detection on starting ranks, and SetupValidator readiness."""
+    import struct
+    from unittest.mock import MagicMock
+    from app.setup_validator import SetupValidator
+    from board_hardware import (
+        DEFAULT_COL_MUX_MAP,
+        apply_debounce,
+        calibrate_board_with_pieces,
+        scan_board,
+        settings,
+    )
+
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+
+    # 1. Simulate calibration with pieces placed:
+    # Middle ranks 3..6 have ambient baseline 1550 + c * 10
+    # Occupied ranks 1-2 have White piece reading (e.g. 1200)
+    # Occupied ranks 7-8 have Black piece reading (e.g. 1900)
+    calib_vals = [0] * 64
+    for mux_ch in range(8):
+        c = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r in range(8):
+            if r in (0, 1):
+                val = 1200 + c * 10  # White pieces on ranks 1-2
+            elif r in (2, 3, 4, 5):
+                val = 1550 + c * 10  # Empty ranks 3-6
+            else:
+                val = 1900 + c * 10  # Black pieces on ranks 7-8
+            calib_vals[mux_ch * 8 + r] = val
+
+    packet_header = b'\xaa\x55'
+    calib_packet = struct.pack('<64H', *calib_vals)
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (calib_packet if n == 128 else b'')
+
+    with patch("board_hardware.save_settings"):
+        res = calibrate_board_with_pieces(None, mock_ser, duration_s=0.05)
+        assert res is True
+
+    # Check baseline inheritance:
+    for c in range(8):
+        expected_rank3_base = 1550 + c * 10
+        expected_rank6_base = 1550 + c * 10
+        # Ranks 1-2 must inherit Rank 3 baseline
+        assert settings["baselines"][c][0] == expected_rank3_base
+        assert settings["baselines"][c][1] == expected_rank3_base
+        # Ranks 7-8 must inherit Rank 6 baseline
+        assert settings["baselines"][c][6] == expected_rank6_base
+        assert settings["baselines"][c][7] == expected_rank6_base
+
+    # 2. Simulate board scan with pieces placed in starting position
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # Run scan
+    scan_board(None, mock_ser, raw_state)
+
+    # Check polarities:
+    for c in range(8):
+        # White pieces on ranks 1 & 2 -> -1 (South)
+        assert raw_state[c][0] == -1
+        assert raw_state[c][1] == -1
+        # Empty ranks 3-6 -> 0
+        assert raw_state[c][2] == 0
+        assert raw_state[c][3] == 0
+        assert raw_state[c][4] == 0
+        assert raw_state[c][5] == 0
+        # Black pieces on ranks 7 & 8 -> +1 (North)
+        assert raw_state[c][6] == 1
+        assert raw_state[c][7] == 1
+
+    # Apply debounce over 2 cycles
+    for _ in range(2):
+        apply_debounce(raw_state, physical_state, stable_count, threshold=2)
+
+    # Validate with SetupValidator
+    validator = SetupValidator()
+    setup_res = validator.validate(physical_state)
+    assert setup_res.is_setup_ready is True
+    assert len(setup_res.missing_white) == 0
+    assert len(setup_res.missing_black) == 0
+    assert len(setup_res.misplaced_pieces) == 0
+    assert setup_res.white_count == 16
+    assert setup_res.black_count == 16
+
+
 
 

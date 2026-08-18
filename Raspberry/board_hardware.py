@@ -291,26 +291,6 @@ def scan_board(h, serial_conn, raw_state):
                         raw_state[c][r] = -1
                     else:
                         raw_state[c][r] = 0
-
-                    # Dynamic baseline moving average update (4 seconds window)
-                    now = time.time()
-                    detected = (raw_state[c][r] != 0)
-
-                    if (c, r) not in baseline_history:
-                        baseline_history[(c, r)] = []
-
-                    baseline_history[(c, r)].append((now, val, detected))
-
-                    # Keep only entries within the last baseline_window_s seconds
-                    baseline_window = settings.get("baseline_window_s", 2)
-                    history = baseline_history[(c, r)]
-                    while history and (now - history[0][0]) > baseline_window:
-                        history.pop(0)
-                    any_magnet = any(entry[2] for entry in history)
-
-                    if not any_magnet and len(history) > 0:
-                        avg_val = sum(entry[1] for entry in history) / len(history)
-                        settings["baselines"][c][r] = int(avg_val)
         else:
             diag["errors"] = non_mocked_count
             diag["status"] = "TIMEOUT"
