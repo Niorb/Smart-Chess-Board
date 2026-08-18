@@ -53,6 +53,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Resolved Lichess Board API time control restriction (`Invalid time control` on Blitz seeks) by adding native Stockfish AI challenge support (`POST /api/challenge/ai`), difficulty levels 1–8, and auto-routing matches < 8 minutes (Bullet/Blitz) to instant AI play while preserving live human matchmaking for Rapid/Classical. Verified live virtual board game creation, move execution (`e2e4` -> Stockfish `e7e5`), and 52 passing pytest tests on the Raspberry Pi over SSH.
 - [x] Added configurable ELO rating boundaries (`ratingRange` parameter in `POST /api/board/seek`) to backend and web frontend, supporting presets (`Any`, `±100`, `±200`, `±300`, `±500`) and custom Min/Max ELO filters. All 53 unit/integration tests and frontend production build verified on Raspberry Pi.
 - [x] Restored dynamic baseline drift tracking for empty middle ranks (Ranks 3-6) in `scan_board()` with starting piece ranks (Ranks 1-2 and 7-8) inheriting Rank 3 and Rank 6 baseline updates per column, preventing piece magnet absorption while maintaining live ambient temperature/voltage drift compensation.
+- [x] Implemented smart piece auto-detection against reference ranks 3 & 6, 3-way mode switch (`Auto` / `Pieces Placed` / `Empty Board`), ±100 default thresholds, 1000 max slider cap, and live Web UI status badge.
 - [x] Fixed "Calibrate with pieces placed" feature and verified `SetupValidator` and dim white LED adjustment when all pieces are placed.
 
 ## Task Backlog

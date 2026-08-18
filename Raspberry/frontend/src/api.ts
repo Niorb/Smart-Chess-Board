@@ -105,7 +105,8 @@ export async function updateBoardSettings(
   muxSettleMs?: number,
   debounceThreshold?: number,
   baselineWindowS?: number,
-  disabledSquares?: number[][]
+  disabledSquares?: number[][],
+  piecesMode?: 'auto' | 'pieces' | 'empty'
 ) {
   const body: Record<string, unknown> = {};
   if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
@@ -117,6 +118,7 @@ export async function updateBoardSettings(
   if (debounceThreshold !== undefined && debounceThreshold !== null) body.debounce_threshold = debounceThreshold;
   if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
   if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
+  if (piecesMode !== undefined && piecesMode !== null) body.pieces_mode = piecesMode;
 
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',

@@ -93,6 +93,7 @@ class ThresholdSettings(BaseModel):
     debounce_threshold: int | float | None = None
     baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
+    pieces_mode: str | None = None  # "auto" | "pieces" | "empty"
 
 
 class HighlightRequest(BaseModel):
@@ -190,6 +191,8 @@ async def update_board_settings(body: ThresholdSettings):
         settings["baseline_window_s"] = int(body.baseline_window_s)
     if body.disabled_squares is not None:
         settings["disabled_squares"] = body.disabled_squares
+    if body.pieces_mode is not None:
+        settings["pieces_mode"] = body.pieces_mode
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 

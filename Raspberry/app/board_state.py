@@ -171,12 +171,13 @@ class BoardStateManager:
                         logger.error(f"Error turning off LEDs after calibration with pieces: {e}")
 
     def get_physical_payload(self):
-        from board_hardware import settings
+        from board_hardware import get_latest_detection_state, settings
         setup_data = (
             self.setup_result.to_dict()
             if hasattr(self, "setup_result") and self.setup_result
             else self.setup_validator.validate(self.physical_state).to_dict()
         )
+        detection = get_latest_detection_state()
         return {
             "rows": BOARD_ROWS,
             "cols": BOARD_COLS,
@@ -189,6 +190,10 @@ class BoardStateManager:
             "disabled_squares": settings.get("disabled_squares", []),
             "virtual_only": self.virtual_only,
             "setup": setup_data,
+            "pieces_detected": detection.get("pieces_detected", False),
+            "detected_starting_count": detection.get("detected_starting_count", 0),
+            "pieces_mode": settings.get("pieces_mode", "auto"),
+            "effective_pieces_mode": detection.get("effective_pieces_mode", False),
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,

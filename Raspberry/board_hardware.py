@@ -62,8 +62,8 @@ DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {
     "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
-    "threshold_positive": 150,
-    "threshold_negative": 150,
+    "threshold_positive": 100,
+    "threshold_negative": 100,
     "col_mode": "auto",
     "manual_col": 0,
     "scan_delay": 100,
@@ -72,6 +72,7 @@ settings: dict[str, Any] = {
     "baseline_window_s": 2,
     "disabled_squares": [],
     "col_mux_map": list(DEFAULT_COL_MUX_MAP),
+    "pieces_mode": "auto",  # "auto" | "pieces" | "empty"
 }
 
 last_sent_settle_us = None
@@ -207,6 +208,18 @@ load_settings()
 # Dynamic baseline history (timestamp, raw_value, detected_magnet) for each square
 baseline_history: dict = {}
 
+# Latest smart piece detection status
+latest_detection_state: dict[str, Any] = {
+    "pieces_detected": False,
+    "detected_starting_count": 0,
+    "pieces_mode": "auto",
+    "effective_pieces_mode": False,
+}
+
+
+def get_latest_detection_state() -> dict[str, Any]:
+    return dict(latest_detection_state)
+
 # =============================================================================
 # MUX PIN ASSIGNMENTS & COMPATIBILITY STUBS
 # =============================================================================
@@ -292,34 +305,101 @@ def scan_board(h, serial_conn, raw_state):
                     else:
                         raw_state[c][r] = 0
 
-                    # Dynamic baseline drift tracking for empty middle ranks (Ranks 3-6)
-                    baseline_window = settings.get("baseline_window_s", 2)
-                    if baseline_window > 0 and r in (2, 3, 4, 5):
-                        now = time.time()
-                        detected = (raw_state[c][r] != 0)
+            # Smart Starting Piece Detection against Ranks 3 & 6
+            thresh_pos = settings.get("threshold_positive", 100)
+            thresh_neg = settings.get("threshold_negative", 100)
+            detected_starting_count = 0
 
-                        if (c, r) not in baseline_history:
-                            baseline_history[(c, r)] = []
+            for c in range(BOARD_COLS):
+                ref_rank3 = matrix[c][2]  # Rank 3 reference
+                ref_rank6 = matrix[c][5]  # Rank 6 reference
 
-                        baseline_history[(c, r)].append((now, val, detected))
+                # White starting pieces on Ranks 1 & 2 (r=0, 1)
+                for r in (0, 1):
+                    diff_white = matrix[c][r] - ref_rank3
+                    if diff_white < -thresh_neg or diff_white > thresh_pos:
+                        detected_starting_count += 1
 
-                        history = baseline_history[(c, r)]
-                        while history and (now - history[0][0]) > baseline_window:
-                            history.pop(0)
+                # Black starting pieces on Ranks 7 & 8 (r=6, 7)
+                for r in (6, 7):
+                    diff_black = matrix[c][r] - ref_rank6
+                    if diff_black > thresh_pos or diff_black < -thresh_neg:
+                        detected_starting_count += 1
 
-                        # Check if window is populated and no magnet was detected
-                        if len(history) > 0 and not any(entry[2] for entry in history):
-                            if (now - history[0][0]) >= (baseline_window * 0.8):
-                                avg_val = int(sum(entry[1] for entry in history) / len(history))
-                                settings["baselines"][c][r] = avg_val
+            pieces_detected = (detected_starting_count >= 4)
+            pieces_mode = settings.get("pieces_mode", "auto")
 
-                                # Propagate baseline drift to corresponding starting piece ranks
-                                if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
-                                    settings["baselines"][c][0] = avg_val
-                                    settings["baselines"][c][1] = avg_val
+            if pieces_mode == "pieces":
+                effective_pieces_mode = True
+            elif pieces_mode == "empty":
+                effective_pieces_mode = False
+            else:
+                effective_pieces_mode = pieces_detected
+
+            global latest_detection_state
+            latest_detection_state = {
+                "pieces_detected": pieces_detected,
+                "detected_starting_count": detected_starting_count,
+                "pieces_mode": pieces_mode,
+                "effective_pieces_mode": effective_pieces_mode,
+            }
+
+            diag["pieces_detected"] = pieces_detected
+            diag["detected_starting_count"] = detected_starting_count
+            diag["pieces_mode"] = pieces_mode
+            diag["effective_pieces_mode"] = effective_pieces_mode
+
+            # Dynamic baseline drift tracking
+            baseline_window = settings.get("baseline_window_s", 2)
+            if baseline_window > 0:
+                now = time.time()
+                if effective_pieces_mode:
+                    # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8
+                    for c in range(BOARD_COLS):
+                        for r in (2, 3, 4, 5):
+                            val = matrix[c][r]
+                            detected = (raw_state[c][r] != 0)
+
+                            if (c, r) not in baseline_history:
+                                baseline_history[(c, r)] = []
+
+                            baseline_history[(c, r)].append((now, val, detected))
+
+                            history = baseline_history[(c, r)]
+                            while history and (now - history[0][0]) > baseline_window:
+                                history.pop(0)
+
+                            if len(history) > 0 and not any(entry[2] for entry in history):
+                                if (now - history[0][0]) >= (baseline_window * 0.8):
+                                    avg_val = int(sum(entry[1] for entry in history) / len(history))
+                                    settings["baselines"][c][r] = avg_val
+
+                                    if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
+                                        settings["baselines"][c][0] = avg_val
+                                        settings["baselines"][c][1] = avg_val
                                 elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
                                     settings["baselines"][c][6] = avg_val
                                     settings["baselines"][c][7] = avg_val
+                else:
+                    # Empty Board Mode: All 64 squares (ranks 1-8) drift directly on their own readings
+                    for c in range(BOARD_COLS):
+                        for r in range(BOARD_ROWS):
+                            val = matrix[c][r]
+                            detected = (raw_state[c][r] != 0)
+
+                            if (c, r) not in baseline_history:
+                                baseline_history[(c, r)] = []
+
+                            baseline_history[(c, r)].append((now, val, detected))
+
+                            history = baseline_history[(c, r)]
+                            while history and (now - history[0][0]) > baseline_window:
+                                history.pop(0)
+
+                            if len(history) > 0 and not any(entry[2] for entry in history):
+                                if (now - history[0][0]) >= (baseline_window * 0.8):
+                                    avg_val = int(sum(entry[1] for entry in history) / len(history))
+                                    settings["baselines"][c][r] = avg_val
         else:
             diag["errors"] = non_mocked_count
             diag["status"] = "TIMEOUT"

@@ -477,5 +477,100 @@ def test_starting_position_piece_detection_after_piece_calibration():
     assert setup_res.black_count == 16
 
 
+def test_smart_pieces_detection_auto_and_manual_modes():
+    """Verify smart pieces detection against ranks 3 & 6 and manual mode overrides."""
+    import struct
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, scan_board, settings
+
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["threshold_positive"] = 100
+    settings["threshold_negative"] = 100
+    settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # 1. Full starting pieces layout
+    raw_vals = [0] * 64
+    for mux_ch in range(8):
+        c = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r in range(8):
+            if r in (0, 1):
+                raw_vals[mux_ch * 8 + r] = 1200  # White pieces (< 1550 - 100)
+            elif r in (6, 7):
+                raw_vals[mux_ch * 8 + r] = 1900  # Black pieces (> 1550 + 100)
+            else:
+                raw_vals[mux_ch * 8 + r] = 1550  # Empty middle ranks
+    
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    # Auto Mode with pieces placed
+    settings["pieces_mode"] = "auto"
+    _, diag = scan_board(None, mock_ser, raw_state)
+    assert diag["pieces_detected"] is True
+    assert diag["detected_starting_count"] == 32
+    assert diag["effective_pieces_mode"] is True
+
+    # Manual Override: Force Empty
+    settings["pieces_mode"] = "empty"
+    _, diag = scan_board(None, mock_ser, raw_state)
+    assert diag["pieces_detected"] is True
+    assert diag["pieces_mode"] == "empty"
+    assert diag["effective_pieces_mode"] is False
+
+    # 2. Empty board layout (all raw values near 1550)
+    empty_vals = [1550] * 64
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *empty_vals) if n == 128 else b'')
+
+    # Auto Mode with empty board
+    settings["pieces_mode"] = "auto"
+    _, diag = scan_board(None, mock_ser, raw_state)
+    assert diag["pieces_detected"] is False
+    assert diag["detected_starting_count"] == 0
+    assert diag["effective_pieces_mode"] is False
+
+    # Manual Override: Force Pieces
+    settings["pieces_mode"] = "pieces"
+    _, diag = scan_board(None, mock_ser, raw_state)
+    assert diag["pieces_detected"] is False
+    assert diag["pieces_mode"] == "pieces"
+    assert diag["effective_pieces_mode"] is True
+
+
+def test_empty_board_mode_calibrates_all_64_squares_directly():
+    """Verify that when effective_pieces_mode is False, all 64 squares update directly."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["pieces_mode"] = "empty"  # Force empty board mode
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 100
+    settings["threshold_negative"] = 100
+    settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # Provide distinct reading of 1530 for all squares
+    raw_vals = [1530] * 64
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    # Seed baseline_history for all 64 squares
+    t0 = time.time() - 0.085
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            baseline_history[(c, r)] = [(t0, 1530, False)]
+
+    scan_board(None, mock_ser, raw_state)
+
+    # All 64 squares (ranks 0..7) should update directly to 1530
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            assert settings["baselines"][c][r] == 1530
+
+
 
 

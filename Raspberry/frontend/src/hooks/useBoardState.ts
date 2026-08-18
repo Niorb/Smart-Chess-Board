@@ -24,6 +24,10 @@ export interface BoardState {
     disabled_squares?: number[][];
     virtual_only?: boolean;
     setup?: SetupStatus;
+    pieces_detected?: boolean;
+    detected_starting_count?: number;
+    pieces_mode?: 'auto' | 'pieces' | 'empty';
+    effective_pieces_mode?: boolean;
     lifted_square?: [number, number] | null;
     legal_targets?: [number, number][];
     invalid_placement?: [number, number] | null;

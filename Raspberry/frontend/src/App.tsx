@@ -307,16 +307,18 @@ function App() {
     debounce_threshold?: number;
     baseline_window_s?: number;
     disabled_squares?: number[][];
+    pieces_mode?: 'auto' | 'pieces' | 'empty';
   } | null>(null);
 
-  const [positiveThresh, setPositiveThresh] = useState<number>(150);
-  const [negativeThresh, setNegativeThresh] = useState<number>(150);
+  const [positiveThresh, setPositiveThresh] = useState<number>(100);
+  const [negativeThresh, setNegativeThresh] = useState<number>(100);
   const [colMode, setColMode] = useState<'auto' | 'manual'>('auto');
   const [manualCol, setManualCol] = useState<number>(0);
   const [scanDelay, setScanDelay] = useState<number>(100);
   const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
   const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
   const [baselineWindowS, setBaselineWindowS] = useState<number>(2);
+  const [piecesMode, setPiecesMode] = useState<'auto' | 'pieces' | 'empty'>('auto');
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -326,14 +328,15 @@ function App() {
       try {
         const res = await getBoardSettings();
         setSettings(res);
-        setPositiveThresh(res.threshold_positive ?? 150);
-        setNegativeThresh(res.threshold_negative ?? 150);
+        setPositiveThresh(res.threshold_positive ?? 100);
+        setNegativeThresh(res.threshold_negative ?? 100);
         setColMode(res.col_mode || 'auto');
         setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
         setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
         setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
         setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
         setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
+        setPiecesMode(res.pieces_mode ?? 'auto');
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -450,7 +453,8 @@ function App() {
         muxSettleMs,
         debounceThreshold,
         baselineWindowS,
-        currentDisabled
+        currentDisabled,
+        piecesMode
       );
       if (res.status === 'success') {
         setSettings(res.settings);
@@ -461,6 +465,33 @@ function App() {
     } catch (err) {
       console.error(err);
       setSettingsStatus("Error saving thresholds");
+    } finally {
+      setTimeout(() => setSettingsStatus(null), 4000);
+    }
+  };
+
+  const handleSetPiecesMode = async (newMode: 'auto' | 'pieces' | 'empty') => {
+    setPiecesMode(newMode);
+    const currentDisabled = state.physical.disabled_squares ?? [];
+    try {
+      const res = await updateBoardSettings(
+        positiveThresh,
+        negativeThresh,
+        colMode,
+        manualCol,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS,
+        currentDisabled,
+        newMode
+      );
+      if (res.status === 'success') {
+        setSettings(res.settings);
+        setSettingsStatus(`Board mode set to ${newMode.toUpperCase()}`);
+      }
+    } catch (err) {
+      console.error("Error setting pieces mode:", err);
     } finally {
       setTimeout(() => setSettingsStatus(null), 4000);
     }
@@ -1164,8 +1195,8 @@ function App() {
                   </div>
                   <input 
                     type="range"
-                    min="50"
-                    max="3000"
+                    min="10"
+                    max="1000"
                     step="10"
                     value={positiveThresh}
                     onChange={(e) => setPositiveThresh(parseInt(e.target.value))}
@@ -1180,8 +1211,8 @@ function App() {
                   </div>
                   <input 
                     type="range"
-                    min="50"
-                    max="3000"
+                    min="10"
+                    max="1000"
                     step="10"
                     value={negativeThresh}
                     onChange={(e) => setNegativeThresh(parseInt(e.target.value))}
@@ -1198,6 +1229,69 @@ function App() {
                 {settingsStatus && (
                   <span className="text-[10px] text-blue-400 font-mono text-center font-bold">{settingsStatus}</span>
                 )}
+
+                <hr className="border-slate-800/80 my-1" />
+
+                {/* Smart Pieces Detection Status & Mode Switch */}
+                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">
+                      Initial Pieces Detection
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                      state.physical.effective_pieces_mode
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                    }`}>
+                      {state.physical.effective_pieces_mode
+                        ? `Pieces Present (${state.physical.detected_starting_count ?? 0}/32)`
+                        : `Empty Board (${state.physical.detected_starting_count ?? 0}/32)`}
+                    </span>
+                  </div>
+
+                  <div className="text-[10px] text-slate-400 leading-tight">
+                    {state.physical.effective_pieces_mode
+                      ? 'In-loop baseline calibration active on middle ranks (propagating to ranks 1-2 & 7-8).'
+                      : 'In-loop baseline calibration active on all 64 squares directly.'}
+                  </div>
+
+                  {/* 3-Way Mode Switch */}
+                  <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => handleSetPiecesMode('auto')}
+                      className={`py-1.5 px-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                        piecesMode === 'auto'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      Auto (Smart)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetPiecesMode('pieces')}
+                      className={`py-1.5 px-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                        piecesMode === 'pieces'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      Pieces Placed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetPiecesMode('empty')}
+                      className={`py-1.5 px-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                        piecesMode === 'empty'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      Empty Board
+                    </button>
+                  </div>
+                </div>
 
                 <hr className="border-slate-800/80 my-1" />
 

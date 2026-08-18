@@ -81,8 +81,8 @@
             1900
         ]
     ],
-    "threshold_positive": 120,
-    "threshold_negative": 120,
+    "threshold_positive": 100,
+    "threshold_negative": 100,
     "col_mode": "auto",
     "manual_col": -1,
     "scan_delay": 50,
@@ -91,5 +91,6 @@
     "baseline_window_s": 2,
     "disabled_squares": [],
     "mux_settle_ms": 10,
-    "col_mux_map": [7, 6, 5, 4, 3, 2, 1, 0]
+    "col_mux_map": [7, 6, 5, 4, 3, 2, 1, 0],
+    "pieces_mode": "auto"
 }
