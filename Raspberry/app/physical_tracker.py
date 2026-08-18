@@ -163,22 +163,7 @@ class PhysicalMoveTracker:
             return None
 
         # ---------------------------------------------------------------------
-        # 0. Handle In-Flight Move Lock
-        # ---------------------------------------------------------------------
-        if self.in_flight_move is not None:
-            elapsed = time.time() - self.in_flight_move.get("timestamp", 0.0)
-            if elapsed > 5.0:
-                logger.warning(
-                    f"In-flight move lock timed out after {elapsed:.1f}s: {self.in_flight_move.get('uci')}. Releasing lock."
-                )
-                self.in_flight_move = None
-            else:
-                return None
-
-        board: chess.Board = engine.board
-
-        # ---------------------------------------------------------------------
-        # 1. Handle Pending Opponent Move
+        # 0. Handle Pending Opponent Move
         # ---------------------------------------------------------------------
         if self.pending_opponent_move is not None:
             opp_from = self.pending_opponent_move["from"]
@@ -228,7 +213,7 @@ class PhysicalMoveTracker:
             return None
 
         # ---------------------------------------------------------------------
-        # 1.5 Handle Player's Pending Castling Rook Movement
+        # 0.5 Handle Player's Pending Castling Rook Movement
         # ---------------------------------------------------------------------
         if self.pending_castling_rook is not None:
             r_from_c, r_from_r = self.pending_castling_rook["from"]
@@ -249,6 +234,21 @@ class PhysicalMoveTracker:
             elif elapsed > 20.0:
                 logger.info("Player pending castling Rook timed out.")
                 self.pending_castling_rook = None
+
+        # ---------------------------------------------------------------------
+        # 1. Handle In-Flight Move Lock
+        # ---------------------------------------------------------------------
+        if self.in_flight_move is not None:
+            elapsed = time.time() - self.in_flight_move.get("timestamp", 0.0)
+            if elapsed > 5.0:
+                logger.warning(
+                    f"In-flight move lock timed out after {elapsed:.1f}s: {self.in_flight_move.get('uci')}. Releasing lock."
+                )
+                self.in_flight_move = None
+            else:
+                return None
+
+        board: chess.Board = engine.board
 
         # ---------------------------------------------------------------------
         # 2. Handle Player Turn & Piece Lifting
