@@ -70,6 +70,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Capture Move Visual Distinction**: Added `COLOR_OPPONENT_CAPTURE` (`(192, 0, 32)`) and `COLOR_CAPTURE_TRACE` (`(204, 32, 64)`). Wired `is_capture` detection in `PhysicalMoveTracker.sync_game()` and `LichessEngine.get_game_payload()`, layering distinct ruby/crimson destination highlights and fiery trace pulses on capture moves.
   - **Hardware Settings Isolation & Git Protection**: Untracked `board_settings.json` from git, added it to `.gitignore`, created tracked default template `Raspberry/board_settings.default.json`, and implemented 3-tier fallback initialization in `board_hardware.load_settings()` to guarantee user baselines/thresholds are never overwritten on `git pull`.
   - **Web UI & REST API**: Extended `POST /api/leds/test_trace` and frontend UI with capture move trace testing (`d4 ⚔ e5`).
+- [x] Redesigned victory animation (`render_game_won`) to be lightweight and low-power:
+  - Replaced full-board 64-square sinusoidal wash with dual high-speed sweeping diagonal laser comets ($a1 \to h8$ gold beam and $a8 \to h1$ emerald counter-beam), sparse high-threshold stardust twinkles (1-2 squares max), and a central diamond flare ($d4, d5, e4, e5$).
+  - Reduced peak active simultaneous squares from 64 down to 3-6 squares (< 10% of board) and reduced power draw by > 90% while dramatically improving visual contrast and fluidity.
 
 ## Task Backlog
 

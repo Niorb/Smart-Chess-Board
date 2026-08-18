@@ -68,9 +68,22 @@ def test_render_game_started():
 
 
 def test_render_game_won():
-    frame = [0] * NUM_LEDS
-    render_game_won(0.5, frame, {}, now=time.time())
-    assert any(frame)
+    # Test at multiple progress steps to ensure low simultaneous active square count
+    now = time.time()
+    for p in [0.1, 0.25, 0.5, 0.75, 0.9]:
+        frame = [0] * NUM_LEDS
+        render_game_won(p, frame, {}, now=now)
+        assert any(frame)
+        # Count number of illuminated squares
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        # Strict lightweight lighting budget: must be <= 10 squares at any instant (far below 64)
+        assert lit_squares <= 10
+
 
 
 def test_render_game_lost():

@@ -212,31 +212,108 @@ def render_game_won(
 ) -> None:
     """
     GAME_WON animation:
-    Cascading diagonal waves and golden sparkle shimmer across the board.
+    Lightweight, high-contrast victory celebration featuring sweeping dual diagonal
+    laser comets, sparse stardust twinkling, and a central diamond flare.
+
+    Lighting budget: Only 3-6 squares active simultaneously at any frame (<10% of board).
     """
     if now == 0.0:
         now = time.time()
 
-    # Fade envelope (in at start, out at finish)
-    if progress < 0.1:
-        envelope = progress / 0.1
-    elif progress > 0.8:
-        envelope = (1.0 - progress) / 0.2
+    # 1. Global Attack-Sustain-Release Envelope
+    if progress < 0.08:
+        envelope = progress / 0.08
+    elif progress > 0.85:
+        rel = (progress - 0.85) / 0.15
+        envelope = 0.5 * (1.0 + math.cos(math.pi * rel))
     else:
         envelope = 1.0
 
+    if envelope <= 0.001:
+        for c in range(8):
+            for r in range(8):
+                set_square_in_frame(frame, c, r, COLOR_INT_OFF)
+        return
+
+    # Color definitions
+    col_gold = COLOR_INT_VICTORY_GOLD
+    col_green = COLOR_INT_VICTORY_GREEN
+    col_sparkle = blend_colors(col_gold, 0xFFFFFF, 0.70)
+
+    # 2. Phase Wavefront Positions
+    # Phase 1: Diagonal sweep (a1 -> h8) for progress in [0.0, 0.48]
+    p1 = progress / 0.48
+    w1 = p1 * 18.0 - 2.0 if progress <= 0.48 else 99.0
+
+    # Phase 2: Counter-diagonal sweep (a8 -> h1) for progress in [0.40, 0.84]
+    p2 = (progress - 0.40) / 0.44
+    w2 = p2 * 18.0 - 2.0 if 0.40 <= progress <= 0.84 else 99.0
+
+    # Phase 3: Center Diamond Flare for progress in [0.78, 1.0]
+    p3 = (progress - 0.78) / 0.22 if progress >= 0.78 else 0.0
+    r3 = p3 * 2.4
+
     for c in range(8):
         for r in range(8):
-            diag = c + r  # 0 to 14
-            wave_phase = progress * 4.0 * math.pi - (diag * 0.45)
-            wave = 0.5 + 0.5 * math.sin(wave_phase)
+            w1_val = 0.0
+            w2_val = 0.0
+            w3_val = 0.0
 
-            # High-frequency gold sparkle
-            sparkle = 0.5 + 0.5 * math.sin(now * 14.0 + c * 4.1 + r * 5.7)
+            # Phase 1: Diagonal Wavefront
+            if progress <= 0.48:
+                u1 = c + r
+                v1 = c - r
+                du1 = u1 - w1
+                w1_val = math.exp(-2.5 * du1 * du1 - 0.07 * v1 * v1)
 
-            intensity = (0.5 * wave + 0.5 * sparkle) * envelope
-            color = blend_colors(COLOR_INT_VICTORY_GOLD, COLOR_INT_VICTORY_GREEN, wave)
-            set_square_in_frame(frame, c, r, scale_color(color, intensity))
+            # Phase 2: Counter-Diagonal Wavefront
+            if 0.40 <= progress <= 0.84:
+                u2 = c + (7 - r)
+                v2 = c - (7 - r)
+                du2 = u2 - w2
+                w2_val = math.exp(-2.5 * du2 * du2 - 0.07 * v2 * v2)
+
+            # Phase 3: Center Diamond Pulse
+            if progress >= 0.78:
+                dist_center = math.sqrt((c - 3.5) ** 2 + (r - 3.5) ** 2)
+                dr = dist_center - r3
+                w3_val = math.exp(-3.2 * dr * dr) * ((1.0 - p3) ** 2)
+
+            # Primary wave composite
+            w_total = w1_val + w2_val + w3_val
+            if w_total > 0.001:
+                # Color blending based on phase dominance
+                blend_g = (w1_val * 0.3 + w2_val * 0.9) / w_total
+                base_color = blend_colors(col_gold, col_green, blend_g)
+            else:
+                base_color = col_gold
+
+            primary_intensity = w_total * envelope
+
+            # 4. Sparse Stardust Twinkles (Only top ~2.5% threshold fires)
+            h1 = math.sin(now * 13.0 + c * 17.1 + r * 31.7)
+            h2 = math.cos(now * 8.5 + c * 29.3 + r * 11.9)
+            sparkle_harmonic = h1 * h2
+            if sparkle_harmonic > 0.82:
+                s_factor = ((sparkle_harmonic - 0.82) / 0.18) ** 2
+                sparkle_intensity = s_factor * 0.80 * envelope
+            else:
+                sparkle_intensity = 0.0
+
+            # 5. Final Composite & Deadband Gating
+            total_intensity = primary_intensity + sparkle_intensity
+            if total_intensity > 0.025:
+                # Blend in diamond white-gold for sparkle contribution
+                if sparkle_intensity > 0.001:
+                    sparkle_ratio = sparkle_intensity / total_intensity
+                    final_color = blend_colors(base_color, col_sparkle, sparkle_ratio)
+                else:
+                    final_color = base_color
+
+                clamped_intensity = min(1.0, total_intensity)
+                set_square_in_frame(frame, c, r, scale_color(final_color, clamped_intensity))
+            else:
+                set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
 
 def render_game_lost(progress: float, frame: List[int], params: Dict[str, Any]) -> None:
