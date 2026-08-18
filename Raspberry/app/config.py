@@ -72,6 +72,17 @@ COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
 COLOR_MOVE_CONFIRM = (48, 255, 128)  # Vibrant emerald/spring green arrival confirmation flash
 COLOR_CAPTURE_CONFIRM = (255, 32, 64)  # Radiant ruby/crimson capture confirmation flash
 
+# Coach & Blunder Guard Move Quality Colors — (R, G, B) tuples (scaled 20% for power)
+COLOR_MOVE_BEST = (0, 204, 76)        # Emerald Green for Best Move
+COLOR_MOVE_GOOD = (0, 180, 220)       # Cyan / Sky Blue for Good Move
+COLOR_MOVE_INACCURACY = (220, 160, 0) # Amber / Yellow for Inaccuracy
+COLOR_MOVE_BLUNDER = (220, 24, 40)    # Crimson / Red for Blunder
+
+# Live Evaluation Bar Colors — (R, G, B) tuples (subtle, scaled for low power)
+COLOR_EVAL_WHITE = (80, 80, 100)      # Cool light tone for White advantage
+COLOR_EVAL_BLACK = (10, 20, 60)       # Dim navy tone for Black advantage
+COLOR_EVAL_NEUTRAL = (30, 30, 48)     # Neutral midpoint tone
+
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
 COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
 COLOR_CAPTURE_TRACE = (204, 32, 64)  # High-energy rose-crimson pulse along capture trajectory

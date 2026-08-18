@@ -124,6 +124,16 @@ class LichessEngine:
         self._event_stream_task: asyncio.Task | None = None
         self._cancel_event = asyncio.Event()
 
+    @property
+    def is_ai_game(self) -> bool:
+        """Returns True if the current active game is against Stockfish AI."""
+        opp = self.game_info.get("opponent", {})
+        username = (opp.get("username") or "").lower()
+        title = opp.get("title")
+        if title == "BOT" or "stockfish" in username or "ai level" in username or username.startswith("ai"):
+            return True
+        return False
+
     def _get_headers(self) -> dict[str, str]:
         token = os.environ.get("LICHESS_API_TOKEN", self.token).strip()
         headers = {

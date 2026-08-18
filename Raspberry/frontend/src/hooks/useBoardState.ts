@@ -9,6 +9,28 @@ export interface SetupStatus {
   black_count?: number;
 }
 
+export interface MoveHint {
+  target_square: [number, number];
+  uci: string;
+  tier: 'best' | 'good' | 'inaccuracy' | 'blunder';
+  delta_cp: number;
+}
+
+export interface CoachPayload {
+  enabled: boolean;
+  eval_bar_enabled: boolean;
+  coach_hints_enabled: boolean;
+  is_ai_game: boolean;
+  fair_play_active: boolean;
+  evaluation?: {
+    score_cp?: number | null;
+    mate?: number | null;
+    win_chance: number;
+    best_move?: string | null;
+  } | null;
+  lifted_move_hints?: MoveHint[];
+}
+
 export interface BoardState {
   status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER';
   virtual_only?: boolean;
@@ -57,6 +79,7 @@ export interface BoardState {
     white: string;
     black: string;
   };
+  coach?: CoachPayload;
   game?: {
     game_id: string | null;
     rated: boolean;

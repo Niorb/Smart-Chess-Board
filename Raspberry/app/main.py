@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .board_state import state_manager
+from .coach_engine import coach_engine
 from .lichess_engine import lichess_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -29,12 +30,14 @@ logger = logging.getLogger("smart-chess-app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting background state manager loop and Lichess engine...")
+    logger.info("Starting background state manager loop, Lichess engine, and Coach engine...")
     await lichess_engine.start(state_manager)
+    await coach_engine.start()
     task = asyncio.create_task(state_manager.update_loop(manager.broadcast))
     yield
-    logger.info("Stopping background loop and Lichess engine...")
+    logger.info("Stopping background loop, Lichess engine, and Coach engine...")
     task.cancel()
+    await coach_engine.stop()
     await lichess_engine.stop()
     try:
         await task
@@ -94,6 +97,9 @@ class ThresholdSettings(BaseModel):
     baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
     pieces_mode: str | None = None  # "auto" | "pieces" | "empty"
+    coach_hints_enabled: bool | None = None
+    eval_bar_enabled: bool | None = None
+    coach_ai_only: bool | None = None
 
 
 class HighlightRequest(BaseModel):
@@ -206,6 +212,12 @@ async def update_board_settings(body: ThresholdSettings):
         settings["disabled_squares"] = body.disabled_squares
     if body.pieces_mode is not None:
         settings["pieces_mode"] = body.pieces_mode
+    if body.coach_hints_enabled is not None:
+        settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
+    if body.eval_bar_enabled is not None:
+        settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
+    if body.coach_ai_only is not None:
+        settings["coach_ai_only"] = bool(body.coach_ai_only)
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 

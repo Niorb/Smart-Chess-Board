@@ -19,5 +19,8 @@
     "baseline_window_s": 2,
     "disabled_squares": [],
     "col_mux_map": [7, 6, 5, 4, 3, 2, 1, 0],
-    "pieces_mode": "auto"
+    "pieces_mode": "auto",
+    "coach_hints_enabled": true,
+    "eval_bar_enabled": true,
+    "coach_ai_only": true
 }

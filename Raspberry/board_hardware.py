@@ -73,6 +73,9 @@ settings: dict[str, Any] = {
     "disabled_squares": [],
     "col_mux_map": list(DEFAULT_COL_MUX_MAP),
     "pieces_mode": "auto",  # "auto" | "pieces" | "empty"
+    "coach_hints_enabled": True,
+    "eval_bar_enabled": True,
+    "coach_ai_only": True,
 }
 
 last_sent_settle_us = None

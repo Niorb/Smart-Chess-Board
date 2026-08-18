@@ -141,6 +141,17 @@ function App() {
     return dests;
   }, [selectedSquare, state.status, state.game?.legal_moves]);
 
+  // Map of destination coordinate -> move quality tier for the active selected piece or physical lifted piece
+  const destQualities = useMemo(() => {
+    const map = new Map<string, 'best' | 'good' | 'inaccuracy' | 'blunder'>();
+    if (!state.coach?.enabled || !state.coach?.lifted_move_hints) return map;
+    for (const hint of state.coach.lifted_move_hints) {
+      const toCoord = hint.uci.slice(2, 4);
+      map.set(toCoord, hint.tier);
+    }
+    return map;
+  }, [state.coach?.enabled, state.coach?.lifted_move_hints]);
+
   // Last move squares
   const lastMoveSquares = useMemo(() => {
     const lm = state.game?.last_move;
@@ -313,6 +324,9 @@ function App() {
     baseline_window_s?: number;
     disabled_squares?: number[][];
     pieces_mode?: 'auto' | 'pieces' | 'empty';
+    coach_hints_enabled?: boolean;
+    eval_bar_enabled?: boolean;
+    coach_ai_only?: boolean;
   } | null>(null);
 
   const [positiveThresh, setPositiveThresh] = useState<number>(() => {
@@ -349,6 +363,18 @@ function App() {
   const [piecesMode, setPiecesMode] = useState<'auto' | 'pieces' | 'empty'>(() => {
     return (localStorage.getItem('scb_pieces_mode') as 'auto' | 'pieces' | 'empty') || 'auto';
   });
+  const [coachHintsEnabled, setCoachHintsEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_coach_hints_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [evalBarEnabled, setEvalBarEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_eval_bar_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [coachAiOnly, setCoachAiOnly] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_coach_ai_only');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -364,7 +390,10 @@ function App() {
     settle: number = muxSettleMs,
     debounce: number = debounceThreshold,
     window_s: number = baselineWindowS,
-    pMode: 'auto' | 'pieces' | 'empty' = piecesMode
+    pMode: 'auto' | 'pieces' | 'empty' = piecesMode,
+    coachHints: boolean = coachHintsEnabled,
+    evalBar: boolean = evalBarEnabled,
+    aiOnly: boolean = coachAiOnly
   ) => {
     localStorage.setItem('scb_positive_thresh', String(pos));
     localStorage.setItem('scb_negative_thresh', String(neg));
@@ -375,6 +404,9 @@ function App() {
     localStorage.setItem('scb_debounce_threshold', String(debounce));
     localStorage.setItem('scb_baseline_window_s', String(window_s));
     localStorage.setItem('scb_pieces_mode', pMode);
+    localStorage.setItem('scb_coach_hints_enabled', String(coachHints));
+    localStorage.setItem('scb_eval_bar_enabled', String(evalBar));
+    localStorage.setItem('scb_coach_ai_only', String(aiOnly));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -390,7 +422,10 @@ function App() {
           debounce,
           window_s,
           currentDisabled,
-          pMode
+          pMode,
+          coachHints,
+          evalBar,
+          aiOnly
         );
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
@@ -436,6 +471,18 @@ function App() {
         if (res.pieces_mode) {
           setPiecesMode(res.pieces_mode);
           localStorage.setItem('scb_pieces_mode', res.pieces_mode);
+        }
+        if (res.coach_hints_enabled !== undefined) {
+          setCoachHintsEnabled(res.coach_hints_enabled);
+          localStorage.setItem('scb_coach_hints_enabled', String(res.coach_hints_enabled));
+        }
+        if (res.eval_bar_enabled !== undefined) {
+          setEvalBarEnabled(res.eval_bar_enabled);
+          localStorage.setItem('scb_eval_bar_enabled', String(res.eval_bar_enabled));
+        }
+        if (res.coach_ai_only !== undefined) {
+          setCoachAiOnly(res.coach_ai_only);
+          localStorage.setItem('scb_coach_ai_only', String(res.coach_ai_only));
         }
       } catch (err) {
         console.error("Error fetching board settings:", err);
@@ -742,9 +789,33 @@ function App() {
               </div>
             </div>
 
-            {/* 8x8 Board Container */}
-            <div className="relative w-full aspect-square bg-slate-900 overflow-hidden shadow-2xl border-x-4 border-slate-800">
-              <div className="grid grid-cols-8 grid-rows-8 w-full h-full">
+            {/* 8x8 Board Container with Live Evaluation Gauge */}
+            <div className="flex items-stretch w-full aspect-square bg-slate-900 overflow-hidden shadow-2xl border-x-4 border-slate-800 relative">
+              {/* Vertical Eval Bar (When Eval Bar enabled and playing or AI game) */}
+              {state.coach?.eval_bar_enabled && state.status === 'PLAYING' && (
+                <div className="w-5 bg-slate-950 flex flex-col justify-end border-r border-slate-800 relative select-none flex-shrink-0">
+                  {/* Black Bar (Top) */}
+                  <div 
+                    className="w-full bg-slate-800 transition-all duration-500 ease-out"
+                    style={{ height: `${100 - (state.coach?.evaluation?.win_chance ?? 50)}%` }}
+                  />
+                  {/* White Bar (Bottom) */}
+                  <div 
+                    className="w-full bg-slate-200 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                    style={{ height: `${state.coach?.evaluation?.win_chance ?? 50}%` }}
+                  />
+                  {/* Eval Score Badge */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-90deg] text-[9px] font-mono font-extrabold tracking-tighter whitespace-nowrap px-1 py-0.5 rounded bg-slate-900/90 text-slate-200 border border-slate-700/80 shadow">
+                    {state.coach?.evaluation?.mate !== null && state.coach?.evaluation?.mate !== undefined
+                      ? `M${state.coach.evaluation.mate}`
+                      : state.coach?.evaluation?.score_cp !== null && state.coach?.evaluation?.score_cp !== undefined
+                      ? `${(state.coach.evaluation.score_cp / 100).toFixed(1)}`
+                      : '0.0'}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
                 {Array(8).fill(null).map((_, rIdx) => (
                   Array(8).fill(null).map((_, cIdx) => {
                     const isFlipped = state.my_color === 'black';
@@ -778,14 +849,31 @@ function App() {
                         {/* Piece Icon */}
                         {renderPiece(piece)}
 
-                        {/* Legal Move Indicator Dot */}
+                        {/* Legal Move Indicator Dot (with Coach / Blunder Guard Color Tiers) */}
                         {isLegalDest && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            {piece !== '.' ? (
-                              <div className="w-full h-full rounded-none ring-4 ring-emerald-400/80 ring-inset bg-emerald-400/20 animate-pulse" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-full bg-emerald-400/80 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                            )}
+                            {(() => {
+                              const quality = destQualities.get(coord);
+                              let ringColor = 'ring-emerald-400/80 bg-emerald-400/20';
+                              let dotColor = 'bg-emerald-400/80 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
+
+                              if (quality === 'good') {
+                                ringColor = 'ring-cyan-400/80 bg-cyan-400/20';
+                                dotColor = 'bg-cyan-400/90 shadow-[0_0_8px_rgba(34,211,238,0.9)]';
+                              } else if (quality === 'inaccuracy') {
+                                ringColor = 'ring-amber-400/80 bg-amber-400/20';
+                                dotColor = 'bg-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.9)]';
+                              } else if (quality === 'blunder') {
+                                ringColor = 'ring-rose-500/80 bg-rose-500/30';
+                                dotColor = 'bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.9)]';
+                              }
+
+                              return piece !== '.' ? (
+                                <div className={`w-full h-full rounded-none ring-4 ring-inset ${ringColor} animate-pulse`} />
+                              ) : (
+                                <div className={`w-3.5 h-3.5 rounded-full ${dotColor}`} />
+                              );
+                            })()}
                           </div>
                         )}
 
@@ -949,6 +1037,80 @@ function App() {
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* AI Coach & Training Card */}
+            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-3 text-left">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-400" />
+                  AI Coach & Training
+                </h3>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                  state.coach?.fair_play_active
+                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    : state.coach?.enabled
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {state.coach?.fair_play_active ? 'Fair-Play Enforced' : state.coach?.enabled ? 'Coach Active' : 'Coach Off'}
+                </span>
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-col gap-2.5 pt-1">
+                {/* Live Eval Bar Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-200">Live Evaluation Bar</span>
+                    <span className="text-[10px] text-slate-400">File 'h' LEDs &amp; virtual gauge</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !evalBarEnabled;
+                      setEvalBarEnabled(next);
+                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, next, coachAiOnly);
+                    }}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
+                      evalBarEnabled ? 'bg-indigo-600' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                      evalBarEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* Blunder Guard / Color-coded Moves Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-200">Blunder Guard</span>
+                    <span className="text-[10px] text-slate-400">Color-coded move destination tiers</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !coachHintsEnabled;
+                      setCoachHintsEnabled(next);
+                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, next, evalBarEnabled, coachAiOnly);
+                    }}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
+                      coachHintsEnabled ? 'bg-indigo-600' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                      coachHintsEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* AI Only Gate Badge / Explanation */}
+                <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-2.5 flex items-start gap-2 mt-1">
+                  <Shield className="text-indigo-400 flex-shrink-0 mt-0.5" size={13} />
+                  <p className="text-[10px] text-indigo-200/90 leading-tight">
+                    <strong>AI Matches Only:</strong> Coach features and live evaluation are automatically disabled during rated online matches against human opponents to preserve fair-play on Lichess.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Matchmaking Selection Controls (When IDLE or GAME_OVER) */}

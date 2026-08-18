@@ -106,7 +106,10 @@ export async function updateBoardSettings(
   debounceThreshold?: number,
   baselineWindowS?: number,
   disabledSquares?: number[][],
-  piecesMode?: 'auto' | 'pieces' | 'empty'
+  piecesMode?: 'auto' | 'pieces' | 'empty',
+  coachHintsEnabled?: boolean,
+  evalBarEnabled?: boolean,
+  coachAiOnly?: boolean
 ) {
   const body: Record<string, unknown> = {};
   if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
@@ -119,6 +122,9 @@ export async function updateBoardSettings(
   if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
   if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
   if (piecesMode !== undefined && piecesMode !== null) body.pieces_mode = piecesMode;
+  if (coachHintsEnabled !== undefined) body.coach_hints_enabled = coachHintsEnabled;
+  if (evalBarEnabled !== undefined) body.eval_bar_enabled = evalBarEnabled;
+  if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
 
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',

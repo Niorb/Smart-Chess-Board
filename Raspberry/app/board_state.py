@@ -47,15 +47,20 @@ from app.config import (
     NUM_LEDS,
     SERIAL_PORT,
 )
-from app.led_helpers import (
-    COLOR_INT_CAPTURE_CONFIRM,
-    COLOR_INT_CAPTURE_TRACE,
-    COLOR_INT_CHECK,
+    COLOR_INT_DRAW_BLUE,
+    COLOR_INT_DRAW_WHITE,
+    COLOR_INT_EVAL_BLACK,
+    COLOR_INT_EVAL_NEUTRAL,
+    COLOR_INT_EVAL_WHITE,
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_CAPTURE,
     COLOR_INT_LEGAL_TARGET,
+    COLOR_INT_MOVE_BEST,
+    COLOR_INT_MOVE_BLUNDER,
     COLOR_INT_MOVE_CONFIRM,
+    COLOR_INT_MOVE_GOOD,
+    COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
@@ -69,7 +74,14 @@ from app.led_helpers import (
     get_led_indices,
     init_strip,
 )
-from app.led_animations import scale_color
+from app.coach_engine import MoveQuality, coach_engine
+from app.led_animations import (
+    get_castle_rook_move,
+    interpolate_move_path,
+    render_castle_trace,
+    render_move_trace,
+    scale_color,
+)
 from app.lichess_engine import lichess_engine
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import SetupResult, SetupValidator
@@ -398,6 +410,22 @@ class BoardStateManager:
 
             # Layer 2: Playing State Highlights
             elif self.game_status == "PLAYING":
+                is_ai = getattr(lichess_engine, "is_ai_game", False)
+                coach_ai_only = settings.get("coach_ai_only", True)
+                fair_play_active = coach_ai_only and not is_ai
+                eval_bar_enabled = settings.get("eval_bar_enabled", True)
+
+                # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
+                if eval_bar_enabled and not fair_play_active and getattr(lichess_engine, "board", None):
+                    fen = lichess_engine.board.fen()
+                    cached_eval = coach_engine.get_cached_evaluation(fen)
+                    win_chance = cached_eval.win_chance if cached_eval else 50.0
+                    n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
+                    # File h corresponds to column/file index 7 (Strip 2, row 7)
+                    for r in range(8):
+                        eval_col = COLOR_INT_EVAL_WHITE if r < n_white else COLOR_INT_EVAL_BLACK
+                        set_square_leds(7, r, eval_col)
+
                 # 1. Opponent Move Indication & Animated Trace
                 if self.move_tracker.pending_opponent_move:
                     opp_from = self.move_tracker.pending_opponent_move["from"]
@@ -449,13 +477,37 @@ class BoardStateManager:
                         k_r = chess.square_rank(king_sq)
                         set_square_leds(k_c, k_r, COLOR_INT_CHECK)
 
-                # 3. Lifted Piece & Legal Target Dots
+                # 3. Lifted Piece & Legal Target Dots (with Coach / Blunder Guard hints)
                 if self.move_tracker.lifted_square:
                     l_c, l_r = self.move_tracker.lifted_square
                     set_square_leds(l_c, l_r, COLOR_INT_PIECE_LIFTED)
+                    coach_hints_enabled = settings.get("coach_hints_enabled", True)
+                    coach_active = coach_hints_enabled and not fair_play_active
+                    cached_eval = (
+                        coach_engine.get_cached_evaluation(lichess_engine.board.fen())
+                        if (coach_active and getattr(lichess_engine, "board", None))
+                        else None
+                    )
+
                     for t_c, t_r in self.move_tracker.legal_targets:
                         is_cap = (t_c, t_r) in getattr(self.move_tracker, "legal_captures", [])
                         target_col = COLOR_INT_LEGAL_CAPTURE if is_cap else COLOR_INT_LEGAL_TARGET
+
+                        if coach_active and cached_eval and cached_eval.moves_map:
+                            from_sq = chess.square_name(chess.square(l_c, l_r))
+                            to_sq = chess.square_name(chess.square(t_c, t_r))
+                            uci = f"{from_sq}{to_sq}"
+                            move_analysis = cached_eval.moves_map.get(uci) or cached_eval.moves_map.get(f"{uci}q")
+                            if move_analysis:
+                                if move_analysis.classification == MoveQuality.BEST:
+                                    target_col = COLOR_INT_MOVE_BEST
+                                elif move_analysis.classification == MoveQuality.GOOD:
+                                    target_col = COLOR_INT_MOVE_GOOD
+                                elif move_analysis.classification == MoveQuality.INACCURACY:
+                                    target_col = COLOR_INT_MOVE_INACCURACY
+                                else:
+                                    target_col = COLOR_INT_MOVE_BLUNDER
+
                         set_square_leds(t_c, t_r, target_col)
 
                 # 4. Invalid Placement Indicator
@@ -669,7 +721,51 @@ class BoardStateManager:
                     self.digital_state = [["." for _ in range(8)] for _ in range(8)]
                     self.clocks = {"white": "?", "black": "?"}
 
-                # 3. Construct unified broadcast payload
+                # 3. Coach Analysis & Payload
+                is_ai = getattr(lichess_engine, "is_ai_game", False)
+                coach_ai_only = settings.get("coach_ai_only", True)
+                fair_play_active = coach_ai_only and not is_ai
+                coach_hints_enabled = settings.get("coach_hints_enabled", True)
+                eval_bar_enabled = settings.get("eval_bar_enabled", True)
+
+                coach_payload = {
+                    "enabled": bool((coach_hints_enabled or eval_bar_enabled) and not fair_play_active),
+                    "eval_bar_enabled": bool(eval_bar_enabled and not fair_play_active),
+                    "coach_hints_enabled": bool(coach_hints_enabled and not fair_play_active),
+                    "is_ai_game": bool(is_ai),
+                    "fair_play_active": bool(fair_play_active),
+                    "evaluation": None,
+                    "lifted_move_hints": [],
+                }
+
+                if not fair_play_active and getattr(lichess_engine, "board", None) and self.game_status == "PLAYING":
+                    coach_engine.request_analysis(lichess_engine.board)
+                    eval_res = coach_engine.get_cached_evaluation(lichess_engine.board.fen())
+                    if eval_res:
+                        coach_payload["evaluation"] = {
+                            "score_cp": eval_res.score_cp,
+                            "mate": eval_res.mate,
+                            "win_chance": eval_res.win_chance,
+                            "best_move": eval_res.best_move,
+                        }
+                        if self.move_tracker.lifted_square and coach_hints_enabled:
+                            l_c, l_r = self.move_tracker.lifted_square
+                            from_sq = chess.square_name(chess.square(l_c, l_r))
+                            hints = []
+                            for t_c, t_r in self.move_tracker.legal_targets:
+                                to_sq = chess.square_name(chess.square(t_c, t_r))
+                                uci = f"{from_sq}{to_sq}"
+                                m_analysis = eval_res.moves_map.get(uci) or eval_res.moves_map.get(f"{uci}q")
+                                if m_analysis:
+                                    hints.append({
+                                        "target_square": [t_c, t_r],
+                                        "uci": uci,
+                                        "tier": m_analysis.classification.value,
+                                        "delta_cp": m_analysis.delta_cp,
+                                    })
+                            coach_payload["lifted_move_hints"] = hints
+
+                # 4. Construct unified broadcast payload
                 payload = {
                     "status": self.game_status,
                     "virtual_only": self.virtual_only,
@@ -678,6 +774,7 @@ class BoardStateManager:
                     "clocks": self.clocks,
                     "my_color": lichess_engine.my_color,
                     "game": lichess_engine.get_game_payload(),
+                    "coach": coach_payload,
                     "diagnostics": diag_info,
                 }
 
