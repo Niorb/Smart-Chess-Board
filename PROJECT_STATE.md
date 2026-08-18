@@ -52,7 +52,8 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Added unit tests for Lichess engine (`test_lichess_engine.py`) and updated test suites (`test_board_state.py`, `test_api_routes.py`, `test_led_helpers.py`, `test_highlight_row_swap.py`).
 - [x] Resolved Lichess Board API time control restriction (`Invalid time control` on Blitz seeks) by adding native Stockfish AI challenge support (`POST /api/challenge/ai`), difficulty levels 1–8, and auto-routing matches < 8 minutes (Bullet/Blitz) to instant AI play while preserving live human matchmaking for Rapid/Classical. Verified live virtual board game creation, move execution (`e2e4` -> Stockfish `e7e5`), and 52 passing pytest tests on the Raspberry Pi over SSH.
 - [x] Added configurable ELO rating boundaries (`ratingRange` parameter in `POST /api/board/seek`) to backend and web frontend, supporting presets (`Any`, `±100`, `±200`, `±300`, `±500`) and custom Min/Max ELO filters. All 53 unit/integration tests and frontend production build verified on Raspberry Pi.
-- [x] Fixed "Calibrate with pieces placed" feature by removing dynamic baseline moving average mutation from `scan_board()`, enforcing baseline immutability during active scanning, ensuring Ranks 1-2 inherit Rank 3 baseline and Ranks 7-8 inherit Rank 6 baseline per column, and verifying `SetupValidator` and dim white LED adjustment when all pieces are placed.
+- [x] Restored dynamic baseline drift tracking for empty middle ranks (Ranks 3-6) in `scan_board()` with starting piece ranks (Ranks 1-2 and 7-8) inheriting Rank 3 and Rank 6 baseline updates per column, preventing piece magnet absorption while maintaining live ambient temperature/voltage drift compensation.
+- [x] Fixed "Calibrate with pieces placed" feature and verified `SetupValidator` and dim white LED adjustment when all pieces are placed.
 
 ## Task Backlog
 

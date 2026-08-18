@@ -291,6 +291,35 @@ def scan_board(h, serial_conn, raw_state):
                         raw_state[c][r] = -1
                     else:
                         raw_state[c][r] = 0
+
+                    # Dynamic baseline drift tracking for empty middle ranks (Ranks 3-6)
+                    baseline_window = settings.get("baseline_window_s", 2)
+                    if baseline_window > 0 and r in (2, 3, 4, 5):
+                        now = time.time()
+                        detected = (raw_state[c][r] != 0)
+
+                        if (c, r) not in baseline_history:
+                            baseline_history[(c, r)] = []
+
+                        baseline_history[(c, r)].append((now, val, detected))
+
+                        history = baseline_history[(c, r)]
+                        while history and (now - history[0][0]) > baseline_window:
+                            history.pop(0)
+
+                        # Check if window is populated and no magnet was detected
+                        if len(history) > 0 and not any(entry[2] for entry in history):
+                            if (now - history[0][0]) >= (baseline_window * 0.8):
+                                avg_val = int(sum(entry[1] for entry in history) / len(history))
+                                settings["baselines"][c][r] = avg_val
+
+                                # Propagate baseline drift to corresponding starting piece ranks
+                                if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
+                                    settings["baselines"][c][0] = avg_val
+                                    settings["baselines"][c][1] = avg_val
+                                elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
+                                    settings["baselines"][c][6] = avg_val
+                                    settings["baselines"][c][7] = avg_val
         else:
             diag["errors"] = non_mocked_count
             diag["status"] = "TIMEOUT"
