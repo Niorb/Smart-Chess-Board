@@ -102,6 +102,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Dynamic Baseline Drift Gating (`Raspberry/board_hardware.py`)**: Gated the continuous background analog baseline drift compensation on `settings["in_loop_calibration"]` (defaults to `True`). When disabled, baseline drift calculations are suppressed and static baselines are preserved.
   - **FastAPI & REST Persistence (`Raspberry/app/main.py`)**: Added `in_loop_calibration` to `ThresholdSettings` model and `POST /api/board/settings` with auto-save to `board_settings.json`.
   - **React UI In-Game Switch (`Raspberry/frontend/src/App.tsx`)**: Added an accessible **"In-Loop Auto Calibration"** toggle switch in both the **Play Tab** (for live adjustments during ongoing matches) and the **Debug Tab** (in the Initial Pieces Detection panel), with full local storage caching and server state synchronization.
+- [x] Implemented Single-Square Baseline Calibration on Left-Click (Replaced Highlight Feature):
+  - **Individual Square Baseline Setting (`Raspberry/board_hardware.py`)**: Added `set_square_baseline(col, row, value)` to immediately adopt the current ADC reading as that square's baseline and flush any stale drift history.
+  - **REST API (`Raspberry/app/main.py`)**: Added `POST /api/board/calibrate_square` taking `{ col, row, value? }` with atomic persistence to `board_settings.json`.
+  - **React UI Integration (`Raspberry/frontend/src/App.tsx`)**: Left-clicking any square in the **Play tab sensor matrix overlay** or **Debug tab physical ADC matrix** immediately calibrates that specific square's baseline to its live reading and displays a confirmation status toast.
 
 ## Task Backlog
 
