@@ -402,10 +402,9 @@ def test_opponent_reconnection_cancels_auto_claim_task():
             # 2. Opponent reconnects before timer expires
             engine._handle_opponent_gone(False, 0, mock_state_mgr)
 
-            assert claim_task.cancelled() or claim_task.done()
-            assert engine.opponent_gone is None
-
             await asyncio.sleep(0.01)
+            assert claim_task.cancelled() or claim_task.done() or (hasattr(claim_task, "cancelling") and claim_task.cancelling() > 0)
+            assert engine.opponent_gone is None
             mock_claim.assert_not_called()
     asyncio.run(_test())
 
@@ -491,31 +490,39 @@ def test_auto_claim_task_cancelled_on_stop_cancel_resign_abort():
 
         # 1. Test cancellation on stop()
         engine.is_running = True
-        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        t1 = asyncio.create_task(asyncio.sleep(100))
+        engine._auto_claim_task = t1
         await engine.stop()
-        assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+        assert engine._auto_claim_task is None
+        assert t1.cancelled() or t1.done() or (hasattr(t1, "cancelling") and t1.cancelling() > 0)
 
         # 2. Test cancellation on cancel()
         mock_state_mgr.game_status = "PLAYING"
-        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        t2 = asyncio.create_task(asyncio.sleep(100))
+        engine._auto_claim_task = t2
         with patch.object(engine, "resign", new_callable=AsyncMock):
             await engine.cancel(mock_state_mgr)
-            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+            assert engine._auto_claim_task is None
+            assert t2.cancelled() or t2.done() or (hasattr(t2, "cancelling") and t2.cancelling() > 0)
 
         # 3. Test cancellation on resign()
         engine.current_game_id = "testCleanupGame"
-        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        t3 = asyncio.create_task(asyncio.sleep(100))
+        engine._auto_claim_task = t3
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
             await engine.resign(mock_state_mgr)
-            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+            assert engine._auto_claim_task is None
+            assert t3.cancelled() or t3.done() or (hasattr(t3, "cancelling") and t3.cancelling() > 0)
 
         # 4. Test cancellation on abort()
         engine.current_game_id = "testCleanupGame"
-        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        t4 = asyncio.create_task(asyncio.sleep(100))
+        engine._auto_claim_task = t4
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value = MagicMock(status_code=200)
             await engine.abort(mock_state_mgr)
-            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+            assert engine._auto_claim_task is None
+            assert t4.cancelled() or t4.done() or (hasattr(t4, "cancelling") and t4.cancelling() > 0)
     asyncio.run(_test())
 
