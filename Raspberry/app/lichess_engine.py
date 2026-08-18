@@ -669,7 +669,18 @@ class LichessEngine:
 
     def get_game_payload(self) -> dict[str, Any]:
         """Returns structured metadata for WebSockets and API endpoints."""
-        last_move_uci = self.board.peek().uci() if self.board.move_stack else None
+        last_move_uci = None
+        last_move_is_capture = False
+        if self.board.move_stack:
+            last_move = self.board.peek()
+            last_move_uci = last_move.uci()
+            try:
+                m = self.board.pop()
+                last_move_is_capture = bool(self.board.is_capture(m))
+                self.board.push(m)
+            except Exception:
+                last_move_is_capture = False
+
         return {
             "game_id": self.current_game_id,
             "rated": self.game_info.get("rated", False),
@@ -678,6 +689,7 @@ class LichessEngine:
             "my_color": self.my_color,
             "opponent": self.game_info.get("opponent", {}),
             "last_move": last_move_uci,
+            "last_move_is_capture": last_move_is_capture,
             "legal_moves": [m.uci() for m in self.board.legal_moves],
             "is_check": self.board.is_check(),
             "is_game_over": self.board.is_game_over() or self.game_info.get("is_game_over", False),

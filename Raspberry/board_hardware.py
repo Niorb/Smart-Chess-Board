@@ -81,9 +81,25 @@ last_sent_settle_us = None
 def load_settings():
     global settings
     filepath = get_settings_filepath()
+    source_file = None
+    loaded = None
+
+    # Tier 1: Check primary user settings file
     if os.path.exists(filepath):
+        source_file = filepath
+    else:
+        # Tier 2: Check default factory template in the same directory
+        default_template_path = os.path.join(
+            os.path.dirname(filepath) if os.path.dirname(filepath) else ".",
+            "board_settings.default.json"
+        )
+        if os.path.exists(default_template_path):
+            source_file = default_template_path
+            logger.info(f"User settings {filepath} not found. Initializing from template {default_template_path}")
+
+    if source_file and os.path.exists(source_file):
         try:
-            with open(filepath) as f:
+            with open(source_file) as f:
                 loaded = json.load(f)
 
                 # Check for legacy row terminology keys and migrate them
@@ -126,7 +142,7 @@ def load_settings():
                 if not is_valid_col_mux_map:
                     if "col_mux_map" in loaded:
                         logger.warning(
-                            f"Invalid col_mux_map in {filepath}. Using standard default mapping."
+                            f"Invalid col_mux_map in {source_file}. Using standard default mapping."
                         )
                     loaded["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
@@ -142,14 +158,22 @@ def load_settings():
                 )
                 if not is_valid_baselines:
                     logger.warning(
-                        f"Invalid baselines matrix shape in {filepath}. Using standard default matrix."
+                        f"Invalid baselines matrix shape in {source_file}. Using standard default matrix."
                     )
                     loaded["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
 
                 settings.update(loaded)
-                logger.info(f"Loaded board settings from {filepath}")
+                logger.info(f"Loaded board settings from {source_file}")
         except Exception as e:
-            logger.error(f"Error loading settings: {e}")
+            logger.error(f"Error loading settings from {source_file}: {e}")
+
+    # If primary user settings file does not exist yet, save settings to initialize it
+    if not os.path.exists(filepath):
+        try:
+            save_settings()
+            logger.info(f"Initialized user settings file at {filepath}")
+        except Exception as e:
+            logger.error(f"Error auto-initializing settings file: {e}")
 
     # Ensure col_mux_map is valid in settings
     col_mux_map = settings.get("col_mux_map")

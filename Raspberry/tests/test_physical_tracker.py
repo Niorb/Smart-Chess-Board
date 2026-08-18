@@ -7,11 +7,13 @@ Unit tests for PhysicalMoveTracker:
 - Completing a legal move (e2 -> e4)
 - Detecting illegal placement
 - Handling opponent moves and physical mirroring
-- Handling promotion detection
+- Capture detection in sync_game (standard and en passant)
+- In-flight move locking and safety timeouts
 """
 
 import os
 import sys
+import time
 from unittest.mock import MagicMock
 
 import chess
@@ -151,6 +153,66 @@ def test_opponent_move_sync_and_mirror(initial_physical_state, mock_engine):
     assert tracker.pending_opponent_move is None
 
 
+def test_sync_game_quiet_move_is_capture_false(mock_engine):
+    """Verify sync_game marks is_capture == False on quiet moves."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # White played e4, Black played e5 (quiet move)
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("e5")
+    mock_engine.game_info["last_move"] = "e7e5"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["uci"] == "e7e5"
+    assert tracker.pending_opponent_move.get("is_capture") is False
+
+
+def test_sync_game_piece_capture_is_capture_true(mock_engine):
+    """Verify sync_game marks is_capture == True on standard piece captures."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Moves: 1. e4 d5 2. exd5 (White) Qxd5 (Black capture)
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("d5")
+    mock_engine.board.push_san("exd5")
+    mock_engine.board.push_san("Qxd5")
+    mock_engine.game_info["last_move"] = "d8d5"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["uci"] == "d8d5"
+    assert tracker.pending_opponent_move.get("is_capture") is True
+
+
+def test_sync_game_en_passant_is_capture_true(mock_engine):
+    """Verify sync_game marks is_capture == True on en passant captures."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Moves: 1. a3 d5 2. b4 d4 3. c4 dxc3 (Black en passant)
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("a3")
+    mock_engine.board.push_san("d5")
+    mock_engine.board.push_san("b4")
+    mock_engine.board.push_san("d4")
+    mock_engine.board.push_san("c4")
+    mock_engine.board.push_san("dxc3")  # Black en passant
+    mock_engine.game_info["last_move"] = "d4c3"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["uci"] == "d4c3"
+    assert tracker.pending_opponent_move.get("is_capture") is True
+
+
 def test_in_flight_move_locking_and_sync(initial_physical_state, mock_engine):
     tracker = PhysicalMoveTracker()
 
@@ -189,7 +251,6 @@ def test_in_flight_move_locking_and_sync(initial_physical_state, mock_engine):
 
 
 def test_in_flight_move_safety_timeout(initial_physical_state, mock_engine):
-    import time
     tracker = PhysicalMoveTracker()
 
     # Manually set an in-flight move with an old timestamp (> 5s ago)

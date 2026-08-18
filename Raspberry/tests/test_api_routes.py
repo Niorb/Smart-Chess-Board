@@ -162,3 +162,33 @@ def test_test_trace_route():
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
+
+def test_test_trace_route_with_is_capture():
+    """Verify POST /api/leds/test_trace with is_capture flag."""
+    client = TestClient(app)
+
+    # 1. UCI move with is_capture=True
+    response = client.post(
+        "/api/leds/test_trace",
+        json={"uci": "e2e4", "is_capture": True},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["path"] == [[4, 1], [4, 2], [4, 3]]
+
+    # 2. Coordinate-based move with is_capture=True
+    response_coords = client.post(
+        "/api/leds/test_trace",
+        json={"from_pos": [4, 1], "to_pos": [4, 3], "is_capture": True},
+    )
+    assert response_coords.status_code == 200
+    assert response_coords.json()["status"] == "success"
+    assert response_coords.json()["path"] == [[4, 1], [4, 2], [4, 3]]
+
+    # 3. Clear trace
+    response_clear = client.post("/api/leds/test_trace", json={"clear": True})
+    assert response_clear.status_code == 200
+    assert response_clear.json()["status"] == "success"
+
+

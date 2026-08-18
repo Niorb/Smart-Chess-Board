@@ -382,9 +382,9 @@ function App() {
     }
   };
 
-  const handleTestTrace = async (uci: string) => {
+  const handleTestTrace = async (uci: string, is_capture: boolean = false) => {
     try {
-      await testMoveTrace({ uci });
+      await testMoveTrace({ uci, is_capture });
     } catch (err) {
       console.error("Error testing trace:", err);
     }
@@ -1414,27 +1414,34 @@ function App() {
                     <Wand2 size={10} />
                     <span>Move Trace Samples:</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => handleTestTrace('a1h8')}
                       disabled={!isConnected}
-                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1"
                     >
-                      a1 ↗ h8
+                      <span>a1 ↗ h8 (Diagonal)</span>
                     </button>
                     <button
                       onClick={() => handleTestTrace('g1f3')}
                       disabled={!isConnected}
-                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1"
                     >
-                      g1 ♞ f3
+                      <span>g1 ♞ f3 (Knight)</span>
                     </button>
                     <button
                       onClick={() => handleTestTrace('e2e4')}
                       disabled={!isConnected}
-                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1"
                     >
-                      e2 ↑ e4
+                      <span>e2 ↑ e4 (Quiet)</span>
+                    </button>
+                    <button
+                      onClick={() => handleTestTrace('d4e5', true)}
+                      disabled={!isConnected}
+                      className="bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-500/40 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <span>d4 ⚔ e5 (Capture)</span>
                     </button>
                   </div>
                 </div>

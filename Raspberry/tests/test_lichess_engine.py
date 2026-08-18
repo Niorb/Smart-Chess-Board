@@ -294,3 +294,44 @@ def test_event_stream_task_management():
                 await engine.stop()
                 assert engine.is_running is False
     asyncio.run(_test())
+
+
+def test_get_game_payload_includes_last_move_is_capture():
+    """
+    Verify get_game_payload() includes 'last_move_is_capture'
+    for initial state, quiet moves, standard piece captures, and en passant.
+    """
+    engine = LichessEngine()
+    engine.current_game_id = "testCaptureGame"
+    engine.my_color = "white"
+
+    # 1. Initial position (no moves)
+    payload_initial = engine.get_game_payload()
+    assert "last_move_is_capture" in payload_initial
+    assert payload_initial["last_move_is_capture"] is False
+    assert payload_initial["last_move"] is None
+
+    # 2. Quiet move: 1. e4
+    engine._apply_moves("e2e4")
+    payload_quiet = engine.get_game_payload()
+    assert payload_quiet["last_move"] == "e2e4"
+    assert payload_quiet["last_move_is_capture"] is False
+
+    # 3. Standard piece capture: 1. e4 d5 2. exd5
+    engine._apply_moves("e2e4 d7d5 e4d5")
+    payload_capture = engine.get_game_payload()
+    assert payload_capture["last_move"] == "e4d5"
+    assert payload_capture["last_move_is_capture"] is True
+
+    # 4. Another quiet move after capture: 1. e4 d5 2. exd5 Nf6
+    engine._apply_moves("e2e4 d7d5 e4d5 g8f6")
+    payload_quiet_2 = engine.get_game_payload()
+    assert payload_quiet_2["last_move"] == "g8f6"
+    assert payload_quiet_2["last_move_is_capture"] is False
+
+    # 5. En passant capture: 1. e4 a6 2. e5 d5 3. exd6
+    engine._apply_moves("e2e4 a7a6 e4e5 d7d5 e5d6")
+    payload_ep = engine.get_game_payload()
+    assert payload_ep["last_move"] == "e5d6"
+    assert payload_ep["last_move_is_capture"] is True
+

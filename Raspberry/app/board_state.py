@@ -46,12 +46,14 @@ from app.config import (
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_CHECK,
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_TARGET,
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
+    COLOR_INT_OPPONENT_CAPTURE,
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
     COLOR_INT_PIECE_LIFTED,
@@ -92,6 +94,7 @@ class BoardStateManager:
         self.is_calibrating: bool = False
         self.active_animation = None  # LifecycleAnimation | None
         self.custom_trace_path = None  # list[tuple[int, int]] | None
+        self.custom_trace_is_capture: bool = False
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
 
         # Setup verification and move tracking subsystems
@@ -358,14 +361,17 @@ class BoardStateManager:
                     opp_to = self.move_tracker.pending_opponent_move["to"]
                     from_c, from_r = opp_from
                     to_c, to_r = opp_to
+                    is_capture = bool(self.move_tracker.pending_opponent_move.get("is_capture", False))
+                    target_color = COLOR_INT_OPPONENT_CAPTURE if is_capture else COLOR_INT_OPPONENT_TO
+                    trace_color = COLOR_INT_CAPTURE_TRACE if is_capture else COLOR_INT_MOVE_TRACE
 
-                    # Interpolate path and render moving comet pulse
-                    path = interpolate_move_path(from_c, from_r, to_c, to_r)
-                    render_move_trace(path, now, frame, COLOR_INT_MOVE_TRACE)
-
-                    # Keep start and arrival squares continuously lit
+                    # Keep start and arrival squares lit
                     set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
-                    set_square_leds(to_c, to_r, COLOR_INT_OPPONENT_TO)
+                    set_square_leds(to_c, to_r, target_color)
+
+                    # Interpolate path and render moving comet pulse with arrival flare
+                    path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                    render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
 
                 # 2. King in Check Indicator
                 if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
@@ -391,9 +397,11 @@ class BoardStateManager:
             if self.custom_trace_path and len(self.custom_trace_path) >= 2:
                 t_from_c, t_from_r = self.custom_trace_path[0]
                 t_to_c, t_to_r = self.custom_trace_path[-1]
-                render_move_trace(self.custom_trace_path, now, frame, COLOR_INT_MOVE_TRACE)
+                target_color = COLOR_INT_OPPONENT_CAPTURE if self.custom_trace_is_capture else COLOR_INT_OPPONENT_TO
+                trace_color = COLOR_INT_CAPTURE_TRACE if self.custom_trace_is_capture else COLOR_INT_MOVE_TRACE
                 set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
-                set_square_leds(t_to_c, t_to_r, COLOR_INT_OPPONENT_TO)
+                set_square_leds(t_to_c, t_to_r, target_color)
+                render_move_trace(self.custom_trace_path, now, frame, trace_color=trace_color, blend_arrival=True)
 
             # Layer 4: Diagnostic override (highest individual square priority)
             if self.highlighted_square:
@@ -451,6 +459,7 @@ class BoardStateManager:
             self.frozen_baselines = None
         self.active_animation = None
         self.custom_trace_path = None
+        self.custom_trace_is_capture = False
         if self.strip:
             try:
                 all_leds_off(self.strip)

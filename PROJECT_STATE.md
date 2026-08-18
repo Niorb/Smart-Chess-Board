@@ -64,11 +64,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Implemented baseline freezing and sensor reading suppression during animations:
   - **Baseline Freezing**: Snapshots analog baselines before full-board lifecycle animations and LED diagnostic tests, suppresses dynamic baseline drift tracking during animation frames, and cleanly restores original baselines and resets drift window upon animation completion.
   - **Reading Suppression**: Freezes physical piece state and disables debounce move tracking during active animations, preventing power-drop voltage ripples from triggering false piece lifts or invalid placements.
-  - **Default Thresholds Updated**: Set default positive and negative deviation thresholds to **180** in backend settings, config, and webapp UI sliders/initializers. All 97 unit/integration tests passing on the physical Raspberry Pi.
+  - **Default Thresholds Updated**
+- [x] Implemented animated move trace arrival pulse, capture move distinction, and settings protection:
+  - **Arrival Square Pulse Flare**: Enhanced `render_move_trace()` with virtual trajectory overshoot and additive luminance flare on the arrival square upon comet arrival, supporting 1-step moves (e.g. `e2e3`) and seamless wrap-around continuity.
+  - **Capture Move Visual Distinction**: Added `COLOR_OPPONENT_CAPTURE` (`(192, 0, 32)`) and `COLOR_CAPTURE_TRACE` (`(204, 32, 64)`). Wired `is_capture` detection in `PhysicalMoveTracker.sync_game()` and `LichessEngine.get_game_payload()`, layering distinct ruby/crimson destination highlights and fiery trace pulses on capture moves.
+  - **Hardware Settings Isolation & Git Protection**: Untracked `board_settings.json` from git, added it to `.gitignore`, created tracked default template `Raspberry/board_settings.default.json`, and implemented 3-tier fallback initialization in `board_hardware.load_settings()` to guarantee user baselines/thresholds are never overwritten on `git pull`.
+  - **Web UI & REST API**: Extended `POST /api/leds/test_trace` and frontend UI with capture move trace testing (`d4 ⚔ e5`).
 
 ## Task Backlog
 
 ## Active Blockers
 - None
-
-

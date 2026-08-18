@@ -64,12 +64,14 @@ COLOR_PIECE_LIFTED = (144, 80, 0)  # Amber / Gold for lifted piece origin
 COLOR_LEGAL_TARGET = (0, 24, 48)  # Subtle deep cyan for legal target dots
 COLOR_OPPONENT_FROM = (176, 56, 0)  # Orange for opponent move origin
 COLOR_OPPONENT_TO = (0, 112, 176)  # Cyan/blue for opponent move destination
+COLOR_OPPONENT_CAPTURE = (192, 0, 32)  # Ruby red for opponent capture target square
 COLOR_CHECK = (176, 0, 0)  # Red highlight on King in check
 COLOR_HIGHLIGHT = (204, 64, 0)  # Orange for diagnostic highlight
 COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
 
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
 COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
+COLOR_CAPTURE_TRACE = (204, 32, 64)  # High-energy rose-crimson pulse along capture trajectory
 COLOR_VICTORY_GOLD = (204, 172, 0)  # Shimmering gold for victory
 COLOR_VICTORY_GREEN = (0, 204, 48)  # Emerald green wave for victory
 COLOR_DEFEAT_RED = (176, 0, 16)  # Crimson wave for defeat

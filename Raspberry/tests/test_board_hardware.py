@@ -601,6 +601,55 @@ def test_freeze_baseline_suppresses_drift():
     assert len(baseline_history) == 0
 
 
+def test_load_settings_fallback_to_default_json_and_creates_settings_file():
+    """
+    Verify multi-tier fallback: when board_settings.json does not exist,
+    load_settings() loads from board_settings.default.json and creates board_settings.json.
+    """
+    import json
+    import tempfile
+    from board_hardware import load_settings, settings
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        settings_path = os.path.join(tmpdir, "board_settings.json")
+        default_path = os.path.join(tmpdir, "board_settings.default.json")
+        old_env = os.environ.get("BOARD_SETTINGS_PATH")
+        os.environ["BOARD_SETTINGS_PATH"] = settings_path
+
+        try:
+            default_data = {
+                "threshold_positive": 215,
+                "threshold_negative": 215,
+                "scan_delay": 42,
+                "mux_settle_us": 120,
+                "col_mode": "auto",
+                "pieces_mode": "auto",
+            }
+            with open(default_path, "w") as f:
+                json.dump(default_data, f)
+
+            assert not os.path.exists(settings_path)
+
+            load_settings()
+
+            assert settings["threshold_positive"] == 215
+            assert settings["threshold_negative"] == 215
+            assert settings["scan_delay"] == 42
+            assert settings["mux_settle_us"] == 120
+
+            assert os.path.exists(settings_path)
+            with open(settings_path) as f:
+                saved_content = json.load(f)
+            assert saved_content["threshold_positive"] == 215
+            assert saved_content["scan_delay"] == 42
+        finally:
+            if old_env is not None:
+                os.environ["BOARD_SETTINGS_PATH"] = old_env
+            else:
+                os.environ.pop("BOARD_SETTINGS_PATH", None)
+
+
+
 
 
 

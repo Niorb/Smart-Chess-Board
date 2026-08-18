@@ -106,12 +106,21 @@ class PhysicalMoveTracker:
                 to_r = int(last_move_uci[3]) - 1
 
                 if 0 <= from_c < self.cols and 0 <= from_r < self.rows and 0 <= to_c < self.cols and 0 <= to_r < self.rows:
+                    is_capture = False
+                    if hasattr(engine.board, "move_stack") and len(engine.board.move_stack) > 0:
+                        last_move = engine.board.peek()
+                        if last_move.uci() == last_move_uci:
+                            m = engine.board.pop()
+                            is_capture = bool(engine.board.is_capture(m))
+                            engine.board.push(m)
+
                     self.pending_opponent_move = {
                         "uci": last_move_uci,
                         "from": (from_c, from_r),
                         "to": (to_c, to_r),
+                        "is_capture": is_capture,
                     }
-                    logger.info(f"Opponent move pending physical mirroring: {last_move_uci} ({from_c},{from_r} -> {to_c},{to_r})")
+                    logger.info(f"Opponent move pending physical mirroring: {last_move_uci} ({from_c},{from_r} -> {to_c},{to_r}) capture={is_capture}")
             except (ValueError, IndexError) as e:
                 logger.warning(f"Failed to parse last move UCI '{last_move_uci}': {e}")
 

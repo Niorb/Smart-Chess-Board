@@ -121,30 +121,34 @@ def render_move_trace(
     frame: List[int],
     trace_color: int = COLOR_INT_MOVE_TRACE,
     period: float = MOVE_TRACE_PERIOD_S,
+    blend_arrival: bool = True,
 ) -> None:
     """
-    Renders a smooth animated pulse / comet traveling along the intermediate squares of path.
+    Renders an animated comet traveling along path coordinates from origin to destination.
 
-    Start and destination squares are left to be lit by the caller (Amber/Cyan).
-    Intermediate squares are smoothly illuminated with comet falloff.
+    Intermediate squares receive a traveling Gaussian comet glow.
+    The destination/arrival square pulses with an additive luminance flare upon comet arrival.
 
     Args:
-        path: List of (file, rank) tuples from start to destination inclusive.
+        path: Ordered list of (file, rank) tuples from origin to destination (len >= 2).
         now: Current timestamp in seconds (time.time()).
         frame: LED frame buffer (list of integer colors).
         trace_color: Color of the moving pulse.
-        period: Time in seconds for one complete traversal cycle.
+        period: Time in seconds for one complete traversal and decay cycle.
+        blend_arrival: Whether to blend the arrival pulse onto the existing target square color.
     """
-    if len(path) < 3 or period <= 0:
+    if len(path) < 2 or period <= 0:
         return
 
-    # Intermediate squares excluding origin and destination
-    num_steps = len(path) - 1
-    t = (now % period) / period  # 0.0 to 1.0
-    comet_pos = t * num_steps
+    num_squares = len(path)
+    num_steps = num_squares - 1
+    delta_overshoot = 1.2
+    total_span = num_steps + delta_overshoot
+    tau = (now % period) / period  # 0.0 to 1.0
+    comet_pos = tau * total_span
 
     # Render comet tail across intermediate squares
-    for i in range(1, len(path) - 1):
+    for i in range(1, num_steps):
         c, r = path[i]
         dist = abs(comet_pos - i)
         # Pulse intensity with Gaussian falloff (width ~ 0.9 squares)
@@ -152,6 +156,17 @@ def render_move_trace(
         if intensity > 0.02:
             scaled = scale_color(trace_color, intensity)
             blend_square_in_frame(frame, c, r, scaled, intensity)
+
+    # Render arrival pulse flare on destination square
+    c_arr, r_arr = path[num_steps]
+    d_arr = abs(comet_pos - num_steps)
+    intensity_arr = math.exp(-2.5 * d_arr * d_arr)
+    if intensity_arr > 0.02 and blend_arrival:
+        flare = scale_color(trace_color, intensity_arr * 0.85)
+        if 0 <= c_arr < 8 and 0 <= r_arr < 8:
+            for idx in get_led_indices(r_arr, c_arr):
+                if 0 <= idx < len(frame):
+                    frame[idx] = add_colors(frame[idx], flare)
 
 
 # =============================================================================

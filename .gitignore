@@ -19,3 +19,10 @@ build/
 *.token
 *.secret
 
+# Board Hardware Calibration & Transient Settings
+Raspberry/board_settings.json
+board_settings.json
+*.tmp
+*.json.tmp
+
+

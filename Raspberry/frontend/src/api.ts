@@ -182,6 +182,7 @@ export async function testMoveTrace(options: {
   uci?: string;
   from_pos?: [number, number];
   to_pos?: [number, number];
+  is_capture?: boolean;
   clear?: boolean;
 }) {
   const response = await fetch(`${API_BASE}/leds/test_trace`, {

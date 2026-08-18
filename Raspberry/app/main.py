@@ -110,6 +110,7 @@ class TestTraceRequest(BaseModel):
     uci: str | None = None
     from_pos: list[int] | None = None
     to_pos: list[int] | None = None
+    is_capture: bool | None = False
     clear: bool | None = False
 
 
@@ -276,14 +277,15 @@ async def test_trace_route(body: TestTraceRequest):
     """
     Tests move path interpolation and animated trace between squares.
     Accepts:
-      - {"uci": "e2e4"}
-      - {"from_pos": [4, 1], "to_pos": [4, 3]}
+      - {"uci": "e2e4", "is_capture": false}
+      - {"from_pos": [4, 1], "to_pos": [4, 3], "is_capture": true}
       - {"clear": true}
     """
     from app.path_interpolator import interpolate_move_path, interpolate_uci_move
 
     if body.clear:
         state_manager.custom_trace_path = None
+        state_manager.custom_trace_is_capture = False
         return {"status": "success", "message": "Custom trace cleared"}
 
     path = []
@@ -306,7 +308,8 @@ async def test_trace_route(body: TestTraceRequest):
         }
 
     state_manager.custom_trace_path = path
-    return {"status": "success", "path": path}
+    state_manager.custom_trace_is_capture = bool(body.is_capture)
+    return {"status": "success", "path": path, "is_capture": state_manager.custom_trace_is_capture}
 
 
 @app.get("/api/board/digital")
