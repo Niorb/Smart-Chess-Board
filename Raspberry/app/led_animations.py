@@ -251,16 +251,16 @@ def render_game_won(
     col_sparkle = blend_colors(col_gold, 0xFFFFFF, 0.70)
 
     # 2. Phase Wavefront Positions
-    # Phase 1: Diagonal sweep (a1 -> h8) for progress in [0.0, 0.48]
-    p1 = progress / 0.48
-    w1 = p1 * 18.0 - 2.0 if progress <= 0.48 else 99.0
+    # Phase 1: Diagonal sweep (a1 -> h8) for progress in [0.0, 0.45]
+    p1 = progress / 0.45
+    w1 = p1 * 18.0 - 2.0 if progress <= 0.45 else 99.0
 
-    # Phase 2: Counter-diagonal sweep (a8 -> h1) for progress in [0.40, 0.84]
-    p2 = (progress - 0.40) / 0.44
-    w2 = p2 * 18.0 - 2.0 if 0.40 <= progress <= 0.84 else 99.0
+    # Phase 2: Counter-diagonal sweep (a8 -> h1) for progress in [0.45, 0.82]
+    p2 = (progress - 0.45) / 0.37
+    w2 = p2 * 18.0 - 2.0 if 0.45 <= progress <= 0.82 else 99.0
 
-    # Phase 3: Center Diamond Flare for progress in [0.78, 1.0]
-    p3 = (progress - 0.78) / 0.22 if progress >= 0.78 else 0.0
+    # Phase 3: Center Diamond Flare for progress in [0.80, 1.0]
+    p3 = (progress - 0.80) / 0.20 if progress >= 0.80 else 0.0
     r3 = p3 * 2.4
 
     for c in range(8):
@@ -270,21 +270,21 @@ def render_game_won(
             w3_val = 0.0
 
             # Phase 1: Diagonal Wavefront (sweeping beam along a1 -> h8)
-            if progress <= 0.48:
+            if progress <= 0.45:
                 u1 = c + r
                 v1 = c - r
                 du1 = u1 - w1
-                w1_val = math.exp(-4.5 * du1 * du1 - 0.20 * v1 * v1)
+                w1_val = math.exp(-4.5 * du1 * du1 - 0.25 * v1 * v1)
 
             # Phase 2: Counter-Diagonal Wavefront (sweeping beam along a8 -> h1)
-            if 0.40 <= progress <= 0.84:
+            if 0.45 <= progress <= 0.82:
                 u2 = c + (7 - r)
                 v2 = c - (7 - r)
                 du2 = u2 - w2
-                w2_val = math.exp(-4.5 * du2 * du2 - 0.20 * v2 * v2)
+                w2_val = math.exp(-4.5 * du2 * du2 - 0.25 * v2 * v2)
 
             # Phase 3: Center Diamond Pulse
-            if progress >= 0.78:
+            if progress >= 0.80:
                 dist_center = math.sqrt((c - 3.5) ** 2 + (r - 3.5) ** 2)
                 dr = dist_center - r3
                 w3_val = math.exp(-4.5 * dr * dr) * ((1.0 - p3) ** 2)
@@ -312,7 +312,7 @@ def render_game_won(
 
             # 5. Final Composite & Deadband Gating
             total_intensity = primary_intensity + sparkle_intensity
-            if total_intensity > 0.04:
+            if total_intensity > 0.05:
                 # Blend in diamond white-gold for sparkle contribution
                 if sparkle_intensity > 0.001:
                     sparkle_ratio = sparkle_intensity / total_intensity
