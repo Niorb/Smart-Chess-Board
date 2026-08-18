@@ -649,6 +649,59 @@ def test_load_settings_fallback_to_default_json_and_creates_settings_file():
                 os.environ.pop("BOARD_SETTINGS_PATH", None)
 
 
+def test_baseline_not_calibrated_when_piece_lifted():
+    """
+    Verify that when a piece was on a square and is lifted, in-loop calibration / drift
+    does NOT immediately adopt the reading, because the history window contains detected entries.
+    """
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 2.0
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["pieces_mode"] = "pieces"
+
+    # Baseline is 1550
+    settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    now = time.time()
+    # History contains recent detection entries from when piece was still on d4 (3, 3)
+    baseline_history[(3, 3)] = [
+        (now - 1.5, 1850, True),  # Piece was on square
+        (now - 1.0, 1850, True),  # Piece was on square
+        (now - 0.5, 1850, True),  # Piece was on square
+    ]
+
+    # Piece is now lifted: raw reading returns to 1570 (minor offset)
+    raw_vals = [1550] * 64
+    for mux_ch in range(8):
+        c = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r in range(8):
+            if c == 3 and r == 3:
+                raw_vals[mux_ch * 8 + r] = 1570
+            else:
+                raw_vals[mux_ch * 8 + r] = 1550
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
+
+    scan_board(None, mock_ser, raw_state)
+
+    # Square (3, 3) is now empty (raw_state == 0), but baseline must NOT update to 1570
+    assert raw_state[3][3] == 0
+    assert settings["baselines"][3][3] == 1550
+
+
+
 
 
 

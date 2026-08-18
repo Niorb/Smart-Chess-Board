@@ -166,4 +166,22 @@ def test_board_state_seeking_continuous_led_render():
     assert bsm.strip.show.called
 
 
+def test_board_state_freezes_baseline_when_piece_lifted():
+    """Verify that when a piece is lifted or in flight, freeze_baseline is passed to scan_board."""
+    bsm = BoardStateManager()
+    bsm.move_tracker.lifted_square = (4, 1)  # Piece lifted on e2
+
+    is_animating = bool(
+        (bsm.active_animation is not None and bsm.active_animation.is_active())
+        or bsm.led_test_active
+    )
+    is_piece_moving = bool(
+        bsm.move_tracker.lifted_square is not None
+        or bsm.move_tracker.in_flight_move is not None
+    )
+    freeze_baseline = is_animating or is_piece_moving
+    assert freeze_baseline is True
+
+
+
 

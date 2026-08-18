@@ -503,7 +503,12 @@ class BoardStateManager:
                         (self.active_animation is not None and self.active_animation.is_active(now_ts))
                         or self.led_test_active
                     )
-                    raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, is_animating)
+                    is_piece_moving = bool(
+                        self.move_tracker.lifted_square is not None
+                        or self.move_tracker.in_flight_move is not None
+                    )
+                    freeze_baseline = is_animating or is_piece_moving
+                    raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, freeze_baseline)
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
                     col_mode = settings.get("col_mode", "auto")
