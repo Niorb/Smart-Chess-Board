@@ -238,6 +238,7 @@ def test_scan_board_dynamic_drift_middle_ranks():
 
     baseline_history.clear()
     settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["pieces_mode"] = "pieces"
     settings["baseline_window_s"] = 0.1
     settings["threshold_positive"] = 150
     settings["threshold_negative"] = 150
