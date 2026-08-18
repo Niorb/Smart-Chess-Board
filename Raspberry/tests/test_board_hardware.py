@@ -254,8 +254,8 @@ def test_scan_board_dynamic_drift_middle_ranks():
     mock_ser = MagicMock()
     mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
 
-    # Seed baseline_history with an entry from 0.15s ago to satisfy the 80% window requirement
-    t0 = time.time() - 0.15
+    # Seed baseline_history with an entry from 0.085s ago (within 0.1s window and >= 80% span)
+    t0 = time.time() - 0.085
     for c in range(BOARD_COLS):
         for r in (2, 3, 4, 5):
             baseline_history[(c, r)] = [(t0, 1540, False)]
