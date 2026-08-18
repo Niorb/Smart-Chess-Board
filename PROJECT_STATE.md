@@ -55,7 +55,11 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Restored dynamic baseline drift tracking for empty middle ranks (Ranks 3-6) in `scan_board()` with starting piece ranks (Ranks 1-2 and 7-8) inheriting Rank 3 and Rank 6 baseline updates per column, preventing piece magnet absorption while maintaining live ambient temperature/voltage drift compensation.
 - [x] Implemented smart piece auto-detection against reference ranks 3 & 6, 3-way mode switch (`Auto` / `Pieces Placed` / `Empty Board`), ±100 default thresholds, 1000 max slider cap, and live Web UI status badge.
 - [x] Fixed LED flickering on physical player moves by implementing `in_flight_move` state locking in `PhysicalMoveTracker` (suppressing 50-100Hz re-trigger loops during network latency) and differential zero-blackout LED updates in `DualPixelStrip.show()`.
-- [x] Fixed "Calibrate with pieces placed" feature and verified `SetupValidator` and dim white LED adjustment when all pieces are placed.
+- [x] Implemented animated move traces and full-board lifecycle animations:
+  - **Move Trace Flow**: Dynamic Gaussian comet pulse flowing along piece trajectory (orthogonal ranks/files, diagonals, Knight L-shapes, Bresenham lines) rendered in vibrant magenta (`COLOR_MOVE_TRACE`), while keep start (amber) and arrival (cyan) squares continuously lit.
+  - **Game Lifecycle Animations**: Procedural non-blocking animations for **Game Start** (radial expanding emerald wave), **Victory** (cascading gold & emerald celebration waves), **Defeat** (collapsing perimeter crimson wave), and **Draw** (symmetrical sapphire & white curtain sweep).
+  - **API & Web UI Controls**: Added `/api/leds/trigger_animation` and `/api/leds/test_trace` endpoints and debug testing buttons in `App.tsx`.
+  - **Verification & Deployment**: All 94 unit/integration test suites and frontend production build verified cleanly on the physical Raspberry Pi over SSH.
 
 ## Task Backlog
 
