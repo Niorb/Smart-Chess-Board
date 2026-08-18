@@ -232,6 +232,9 @@ COL_MUX_S3 = 23
 def set_mux_channel(_h, _s0, _s1, _s2, _s3, _channel):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
 
+def init_mux_pins(_h):
+    """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
+
 def clear_baseline_history():
     """Clears dynamic baseline drift historical window samples."""
     global baseline_history
