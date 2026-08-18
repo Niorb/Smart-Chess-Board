@@ -402,6 +402,17 @@ async def resign_game_route():
     return {"status": "resigned" if success else "error"}
 
 
+@app.post("/api/lichess/claim-victory")
+@app.post("/api/game/claim-victory")
+async def claim_victory_route():
+    """Claims victory when an opponent disconnects on Lichess."""
+    if state_manager.game_status != "PLAYING":
+        return {"status": "error", "message": "No active game to claim victory"}
+
+    success = await lichess_engine.claim_victory(state_manager)
+    return {"status": "claimed" if success else "error"}
+
+
 @app.post("/api/game/draw")
 async def draw_game_route(body: DrawRequest | None = None):
     """Offers or accepts a draw on Lichess."""

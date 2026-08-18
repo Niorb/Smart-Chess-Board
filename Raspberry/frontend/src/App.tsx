@@ -4,6 +4,7 @@ import {
   seekGame, 
   cancelGame, 
   resignGame,
+  claimVictory,
   offerDraw,
   getLichessAccount,
   setGameMode,
@@ -24,6 +25,8 @@ import {
   XCircle, 
   Flag,
   Handshake,
+  AlertTriangle,
+  Trophy,
   Terminal,
   Activity,
   Sliders,
@@ -104,6 +107,40 @@ function App() {
   // Click to Move state
   const [selectedSquare, setSelectedSquare] = useState<{ col: number; row: number } | null>(null);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+
+  // Disconnection & Victory Claiming State
+  const [claimCountdown, setClaimCountdown] = useState<number>(0);
+  const [isClaiming, setIsClaiming] = useState<boolean>(false);
+
+  const opponentGone = state.game?.opponent_gone?.gone ?? false;
+  const claimWinIn = state.game?.opponent_gone?.claim_win_in ?? 0;
+
+  useEffect(() => {
+    if (opponentGone) {
+      setClaimCountdown(claimWinIn);
+    } else {
+      setClaimCountdown(0);
+    }
+  }, [opponentGone, claimWinIn]);
+
+  useEffect(() => {
+    if (!opponentGone || claimCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setClaimCountdown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [opponentGone, claimCountdown]);
+
+  const handleClaimVictory = async () => {
+    setIsClaiming(true);
+    try {
+      await claimVictory();
+    } catch (err) {
+      console.error("Error claiming victory:", err);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   // Fetch Lichess Account on mount and connection changes
   useEffect(() => {
@@ -1024,6 +1061,39 @@ function App() {
                       ⚠️ CHECK!
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Opponent Disconnected Alert Banner */}
+              {state.status === 'PLAYING' && opponentGone && (
+                <div className="bg-amber-950/40 border border-amber-500/60 rounded-xl p-3.5 flex flex-col gap-2.5 animate-pulse shadow-lg shadow-amber-950/30">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="text-amber-400 flex-shrink-0 animate-bounce" size={20} />
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-amber-200 uppercase tracking-wider">
+                        Opponent Disconnected
+                      </span>
+                      <span className="text-[11px] text-amber-300/90 font-mono">
+                        {claimCountdown > 0
+                          ? `Auto-claiming victory in ${claimCountdown}s...`
+                          : 'Victory can be claimed now!'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleClaimVictory}
+                    disabled={isClaiming || claimCountdown > 0}
+                    className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs py-2.5 px-3 rounded-lg shadow flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Trophy size={14} />
+                    <span>
+                      {isClaiming
+                        ? 'Claiming Victory...'
+                        : claimCountdown > 0
+                        ? `Claim Victory (${claimCountdown}s)`
+                        : 'Claim Victory Now'}
+                    </span>
+                  </button>
                 </div>
               )}
 

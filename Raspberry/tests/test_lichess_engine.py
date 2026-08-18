@@ -335,3 +335,187 @@ def test_get_game_payload_includes_last_move_is_capture():
     assert payload_ep["last_move"] == "e5d6"
     assert payload_ep["last_move_is_capture"] is True
 
+
+def test_handle_opponent_gone_immediate_claim():
+    """Verify opponentGone with claimWinInSeconds <= 0 triggers immediate victory claim."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "testOpponentGone1"
+        engine.my_color = "white"
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "PLAYING"
+
+        with patch.object(engine, "claim_victory", new_callable=AsyncMock) as mock_claim:
+            mock_claim.return_value = True
+
+            engine._handle_opponent_gone(True, 0, mock_state_mgr)
+
+            assert engine.opponent_gone == {"gone": True, "claim_win_in": 0}
+            assert engine._auto_claim_task is not None
+
+            await asyncio.sleep(0.01)
+            mock_claim.assert_called_once_with(mock_state_mgr)
+    asyncio.run(_test())
+
+
+def test_handle_opponent_gone_scheduled_delayed_claim():
+    """Verify opponentGone with claimWinInSeconds > 0 schedules a delayed task."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "testOpponentGone2"
+        engine.my_color = "white"
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "PLAYING"
+
+        with patch.object(engine, "claim_victory", new_callable=AsyncMock) as mock_claim, \
+             patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            mock_claim.return_value = True
+
+            engine._handle_opponent_gone(True, 15, mock_state_mgr)
+
+            assert engine.opponent_gone == {"gone": True, "claim_win_in": 15}
+            assert engine._auto_claim_task is not None
+
+            await engine._auto_claim_task
+
+            mock_sleep.assert_called_with(15)
+            mock_claim.assert_called_once_with(mock_state_mgr)
+    asyncio.run(_test())
+
+
+def test_opponent_reconnection_cancels_auto_claim_task():
+    """Verify opponent returning (gone=False) cancels pending auto-claim task and clears state."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "testOpponentReconnect"
+        engine.my_color = "white"
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "PLAYING"
+
+        with patch.object(engine, "claim_victory", new_callable=AsyncMock) as mock_claim:
+            # 1. Opponent disconnects (scheduled for 20s)
+            engine._handle_opponent_gone(True, 20, mock_state_mgr)
+            claim_task = engine._auto_claim_task
+            assert claim_task is not None
+            assert engine.opponent_gone == {"gone": True, "claim_win_in": 20}
+
+            # 2. Opponent reconnects before timer expires
+            engine._handle_opponent_gone(False, 0, mock_state_mgr)
+
+            assert claim_task.cancelled() or claim_task.done()
+            assert engine.opponent_gone is None
+
+            await asyncio.sleep(0.01)
+            mock_claim.assert_not_called()
+    asyncio.run(_test())
+
+
+def test_claim_victory_http_success_and_state_updates():
+    """Verify claim_victory makes POST request, sets game over, winner, idle status, and animation."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "claimGame123"
+        engine.my_color = "white"
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "PLAYING"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"ok": True}
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
+
+            result = await engine.claim_victory(mock_state_mgr)
+
+            assert result is True
+            mock_post.assert_called_once_with("/api/board/game/claimGame123/claim-victory")
+            assert engine.game_info["is_game_over"] is True
+            assert engine.game_info["winner"] == "white"
+            assert mock_state_mgr.game_status == "IDLE"
+            mock_state_mgr.trigger_animation.assert_called_once_with("GAME_WON")
+    asyncio.run(_test())
+
+
+def test_claim_victory_http_failure():
+    """Verify claim_victory returns False on API rejection or network error."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "claimFailGame"
+        engine.my_color = "black"
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "PLAYING"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.text = "Cannot claim victory yet"
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
+
+            result = await engine.claim_victory(mock_state_mgr)
+
+            assert result is False
+            assert engine.game_info["is_game_over"] is False
+    asyncio.run(_test())
+
+
+def test_get_game_payload_includes_opponent_gone():
+    """Verify get_game_payload includes opponent_gone in initial and disconnected states."""
+    engine = LichessEngine()
+    engine.current_game_id = "testPayloadGame"
+    engine.my_color = "white"
+
+    # 1. Normal state: opponent_gone is None
+    payload_normal = engine.get_game_payload()
+    assert "opponent_gone" in payload_normal
+    assert payload_normal["opponent_gone"] is None
+
+    # 2. Opponent disconnected state
+    engine.opponent_gone = {"gone": True, "claim_win_in": 10}
+    payload_gone = engine.get_game_payload()
+    assert payload_gone["opponent_gone"] == {"gone": True, "claim_win_in": 10}
+
+    # 3. Opponent reconnected state
+    engine.opponent_gone = None
+    payload_back = engine.get_game_payload()
+    assert payload_back["opponent_gone"] is None
+
+
+def test_auto_claim_task_cancelled_on_stop_cancel_resign_abort():
+    """Verify auto claim task is cleanly cancelled across engine lifecycle operations."""
+    async def _test():
+        engine = LichessEngine()
+        engine.current_game_id = "testCleanupGame"
+        mock_state_mgr = MagicMock()
+
+        # 1. Test cancellation on stop()
+        engine.is_running = True
+        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        await engine.stop()
+        assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+
+        # 2. Test cancellation on cancel()
+        mock_state_mgr.game_status = "PLAYING"
+        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        with patch.object(engine, "resign", new_callable=AsyncMock):
+            await engine.cancel(mock_state_mgr)
+            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+
+        # 3. Test cancellation on resign()
+        engine.current_game_id = "testCleanupGame"
+        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(status_code=200)
+            await engine.resign(mock_state_mgr)
+            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+
+        # 4. Test cancellation on abort()
+        engine.current_game_id = "testCleanupGame"
+        engine._auto_claim_task = asyncio.create_task(asyncio.sleep(100))
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = MagicMock(status_code=200)
+            await engine.abort(mock_state_mgr)
+            assert engine._auto_claim_task.cancelled() or engine._auto_claim_task.done()
+    asyncio.run(_test())
+

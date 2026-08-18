@@ -60,6 +60,14 @@ export async function resignGame() {
   return response.json();
 }
 
+export async function claimVictory() {
+  const response = await fetch(`${API_BASE}/lichess/claim-victory`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
 export async function offerDraw(accept: boolean = true) {
   const response = await fetch(`${API_BASE}/game/draw`, {
     method: 'POST',

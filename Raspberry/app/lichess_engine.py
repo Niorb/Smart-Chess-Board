@@ -119,6 +119,8 @@ class LichessEngine:
             "winner": None,
             "end_reason": None,
         }
+        self.opponent_gone: dict[str, Any] | None = None
+        self._auto_claim_task: asyncio.Task | None = None
         self._seek_task: asyncio.Task | None = None
         self._stream_task: asyncio.Task | None = None
         self._event_stream_task: asyncio.Task | None = None
@@ -182,6 +184,10 @@ class LichessEngine:
             return
 
         self._cancel_event.set()
+        if self._auto_claim_task and not self._auto_claim_task.done():
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+        self.opponent_gone = None
         if self._seek_task and not self._seek_task.done():
             self._seek_task.cancel()
         if self._stream_task and not self._stream_task.done():
@@ -520,9 +526,10 @@ class LichessEngine:
                         elif event_type == "chatLine":
                             logger.info(f"[Chat] {event.get('username')}: {event.get('text')}")
                         elif event_type == "opponentGone":
-                            gone = event.get("gone", False)
+                            gone = bool(event.get("gone", False))
                             claim_win = event.get("claimWinInSeconds", 0)
                             logger.info(f"Opponent gone: {gone}, claim win in {claim_win}s")
+                            self._handle_opponent_gone(gone, claim_win, state_manager)
 
         except asyncio.CancelledError:
             logger.info(f"Game stream {game_id} cancelled.")
@@ -530,8 +537,39 @@ class LichessEngine:
             logger.error(f"Error in game stream {game_id}: {e}")
         finally:
             logger.info(f"Game stream {game_id} finished.")
+            if self._auto_claim_task and not self._auto_claim_task.done():
+                self._auto_claim_task.cancel()
+                self._auto_claim_task = None
+            self.opponent_gone = None
             if state_manager.game_status == "PLAYING":
                 state_manager.game_status = "IDLE"
+
+    def _handle_opponent_gone(self, gone: bool, claim_win_in: int | float, state_manager):
+        """Tracks opponent disconnection and schedules automated victory claiming."""
+        if self._auto_claim_task and not self._auto_claim_task.done():
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+
+        if gone:
+            self.opponent_gone = {"gone": True, "claim_win_in": max(0, int(claim_win_in))}
+            if claim_win_in <= 0:
+                logger.info("Opponent gone timer expired. Dispatching immediate victory claim...")
+                self._auto_claim_task = asyncio.create_task(self.claim_victory(state_manager))
+            else:
+                logger.info(f"Scheduling automated victory claim in {claim_win_in}s...")
+                async def _delayed_claim():
+                    try:
+                        await asyncio.sleep(claim_win_in)
+                        logger.info(f"Auto-claim timer elapsed ({claim_win_in}s). Claiming victory for {self.current_game_id}...")
+                        await self.claim_victory(state_manager)
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as err:
+                        logger.error(f"Error in auto-claim task: {err}")
+
+                self._auto_claim_task = asyncio.create_task(_delayed_claim())
+        else:
+            self.opponent_gone = None
 
     def _trigger_end_animation(self, state_manager, winner: str | None):
         """Triggers appropriate victory, defeat, or draw animation upon game termination."""
@@ -698,6 +736,7 @@ class LichessEngine:
             "turn": "white" if self.board.turn == chess.WHITE else "black",
             "my_color": self.my_color,
             "opponent": self.game_info.get("opponent", {}),
+            "opponent_gone": self.opponent_gone,
             "last_move": last_move_uci,
             "last_move_is_capture": last_move_is_capture,
             "legal_moves": [m.uci() for m in self.board.legal_moves],
@@ -747,8 +786,48 @@ class LichessEngine:
             logger.error(f"Error making move {uci_move}: {e}")
             return False
 
+    async def claim_victory(self, state_manager=None) -> bool:
+        """Claims victory on an abandoned game via POST /api/board/game/{game_id}/claim-victory."""
+        if self._auto_claim_task and not self._auto_claim_task.done() and asyncio.current_task() != self._auto_claim_task:
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+
+        if not self.current_game_id:
+            logger.warning("No active game ID to claim victory.")
+            return False
+
+        headers = self._get_headers()
+        try:
+            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+                res = await client.post(f"/api/board/game/{self.current_game_id}/claim-victory")
+                if res.status_code in [200, 201]:
+                    logger.info(f"Victory claimed successfully for game {self.current_game_id}!")
+                    self.game_info["is_game_over"] = True
+                    self.game_info["winner"] = self.my_color
+                    self.game_info["end_reason"] = "opponent_left"
+                    self.opponent_gone = None
+                    if self._auto_claim_task and not self._auto_claim_task.done():
+                        self._auto_claim_task.cancel()
+                        self._auto_claim_task = None
+                    if state_manager:
+                        state_manager.game_status = "IDLE"
+                        if hasattr(state_manager, "trigger_animation"):
+                            state_manager.trigger_animation("GAME_WON")
+                    return True
+                else:
+                    logger.warning(f"Failed to claim victory: HTTP {res.status_code} - {res.text}")
+                    return False
+        except Exception as e:
+            logger.error(f"Error claiming victory: {e}")
+            return False
+
     async def resign(self, state_manager) -> bool:
         """Resigns the active game via POST /api/board/game/{game_id}/resign."""
+        if self._auto_claim_task and not self._auto_claim_task.done():
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+        self.opponent_gone = None
+
         if not self.current_game_id:
             return False
 
@@ -767,6 +846,11 @@ class LichessEngine:
 
     async def abort(self, state_manager) -> bool:
         """Aborts the active game via POST /api/board/game/{game_id}/abort."""
+        if self._auto_claim_task and not self._auto_claim_task.done():
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+        self.opponent_gone = None
+
         if not self.current_game_id:
             return False
 
@@ -798,6 +882,11 @@ class LichessEngine:
 
     async def cancel(self, state_manager):
         """Cancels an active seek or resigns an ongoing game."""
+        if self._auto_claim_task and not self._auto_claim_task.done():
+            self._auto_claim_task.cancel()
+            self._auto_claim_task = None
+        self.opponent_gone = None
+
         if state_manager.game_status == "SEEKING":
             logger.info("Cancelling active Lichess seek...")
             self._cancel_event.set()

@@ -203,3 +203,62 @@ def test_test_trace_route_with_is_capture():
     assert response_clear.json()["status"] == "success"
 
 
+def test_claim_victory_route_success():
+    """Verify POST /api/lichess/claim-victory succeeds when game is active."""
+    from app.main import state_manager
+    state_manager.game_status = "PLAYING"
+    client = TestClient(app)
+
+    with patch("app.main.lichess_engine.claim_victory", new_callable=AsyncMock) as mock_claim:
+        mock_claim.return_value = True
+        response = client.post("/api/lichess/claim-victory")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "claimed"
+        mock_claim.assert_called_once_with(state_manager)
+
+
+def test_claim_victory_game_route_alias_success():
+    """Verify POST /api/game/claim-victory alias endpoint functions identically."""
+    from app.main import state_manager
+    state_manager.game_status = "PLAYING"
+    client = TestClient(app)
+
+    with patch("app.main.lichess_engine.claim_victory", new_callable=AsyncMock) as mock_claim:
+        mock_claim.return_value = True
+        response = client.post("/api/game/claim-victory")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "claimed"
+        mock_claim.assert_called_once_with(state_manager)
+
+
+def test_claim_victory_route_not_playing():
+    """Verify POST /api/lichess/claim-victory returns error when no game is active."""
+    from app.main import state_manager, lichess_engine
+    state_manager.game_status = "IDLE"
+    lichess_engine.current_game_id = None
+    client = TestClient(app)
+
+    response = client.post("/api/lichess/claim-victory")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert "No active game" in data["message"]
+
+
+def test_claim_victory_route_engine_rejection():
+    """Verify POST /api/lichess/claim-victory handles Lichess API rejection."""
+    from app.main import state_manager
+    state_manager.game_status = "PLAYING"
+    client = TestClient(app)
+
+    with patch("app.main.lichess_engine.claim_victory", new_callable=AsyncMock) as mock_claim:
+        mock_claim.return_value = False
+        response = client.post("/api/lichess/claim-victory")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+
+
+

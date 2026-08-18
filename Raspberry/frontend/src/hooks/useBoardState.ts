@@ -91,6 +91,10 @@ export interface BoardState {
       rating: number;
       title?: string | null;
     };
+    opponent_gone?: {
+      gone: boolean;
+      claim_win_in: number;
+    } | null;
     last_move?: string | null;
     legal_moves?: string[];
     is_check?: boolean;
