@@ -137,8 +137,8 @@ def test_baseline_freezing_and_restoration_during_animation():
     assert settings["baselines"][0][0] == 1600
 
 
-@pytest.mark.asyncio
-async def test_baseline_freezing_during_led_test():
+def test_baseline_freezing_during_led_test():
+    import asyncio
     from board_hardware import settings
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -148,9 +148,10 @@ async def test_baseline_freezing_during_led_test():
 
     # Run LED test with sleep patched out
     with patch("asyncio.sleep", return_value=None):
-        await bsm.run_led_test()
+        asyncio.run(bsm.run_led_test())
 
     assert bsm.led_test_active is False
     assert bsm.frozen_baselines is None
     assert settings["baselines"][0][0] == 1700
+
 
