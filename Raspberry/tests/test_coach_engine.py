@@ -145,56 +145,64 @@ class TestHeuristicEvaluator:
 # 3. COACH ENGINE ASYNC EVALUATION & CACHING TESTS
 # =============================================================================
 
-@pytest.mark.asyncio
 class TestCoachEngineAsync:
-    async def test_coach_engine_init_and_fallback(self):
+    def test_coach_engine_init_and_fallback(self):
         """If Stockfish is unavailable, coach gracefully operates in heuristic mode."""
-        engine = CoachEngine(stockfish_path="/nonexistent/path/to/stockfish")
-        await engine.start()
-        assert engine.is_heuristic_mode is True
+        async def _test():
+            engine = CoachEngine(stockfish_path="/nonexistent/path/to/stockfish")
+            await engine.start()
+            assert engine.is_heuristic_mode is True
 
-        result = await engine.evaluate_position(chess.STARTING_FEN)
-        assert isinstance(result, PositionEvaluation)
-        assert result.best_move is not None
-        assert len(result.top_moves) > 0
-        await engine.stop()
+            result = await engine.evaluate_position(chess.STARTING_FEN)
+            assert isinstance(result, PositionEvaluation)
+            assert result.best_move is not None
+            assert len(result.top_moves) > 0
+            await engine.stop()
 
-    async def test_fen_caching(self):
+        asyncio.run(_test())
+
+    def test_fen_caching(self):
         """Re-evaluating identical FEN retrieves result from cache without re-computing."""
-        engine = CoachEngine(stockfish_path=None)
-        await engine.start()
+        async def _test():
+            engine = CoachEngine(stockfish_path=None)
+            await engine.start()
 
-        eval1 = await engine.evaluate_position(chess.STARTING_FEN)
-        with patch.object(engine.evaluator, "evaluate", wraps=engine.evaluator.evaluate) as mock_eval:
-            eval2 = await engine.evaluate_position(chess.STARTING_FEN)
-            mock_eval.assert_not_called()
+            eval1 = await engine.evaluate_position(chess.STARTING_FEN)
+            with patch.object(engine.evaluator, "evaluate", wraps=engine.evaluator.evaluate) as mock_eval:
+                eval2 = await engine.evaluate_position(chess.STARTING_FEN)
+                mock_eval.assert_not_called()
 
-        assert eval1.best_move == eval2.best_move
-        assert eval1.score_cp == eval2.score_cp
-        await engine.stop()
+            assert eval1.best_move == eval2.best_move
+            assert eval1.score_cp == eval2.score_cp
+            await engine.stop()
 
-    async def test_task_cancellation_on_rapid_requests(self):
+        asyncio.run(_test())
+
+    def test_task_cancellation_on_rapid_requests(self):
         """Triggering new analysis while one is pending cleanly cancels previous task."""
-        engine = CoachEngine(stockfish_path=None)
-        await engine.start()
+        async def _test():
+            engine = CoachEngine(stockfish_path=None)
+            await engine.start()
 
-        async def slow_eval():
-            await asyncio.sleep(0.5)
-            return await engine.evaluate_position("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+            async def slow_eval():
+                await asyncio.sleep(0.5)
+                return await engine.evaluate_position("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 
-        task1 = asyncio.create_task(slow_eval())
-        await asyncio.sleep(0.01)
+            task1 = asyncio.create_task(slow_eval())
+            await asyncio.sleep(0.01)
 
-        task2 = asyncio.create_task(engine.evaluate_position(chess.STARTING_FEN))
-        res2 = await task2
-        assert res2 is not None
+            task2 = asyncio.create_task(engine.evaluate_position(chess.STARTING_FEN))
+            res2 = await task2
+            assert res2 is not None
 
-        task1.cancel()
-        try:
-            await task1
-        except asyncio.CancelledError:
-            pass
-        await engine.stop()
+            task1.cancel()
+            try:
+                await task1
+            except asyncio.CancelledError:
+                pass
+            await engine.stop()
+
+        asyncio.run(_test())
 
 
 # =============================================================================

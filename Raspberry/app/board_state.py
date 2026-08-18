@@ -48,6 +48,9 @@ from app.config import (
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_CAPTURE_CONFIRM,
+    COLOR_INT_CAPTURE_TRACE,
+    COLOR_INT_CHECK,
     COLOR_INT_DRAW_BLUE,
     COLOR_INT_DRAW_WHITE,
     COLOR_INT_EVAL_BLACK,

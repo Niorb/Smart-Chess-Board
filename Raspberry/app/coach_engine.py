@@ -155,8 +155,6 @@ class HeuristicEvaluator:
             else:
                 score -= total_val
 
-        # Mobility bonus
-        score += len(list(board.legal_moves)) * (5 if board.turn == chess.WHITE else -5)
         return score
 
     def get_top_moves(self, board: chess.Board, top_k: int = 5) -> List[MoveAnalysis]:
