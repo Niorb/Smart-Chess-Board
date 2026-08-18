@@ -40,8 +40,17 @@ def test_calibrate_board_with_pieces_mapping():
             else:
                 raw_vals.append(2200)
 
-    data_bytes = struct.pack('<64H', *raw_vals)
-    mock_ser.read.side_effect = [b'\xaa\x55', data_bytes]
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    def mock_read(n):
+        if n == 2:
+            return packet_header
+        if n == 128:
+            return packet_data
+        return b''
+
+    mock_ser.read.side_effect = mock_read
 
     with patch("board_hardware.save_settings"):
         res = calibrate_board_with_pieces(None, mock_ser, duration_s=0.05)
