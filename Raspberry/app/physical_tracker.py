@@ -12,7 +12,7 @@ from typing import Any
 
 import chess
 
-from app.config import BOARD_COLS, BOARD_ROWS
+from app.config import ANIM_MOVE_CONFIRM_DURATION_S, BOARD_COLS, BOARD_ROWS
 
 logger = logging.getLogger("smart-chess-app.tracker")
 
@@ -35,6 +35,7 @@ class PhysicalMoveTracker:
         self.pending_opponent_move: dict[str, Any] | None = None
         self._last_synced_move_uci: str | None = None
         self.in_flight_move: dict[str, Any] | None = None
+        self.arrival_flash: dict[str, Any] | None = None
 
     def set_in_flight_move(
         self, from_c: int, from_r: int, to_c: int, to_r: int, uci: str
@@ -59,6 +60,7 @@ class PhysicalMoveTracker:
         self.pending_opponent_move = None
         self._last_synced_move_uci = None
         self.in_flight_move = None
+        self.arrival_flash = None
 
     def sync_game(self, engine: Any) -> None:
         """
@@ -171,6 +173,12 @@ class PhysicalMoveTracker:
 
             if origin_empty and target_occupied:
                 logger.info(f"Physical board confirmed opponent move: {self.pending_opponent_move['uci']}")
+                self.arrival_flash = {
+                    "square": (to_c, to_r),
+                    "start_time": time.time(),
+                    "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                    "is_capture": bool(self.pending_opponent_move.get("is_capture", False)),
+                }
                 self.pending_opponent_move = None
                 self.invalid_placement = None
 
@@ -236,6 +244,14 @@ class PhysicalMoveTracker:
                     is_placed = (target_val == expected_polarity or (target_val != 0 and target_val != (-1 if existing_piece.color == chess.WHITE else 1)))
 
                 if is_placed:
+                    is_capture = (existing_piece is not None)
+                    self.arrival_flash = {
+                        "square": (t_c, t_r),
+                        "start_time": time.time(),
+                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                        "is_capture": is_capture,
+                    }
+
                     # Check for pawn promotion
                     promo_moves = [
                         m for m in board.legal_moves
@@ -284,6 +300,16 @@ class PhysicalMoveTracker:
             "legal_targets": [list(sq) for sq in self.legal_targets],
             "invalid_placement": list(self.invalid_placement) if self.invalid_placement else None,
             "pending_opponent_move": self.pending_opponent_move,
+            "arrival_flash": (
+                {
+                    "square": list(self.arrival_flash["square"]),
+                    "start_time": self.arrival_flash["start_time"],
+                    "duration": self.arrival_flash["duration"],
+                    "is_capture": self.arrival_flash["is_capture"],
+                }
+                if self.arrival_flash
+                else None
+            ),
             "in_flight_move": (
                 {
                     "from": list(self.in_flight_move["from"]),

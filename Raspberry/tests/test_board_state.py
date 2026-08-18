@@ -183,5 +183,67 @@ def test_board_state_freezes_baseline_when_piece_lifted():
     assert freeze_baseline is True
 
 
+def test_trigger_arrival_flash():
+    bsm = BoardStateManager()
+    bsm.trigger_arrival_flash(4, 3, is_capture=False)
+    assert bsm.arrival_flash is not None
+    assert bsm.arrival_flash["square"] == (4, 3)
+    assert bsm.arrival_flash["is_capture"] is False
+    assert bsm.arrival_flash["duration"] == 0.45
+
+    bsm.trigger_arrival_flash(3, 4, is_capture=True, duration=0.6)
+    assert bsm.arrival_flash["square"] == (3, 4)
+    assert bsm.arrival_flash["is_capture"] is True
+    assert bsm.arrival_flash["duration"] == 0.6
+
+
+def test_arrival_flash_rendering_and_expiration():
+    import time
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+
+    # Trigger active flash
+    bsm.trigger_arrival_flash(4, 3, is_capture=False)
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.arrival_flash is not None
+
+    # Fast forward past duration
+    bsm.arrival_flash["start_time"] = time.time() - 1.0
+    bsm._update_leds()
+    assert bsm.arrival_flash is None
+
+
+def test_move_tracker_arrival_flash_rendering():
+    import time
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+
+    bsm.move_tracker.arrival_flash = {
+        "square": (2, 3),
+        "start_time": time.time(),
+        "duration": 0.45,
+        "is_capture": True,
+    }
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.move_tracker.arrival_flash is not None
+
+    # Fast forward past duration
+    bsm.move_tracker.arrival_flash["start_time"] = time.time() - 1.0
+    bsm._update_leds()
+    assert bsm.move_tracker.arrival_flash is None
+
+
+def test_clear_all_leds_clears_arrival_flash():
+    import time
+    bsm = BoardStateManager()
+    bsm.arrival_flash = {"square": (0, 0), "start_time": time.time(), "duration": 0.45, "is_capture": False}
+    bsm.move_tracker.arrival_flash = {"square": (1, 1), "start_time": time.time(), "duration": 0.45, "is_capture": False}
+    bsm.clear_all_leds()
+    assert bsm.arrival_flash is None
+    assert bsm.move_tracker.arrival_flash is None
+
+
 
 

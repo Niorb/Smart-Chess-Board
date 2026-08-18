@@ -41,16 +41,19 @@ except ImportError:
     serial = None
 
 from app.config import (
+    ANIM_MOVE_CONFIRM_DURATION_S,
     BAUD_RATE,
     NUM_LEDS,
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_CAPTURE_CONFIRM,
     COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_CHECK,
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_TARGET,
+    COLOR_INT_MOVE_CONFIRM,
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
@@ -64,6 +67,7 @@ from app.led_helpers import (
     get_led_indices,
     init_strip,
 )
+from app.led_animations import scale_color
 from app.lichess_engine import lichess_engine
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import SetupResult, SetupValidator
@@ -96,6 +100,7 @@ class BoardStateManager:
         self.custom_trace_path = None  # list[tuple[int, int]] | None
         self.custom_trace_is_capture: bool = False
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
+        self.arrival_flash: dict | None = None
 
         # Setup verification and move tracking subsystems
         self.setup_validator = SetupValidator()
@@ -128,6 +133,21 @@ class BoardStateManager:
         except Exception as e:
             logger.error(f"LED strip init failed in BoardStateManager: {e}")
             self.strip = None
+
+    def trigger_arrival_flash(
+        self,
+        c: int,
+        r: int,
+        is_capture: bool = False,
+        duration: float = ANIM_MOVE_CONFIRM_DURATION_S,
+    ) -> None:
+        """Triggers an immediate visual confirmation flash on the arrival square."""
+        self.arrival_flash = {
+            "square": (c, r),
+            "start_time": time.time(),
+            "duration": duration,
+            "is_capture": is_capture,
+        }
 
     def trigger_animation(self, name: str, params: dict | None = None) -> bool:
         """
@@ -227,6 +247,16 @@ class BoardStateManager:
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
+            "arrival_flash": (
+                {
+                    "square": list(self.arrival_flash["square"] if self.arrival_flash else self.move_tracker.arrival_flash["square"]),
+                    "start_time": (self.arrival_flash or self.move_tracker.arrival_flash)["start_time"],
+                    "duration": (self.arrival_flash or self.move_tracker.arrival_flash)["duration"],
+                    "is_capture": (self.arrival_flash or self.move_tracker.arrival_flash)["is_capture"],
+                }
+                if (self.arrival_flash or (hasattr(self, "move_tracker") and self.move_tracker and self.move_tracker.arrival_flash))
+                else None
+            ),
             "active_animation": self.active_animation.name if (self.active_animation and self.active_animation.is_active()) else None,
             "custom_trace_path": [list(sq) for sq in self.custom_trace_path] if self.custom_trace_path else None,
             "in_flight_move": (
@@ -402,6 +432,25 @@ class BoardStateManager:
                     inv_c, inv_r = self.move_tracker.invalid_placement
                     set_square_leds(inv_c, inv_r, COLOR_INT_ILLEGAL)
 
+            # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square)
+            for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
+                if flash_source:
+                    flash_c, flash_r = flash_source["square"]
+                    flash_t0 = flash_source["start_time"]
+                    flash_dur = flash_source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
+                    is_capture = flash_source.get("is_capture", False)
+                    elapsed = now - flash_t0
+                    if 0 <= elapsed < flash_dur:
+                        progress = elapsed / flash_dur
+                        intensity = math.exp(-3.5 * progress) * (1.0 - progress)
+                        flash_color = COLOR_INT_CAPTURE_CONFIRM if is_capture else COLOR_INT_MOVE_CONFIRM
+                        set_square_leds(flash_c, flash_r, scale_color(flash_color, intensity))
+                    else:
+                        if self.arrival_flash is flash_source:
+                            self.arrival_flash = None
+                        if hasattr(self, "move_tracker") and self.move_tracker.arrival_flash is flash_source:
+                            self.move_tracker.arrival_flash = None
+
             # Layer 3: Custom Diagnostic Trace Override
             if self.custom_trace_path and len(self.custom_trace_path) >= 2:
                 t_from_c, t_from_r = self.custom_trace_path[0]
@@ -459,8 +508,11 @@ class BoardStateManager:
             logger.info("Sequential LED strip test completed.")
 
     def clear_all_leds(self):
-        """Forces all physical LEDs off and clears any highlighted square, active animation, or custom trace."""
+        """Forces all physical LEDs off and clears any highlighted square, active animation, custom trace, or arrival flash."""
         self.highlighted_square = None
+        self.arrival_flash = None
+        if hasattr(self, "move_tracker") and self.move_tracker:
+            self.move_tracker.arrival_flash = None
         if self.active_animation is not None and self.frozen_baselines is not None:
             from board_hardware import settings, clear_baseline_history
             settings["baselines"] = [list(col) for col in self.frozen_baselines]

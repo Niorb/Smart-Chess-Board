@@ -68,6 +68,8 @@ COLOR_OPPONENT_CAPTURE = (192, 0, 32)  # Ruby red for opponent capture target sq
 COLOR_CHECK = (176, 0, 0)  # Red highlight on King in check
 COLOR_HIGHLIGHT = (204, 64, 0)  # Orange for diagnostic highlight
 COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
+COLOR_MOVE_CONFIRM = (48, 255, 128)  # Vibrant emerald/spring green arrival confirmation flash
+COLOR_CAPTURE_CONFIRM = (255, 32, 64)  # Radiant ruby/crimson capture confirmation flash
 
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
 COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
@@ -99,6 +101,7 @@ FLASH_COUNT_CONNECT = 2  # Number of flashes on successful connection
 
 # Procedural Animation Timings (seconds)
 MOVE_TRACE_PERIOD_S = 0.8  # Traversal period for move trace pulse
+ANIM_MOVE_CONFIRM_DURATION_S = 0.45  # Snappy 450ms exponential decay
 ANIM_GAME_START_DURATION_S = 1.5  # Duration for game start radial burst
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
 ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave

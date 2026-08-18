@@ -273,3 +273,89 @@ def test_tracker_to_dict_and_reset(initial_physical_state, mock_engine):
     tracker.reset()
     assert tracker.in_flight_move is None
     assert tracker.to_dict()["in_flight_move"] is None
+
+
+def test_player_quiet_move_triggers_arrival_flash(initial_physical_state, mock_engine):
+    tracker = PhysicalMoveTracker()
+
+    # 1. Lift e2 (c=4, r=1)
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0
+    tracker.process_physical_state(state, mock_engine)
+
+    # 2. Place on e4 (c=4, r=3)
+    state[4][3] = -1
+    tracker.process_physical_state(state, mock_engine)
+
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (4, 3)
+    assert tracker.arrival_flash["is_capture"] is False
+    assert tracker.arrival_flash["duration"] == 0.45
+    assert abs(tracker.arrival_flash["start_time"] - time.time()) < 1.0
+
+
+def test_player_capture_move_triggers_arrival_flash(initial_physical_state, mock_engine):
+    tracker = PhysicalMoveTracker()
+
+    # Setup board: 1. e4 d5 2. exd5 (White pawn on e4 captures Black pawn on d5)
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("d5")
+    mock_engine.game_info["turn"] = "white"
+
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0   # e2 empty
+    state[4][3] = -1  # e4 White pawn
+    state[3][6] = 0   # d7 empty
+    state[3][4] = 1   # d5 Black pawn
+
+    # Lift e4 pawn
+    state[4][3] = 0
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.lifted_square == (4, 3)
+    assert (3, 4) in tracker.legal_targets
+
+    # Place on d5 (capture)
+    state[3][4] = -1
+    tracker.process_physical_state(state, mock_engine)
+
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (3, 4)
+    assert tracker.arrival_flash["is_capture"] is True
+
+
+def test_opponent_move_mirror_triggers_arrival_flash(initial_physical_state, mock_engine):
+    tracker = PhysicalMoveTracker()
+
+    # Opponent played e7e5
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("e5")
+    mock_engine.game_info["last_move"] = "e7e5"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0  # e2 empty
+    state[4][3] = -1 # e4 occupied
+    state[4][6] = 0  # e7 lifted
+    state[4][4] = 1  # e5 placed
+
+    tracker.process_physical_state(state, mock_engine)
+
+    assert tracker.pending_opponent_move is None
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (4, 4)
+    assert tracker.arrival_flash["is_capture"] is False
+
+
+def test_tracker_reset_clears_arrival_flash():
+    tracker = PhysicalMoveTracker()
+    tracker.arrival_flash = {
+        "square": (4, 3),
+        "start_time": time.time(),
+        "duration": 0.45,
+        "is_capture": False,
+    }
+    tracker.reset()
+    assert tracker.arrival_flash is None
+

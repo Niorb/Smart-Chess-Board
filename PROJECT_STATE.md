@@ -79,8 +79,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - All slider movements and mode toggles (positive/negative shift, scan delay, col mode, pieces mode, settle time, debounce threshold, baseline window) immediately sync to `localStorage` and debounced auto-persist to the FastAPI backend (`board_settings.json`).
 - [x] Implemented continuous "Waiting for Opponent" (Seeking) radar animation:
   - **Perimeter Orbital Comet**: Clockwise orbital pulse along the 28 perimeter squares ($a1 \to h1 \to h8 \to a8 \to a1$) with bright cyan-white head (`(140, 240, 255)`), electric azure body (`(0, 140, 255)`), and deep sapphire decay (`(0, 36, 160)`).
-  - **Low-Power Budget**: Strictly 3-4 active squares at any frame (< 6% of board), leaving inner 6x6 squares dark and keeping average current below 50mA.
-  - **State Machine Integration**: Automatically loops during `game_status == "SEEKING"` until match start or cancel, and available as a testable animation (`SEEKING` / `WAITING_FOR_OPPONENT`) via API and Web UI button.
+- [x] Implemented immediate visual confirmation flash on move arrival square:
+  - **Arrival Registration Feedback**: Whenever a physical move or opponent mirror move is registered on the physical board, triggers an instant 450ms exponential-decay flash on the destination square.
+  - **Color Coding**: High-contrast vibrant emerald green (`COLOR_MOVE_CONFIRM = (48, 255, 128)`) for standard quiet moves; radiant ruby crimson (`COLOR_CAPTURE_CONFIRM = (255, 32, 64)`) for capture moves.
+  - **Layered Compositor**: Rendered via Layer 2.5 in `BoardStateManager._update_leds()`, serialized in physical WebSocket state payloads, and automatically cleared upon expiration.
 
 ## Task Backlog
 
