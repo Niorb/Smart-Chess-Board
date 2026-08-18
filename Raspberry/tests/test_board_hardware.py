@@ -275,7 +275,7 @@ def test_scan_board_immutability_of_baselines():
 def test_starting_position_piece_detection_after_piece_calibration():
     """Verify piece calibration, detection on starting ranks, and SetupValidator readiness."""
     import struct
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
     from app.setup_validator import SetupValidator
     from board_hardware import (
         DEFAULT_COL_MUX_MAP,
