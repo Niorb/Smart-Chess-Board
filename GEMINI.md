@@ -47,13 +47,16 @@ After modifying code locally, ALWAYS execute this sequence:
 - **Sensors**: 64 Linear Analog Hall-effect sensors read via CD74HC4067 multiplexers and a 12-bit ADC on ESP32 (GPIO 34).
 - **Communication Protocol**: Binary packet request (`'B'`) over high-speed serial UART (`921600` baud).
 
-### Magnetic Polarity Convention
+### Magnetic Polarity Convention & Calibration Modes
 - **White Pieces**: **Negative magnetic pole** (`-1` / South).
   - Expected on **Ranks 1 and 2** during initial setup.
 - **Black Pieces**: **Positive magnetic pole** (`+1` / North).
   - Expected on **Ranks 7 and 8** during initial setup.
 - **Empty Squares**: Neutral (`0`).
   - Expected on **Ranks 3, 4, 5, and 6**.
+- **Calibration Options**:
+  - *Calibrate With Pieces Placed*: Samples the empty middle ranks 3–6 and maps the Rank 3 baseline to starting Ranks 1 & 2, and the Rank 6 baseline to starting Ranks 7 & 8.
+  - *Force Recalibrate (Empty Board)*: Directly samples all 64 squares (requires an empty board).
 
 ### WS2812B LED Strips
 - **Total LEDs**: 152 LEDs across 2 physical strips (76 LEDs per strip / 2 LEDs per square + serpentine skipped spacers).
