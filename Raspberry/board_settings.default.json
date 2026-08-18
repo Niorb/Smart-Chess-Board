@@ -22,5 +22,6 @@
     "pieces_mode": "auto",
     "coach_hints_enabled": true,
     "eval_bar_enabled": true,
-    "coach_ai_only": true
+    "coach_ai_only": true,
+    "in_loop_calibration": true
 }

@@ -117,7 +117,8 @@ export async function updateBoardSettings(
   piecesMode?: 'auto' | 'pieces' | 'empty',
   coachHintsEnabled?: boolean,
   evalBarEnabled?: boolean,
-  coachAiOnly?: boolean
+  coachAiOnly?: boolean,
+  inLoopCalibration?: boolean
 ) {
   const body: Record<string, unknown> = {};
   if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
@@ -133,6 +134,7 @@ export async function updateBoardSettings(
   if (coachHintsEnabled !== undefined) body.coach_hints_enabled = coachHintsEnabled;
   if (evalBarEnabled !== undefined) body.eval_bar_enabled = evalBarEnabled;
   if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
+  if (inLoopCalibration !== undefined) body.in_loop_calibration = inLoopCalibration;
 
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',

@@ -76,6 +76,7 @@ settings: dict[str, Any] = {
     "coach_hints_enabled": True,
     "eval_bar_enabled": True,
     "coach_ai_only": True,
+    "in_loop_calibration": True,
 }
 
 last_sent_settle_us = None
@@ -383,9 +384,10 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
             diag["pieces_mode"] = pieces_mode
             diag["effective_pieces_mode"] = effective_pieces_mode
 
-            # Dynamic baseline drift tracking (suppressed when baseline is frozen during animations)
+            # Dynamic baseline drift tracking (suppressed when baseline is frozen during animations or in_loop_calibration is disabled)
+            in_loop_cal = settings.get("in_loop_calibration", True)
             baseline_window = settings.get("baseline_window_s", 2)
-            if not freeze_baseline and baseline_window > 0:
+            if in_loop_cal and not freeze_baseline and baseline_window > 0:
                 now = time.time()
                 if effective_pieces_mode:
                     # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8

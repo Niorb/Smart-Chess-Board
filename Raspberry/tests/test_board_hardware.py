@@ -701,6 +701,49 @@ def test_baseline_not_calibrated_when_piece_lifted():
     assert settings["baselines"][3][3] == 1550
 
 
+def test_in_loop_calibration_default_setting():
+    """Verify that in_loop_calibration defaults to True."""
+    from board_hardware import settings
+    assert settings.get("in_loop_calibration") is True
+
+
+def test_scan_board_in_loop_calibration_disabled_suppresses_drift():
+    """Verify that when in_loop_calibration is False, baseline drift is suppressed in scan_board."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["pieces_mode"] = "empty"
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 150
+    settings["threshold_negative"] = 150
+    settings["in_loop_calibration"] = False
+    settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    raw_vals = [1540] * 64
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    t0 = time.time() - 0.085
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            baseline_history[(c, r)] = [(t0, 1540, False)]
+
+    scan_board(None, mock_ser, raw_state, freeze_baseline=False)
+
+    # Baseline must NOT change when in_loop_calibration is False
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            assert settings["baselines"][c][r] == 1500
+
+    # Reset
+    settings["in_loop_calibration"] = True
+
+
 
 
 

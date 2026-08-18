@@ -364,6 +364,7 @@ function App() {
     coach_hints_enabled?: boolean;
     eval_bar_enabled?: boolean;
     coach_ai_only?: boolean;
+    in_loop_calibration?: boolean;
   } | null>(null);
 
   const [positiveThresh, setPositiveThresh] = useState<number>(() => {
@@ -412,6 +413,10 @@ function App() {
     const saved = localStorage.getItem('scb_coach_ai_only');
     return saved !== null ? saved === 'true' : true;
   });
+  const [inLoopCalibration, setInLoopCalibration] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_in_loop_calibration');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -430,7 +435,8 @@ function App() {
     pMode: 'auto' | 'pieces' | 'empty' = piecesMode,
     coachHints: boolean = coachHintsEnabled,
     evalBar: boolean = evalBarEnabled,
-    aiOnly: boolean = coachAiOnly
+    aiOnly: boolean = coachAiOnly,
+    inLoopCal: boolean = inLoopCalibration
   ) => {
     localStorage.setItem('scb_positive_thresh', String(pos));
     localStorage.setItem('scb_negative_thresh', String(neg));
@@ -444,6 +450,7 @@ function App() {
     localStorage.setItem('scb_coach_hints_enabled', String(coachHints));
     localStorage.setItem('scb_eval_bar_enabled', String(evalBar));
     localStorage.setItem('scb_coach_ai_only', String(aiOnly));
+    localStorage.setItem('scb_in_loop_calibration', String(inLoopCal));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -462,7 +469,8 @@ function App() {
           pMode,
           coachHints,
           evalBar,
-          aiOnly
+          aiOnly,
+          inLoopCal
         );
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
@@ -520,6 +528,10 @@ function App() {
         if (res.coach_ai_only !== undefined) {
           setCoachAiOnly(res.coach_ai_only);
           localStorage.setItem('scb_coach_ai_only', String(res.coach_ai_only));
+        }
+        if (res.in_loop_calibration !== undefined) {
+          setInLoopCalibration(res.in_loop_calibration);
+          localStorage.setItem('scb_in_loop_calibration', String(res.in_loop_calibration));
         }
       } catch (err) {
         console.error("Error fetching board settings:", err);
@@ -1183,6 +1195,45 @@ function App() {
               </div>
             </div>
 
+            {/* In-Game Hardware Settings Card */}
+            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-3 text-left">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Sliders size={14} className="text-emerald-400" />
+                  Board Hardware Controls
+                </h3>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                  inLoopCalibration
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  {inLoopCalibration ? 'Auto Calibrating' : 'Calibration Frozen'}
+                </span>
+              </div>
+
+              {/* In-Loop Auto Calibration Toggle */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-200">In-Loop Auto Calibration</span>
+                  <span className="text-[10px] text-slate-400">Dynamic baseline drift compensation</span>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !inLoopCalibration;
+                    setInLoopCalibration(next);
+                    persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
+                    inLoopCalibration ? 'bg-emerald-600' : 'bg-slate-800'
+                  }`}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                    inLoopCalibration ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+            </div>
+
             {/* Matchmaking Selection Controls (When IDLE or GAME_OVER) */}
             {(state.status === 'IDLE' || state.status === 'GAME_OVER') && (
               <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-4 text-left">
@@ -1652,6 +1703,29 @@ function App() {
                       }`}
                     >
                       Empty Board
+                    </button>
+                  </div>
+
+                  {/* In-Loop Calibration Switch */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 mt-1">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-slate-200">In-Loop Calibration</span>
+                      <span className="text-[9px] text-slate-400">Continuous baseline drift compensation</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !inLoopCalibration;
+                        setInLoopCalibration(next);
+                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next);
+                      }}
+                      className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${
+                        inLoopCalibration ? 'bg-emerald-600' : 'bg-slate-800'
+                      }`}
+                    >
+                      <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                        inLoopCalibration ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
                     </button>
                   </div>
                 </div>

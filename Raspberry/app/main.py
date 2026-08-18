@@ -100,6 +100,7 @@ class ThresholdSettings(BaseModel):
     coach_hints_enabled: bool | None = None
     eval_bar_enabled: bool | None = None
     coach_ai_only: bool | None = None
+    in_loop_calibration: bool | None = None
 
 
 class HighlightRequest(BaseModel):
@@ -218,6 +219,8 @@ async def update_board_settings(body: ThresholdSettings):
         settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
     if body.coach_ai_only is not None:
         settings["coach_ai_only"] = bool(body.coach_ai_only)
+    if body.in_loop_calibration is not None:
+        settings["in_loop_calibration"] = bool(body.in_loop_calibration)
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 

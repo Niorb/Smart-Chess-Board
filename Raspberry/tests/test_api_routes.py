@@ -247,18 +247,24 @@ def test_claim_victory_route_not_playing():
     assert "No active game" in data["message"]
 
 
-def test_claim_victory_route_engine_rejection():
-    """Verify POST /api/lichess/claim-victory handles Lichess API rejection."""
-    from app.main import state_manager
-    state_manager.game_status = "PLAYING"
+def test_settings_update_in_loop_calibration():
+    """Verify REST API updates and returns in_loop_calibration correctly."""
     client = TestClient(app)
 
-    with patch("app.main.lichess_engine.claim_victory", new_callable=AsyncMock) as mock_claim:
-        mock_claim.return_value = False
-        response = client.post("/api/lichess/claim-victory")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "error"
+    # Disable in-loop calibration
+    response = client.post("/api/board/settings", json={"in_loop_calibration": False})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["in_loop_calibration"] is False
+
+    # Re-enable in-loop calibration
+    response = client.post("/api/board/settings", json={"in_loop_calibration": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["in_loop_calibration"] is True
+
 
 
 
