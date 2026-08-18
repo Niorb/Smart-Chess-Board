@@ -259,25 +259,25 @@ def render_game_won(
             w2_val = 0.0
             w3_val = 0.0
 
-            # Phase 1: Diagonal Wavefront
+            # Phase 1: Diagonal Wavefront (sweeping beam along a1 -> h8)
             if progress <= 0.48:
                 u1 = c + r
                 v1 = c - r
                 du1 = u1 - w1
-                w1_val = math.exp(-2.5 * du1 * du1 - 0.07 * v1 * v1)
+                w1_val = math.exp(-4.5 * du1 * du1 - 0.20 * v1 * v1)
 
-            # Phase 2: Counter-Diagonal Wavefront
+            # Phase 2: Counter-Diagonal Wavefront (sweeping beam along a8 -> h1)
             if 0.40 <= progress <= 0.84:
                 u2 = c + (7 - r)
                 v2 = c - (7 - r)
                 du2 = u2 - w2
-                w2_val = math.exp(-2.5 * du2 * du2 - 0.07 * v2 * v2)
+                w2_val = math.exp(-4.5 * du2 * du2 - 0.20 * v2 * v2)
 
             # Phase 3: Center Diamond Pulse
             if progress >= 0.78:
                 dist_center = math.sqrt((c - 3.5) ** 2 + (r - 3.5) ** 2)
                 dr = dist_center - r3
-                w3_val = math.exp(-3.2 * dr * dr) * ((1.0 - p3) ** 2)
+                w3_val = math.exp(-4.5 * dr * dr) * ((1.0 - p3) ** 2)
 
             # Primary wave composite
             w_total = w1_val + w2_val + w3_val
@@ -290,19 +290,19 @@ def render_game_won(
 
             primary_intensity = w_total * envelope
 
-            # 4. Sparse Stardust Twinkles (Only top ~2.5% threshold fires)
+            # 4. Sparse Stardust Twinkles (Only top ~1.5% threshold fires)
             h1 = math.sin(now * 13.0 + c * 17.1 + r * 31.7)
             h2 = math.cos(now * 8.5 + c * 29.3 + r * 11.9)
             sparkle_harmonic = h1 * h2
-            if sparkle_harmonic > 0.82:
-                s_factor = ((sparkle_harmonic - 0.82) / 0.18) ** 2
+            if sparkle_harmonic > 0.85:
+                s_factor = ((sparkle_harmonic - 0.85) / 0.15) ** 2
                 sparkle_intensity = s_factor * 0.80 * envelope
             else:
                 sparkle_intensity = 0.0
 
             # 5. Final Composite & Deadband Gating
             total_intensity = primary_intensity + sparkle_intensity
-            if total_intensity > 0.025:
+            if total_intensity > 0.04:
                 # Blend in diamond white-gold for sparkle contribution
                 if sparkle_intensity > 0.001:
                     sparkle_ratio = sparkle_intensity / total_intensity
