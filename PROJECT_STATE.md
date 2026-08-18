@@ -60,6 +60,7 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Game Lifecycle Animations**: Procedural non-blocking animations for **Game Start** (radial expanding emerald wave), **Victory** (cascading gold & emerald celebration waves), **Defeat** (collapsing perimeter crimson wave), and **Draw** (symmetrical sapphire & white curtain sweep).
   - **API & Web UI Controls**: Added `/api/leds/trigger_animation` and `/api/leds/test_trace` endpoints and debug testing buttons in `App.tsx`.
   - **Verification & Deployment**: All 94 unit/integration test suites and frontend production build verified cleanly on the physical Raspberry Pi over SSH.
+- [x] Applied 20% power and brightness reduction across all LED color channels and `LED_BRIGHTNESS` (from 50 to 40) in [`config.py`](file:///home/robin/Smart-Chess-Board/Raspberry/app/config.py) to stabilize the 5V power rail, eliminate transient voltage drops, and protect Hall sensor analog baseline stability during dense full-board animations. Verified on Pi with 94 passing pytest tests.
 
 ## Task Backlog
 
