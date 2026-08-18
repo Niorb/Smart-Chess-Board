@@ -35,7 +35,7 @@ LED_PIN_2 = 22  # ESP32 GPIO 22 — Strip 2 (files e-h)
 LEDS_PER_STRIP = 76
 LED_STRIP_COUNT = 2
 NUM_LEDS = LEDS_PER_STRIP * LED_STRIP_COUNT  # 152 total
-LED_BRIGHTNESS = 50
+LED_BRIGHTNESS = 40  # 20% power reduction (from 50)
 LED_FREQ_HZ = 800000
 LED_DMA = 10
 LED_DMA_2 = 11
@@ -44,37 +44,37 @@ LED_CHANNEL = 0
 LED_CHANNEL_2 = 1
 
 # =============================================================================
-# LED COLOR DEFINITIONS — (R, G, B) tuples
+# LED COLOR DEFINITIONS — (R, G, B) tuples (scaled for 20% power reduction)
 # =============================================================================
 
 COLOR_OFF = (0, 0, 0)
-COLOR_IDLE = (255, 255, 255)  # Dim white pulse while idle (online)
-COLOR_CONNECTING = (255, 80, 0)  # Orange pulse while connecting
-COLOR_CONNECTED = (0, 255, 0)  # Green flash — connected
-COLOR_SEARCHING = (0, 0, 255)  # Blue chase while seeking a game
-COLOR_FOUND_WHITE = (255, 255, 255)  # White flash — playing White
-COLOR_FOUND_BLACK = (0, 255, 0)  # Green flash — playing Black
-COLOR_CANCELLED = (255, 0, 0)  # Red flash — search cancelled
-COLOR_ERROR = (255, 0, 0)  # Red flash — error occurred
+COLOR_IDLE = (204, 204, 204)  # Dim white pulse while idle (online)
+COLOR_CONNECTING = (204, 64, 0)  # Orange pulse while connecting
+COLOR_CONNECTED = (0, 204, 0)  # Green flash — connected
+COLOR_SEARCHING = (0, 0, 204)  # Blue chase while seeking a game
+COLOR_FOUND_WHITE = (204, 204, 204)  # White flash — playing White
+COLOR_FOUND_BLACK = (0, 204, 0)  # Green flash — playing Black
+COLOR_CANCELLED = (204, 0, 0)  # Red flash — search cancelled
+COLOR_ERROR = (204, 0, 0)  # Red flash — error occurred
 
 # Setup & Game State Layered LED Colors — (R, G, B) tuples
-COLOR_SETUP_MISSING = (20, 20, 20)  # Dim white for missing starting pieces (not full power)
-COLOR_SETUP_MISPLACED = (35, 10, 0)  # Dim amber warning for misplaced pieces during setup
-COLOR_PIECE_LIFTED = (180, 100, 0)  # Amber / Gold for lifted piece origin
-COLOR_LEGAL_TARGET = (0, 30, 60)  # Subtle deep cyan for legal target dots
-COLOR_OPPONENT_FROM = (220, 70, 0)  # Orange for opponent move origin
-COLOR_OPPONENT_TO = (0, 140, 220)  # Cyan/blue for opponent move destination
-COLOR_CHECK = (220, 0, 0)  # Red highlight on King in check
-COLOR_HIGHLIGHT = (255, 80, 0)  # Orange for diagnostic highlight
-COLOR_ILLEGAL = (180, 0, 0)  # Red for invalid placement
+COLOR_SETUP_MISSING = (16, 16, 16)  # Dim white for missing starting pieces
+COLOR_SETUP_MISPLACED = (28, 8, 0)  # Dim amber warning for misplaced pieces during setup
+COLOR_PIECE_LIFTED = (144, 80, 0)  # Amber / Gold for lifted piece origin
+COLOR_LEGAL_TARGET = (0, 24, 48)  # Subtle deep cyan for legal target dots
+COLOR_OPPONENT_FROM = (176, 56, 0)  # Orange for opponent move origin
+COLOR_OPPONENT_TO = (0, 112, 176)  # Cyan/blue for opponent move destination
+COLOR_CHECK = (176, 0, 0)  # Red highlight on King in check
+COLOR_HIGHLIGHT = (204, 64, 0)  # Orange for diagnostic highlight
+COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
 
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
-COLOR_MOVE_TRACE = (220, 20, 180)  # Vibrant magenta/violet pulse along move trajectory
-COLOR_VICTORY_GOLD = (255, 215, 0)  # Shimmering gold for victory
-COLOR_VICTORY_GREEN = (0, 255, 60)  # Emerald green wave for victory
-COLOR_DEFEAT_RED = (220, 0, 20)  # Crimson wave for defeat
-COLOR_DRAW_BLUE = (0, 120, 255)  # Sapphire blue for draw curtain
-COLOR_DRAW_WHITE = (200, 200, 255)  # Cool white for draw curtain
+COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
+COLOR_VICTORY_GOLD = (204, 172, 0)  # Shimmering gold for victory
+COLOR_VICTORY_GREEN = (0, 204, 48)  # Emerald green wave for victory
+COLOR_DEFEAT_RED = (176, 0, 16)  # Crimson wave for defeat
+COLOR_DRAW_BLUE = (0, 96, 204)  # Sapphire blue for draw curtain
+COLOR_DRAW_WHITE = (160, 160, 204)  # Cool white for draw curtain
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
