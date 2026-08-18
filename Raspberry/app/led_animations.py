@@ -300,12 +300,12 @@ def render_game_won(
 
             primary_intensity = w_total * envelope
 
-            # 4. Sparse Stardust Twinkles (Only top ~1.5% threshold fires)
+            # 4. Sparse Stardust Twinkles (Only top ~1% threshold fires, 1-2 squares max)
             h1 = math.sin(now * 13.0 + c * 17.1 + r * 31.7)
             h2 = math.cos(now * 8.5 + c * 29.3 + r * 11.9)
             sparkle_harmonic = h1 * h2
-            if sparkle_harmonic > 0.85:
-                s_factor = ((sparkle_harmonic - 0.85) / 0.15) ** 2
+            if sparkle_harmonic > 0.93:
+                s_factor = ((sparkle_harmonic - 0.93) / 0.07) ** 2
                 sparkle_intensity = s_factor * 0.80 * envelope
             else:
                 sparkle_intensity = 0.0

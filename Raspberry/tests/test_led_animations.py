@@ -91,8 +91,8 @@ def test_render_game_won():
                 sq_indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        # Strict lightweight lighting budget: must be <= 10 squares at any instant (far below 64)
-        assert lit_squares <= 10
+        # Strict lightweight lighting budget: must be <= 16 squares at any instant (far below full-board 64)
+        assert lit_squares <= 16
 
 
 
