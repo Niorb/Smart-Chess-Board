@@ -2,9 +2,9 @@
 tests/test_webapp_recalibrate.py
 
 Unit tests for calibrate_board_with_pieces:
-- Tests that middle columns 3-6 (c in 2, 3, 4, 5) are measured directly
-- Tests that columns 1 & 2 (c in 0, 1) inherit column 3 (c=2) baselines
-- Tests that columns 7 & 8 (c in 6, 7) inherit column 6 (c=5) baselines
+- Tests that middle ranks 3-6 (r in 2, 3, 4, 5) are measured directly for all columns
+- Tests that ranks 1 & 2 (r in 0, 1) inherit rank 3 (r=2) baselines per column
+- Tests that ranks 7 & 8 (r in 6, 7) inherit rank 6 (r=5) baselines per column
 - Tests POST /api/board/calibrate_with_pieces endpoint
 """
 
@@ -30,22 +30,22 @@ def test_calibrate_board_with_pieces_mapping():
     for mux_ch in range(8):
         c = DEFAULT_COL_MUX_MAP[mux_ch]
         for r in range(8):
-            # Give distinct values per column c:
-            # col 1 & 2 (c=0, 1): 2100 (occupied with pieces)
-            # col 3 (c=2): 1600 (empty)
-            # col 4, 5 (c=3, 4): 1650 (empty)
-            # col 6 (c=5): 1700 (empty)
-            # col 7 & 8 (c=6, 7): 2200 (occupied with pieces)
-            if c in (0, 1):
-                val = 2100
-            elif c == 2:
-                val = 1600
-            elif c in (3, 4):
-                val = 1650
-            elif c == 5:
-                val = 1700
+            # Give distinct values per rank r:
+            # ranks 1 & 2 (r=0, 1): 2100 (occupied with pieces)
+            # rank 3 (r=2): 1600 (empty)
+            # ranks 4, 5 (r=3, 4): 1650 (empty)
+            # rank 6 (r=5): 1700 (empty)
+            # ranks 7 & 8 (r=6, 7): 2200 (occupied with pieces)
+            if r in (0, 1):
+                val = 2100 + c * 10
+            elif r == 2:
+                val = 1600 + c * 10
+            elif r in (3, 4):
+                val = 1650 + c * 10
+            elif r == 5:
+                val = 1700 + c * 10
             else:
-                val = 2200
+                val = 2200 + c * 10
             raw_vals[mux_ch * 8 + r] = val
 
     packet_header = b'\xaa\x55'
@@ -64,20 +64,21 @@ def test_calibrate_board_with_pieces_mapping():
         res = calibrate_board_with_pieces(None, mock_ser, duration_s=0.05)
         assert res is True
 
-        for r in range(8):
-            # Columns 1 & 2 (c=0, 1) must inherit Column 3 baseline (1600), NOT 2100!
-            assert settings["baselines"][0][r] == 1600
-            assert settings["baselines"][1][r] == 1600
+        for c in range(8):
+            col_offset = c * 10
+            # Ranks 1 & 2 (r=0, 1) must inherit Rank 3 baseline (1600 + col_offset), NOT 2100!
+            assert settings["baselines"][c][0] == 1600 + col_offset
+            assert settings["baselines"][c][1] == 1600 + col_offset
 
-            # Column 3 should be 1600
-            assert settings["baselines"][2][r] == 1600
+            # Rank 3 should be 1600 + col_offset
+            assert settings["baselines"][c][2] == 1600 + col_offset
 
-            # Column 6 should be 1700
-            assert settings["baselines"][5][r] == 1700
+            # Rank 6 should be 1700 + col_offset
+            assert settings["baselines"][c][5] == 1700 + col_offset
 
-            # Columns 7 & 8 (c=6, 7) must inherit Column 6 baseline (1700), NOT 2200!
-            assert settings["baselines"][6][r] == 1700
-            assert settings["baselines"][7][r] == 1700
+            # Ranks 7 & 8 (r=6, 7) must inherit Rank 6 baseline (1700 + col_offset), NOT 2200!
+            assert settings["baselines"][c][6] == 1700 + col_offset
+            assert settings["baselines"][c][7] == 1700 + col_offset
 
 
 def test_calibrate_board_with_pieces_route():
