@@ -92,7 +92,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Physical LED File 'h' Perimeter Eval Bar (`app/board_state.py`)**: Ranks 1–8 along File 'h' (Strip 2, row 7) continuously render a smooth White vs Black win chance gauge when enabled during AI matches.
   - **Blunder Guard Destination Color Tiers**: When a piece is physically lifted or selected on the digital board during an AI match, destination squares are dynamically illuminated in Emerald Green (`BEST`), Cyan (`GOOD`), Amber (`INACCURACY`), or Crimson (`BLUNDER`).
   - **Strict Fair-Play Invariant**: All coaching hints and live evaluation bars are strictly active only in matches against Stockfish AI, and hard-disabled in online matches against human opponents on Lichess.
-  - **React UI & Settings**: Sleek vertical evaluation bar component beside the digital chessboard, color-coded legal move dots on the virtual board, and toggles in the "AI Coach & Training" settings panel with automated backend persistence.
+- [x] Implemented Automated & Manual Lichess Victory Claiming on Opponent Disconnection:
+  - **Automated Stream Countdown & Task Scheduler (`Raspberry/app/lichess_engine.py`)**: Listens to Lichess `opponentGone` NDJSON events. When an opponent leaves, tracks remaining seconds (`claimWinInSeconds`) and automatically claims victory via `POST /api/board/game/{game_id}/claim-victory` as soon as the waiting window expires without requiring browser intervention.
+  - **Reconnection & Lifecycle Task Cancellation**: Seamlessly cancels pending auto-claim timers if the opponent returns before the timer elapses, or if the game finishes, is resigned, or is aborted.
+  - **Real-Time WebSocket State**: Streams `opponent_gone: { gone: bool, claim_win_in: number }` across `/ws/state`.
+  - **REST API Endpoints (`Raspberry/app/main.py`)**: Added `POST /api/lichess/claim-victory` and `POST /api/game/claim-victory`.
+  - **React UI Banner & Manual Claim**: Animated "Opponent Disconnected" countdown banner in the Play tab with smooth 1-second countdown and active "Claim Victory" button.
 
 ## Task Backlog
 
