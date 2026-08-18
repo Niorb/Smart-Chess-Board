@@ -30,6 +30,7 @@ export interface BoardState {
     effective_pieces_mode?: boolean;
     lifted_square?: [number, number] | null;
     legal_targets?: [number, number][];
+    legal_captures?: [number, number][];
     invalid_placement?: [number, number] | null;
     pending_opponent_move?: {
       uci: string;

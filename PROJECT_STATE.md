@@ -82,7 +82,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Implemented immediate visual confirmation flash on move arrival square:
   - **Arrival Registration Feedback**: Whenever a physical move or opponent mirror move is registered on the physical board, triggers an instant 450ms exponential-decay flash on the destination square.
   - **Color Coding**: High-contrast vibrant emerald green (`COLOR_MOVE_CONFIRM = (48, 255, 128)`) for standard quiet moves; radiant ruby crimson (`COLOR_CAPTURE_CONFIRM = (255, 32, 64)`) for capture moves.
-  - **Layered Compositor**: Rendered via Layer 2.5 in `BoardStateManager._update_leds()`, serialized in physical WebSocket state payloads, and automatically cleared upon expiration.
+- [x] Implemented distinct color differentiation for legal capture targets:
+  - **Capture Dot Highlight**: When a piece is lifted, destination squares where a capture is possible (`board.is_capture(m)`) illuminate in subtle deep ruby/rose (`COLOR_LEGAL_CAPTURE = (64, 10, 24)`), distinguishing them from quiet legal target dots in subtle deep cyan (`COLOR_LEGAL_TARGET = (0, 24, 48)`).
+  - **Data Model & Synchronization**: Added `legal_captures` tracking to `PhysicalMoveTracker`, serialized in physical WebSocket payloads, and integrated into `BoardStateManager._update_leds()`.
 
 ## Task Backlog
 

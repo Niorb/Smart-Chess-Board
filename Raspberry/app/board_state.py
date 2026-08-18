@@ -53,6 +53,7 @@ from app.led_helpers import (
     COLOR_INT_CHECK,
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
+    COLOR_INT_LEGAL_CAPTURE,
     COLOR_INT_LEGAL_TARGET,
     COLOR_INT_MOVE_CONFIRM,
     COLOR_INT_MOVE_TRACE,
@@ -246,6 +247,7 @@ class BoardStateManager:
             "effective_pieces_mode": detection.get("effective_pieces_mode", False),
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
+            "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
             "arrival_flash": (
@@ -426,7 +428,9 @@ class BoardStateManager:
                     l_c, l_r = self.move_tracker.lifted_square
                     set_square_leds(l_c, l_r, COLOR_INT_PIECE_LIFTED)
                     for t_c, t_r in self.move_tracker.legal_targets:
-                        set_square_leds(t_c, t_r, COLOR_INT_LEGAL_TARGET)
+                        is_cap = (t_c, t_r) in getattr(self.move_tracker, "legal_captures", [])
+                        target_col = COLOR_INT_LEGAL_CAPTURE if is_cap else COLOR_INT_LEGAL_TARGET
+                        set_square_leds(t_c, t_r, target_col)
 
                 # 4. Invalid Placement Indicator
                 if self.move_tracker.invalid_placement:

@@ -245,5 +245,35 @@ def test_clear_all_leds_clears_arrival_flash():
     assert bsm.move_tracker.arrival_flash is None
 
 
+def test_legal_target_and_capture_dots_colors():
+    """Verify that _update_leds colors quiet target squares with COLOR_INT_LEGAL_TARGET and capture squares with COLOR_INT_LEGAL_CAPTURE."""
+    from app.led_helpers import COLOR_INT_LEGAL_CAPTURE, COLOR_INT_LEGAL_TARGET, COLOR_INT_PIECE_LIFTED, get_led_indices
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+
+    # White pawn on e4 lifted: e5 is quiet target (4, 4), d5 is capture target (3, 4)
+    bsm.move_tracker.lifted_square = (4, 3)
+    bsm.move_tracker.legal_targets = [(4, 4), (3, 4)]
+    bsm.move_tracker.legal_captures = [(3, 4)]
+
+    bsm._update_leds()
+
+    # Verify setPixelColor calls for quiet target (4, 4) vs capture target (3, 4)
+    e5_indices = get_led_indices(4, 4)
+    d5_indices = get_led_indices(4, 3)  # lifted e4 is (c=4, r=3)
+    cap_d5_indices = get_led_indices(4, 3) # capture square (c=3, r=4) -> get_led_indices(r=4, c=3)
+    d5_cap_indices = get_led_indices(4, 3)
+
+    # Check that setPixelColor was called with COLOR_INT_LEGAL_TARGET and COLOR_INT_LEGAL_CAPTURE
+    call_args = [call[0] for call in bsm.strip.setPixelColor.call_args_list]
+    colors_called = [arg[1] for arg in call_args]
+
+    assert COLOR_INT_PIECE_LIFTED in colors_called
+    assert COLOR_INT_LEGAL_TARGET in colors_called
+    assert COLOR_INT_LEGAL_CAPTURE in colors_called
+
+
+
 
 

@@ -31,6 +31,7 @@ class PhysicalMoveTracker:
         self.rows = rows
         self.lifted_square: tuple[int, int] | None = None
         self.legal_targets: list[tuple[int, int]] = []
+        self.legal_captures: list[tuple[int, int]] = []
         self.invalid_placement: tuple[int, int] | None = None
         self.pending_opponent_move: dict[str, Any] | None = None
         self._last_synced_move_uci: str | None = None
@@ -56,6 +57,7 @@ class PhysicalMoveTracker:
         """Resets all move tracking states."""
         self.lifted_square = None
         self.legal_targets = []
+        self.legal_captures = []
         self.invalid_placement = None
         self.pending_opponent_move = None
         self._last_synced_move_uci = None
@@ -202,16 +204,20 @@ class PhysicalMoveTracker:
                             self.lifted_square = (c, r)
                             self.invalid_placement = None
                             
-                            # Calculate legal destination squares
+                            # Calculate legal destination squares & captures
                             targets: list[tuple[int, int]] = []
+                            captures: list[tuple[int, int]] = []
                             for m in board.legal_moves:
                                 if m.from_square == sq:
                                     t_c = chess.square_file(m.to_square)
                                     t_r = chess.square_rank(m.to_square)
                                     if (t_c, t_r) not in targets:
                                         targets.append((t_c, t_r))
+                                    if board.is_capture(m) and (t_c, t_r) not in captures:
+                                        captures.append((t_c, t_r))
                             self.legal_targets = targets
-                            logger.info(f"Piece lifted at ({c},{r}) -> Legal targets: {targets}")
+                            self.legal_captures = captures
+                            logger.info(f"Piece lifted at ({c},{r}) -> Legal targets: {targets} (captures: {captures})")
                             return None
 
         # Case B: Piece is currently lifted -> Detect placement
@@ -224,6 +230,7 @@ class PhysicalMoveTracker:
                 logger.info(f"Piece returned to ({from_c},{from_r}). Move cancelled.")
                 self.lifted_square = None
                 self.legal_targets = []
+                self.legal_captures = []
                 self.invalid_placement = None
                 return None
 
@@ -267,6 +274,7 @@ class PhysicalMoveTracker:
 
                     self.lifted_square = None
                     self.legal_targets = []
+                    self.legal_captures = []
                     self.invalid_placement = None
                     return move_result
 
@@ -298,6 +306,7 @@ class PhysicalMoveTracker:
         return {
             "lifted_square": list(self.lifted_square) if self.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.legal_targets],
+            "legal_captures": [list(sq) for sq in self.legal_captures],
             "invalid_placement": list(self.invalid_placement) if self.invalid_placement else None,
             "pending_opponent_move": self.pending_opponent_move,
             "arrival_flash": (

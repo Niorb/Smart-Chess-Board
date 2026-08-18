@@ -359,3 +359,38 @@ def test_tracker_reset_clears_arrival_flash():
     tracker.reset()
     assert tracker.arrival_flash is None
 
+
+def test_piece_lift_distinguishes_legal_captures_from_quiet_moves(initial_physical_state, mock_engine):
+    """Verify that when a piece is lifted, capture targets are populated in legal_captures."""
+    tracker = PhysicalMoveTracker()
+
+    # Position: 1. e4 d5 (White turn) -> e4 pawn can move to e5 (quiet) or capture d5 (capture)
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("d5")
+    mock_engine.game_info["turn"] = "white"
+
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0   # e2 empty
+    state[4][3] = -1  # e4 White pawn
+    state[3][6] = 0   # d7 empty
+    state[3][4] = 1   # d5 Black pawn
+
+    # Lift e4 pawn
+    state[4][3] = 0
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.lifted_square == (4, 3)
+    # Quiet move to e5: in legal_targets, NOT in legal_captures
+    assert (4, 4) in tracker.legal_targets
+    assert (4, 4) not in tracker.legal_captures
+    # Capture on d5: in BOTH legal_targets and legal_captures
+    assert (3, 4) in tracker.legal_targets
+    assert (3, 4) in tracker.legal_captures
+
+    # Return pawn to e4 -> clears legal_targets and legal_captures
+    state[4][3] = -1
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.lifted_square is None
+    assert len(tracker.legal_targets) == 0
+    assert len(tracker.legal_captures) == 0
+
+
