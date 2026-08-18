@@ -139,3 +139,26 @@ def test_game_mode_switch_route():
     response = client.post("/api/game/mode", json={"virtual_only": False})
     assert response.status_code == 200
     assert response.json()["virtual_only"] is False
+
+
+def test_trigger_animation_route():
+    client = TestClient(app)
+    response = client.post("/api/leds/trigger_animation", json={"name": "GAME_WON"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert response.json()["animation"] == "GAME_WON"
+
+
+def test_test_trace_route():
+    client = TestClient(app)
+    response = client.post("/api/leds/test_trace", json={"uci": "e2e4"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["path"] == [[4, 1], [4, 2], [4, 3]]
+
+    # Clear trace
+    response = client.post("/api/leds/test_trace", json={"clear": True})
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+

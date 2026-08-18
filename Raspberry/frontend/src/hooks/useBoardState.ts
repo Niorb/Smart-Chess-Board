@@ -36,6 +36,8 @@ export interface BoardState {
       from: [number, number];
       to: [number, number];
     } | null;
+    active_animation?: string | null;
+    custom_trace_path?: [number, number][] | null;
     in_flight_move?: {
       uci: string;
       from: [number, number];

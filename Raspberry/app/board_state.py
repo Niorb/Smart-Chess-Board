@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import threading
+import time
 
 import chess
 
@@ -49,6 +50,7 @@ from app.led_helpers import (
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_TARGET,
+    COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
@@ -88,6 +90,8 @@ class BoardStateManager:
         self.led_test_active = False
         self.testing_led_index = -1
         self.is_calibrating: bool = False
+        self.active_animation = None  # LifecycleAnimation | None
+        self.custom_trace_path = None  # list[tuple[int, int]] | None
 
         # Setup verification and move tracking subsystems
         self.setup_validator = SetupValidator()
@@ -120,6 +124,21 @@ class BoardStateManager:
         except Exception as e:
             logger.error(f"LED strip init failed in BoardStateManager: {e}")
             self.strip = None
+
+    def trigger_animation(self, name: str, params: dict | None = None) -> bool:
+        """
+        Triggers a procedural full-board lifecycle animation.
+        Supported names: 'GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN'.
+        """
+        try:
+            from app.led_animations import create_animation
+            anim = create_animation(name, params)
+            self.active_animation = anim
+            logger.info(f"Triggered LED lifecycle animation: {name} (duration={anim.duration}s)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to trigger animation '{name}': {e}")
+            return False
 
     def _safe_scan(self, raw_state):
         with self.serial_lock:
@@ -198,6 +217,8 @@ class BoardStateManager:
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
+            "active_animation": self.active_animation.name if (self.active_animation and self.active_animation.is_active()) else None,
+            "custom_trace_path": [list(sq) for sq in self.custom_trace_path] if self.custom_trace_path else None,
             "in_flight_move": (
                 {
                     "from": list(self.move_tracker.in_flight_move["from"]),
@@ -261,9 +282,11 @@ class BoardStateManager:
     def _update_leds(self):
         """
         Renders the layered physical WS2812B LED frame:
+        0. Animation Layer: Procedural full-board lifecycle animations (Game start, win, loss, draw).
         1. Base Layer (IDLE/SETUP): Starting squares missing pieces / misplaced pieces.
-        2. Game Layer (PLAYING): King check, pending opponent move, lifted piece & legal target dots.
-        3. Diagnostic Override: highlighted_square.
+        2. Game Layer (PLAYING): King check, pending opponent move (with animated comet trace), lifted piece & legal target dots.
+        3. Custom Trace Diagnostic: custom_trace_path override.
+        4. Diagnostic Override: highlighted_square.
         """
         if (
             self.virtual_only
@@ -275,7 +298,10 @@ class BoardStateManager:
 
         try:
             from board_hardware import settings
+            from app.led_animations import render_move_trace
+            from app.path_interpolator import interpolate_move_path
 
+            now = time.time()
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
 
@@ -287,6 +313,17 @@ class BoardStateManager:
                 for idx in get_led_indices(r, c):
                     if 0 <= idx < NUM_LEDS:
                         frame[idx] = color_val
+
+            # Layer 0: Lifecycle Animation Override (High priority full-board)
+            if self.active_animation is not None:
+                if self.active_animation.is_active(now):
+                    self.active_animation.render(now, frame)
+                    for idx, color in enumerate(frame):
+                        self.strip.setPixelColor(idx, color)
+                    self.strip.show()
+                    return
+                else:
+                    self.active_animation = None
 
             # Layer 1: Setup / Idle Board Validation
             if self.game_status in ["IDLE", "SETUP"]:
@@ -302,12 +339,20 @@ class BoardStateManager:
 
             # Layer 2: Playing State Highlights
             elif self.game_status == "PLAYING":
-                # 1. Opponent Move Indication
+                # 1. Opponent Move Indication & Animated Trace
                 if self.move_tracker.pending_opponent_move:
                     opp_from = self.move_tracker.pending_opponent_move["from"]
                     opp_to = self.move_tracker.pending_opponent_move["to"]
-                    set_square_leds(opp_from[0], opp_from[1], COLOR_INT_OPPONENT_FROM)
-                    set_square_leds(opp_to[0], opp_to[1], COLOR_INT_OPPONENT_TO)
+                    from_c, from_r = opp_from
+                    to_c, to_r = opp_to
+
+                    # Interpolate path and render moving comet pulse
+                    path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                    render_move_trace(path, now, frame, COLOR_INT_MOVE_TRACE)
+
+                    # Keep start and arrival squares continuously lit
+                    set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(to_c, to_r, COLOR_INT_OPPONENT_TO)
 
                 # 2. King in Check Indicator
                 if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
@@ -329,7 +374,15 @@ class BoardStateManager:
                     inv_c, inv_r = self.move_tracker.invalid_placement
                     set_square_leds(inv_c, inv_r, COLOR_INT_ILLEGAL)
 
-            # Layer 3: Diagnostic override (highest priority)
+            # Layer 3: Custom Diagnostic Trace Override
+            if self.custom_trace_path and len(self.custom_trace_path) >= 2:
+                t_from_c, t_from_r = self.custom_trace_path[0]
+                t_to_c, t_to_r = self.custom_trace_path[-1]
+                render_move_trace(self.custom_trace_path, now, frame, COLOR_INT_MOVE_TRACE)
+                set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
+                set_square_leds(t_to_c, t_to_r, COLOR_INT_OPPONENT_TO)
+
+            # Layer 4: Diagnostic override (highest individual square priority)
             if self.highlighted_square:
                 h_c, h_r = self.highlighted_square
                 set_square_leds(h_c, h_r, COLOR_INT_HIGHLIGHT)
@@ -368,8 +421,10 @@ class BoardStateManager:
             logger.info("Sequential LED strip test completed.")
 
     def clear_all_leds(self):
-        """Forces all physical LEDs off and clears any highlighted square."""
+        """Forces all physical LEDs off and clears any highlighted square, active animation, or custom trace."""
         self.highlighted_square = None
+        self.active_animation = None
+        self.custom_trace_path = None
         if self.strip:
             try:
                 all_leds_off(self.strip)

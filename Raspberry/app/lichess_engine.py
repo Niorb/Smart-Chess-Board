@@ -523,6 +523,18 @@ class LichessEngine:
             if state_manager.game_status == "PLAYING":
                 state_manager.game_status = "IDLE"
 
+    def _trigger_end_animation(self, state_manager, winner: str | None):
+        """Triggers appropriate victory, defeat, or draw animation upon game termination."""
+        if not state_manager or not hasattr(state_manager, "trigger_animation"):
+            return
+        if winner:
+            if self.my_color and winner.lower() == self.my_color.lower():
+                state_manager.trigger_animation("GAME_WON")
+            else:
+                state_manager.trigger_animation("GAME_LOST")
+        else:
+            state_manager.trigger_animation("GAME_DRAWN")
+
     def _handle_game_full(self, event: dict[str, Any], state_manager):
         """Handles initial game snapshot event."""
         white_info = event.get("white", {})
@@ -589,6 +601,10 @@ class LichessEngine:
             self.game_info["winner"] = state_data.get("winner")
             self.game_info["end_reason"] = status
             state_manager.game_status = "IDLE"
+            self._trigger_end_animation(state_manager, state_data.get("winner"))
+        else:
+            if state_manager and hasattr(state_manager, "trigger_animation"):
+                state_manager.trigger_animation("GAME_STARTED", {"my_color": self.my_color})
 
     def _handle_game_state(self, event: dict[str, Any], state_manager):
         """Handles differential move/clock updates."""
@@ -614,6 +630,7 @@ class LichessEngine:
             self.game_info["winner"] = winner
             self.game_info["end_reason"] = status
             state_manager.game_status = "IDLE"
+            self._trigger_end_animation(state_manager, winner)
 
     def _apply_moves(self, moves_str: str):
         """Reconstructs internal chess.Board from space-separated UCI move sequence."""
@@ -718,6 +735,8 @@ class LichessEngine:
             async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/resign")
                 state_manager.game_status = "IDLE"
+                if state_manager and hasattr(state_manager, "trigger_animation"):
+                    state_manager.trigger_animation("GAME_LOST")
                 return res.status_code == 200
         except Exception as e:
             logger.error(f"Error resigning game: {e}")

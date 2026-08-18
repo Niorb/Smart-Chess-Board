@@ -68,6 +68,14 @@ COLOR_CHECK = (220, 0, 0)  # Red highlight on King in check
 COLOR_HIGHLIGHT = (255, 80, 0)  # Orange for diagnostic highlight
 COLOR_ILLEGAL = (180, 0, 0)  # Red for invalid placement
 
+# Lifecycle & Trace Animation Colors — (R, G, B) tuples
+COLOR_MOVE_TRACE = (220, 20, 180)  # Vibrant magenta/violet pulse along move trajectory
+COLOR_VICTORY_GOLD = (255, 215, 0)  # Shimmering gold for victory
+COLOR_VICTORY_GREEN = (0, 255, 60)  # Emerald green wave for victory
+COLOR_DEFEAT_RED = (220, 0, 20)  # Crimson wave for defeat
+COLOR_DRAW_BLUE = (0, 120, 255)  # Sapphire blue for draw curtain
+COLOR_DRAW_WHITE = (200, 200, 255)  # Cool white for draw curtain
+
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
 # =============================================================================
@@ -83,3 +91,11 @@ FLASH_COUNT_FOUND = 3  # Number of flashes when game found
 FLASH_COUNT_ERROR = 3  # Number of flashes on error
 FLASH_COUNT_CANCEL = 1  # Number of flashes on cancel
 FLASH_COUNT_CONNECT = 2  # Number of flashes on successful connection
+
+# Procedural Animation Timings (seconds)
+MOVE_TRACE_PERIOD_S = 0.8  # Traversal period for move trace pulse
+ANIM_GAME_START_DURATION_S = 1.5  # Duration for game start radial burst
+ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
+ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave
+ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave
+

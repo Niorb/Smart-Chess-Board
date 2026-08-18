@@ -168,3 +168,27 @@ export async function clearAllLeds() {
   });
   return response.json();
 }
+
+export async function triggerAnimation(name: string, params?: Record<string, unknown>) {
+  const response = await fetch(`${API_BASE}/leds/trigger_animation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, params }),
+  });
+  return response.json();
+}
+
+export async function testMoveTrace(options: {
+  uci?: string;
+  from_pos?: [number, number];
+  to_pos?: [number, number];
+  clear?: boolean;
+}) {
+  const response = await fetch(`${API_BASE}/leds/test_trace`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  return response.json();
+}
+

@@ -101,6 +101,18 @@ class HighlightRequest(BaseModel):
     row: int
 
 
+class TriggerAnimationRequest(BaseModel):
+    name: str
+    params: dict | None = None
+
+
+class TestTraceRequest(BaseModel):
+    uci: str | None = None
+    from_pos: list[int] | None = None
+    to_pos: list[int] | None = None
+    clear: bool | None = False
+
+
 class SeekRequest(BaseModel):
     time_control: str | None = "10+0"
     increment: int | None = 0
@@ -245,6 +257,56 @@ async def clear_leds_route():
         return {"status": "success", "message": "All LEDs turned off"}
     else:
         return {"status": "error", "message": "Failed to clear LEDs"}
+
+
+@app.post("/api/leds/trigger_animation")
+async def trigger_animation_route(body: TriggerAnimationRequest):
+    """
+    Triggers a procedural full-board lifecycle animation.
+    Supported names: 'GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN'.
+    """
+    success = state_manager.trigger_animation(body.name, body.params)
+    if success:
+        return {"status": "success", "animation": body.name}
+    return {"status": "error", "message": f"Failed to trigger animation '{body.name}'"}
+
+
+@app.post("/api/leds/test_trace")
+async def test_trace_route(body: TestTraceRequest):
+    """
+    Tests move path interpolation and animated trace between squares.
+    Accepts:
+      - {"uci": "e2e4"}
+      - {"from_pos": [4, 1], "to_pos": [4, 3]}
+      - {"clear": true}
+    """
+    from app.path_interpolator import interpolate_move_path, interpolate_uci_move
+
+    if body.clear:
+        state_manager.custom_trace_path = None
+        return {"status": "success", "message": "Custom trace cleared"}
+
+    path = []
+    if body.uci:
+        path = interpolate_uci_move(body.uci)
+    elif body.from_pos and body.to_pos and len(body.from_pos) == 2 and len(body.to_pos) == 2:
+        try:
+            fc, fr = int(body.from_pos[0]), int(body.from_pos[1])
+            tc, tr = int(body.to_pos[0]), int(body.to_pos[1])
+            if 0 <= fc < 8 and 0 <= fr < 8 and 0 <= tc < 8 and 0 <= tr < 8:
+                path = interpolate_move_path(fc, fr, tc, tr)
+            else:
+                return {"status": "error", "message": "Coordinates must be between 0 and 7"}
+        except (ValueError, TypeError):
+            return {"status": "error", "message": "Invalid integer coordinates provided"}
+    else:
+        return {
+            "status": "error",
+            "message": "Provide 'uci' (e.g. 'e2e4') or 'from_pos' and 'to_pos' [col, row] coordinates",
+        }
+
+    state_manager.custom_trace_path = path
+    return {"status": "success", "path": path}
 
 
 @app.get("/api/board/digital")

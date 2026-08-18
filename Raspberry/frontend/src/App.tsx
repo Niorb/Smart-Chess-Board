@@ -14,7 +14,9 @@ import {
   makeMove,
   highlightSquare,
   testLeds,
-  clearAllLeds
+  clearAllLeds,
+  triggerAnimation,
+  testMoveTrace
 } from './api'
 import type { LichessAccount } from './api'
 import { 
@@ -33,7 +35,9 @@ import {
   CheckCircle2,
   Bot,
   Zap,
-  Target
+  Target,
+  Sparkles,
+  Wand2
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -367,6 +371,22 @@ function App() {
       await clearAllLeds();
     } catch (err) {
       console.error("Error clearing LEDs:", err);
+    }
+  };
+
+  const handleTriggerAnimation = async (name: string, params?: Record<string, unknown>) => {
+    try {
+      await triggerAnimation(name, params);
+    } catch (err) {
+      console.error("Error triggering animation:", err);
+    }
+  };
+
+  const handleTestTrace = async (uci: string) => {
+    try {
+      await testMoveTrace({ uci });
+    } catch (err) {
+      console.error("Error testing trace:", err);
     }
   };
 
@@ -1344,6 +1364,80 @@ function App() {
                   <PowerOff size={13} />
                   <span>Force All LEDs Off</span>
                 </button>
+
+                <hr className="border-slate-800/80 my-1" />
+
+                {/* LED Animations & Trace Testing */}
+                <div className="flex flex-col gap-2 bg-slate-950 p-3 rounded-xl border border-slate-850 text-left">
+                  <div className="flex items-center gap-2 text-indigo-400">
+                    <Sparkles size={14} />
+                    <span className="text-xs font-bold uppercase tracking-wider">Animation & Trace Tests</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    <button
+                      onClick={() => handleTriggerAnimation('GAME_STARTED')}
+                      disabled={!isConnected}
+                      className="bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Zap size={11} />
+                      <span>Start Anim</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('GAME_WON')}
+                      disabled={!isConnected}
+                      className="bg-yellow-950/40 hover:bg-yellow-900/50 border border-yellow-500/30 text-yellow-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Sparkles size={11} />
+                      <span>Victory (Win)</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('GAME_LOST')}
+                      disabled={!isConnected}
+                      className="bg-rose-950/40 hover:bg-rose-900/50 border border-rose-500/30 text-rose-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Flag size={11} />
+                      <span>Defeat (Loss)</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('GAME_DRAWN')}
+                      disabled={!isConnected}
+                      className="bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/30 text-blue-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Handshake size={11} />
+                      <span>Draw Anim</span>
+                    </button>
+                  </div>
+
+                  {/* Move Trajectory Trace Tests */}
+                  <div className="flex items-center gap-1 mt-1.5 text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    <Wand2 size={10} />
+                    <span>Move Trace Samples:</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      onClick={() => handleTestTrace('a1h8')}
+                      disabled={!isConnected}
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                    >
+                      a1 ↗ h8
+                    </button>
+                    <button
+                      onClick={() => handleTestTrace('g1f3')}
+                      disabled={!isConnected}
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                    >
+                      g1 ♞ f3
+                    </button>
+                    <button
+                      onClick={() => handleTestTrace('e2e4')}
+                      disabled={!isConnected}
+                      className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-750 py-1 px-1 rounded text-[10px] font-mono font-bold"
+                    >
+                      e2 ↑ e4
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
