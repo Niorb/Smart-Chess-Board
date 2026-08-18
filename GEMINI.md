@@ -55,7 +55,7 @@ After modifying code locally, ALWAYS execute this sequence:
 - **Empty Squares**: Neutral (`0`).
   - Expected on **Ranks 3, 4, 5, and 6**.
 - **Calibration Options**:
-  - *Calibrate With Pieces Placed*: Samples the empty middle ranks 3–6 and maps the Rank 3 baseline to starting Ranks 1 & 2, and the Rank 6 baseline to starting Ranks 7 & 8.
+  - *Calibrate With Pieces Placed*: Only reads the empty middle columns 3–6 (`c in 2..5`) and maps Column 3 (`c=2`) baselines to Columns 1 & 2 (`c=0, 1`) and Column 6 (`c=5`) baselines to Columns 7 & 8 (`c=6, 7`) for all rows.
   - *Force Recalibrate (Empty Board)*: Directly samples all 64 squares (requires an empty board).
 
 ### WS2812B LED Strips
