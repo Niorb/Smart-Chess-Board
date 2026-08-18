@@ -98,6 +98,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Real-Time WebSocket State**: Streams `opponent_gone: { gone: bool, claim_win_in: number }` across `/ws/state`.
   - **REST API Endpoints (`Raspberry/app/main.py`)**: Added `POST /api/lichess/claim-victory` and `POST /api/game/claim-victory`.
   - **React UI Banner & Manual Claim**: Animated "Opponent Disconnected" countdown banner in the Play tab with smooth 1-second countdown and active "Claim Victory" button.
+- [x] Implemented In-Loop Auto Calibration Toggle (Active by Default, Switchable In-Game):
+  - **Dynamic Baseline Drift Gating (`Raspberry/board_hardware.py`)**: Gated the continuous background analog baseline drift compensation on `settings["in_loop_calibration"]` (defaults to `True`). When disabled, baseline drift calculations are suppressed and static baselines are preserved.
+  - **FastAPI & REST Persistence (`Raspberry/app/main.py`)**: Added `in_loop_calibration` to `ThresholdSettings` model and `POST /api/board/settings` with auto-save to `board_settings.json`.
+  - **React UI In-Game Switch (`Raspberry/frontend/src/App.tsx`)**: Added an accessible **"In-Loop Auto Calibration"** toggle switch in both the **Play Tab** (for live adjustments during ongoing matches) and the **Debug Tab** (in the Initial Pieces Detection panel), with full local storage caching and server state synchronization.
 
 ## Task Backlog
 
