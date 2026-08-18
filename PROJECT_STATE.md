@@ -87,8 +87,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **2-Phase Choreography**: For Kingside and Queenside castling (e1g1, e1c1, e8g8, e8c8), Phase 1 ($\tau \in [0.0, 0.5]$) animates the King's 2-square move with destination flare, and Phase 2 ($\tau \in [0.5, 1.0]$) animates the Rook's move with destination flare (`render_castle_trace()`).
   - **Player & Opponent Symmetry**:
     - When the opponent castles, both King and Rook moves are animated in sequence and 4 squares are illuminated until both pieces are physically mirrored.
-    - When our player castles on the physical board, placing the King 2 squares over ($e1 \to g1$ or $e1 \to c1$) immediately registers the King touchdown, flashes arrival confirmation, and prompts the corresponding Rook movement ($h1 \to f1$ or $a1 \to d1$) with illuminated origin/destination and animated move trace until the Rook is placed!
-  - **Interactive Diagnostic Buttons**: Added `e1g1 (Castle O-O)` and `e1c1 (Castle O-O-O)` test buttons to the Web UI.
+- [x] Implemented Live Perimeter Evaluation Bar & Blunder Guard (Color-Coded Move Quality):
+  - **Asynchronous Coach Engine (`Raspberry/app/coach_engine.py`)**: Real-time position analysis with multi-PV candidate evaluation, logistic win probability ($W = \frac{100}{1 + 10^{-cp / 400}}$), move delta classification (`best` $\le 10$ cp, `good` $\le 50$ cp, `inaccuracy` $\le 150$ cp, `blunder` $> 150$ cp), FEN caching, and graceful offline heuristic fallback.
+  - **Physical LED File 'h' Perimeter Eval Bar (`app/board_state.py`)**: Ranks 1–8 along File 'h' (Strip 2, row 7) continuously render a smooth White vs Black win chance gauge when enabled during AI matches.
+  - **Blunder Guard Destination Color Tiers**: When a piece is physically lifted or selected on the digital board during an AI match, destination squares are dynamically illuminated in Emerald Green (`BEST`), Cyan (`GOOD`), Amber (`INACCURACY`), or Crimson (`BLUNDER`).
+  - **Strict Fair-Play Invariant**: All coaching hints and live evaluation bars are strictly active only in matches against Stockfish AI, and hard-disabled in online matches against human opponents on Lichess.
+  - **React UI & Settings**: Sleek vertical evaluation bar component beside the digital chessboard, color-coded legal move dots on the virtual board, and toggles in the "AI Coach & Training" settings panel with automated backend persistence.
 
 ## Task Backlog
 
