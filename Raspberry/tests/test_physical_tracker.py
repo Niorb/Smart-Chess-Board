@@ -480,10 +480,13 @@ def test_player_castling_triggers_pending_rook_and_placement_confirms(mock_engin
     mock_engine.board.push_san("Bc5")
     mock_engine.game_info["turn"] = "white"
 
-    # Initial physical board state with pieces on e1 and h1
+    # Initial physical board state matching active chess position
     state = [[0] * 8 for _ in range(8)]
-    state[4][0] = -1  # White King on e1
-    state[7][0] = -1  # White Rook on h1
+    for c in range(8):
+        for r in range(8):
+            piece = mock_engine.board.piece_at(chess.square(c, r))
+            if piece:
+                state[c][r] = -1 if piece.color == chess.WHITE else 1
 
     # Step 1: Lift White King from e1
     state[4][0] = 0
