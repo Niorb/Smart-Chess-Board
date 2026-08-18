@@ -9,6 +9,7 @@ setup verification, move tracking, and real-time synchronization with the Liches
 import asyncio
 import datetime
 import logging
+import math
 import os
 import sys
 import threading
