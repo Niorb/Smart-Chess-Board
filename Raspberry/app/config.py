@@ -12,7 +12,7 @@ Defines matrix dimensions, serial parameters, GPIO pins, LED strips, colors, and
 SERIAL_PORT = "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0"
 BAUD_RATE = 921600
 ADC_BASELINE = 1550
-ADC_DEVIATION = 150
+ADC_DEVIATION = 180
 ANALOG_THRESHOLD = 2000  # Legacy compatibility
 
 # =============================================================================

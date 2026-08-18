@@ -314,8 +314,8 @@ function App() {
     pieces_mode?: 'auto' | 'pieces' | 'empty';
   } | null>(null);
 
-  const [positiveThresh, setPositiveThresh] = useState<number>(100);
-  const [negativeThresh, setNegativeThresh] = useState<number>(100);
+  const [positiveThresh, setPositiveThresh] = useState<number>(180);
+  const [negativeThresh, setNegativeThresh] = useState<number>(180);
   const [colMode, setColMode] = useState<'auto' | 'manual'>('auto');
   const [manualCol, setManualCol] = useState<number>(0);
   const [scanDelay, setScanDelay] = useState<number>(100);
@@ -332,8 +332,8 @@ function App() {
       try {
         const res = await getBoardSettings();
         setSettings(res);
-        setPositiveThresh(res.threshold_positive ?? 100);
-        setNegativeThresh(res.threshold_negative ?? 100);
+        setPositiveThresh(res.threshold_positive ?? 180);
+        setNegativeThresh(res.threshold_negative ?? 180);
         setColMode(res.col_mode || 'auto');
         setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
         setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);

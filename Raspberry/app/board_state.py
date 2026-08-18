@@ -92,6 +92,7 @@ class BoardStateManager:
         self.is_calibrating: bool = False
         self.active_animation = None  # LifecycleAnimation | None
         self.custom_trace_path = None  # list[tuple[int, int]] | None
+        self.frozen_baselines = None  # Snapshot of baselines preserved during animations
 
         # Setup verification and move tracking subsystems
         self.setup_validator = SetupValidator()
@@ -129,9 +130,15 @@ class BoardStateManager:
         """
         Triggers a procedural full-board lifecycle animation.
         Supported names: 'GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN'.
+        Freezes current analog baselines to protect them from voltage drop transients.
         """
         try:
             from app.led_animations import create_animation
+            from board_hardware import settings
+            if self.frozen_baselines is None and "baselines" in settings:
+                self.frozen_baselines = [list(col) for col in settings["baselines"]]
+                logger.info("Snapshotted and froze sensor baselines prior to lifecycle animation.")
+
             anim = create_animation(name, params)
             self.active_animation = anim
             logger.info(f"Triggered LED lifecycle animation: {name} (duration={anim.duration}s)")
@@ -140,9 +147,9 @@ class BoardStateManager:
             logger.error(f"Failed to trigger animation '{name}': {e}")
             return False
 
-    def _safe_scan(self, raw_state):
+    def _safe_scan(self, raw_state, freeze_baseline=False):
         with self.serial_lock:
-            return scan_board(self.h, self.ser, raw_state)
+            return scan_board(self.h, self.ser, raw_state, freeze_baseline=freeze_baseline)
 
     def _safe_calibrate(self):
         with self.serial_lock:
@@ -324,6 +331,12 @@ class BoardStateManager:
                     return
                 else:
                     self.active_animation = None
+                    if self.frozen_baselines is not None:
+                        from board_hardware import settings, clear_baseline_history
+                        settings["baselines"] = [list(col) for col in self.frozen_baselines]
+                        clear_baseline_history()
+                        self.frozen_baselines = None
+                        logger.info("Restored frozen baselines and reset drift window after lifecycle animation.")
 
             # Layer 1: Setup / Idle Board Validation
             if self.game_status in ["IDLE", "SETUP"]:
@@ -398,7 +411,10 @@ class BoardStateManager:
             return
 
         self.led_test_active = True
-        logger.info("Starting sequential LED strip test...")
+        from board_hardware import settings, clear_baseline_history
+        if self.frozen_baselines is None and "baselines" in settings:
+            self.frozen_baselines = [list(col) for col in settings["baselines"]]
+        logger.info("Starting sequential LED strip test (baselines frozen)...")
         try:
             for idx in range(NUM_LEDS):
                 self.strip.setPixelColor(idx, Color(0, 0, 0))
@@ -407,7 +423,7 @@ class BoardStateManager:
 
             for idx in range(NUM_LEDS):
                 self.testing_led_index = idx
-                self.strip.setPixelColor(idx, Color(255, 80, 0))  # Orange
+                self.strip.setPixelColor(idx, Color(204, 64, 0))  # Orange
                 self.strip.show()
                 await asyncio.sleep(0.03)
                 self.strip.setPixelColor(idx, Color(0, 0, 0))
@@ -418,11 +434,21 @@ class BoardStateManager:
         finally:
             self.led_test_active = False
             self.testing_led_index = -1
+            if self.frozen_baselines is not None and self.active_animation is None:
+                settings["baselines"] = [list(col) for col in self.frozen_baselines]
+                clear_baseline_history()
+                self.frozen_baselines = None
+                logger.info("Restored frozen baselines after LED test.")
             logger.info("Sequential LED strip test completed.")
 
     def clear_all_leds(self):
         """Forces all physical LEDs off and clears any highlighted square, active animation, or custom trace."""
         self.highlighted_square = None
+        if self.active_animation is not None and self.frozen_baselines is not None:
+            from board_hardware import settings, clear_baseline_history
+            settings["baselines"] = [list(col) for col in self.frozen_baselines]
+            clear_baseline_history()
+            self.frozen_baselines = None
         self.active_animation = None
         self.custom_trace_path = None
         if self.strip:
@@ -454,7 +480,12 @@ class BoardStateManager:
                         "errors": 0,
                     }
                 elif self.ser and self.h:
-                    raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state)
+                    now_ts = time.time()
+                    is_animating = bool(
+                        (self.active_animation is not None and self.active_animation.is_active(now_ts))
+                        or self.led_test_active
+                    )
+                    raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, is_animating)
                     self.raw_analog_values = raw_matrix
                     diag_info = scan_diag
                     col_mode = settings.get("col_mode", "auto")
@@ -468,38 +499,40 @@ class BoardStateManager:
                                 self.physical_state[c][r] = 0
                                 stable_count[c][r] = 0
 
-                    debounce_thresh = settings.get("debounce_threshold", 2)
-                    apply_debounce(
-                        raw_state, self.physical_state, stable_count, debounce_thresh
-                    )
-
-                    # Physical Move Tracking during PLAYING state
-                    if self.game_status == "PLAYING":
-                        self.move_tracker.sync_game(lichess_engine)
-                        move_result = self.move_tracker.process_physical_state(
-                            self.physical_state, lichess_engine
+                    # During animations, suppress reading processing to prevent false lifts from voltage transients
+                    if not is_animating:
+                        debounce_thresh = settings.get("debounce_threshold", 2)
+                        apply_debounce(
+                            raw_state, self.physical_state, stable_count, debounce_thresh
                         )
-                        if move_result:
-                            from_f, from_r, to_f, to_r, promo = move_result
-                            logger.info(
-                                f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
-                            )
 
-                            async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
-                                try:
-                                    success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
-                                    if not success:
-                                        logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                        # Physical Move Tracking during PLAYING state
+                        if self.game_status == "PLAYING":
+                            self.move_tracker.sync_game(lichess_engine)
+                            move_result = self.move_tracker.process_physical_state(
+                                self.physical_state, lichess_engine
+                            )
+                            if move_result:
+                                from_f, from_r, to_f, to_r, promo = move_result
+                                logger.info(
+                                    f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                                )
+
+                                async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
+                                    try:
+                                        success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                                        if not success:
+                                            logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                            self.move_tracker.clear_in_flight_move()
+                                    except Exception as err:
+                                        logger.error(f"Unexpected error dispatching move: {err}")
                                         self.move_tracker.clear_in_flight_move()
-                                except Exception as err:
-                                    logger.error(f"Unexpected error dispatching move: {err}")
-                                    self.move_tracker.clear_in_flight_move()
 
-                            asyncio.create_task(
-                                _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
-                            )
-                    else:
-                        self.move_tracker.reset()
+                                asyncio.create_task(
+                                    _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
+                                )
+                        else:
+                            self.move_tracker.reset()
 
                     self._update_leds()
                 else:

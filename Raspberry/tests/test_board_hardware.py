@@ -573,5 +573,34 @@ def test_empty_board_mode_calibrates_all_64_squares_directly():
             assert settings["baselines"][c][r] == 1530
 
 
+def test_freeze_baseline_suppresses_drift():
+    """Verify that when freeze_baseline is True, baselines and history are not mutated."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["pieces_mode"] = "empty"
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 180
+    settings["threshold_negative"] = 180
+    settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    raw_vals = [1700] * 64
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    # Call scan_board with freeze_baseline=True
+    scan_board(None, mock_ser, raw_state, freeze_baseline=True)
+
+    # Baseline must remain untouched at 1500
+    assert settings["baselines"][0][0] == 1500
+    assert len(baseline_history) == 0
+
+
+
 
 

@@ -62,8 +62,8 @@ DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {
     "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
-    "threshold_positive": 100,
-    "threshold_negative": 100,
+    "threshold_positive": 180,
+    "threshold_negative": 180,
     "col_mode": "auto",
     "manual_col": 0,
     "scan_delay": 100,
@@ -232,17 +232,21 @@ COL_MUX_S3 = 23
 def set_mux_channel(_h, _s0, _s1, _s2, _s3, _channel):
     """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
 
-def init_mux_pins(_h):
-    """No-op on the Pi — MUX is controlled directly by the ESP32 coprocessor."""
+def clear_baseline_history():
+    """Clears dynamic baseline drift historical window samples."""
+    global baseline_history
+    baseline_history.clear()
+
 
 # =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
 
-def scan_board(h, serial_conn, raw_state):
+def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     """
     Scans the board and returns both the raw matrix and a dictionary of diagnostic info.
     Reads values as a single batch from the serial interface.
+    When freeze_baseline is True, dynamic baseline drift updating is suppressed.
     """
     matrix = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     diag = {
@@ -306,8 +310,8 @@ def scan_board(h, serial_conn, raw_state):
                         raw_state[c][r] = 0
 
             # Smart Starting Piece Detection against Ranks 3 & 6
-            thresh_pos = settings.get("threshold_positive", 100)
-            thresh_neg = settings.get("threshold_negative", 100)
+            thresh_pos = settings.get("threshold_positive", 180)
+            thresh_neg = settings.get("threshold_negative", 180)
             detected_starting_count = 0
 
             for c in range(BOARD_COLS):
@@ -349,9 +353,9 @@ def scan_board(h, serial_conn, raw_state):
             diag["pieces_mode"] = pieces_mode
             diag["effective_pieces_mode"] = effective_pieces_mode
 
-            # Dynamic baseline drift tracking
+            # Dynamic baseline drift tracking (suppressed when baseline is frozen during animations)
             baseline_window = settings.get("baseline_window_s", 2)
-            if baseline_window > 0:
+            if not freeze_baseline and baseline_window > 0:
                 now = time.time()
                 if effective_pieces_mode:
                     # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8

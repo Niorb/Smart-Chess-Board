@@ -104,3 +104,53 @@ def test_safe_calibrate_no_deadlock():
     with patch("board_hardware.calibrate_board", return_value=True):
         res = bsm._safe_calibrate()
         assert res is True
+
+
+def test_baseline_freezing_and_restoration_during_animation():
+    from board_hardware import settings
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+
+    # Set custom baseline
+    settings["baselines"] = [[1600] * 8 for _ in range(8)]
+    assert bsm.frozen_baselines is None
+
+    # Trigger animation -> should snapshot baselines
+    success = bsm.trigger_animation("GAME_STARTED")
+    assert success is True
+    assert bsm.active_animation is not None
+    assert bsm.frozen_baselines == [[1600] * 8 for _ in range(8)]
+
+    # Simulate drift or tampering during animation
+    settings["baselines"][0][0] = 9999
+
+    # Advance time beyond animation duration
+    import time
+    past_anim = bsm.active_animation
+    past_anim.start_time = time.time() - 10.0  # Expired
+
+    # Call _update_leds to trigger animation cleanup
+    bsm._update_leds()
+    assert bsm.active_animation is None
+    assert bsm.frozen_baselines is None
+    # Baseline must be restored to original 1600
+    assert settings["baselines"][0][0] == 1600
+
+
+@pytest.mark.asyncio
+async def test_baseline_freezing_during_led_test():
+    from board_hardware import settings
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+
+    settings["baselines"] = [[1700] * 8 for _ in range(8)]
+    assert bsm.frozen_baselines is None
+
+    # Run LED test with sleep patched out
+    with patch("asyncio.sleep", return_value=None):
+        await bsm.run_led_test()
+
+    assert bsm.led_test_active is False
+    assert bsm.frozen_baselines is None
+    assert settings["baselines"][0][0] == 1700
+
