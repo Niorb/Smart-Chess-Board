@@ -341,6 +341,15 @@ class BoardStateManager:
                         self.frozen_baselines = None
                         logger.info("Restored frozen baselines and reset drift window after lifecycle animation.")
 
+            # Layer 0.5: Continuous Seeking / Matchmaking Radar Animation
+            if self.game_status == "SEEKING":
+                from app.led_animations import render_seeking
+                render_seeking(now, frame, {})
+                for idx, color in enumerate(frame):
+                    self.strip.setPixelColor(idx, color)
+                self.strip.show()
+                return
+
             # Layer 1: Setup / Idle Board Validation
             if self.game_status in ["IDLE", "SETUP"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)

@@ -37,7 +37,8 @@ import {
   Zap,
   Target,
   Sparkles,
-  Wand2
+  Wand2,
+  Radar
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -1509,6 +1510,14 @@ function App() {
                     >
                       <Handshake size={11} />
                       <span>Draw Anim</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('SEEKING')}
+                      disabled={!isConnected}
+                      className="bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 text-cyan-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all col-span-2 shadow-sm"
+                    >
+                      <Radar size={11} className="animate-spin" />
+                      <span>Seeking / Waiting (Radar)</span>
                     </button>
                   </div>
 

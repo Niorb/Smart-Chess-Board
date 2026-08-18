@@ -77,6 +77,9 @@ COLOR_VICTORY_GREEN = (0, 204, 48)  # Emerald green wave for victory
 COLOR_DEFEAT_RED = (176, 0, 16)  # Crimson wave for defeat
 COLOR_DRAW_BLUE = (0, 96, 204)  # Sapphire blue for draw curtain
 COLOR_DRAW_WHITE = (160, 160, 204)  # Cool white for draw curtain
+COLOR_SEEKING_HEAD = (140, 240, 255)  # Bright icy cyan head for seeking orbit
+COLOR_SEEKING_BODY = (0, 140, 255)  # Electric blue body for seeking orbit
+COLOR_SEEKING_TAIL = (0, 36, 160)  # Deep royal blue tail for seeking orbit
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
@@ -100,4 +103,6 @@ ANIM_GAME_START_DURATION_S = 1.5  # Duration for game start radial burst
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
 ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave
 ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave
+ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
+ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
 

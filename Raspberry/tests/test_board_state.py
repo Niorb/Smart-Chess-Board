@@ -155,3 +155,15 @@ def test_baseline_freezing_during_led_test():
     assert settings["baselines"][0][0] == 1700
 
 
+def test_board_state_seeking_continuous_led_render():
+    """Verify that when game_status == 'SEEKING', _update_leds renders the seeking animation to strip."""
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "SEEKING"
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+

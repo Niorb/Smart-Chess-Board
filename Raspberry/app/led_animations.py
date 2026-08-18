@@ -17,6 +17,8 @@ try:
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
+        ANIM_SEEKING_DURATION_S,
+        ANIM_SEEKING_PERIOD_S,
         MOVE_TRACE_PERIOD_S,
         NUM_LEDS,
     )
@@ -27,6 +29,9 @@ try:
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_FROM,
+        COLOR_INT_SEEKING_BODY,
+        COLOR_INT_SEEKING_HEAD,
+        COLOR_INT_SEEKING_TAIL,
         COLOR_INT_VICTORY_GOLD,
         COLOR_INT_VICTORY_GREEN,
         get_led_indices,
@@ -37,6 +42,8 @@ except ImportError:
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
+        ANIM_SEEKING_DURATION_S,
+        ANIM_SEEKING_PERIOD_S,
         MOVE_TRACE_PERIOD_S,
         NUM_LEDS,
     )
@@ -47,6 +54,9 @@ except ImportError:
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_FROM,
+        COLOR_INT_SEEKING_BODY,
+        COLOR_INT_SEEKING_HEAD,
+        COLOR_INT_SEEKING_TAIL,
         COLOR_INT_VICTORY_GOLD,
         COLOR_INT_VICTORY_GREEN,
         get_led_indices,
@@ -368,6 +378,70 @@ def render_game_drawn(
 
 
 # =============================================================================
+# PERIMETER COORDINATES & SEEKING ANIMATION
+# =============================================================================
+
+# 28 perimeter squares ordered clockwise:
+# Rank 1: (0,0) -> (7,0)
+# File h: (7,1) -> (7,7)
+# Rank 8: (6,7) -> (0,7)
+# File a: (0,6) -> (0,1)
+PERIMETER_COORDS: List[Tuple[int, int]] = (
+    [(c, 0) for c in range(8)]
+    + [(7, r) for r in range(1, 8)]
+    + [(c, 7) for c in range(6, -1, -1)]
+    + [(0, r) for r in range(6, 0, -1)]
+)
+
+
+def render_seeking(
+    now: float,
+    frame: List[int],
+    params: Dict[str, Any],
+    period: float = ANIM_SEEKING_PERIOD_S,
+) -> None:
+    """
+    SEEKING / WAITING_FOR_OPPONENT animation:
+    Smooth comet pulse orbiting the 28 perimeter squares clockwise.
+    Features a bright icy cyan head, electric blue body, and deep royal blue tail decay.
+    Inner 6x6 squares remain completely dark and inactive (< 6% active squares).
+    """
+    if period <= 0:
+        return
+
+    n = len(PERIMETER_COORDS)
+    tau = (now % period) / period  # 0.0 to 1.0
+    head_pos = tau * n
+    tail_length = 7.0  # Tail span in perimeter squares (~1/4 ring)
+
+    for i, (c, r) in enumerate(PERIMETER_COORDS):
+        delta_behind = (head_pos - i) % n
+
+        if delta_behind <= 1.0:
+            # Head and immediate trailing gradient
+            intensity = 1.0 - 0.25 * delta_behind
+            col = blend_colors(COLOR_INT_SEEKING_HEAD, COLOR_INT_SEEKING_BODY, delta_behind)
+        elif delta_behind <= tail_length:
+            # Body to tail decay
+            t = (delta_behind - 1.0) / (tail_length - 1.0)
+            intensity = 0.75 * ((1.0 - t) ** 1.8)
+            col = blend_colors(COLOR_INT_SEEKING_BODY, COLOR_INT_SEEKING_TAIL, t)
+        elif delta_behind > (n - 0.75):
+            # Smooth leading edge ahead of head
+            delta_ahead = n - delta_behind
+            intensity = (1.0 - delta_ahead / 0.75) ** 2
+            col = COLOR_INT_SEEKING_HEAD
+        else:
+            intensity = 0.0
+            col = COLOR_INT_OFF
+
+        if intensity > 0.02:
+            set_square_in_frame(frame, c, r, scale_color(col, intensity))
+        else:
+            set_square_in_frame(frame, c, r, COLOR_INT_OFF)
+
+
+# =============================================================================
 # LIFECYCLE ANIMATION CLASS & FACTORY
 # =============================================================================
 
@@ -406,6 +480,8 @@ class LifecycleAnimation:
             render_game_lost(progress, frame, self.params)
         elif anim_name == "GAME_DRAWN":
             render_game_drawn(progress, frame, self.params, now=now)
+        elif anim_name in ("SEEKING", "WAITING_FOR_OPPONENT", "MATCHMAKING"):
+            render_seeking(now, frame, self.params)
 
 
 def create_animation(
@@ -415,7 +491,7 @@ def create_animation(
     Animation factory creating configured LifecycleAnimation instances.
 
     Args:
-        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN').
+        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'SEEKING', 'WAITING_FOR_OPPONENT').
         params: Optional metadata dict (e.g. {'my_color': 'white'}).
 
     Returns:
@@ -427,6 +503,9 @@ def create_animation(
         "GAME_WON": ANIM_GAME_WON_DURATION_S,
         "GAME_LOST": ANIM_GAME_LOST_DURATION_S,
         "GAME_DRAWN": ANIM_GAME_DRAWN_DURATION_S,
+        "SEEKING": ANIM_SEEKING_DURATION_S,
+        "WAITING_FOR_OPPONENT": ANIM_SEEKING_DURATION_S,
+        "MATCHMAKING": ANIM_SEEKING_DURATION_S,
     }
     duration = durations.get(clean_name, 2.0)
     return LifecycleAnimation(

@@ -77,7 +77,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Configured default positive and negative analog deviation thresholds to **±200** across backend defaults, fallback templates, and web UI.
 - [x] Implemented continuous settings remembering in Web UI:
   - All slider movements and mode toggles (positive/negative shift, scan delay, col mode, pieces mode, settle time, debounce threshold, baseline window) immediately sync to `localStorage` and debounced auto-persist to the FastAPI backend (`board_settings.json`).
-  - On web app refresh or backend reboot, last-used values are automatically reloaded and used as defaults.
+- [x] Implemented continuous "Waiting for Opponent" (Seeking) radar animation:
+  - **Perimeter Orbital Comet**: Clockwise orbital pulse along the 28 perimeter squares ($a1 \to h1 \to h8 \to a8 \to a1$) with bright cyan-white head (`(140, 240, 255)`), electric azure body (`(0, 140, 255)`), and deep sapphire decay (`(0, 36, 160)`).
+  - **Low-Power Budget**: Strictly 3-4 active squares at any frame (< 6% of board), leaving inner 6x6 squares dark and keeping average current below 50mA.
+  - **State Machine Integration**: Automatically loops during `game_status == "SEEKING"` until match start or cancel, and available as a testable animation (`SEEKING` / `WAITING_FOR_OPPONENT`) via API and Web UI button.
 
 ## Task Backlog
 

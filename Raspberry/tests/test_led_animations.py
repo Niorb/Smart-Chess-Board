@@ -10,8 +10,14 @@ import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.config import MOVE_TRACE_PERIOD_S, NUM_LEDS
+from app.config import (
+    ANIM_SEEKING_DURATION_S,
+    ANIM_SEEKING_PERIOD_S,
+    MOVE_TRACE_PERIOD_S,
+    NUM_LEDS,
+)
 from app.led_animations import (
+    PERIMETER_COORDS,
     LifecycleAnimation,
     add_colors,
     blend_colors,
@@ -22,6 +28,7 @@ from app.led_animations import (
     render_game_started,
     render_game_won,
     render_move_trace,
+    render_seeking,
     scale_color,
     unpack_rgb,
 )
@@ -30,6 +37,9 @@ from app.led_helpers import (
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
+    COLOR_INT_SEEKING_BODY,
+    COLOR_INT_SEEKING_HEAD,
+    COLOR_INT_SEEKING_TAIL,
     get_led_indices,
 )
 
@@ -199,3 +209,60 @@ def test_render_move_trace_loop_wraparound_continuity():
             assert 0 <= r <= 255
             assert 0 <= g <= 255
             assert 0 <= b <= 255
+
+
+def test_perimeter_coords_structure():
+    """Verify that PERIMETER_COORDS contains exactly 28 outer squares with valid 0..7 coordinates."""
+    assert len(PERIMETER_COORDS) == 28
+    assert len(set(PERIMETER_COORDS)) == 28
+    for c, r in PERIMETER_COORDS:
+        assert 0 <= c <= 7
+        assert 0 <= r <= 7
+        # Must be on the boundary (rank 0 or 7, or file 0 or 7)
+        assert c in (0, 7) or r in (0, 7)
+
+
+def test_render_seeking_perimeter_bounds_and_decay():
+    """
+    Verify render_seeking:
+    - Inner 6x6 squares remain completely dark (0).
+    - Only perimeter squares illuminate.
+    - Active illuminated squares remain within low-power budget (<= 10 squares).
+    """
+    now = time.time()
+    for frac in [0.0, 0.25, 0.5, 0.75, 0.99]:
+        ts = now + frac * ANIM_SEEKING_PERIOD_S
+        frame = [0] * NUM_LEDS
+        render_seeking(ts, frame, {})
+        assert any(frame)
+
+        # Verify inner 6x6 squares are dark
+        for c in range(1, 7):
+            for r in range(1, 7):
+                indices = get_led_indices(r, c)
+                for idx in indices:
+                    if idx < NUM_LEDS:
+                        assert frame[idx] == 0
+
+        # Verify active squares budget (<= 10 squares lit simultaneously)
+        lit_squares = 0
+        for c, r in PERIMETER_COORDS:
+            indices = get_led_indices(r, c)
+            if any(frame[idx] != 0 for idx in indices if idx < NUM_LEDS):
+                lit_squares += 1
+        assert lit_squares <= 10
+
+
+def test_lifecycle_animation_seeking():
+    """Verify LifecycleAnimation factory support for SEEKING, WAITING_FOR_OPPONENT, MATCHMAKING."""
+    anim = create_animation("SEEKING")
+    assert anim.name == "SEEKING"
+    assert anim.duration == ANIM_SEEKING_DURATION_S
+
+    anim_waiting = create_animation("WAITING_FOR_OPPONENT")
+    assert anim_waiting.name == "WAITING_FOR_OPPONENT"
+    assert anim_waiting.duration == ANIM_SEEKING_DURATION_S
+
+    frame = [0] * NUM_LEDS
+    anim.render(time.time(), frame)
+    assert any(frame)

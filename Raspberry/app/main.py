@@ -264,7 +264,7 @@ async def clear_leds_route():
 async def trigger_animation_route(body: TriggerAnimationRequest):
     """
     Triggers a procedural full-board lifecycle animation.
-    Supported names: 'GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN'.
+    Supported names: 'GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'SEEKING', 'WAITING_FOR_OPPONENT'.
     """
     success = state_manager.trigger_animation(body.name, body.params)
     if success:
