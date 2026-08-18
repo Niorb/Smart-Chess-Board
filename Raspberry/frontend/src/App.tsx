@@ -314,7 +314,7 @@ function App() {
     pieces_mode?: 'auto' | 'pieces' | 'empty';
   } | null>(null);
 
-  const [positiveThresh, setPositiveThresh] = useState<number>(180);
+  const [positiveThresh, setPositiveThresh] = useState<number>(200);
   const [negativeThresh, setNegativeThresh] = useState<number>(180);
   const [colMode, setColMode] = useState<'auto' | 'manual'>('auto');
   const [manualCol, setManualCol] = useState<number>(0);
@@ -332,7 +332,7 @@ function App() {
       try {
         const res = await getBoardSettings();
         setSettings(res);
-        setPositiveThresh(res.threshold_positive ?? 180);
+        setPositiveThresh(res.threshold_positive ?? 200);
         setNegativeThresh(res.threshold_negative ?? 180);
         setColMode(res.col_mode || 'auto');
         setManualCol(res.manual_col !== undefined ? res.manual_col : 0);

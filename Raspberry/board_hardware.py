@@ -62,7 +62,7 @@ DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {
     "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
-    "threshold_positive": 180,
+    "threshold_positive": 200,
     "threshold_negative": 180,
     "col_mode": "auto",
     "manual_col": 0,
@@ -337,7 +337,7 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
                         raw_state[c][r] = 0
 
             # Smart Starting Piece Detection against Ranks 3 & 6
-            thresh_pos = settings.get("threshold_positive", 180)
+            thresh_pos = settings.get("threshold_positive", 200)
             thresh_neg = settings.get("threshold_negative", 180)
             detected_starting_count = 0
 

@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 from unittest.mock import AsyncMock, patch
@@ -8,6 +9,16 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.main import app, parse_sq
+
+
+@pytest.fixture(autouse=True)
+def preserve_settings():
+    from board_hardware import settings
+    saved = copy.deepcopy(settings)
+    with patch("board_hardware.save_settings"):
+        yield
+    settings.clear()
+    settings.update(saved)
 
 
 def test_parse_sq_valid():

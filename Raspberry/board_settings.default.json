@@ -9,7 +9,7 @@
         [1550, 1550, 1550, 1550, 1550, 1550, 1550, 1550],
         [1550, 1550, 1550, 1550, 1550, 1550, 1550, 1550]
     ],
-    "threshold_positive": 180,
+    "threshold_positive": 200,
     "threshold_negative": 180,
     "col_mode": "auto",
     "manual_col": 0,
