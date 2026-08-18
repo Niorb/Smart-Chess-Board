@@ -30,7 +30,7 @@ logger = logging.getLogger("smart-chess-app")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting background state manager loop and Lichess engine...")
-    await lichess_engine.start()
+    await lichess_engine.start(state_manager)
     task = asyncio.create_task(state_manager.update_loop(manager.broadcast))
     yield
     logger.info("Stopping background loop and Lichess engine...")

@@ -277,3 +277,20 @@ def test_seek_with_rating_range():
                 rating_range="1400-1800",
             )
     asyncio.run(_test())
+
+
+def test_event_stream_task_management():
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+
+        with patch.object(engine, "get_account", new_callable=AsyncMock) as mock_get_acct:
+            mock_get_acct.return_value = {"authenticated": True, "username": "TestPlayer", "rating": 1500}
+            with patch.object(engine, "_listen_event_stream", new_callable=AsyncMock) as mock_listen:
+                await engine.start(state_manager=mock_state_mgr)
+                assert engine.is_running is True
+                assert engine._event_stream_task is not None
+
+                await engine.stop()
+                assert engine.is_running is False
+    asyncio.run(_test())

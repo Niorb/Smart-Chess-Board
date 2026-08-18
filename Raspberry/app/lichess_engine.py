@@ -121,6 +121,7 @@ class LichessEngine:
         }
         self._seek_task: asyncio.Task | None = None
         self._stream_task: asyncio.Task | None = None
+        self._event_stream_task: asyncio.Task | None = None
         self._cancel_event = asyncio.Event()
 
     def _get_headers(self) -> dict[str, str]:
@@ -133,7 +134,7 @@ class LichessEngine:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    async def start(self):
+    async def start(self, state_manager=None):
         """Initializes the HTTP client and fetches authenticated account details."""
         if self.is_running and self.client and not self.client.is_closed:
             return
@@ -146,6 +147,7 @@ class LichessEngine:
             http2=True,
         )
         self.is_running = True
+        self._cancel_event.clear()
         logger.info("Lichess engine initialized.")
 
         try:
@@ -153,6 +155,12 @@ class LichessEngine:
             if account.get("authenticated"):
                 self.username = account.get("username")
                 logger.info(f"Authenticated with Lichess as '{self.username}' (Rating: {account.get('rating')}).")
+
+                # Start global event listener (/api/stream/event)
+                if state_manager and (not self._event_stream_task or self._event_stream_task.done()):
+                    self._event_stream_task = asyncio.create_task(
+                        self._listen_event_stream(state_manager)
+                    )
             else:
                 logger.warning("Lichess token not set or unauthenticated. Running in offline/guest mode.")
         except Exception as e:
@@ -168,6 +176,8 @@ class LichessEngine:
             self._seek_task.cancel()
         if self._stream_task and not self._stream_task.done():
             self._stream_task.cancel()
+        if self._event_stream_task and not self._event_stream_task.done():
+            self._event_stream_task.cancel()
 
         if self.client and not self.client.is_closed:
             await self.client.aclose()
@@ -176,6 +186,51 @@ class LichessEngine:
         self.client = None
         self.current_game_id = None
         logger.info("Lichess engine stopped.")
+
+    async def _listen_event_stream(self, state_manager):
+        """Persistent listener for GET /api/stream/event capturing gameStart / incoming challenges."""
+        headers = self._get_headers()
+        headers["Accept"] = "application/x-ndjson"
+
+        while self.is_running and not self._cancel_event.is_set():
+            try:
+                async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=None) as client:
+                    async with client.stream("GET", "/api/stream/event") as response:
+                        if response.status_code != 200:
+                            logger.debug(f"Event stream HTTP {response.status_code}, retrying in 5s...")
+                            await asyncio.sleep(5)
+                            continue
+                        logger.info("Lichess event stream (/api/stream/event) connected.")
+                        async for line in response.aiter_lines():
+                            if not self.is_running or self._cancel_event.is_set():
+                                return
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                event = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+
+                            event_type = event.get("type")
+                            if event_type == "gameStart":
+                                game_info = event.get("game", {})
+                                game_id = game_info.get("id") or game_info.get("gameId")
+                                if game_id and game_id != self.current_game_id:
+                                    logger.info(f"Lichess event stream: gameStart event received for game {game_id}")
+                                    self.current_game_id = game_id
+                                    if state_manager:
+                                        state_manager.game_status = "PLAYING"
+                                    if self._stream_task and not self._stream_task.done():
+                                        self._stream_task.cancel()
+                                    self._stream_task = asyncio.create_task(
+                                        self.stream_game(game_id, state_manager)
+                                    )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Event stream reconnecting: {e}")
+                await asyncio.sleep(3)
 
     async def get_account(self) -> dict[str, Any]:
         """Queries GET /api/account to return user profile and perfs."""

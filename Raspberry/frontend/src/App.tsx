@@ -67,7 +67,7 @@ function App() {
 
   // Time control & match settings
   const [selectedTC, setSelectedTC] = useState<string>('10+0');
-  const [isRated, setIsRated] = useState<boolean>(false);
+  const [isRated, setIsRated] = useState<boolean>(true);
   const [selectedColor, setSelectedColor] = useState<'random' | 'white' | 'black'>('random');
   const [opponentMode, setOpponentMode] = useState<'auto' | 'ai' | 'human'>('auto');
   const [aiLevel, setAiLevel] = useState<number>(3);
@@ -965,15 +965,22 @@ function App() {
                       onClick={() => setIsRated(!isRated)}
                       className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                         isRated
-                          ? 'bg-amber-600/20 text-amber-300 border-amber-500/50'
+                          ? 'bg-amber-600/20 text-amber-300 border-amber-500/50 shadow-sm'
                           : 'bg-slate-950 text-slate-400 border-slate-800'
                       }`}
                     >
                       <Shield size={13} className={isRated ? 'text-amber-400' : 'text-slate-500'} />
-                      <span>{isRated ? 'Rated Match' : 'Casual Match'}</span>
+                      <span>{isRated ? 'Rated (Fast Auto-Match)' : 'Casual (Open Challenge)'}</span>
                     </button>
                   </div>
                 </div>
+
+                {/* Rating Guidance Note */}
+                {!isRated && opponentMode !== 'ai' && (
+                  <div className="text-[10px] text-amber-300/80 bg-amber-950/20 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                    <span>💡 <strong>Note:</strong> Lichess Quick Pairing pool is exclusively for Rated games. Casual/Unrated seeks post to the public lobby where few players search.</span>
+                  </div>
+                )}
 
                 {/* Rating Boundaries (ELO Interval) */}
                 <div className="flex flex-col gap-2 pt-1 border-t border-slate-800/80">
