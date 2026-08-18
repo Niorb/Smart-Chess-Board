@@ -377,9 +377,9 @@ def scan_board(h, serial_conn, raw_state):
                                     if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
                                         settings["baselines"][c][0] = avg_val
                                         settings["baselines"][c][1] = avg_val
-                                elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
-                                    settings["baselines"][c][6] = avg_val
-                                    settings["baselines"][c][7] = avg_val
+                                    elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
+                                        settings["baselines"][c][6] = avg_val
+                                        settings["baselines"][c][7] = avg_val
                 else:
                     # Empty Board Mode: All 64 squares (ranks 1-8) drift directly on their own readings
                     for c in range(BOARD_COLS):
