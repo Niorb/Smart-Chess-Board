@@ -47,6 +47,7 @@ from app.config import (
     NUM_LEDS,
     SERIAL_PORT,
 )
+from app.led_helpers import (
     COLOR_INT_DRAW_BLUE,
     COLOR_INT_DRAW_WHITE,
     COLOR_INT_EVAL_BLACK,
