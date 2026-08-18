@@ -205,6 +205,17 @@ async def calibrate_board_route():
         return {"status": "error", "message": "Calibration failed"}
 
 
+@app.post("/api/board/calibrate_with_pieces")
+async def calibrate_board_with_pieces_route():
+    """Triggers baseline calibration using empty middle ranks mapped to starting ranks."""
+    success = await asyncio.to_thread(state_manager._safe_calibrate_with_pieces)
+    if success:
+        from board_hardware import settings
+        return {"status": "success", "message": "Calibration with pieces completed", "settings": settings}
+    else:
+        return {"status": "error", "message": "Calibration failed"}
+
+
 @app.post("/api/board/highlight")
 async def highlight_square_route(body: HighlightRequest):
     """Highlights or toggles an LED indicator on a board square."""
@@ -336,7 +347,6 @@ async def set_game_mode_route(body: ModeRequest):
 @app.websocket("/ws/state")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
-    asyncio.create_task(state_manager.handle_webapp_connected())
     try:
         while True:
             await websocket.receive_text()

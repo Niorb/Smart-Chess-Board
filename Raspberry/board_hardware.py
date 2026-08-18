@@ -401,6 +401,95 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
     return True
 
 
+def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
+    """
+    Calibrates board baselines when pieces are already in standard starting layout.
+    Measures empty middle ranks (Ranks 3-6) and maps:
+    - Ranks 1 & 2 (r=0, 1) baselines are set to Rank 3 (r=2) baseline for each file.
+    - Ranks 7 & 8 (r=6, 7) baselines are set to Rank 6 (r=5) baseline for each file.
+    - Ranks 3, 4, 5, 6 (r in 2, 3, 4, 5) use their own directly measured baselines.
+    """
+    if serial_conn is None:
+        logger.error("Calibration with pieces failed: serial connection not initialized.")
+        return False
+
+    sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # Flush buffers
+    serial_conn.reset_input_buffer()
+
+    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
+    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
+    global last_sent_settle_us
+    if last_sent_settle_us != settle_us:
+        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
+        last_sent_settle_us = settle_us
+
+    start_time = time.time()
+    while time.time() - start_time < duration_s:
+        serial_conn.write(b'B')
+        header = serial_conn.read(2)
+        if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
+            expected_bytes = BOARD_COLS * BOARD_ROWS * 2
+            data = serial_conn.read(expected_bytes)
+            if len(data) == expected_bytes:
+                import struct
+                vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
+                for mux_ch in range(BOARD_COLS):
+                    c = col_mux_map[mux_ch]
+                    for r in range(BOARD_ROWS):
+                        val = vals[mux_ch * BOARD_ROWS + r]
+                        sums[c][r] += val
+                        counts[c][r] += 1
+            else:
+                serial_conn.reset_input_buffer()
+        else:
+            serial_conn.reset_input_buffer()
+        time.sleep(0.01)
+
+    total_valid_samples = sum(sum(counts[c]) for c in range(BOARD_COLS))
+    if total_valid_samples == 0:
+        logger.error("Calibration with pieces failed: no valid data packets received from hardware.")
+        return False
+
+    # Compute raw average per square
+    measured_avg = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    for c in range(BOARD_COLS):
+        for r in range(BOARD_ROWS):
+            if counts[c][r] > 0:
+                avg_val = int(sums[c][r] / counts[c][r])
+                measured_avg[c][r] = avg_val if avg_val > 0 else 1550
+
+    # Update settings baselines using empty rank mapping
+    for c in range(BOARD_COLS):
+        base_rank3 = measured_avg[c][2]  # Rank 3 (r=2)
+        base_rank6 = measured_avg[c][5]  # Rank 6 (r=5)
+
+        # White starting ranks 1 & 2 -> mapped to Rank 3
+        settings["baselines"][c][0] = base_rank3
+        settings["baselines"][c][1] = base_rank3
+
+        # Middle empty ranks 3, 4, 5, 6 -> own measured baselines
+        settings["baselines"][c][2] = measured_avg[c][2]
+        settings["baselines"][c][3] = measured_avg[c][3]
+        settings["baselines"][c][4] = measured_avg[c][4]
+        settings["baselines"][c][5] = measured_avg[c][5]
+
+        # Black starting ranks 7 & 8 -> mapped to Rank 6
+        settings["baselines"][c][6] = base_rank6
+        settings["baselines"][c][7] = base_rank6
+
+    save_settings()
+
+    # Clear rolling baseline history
+    global baseline_history
+    baseline_history.clear()
+
+    logger.info("Successfully calibrated board baselines with pieces in place.")
+    return True
+
+
 # =============================================================================
 # DEBOUNCING
 # =============================================================================

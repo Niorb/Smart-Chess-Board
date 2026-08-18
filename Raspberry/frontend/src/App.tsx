@@ -10,6 +10,7 @@ import {
   getBoardSettings, 
   updateBoardSettings, 
   calibrateBoard,
+  calibrateBoardWithPieces,
   makeMove,
   highlightSquare,
   testLeds,
@@ -342,8 +343,6 @@ function App() {
     }
   }, [isConnected]);
 
-  const isInitialCalibrating = !!state.physical?.initial_calibrating;
-
   const handleToggleHighlight = async (col: number, row: number) => {
     try {
       await highlightSquare(col, row);
@@ -406,6 +405,26 @@ function App() {
       if (res.status === 'success') {
         setSettings(res.settings);
         setCalibrationStatus("Success: Baselines updated!");
+      } else {
+        setCalibrationStatus("Failed: " + res.message);
+      }
+    } catch (err) {
+      console.error(err);
+      setCalibrationStatus("Error: Calibration failed");
+    } finally {
+      setCalibrating(false);
+      setTimeout(() => setCalibrationStatus(null), 4000);
+    }
+  };
+
+  const handleCalibrateWithPieces = async () => {
+    setCalibrating(true);
+    setCalibrationStatus("Calibrating with pieces in place...");
+    try {
+      const res = await calibrateBoardWithPieces();
+      if (res.status === 'success') {
+        setSettings(res.settings);
+        setCalibrationStatus("Success: Baselines mapped from middle ranks!");
       } else {
         setCalibrationStatus("Failed: " + res.message);
       }
@@ -535,14 +554,6 @@ function App() {
           </div>
         </div>
       </header>
-
-      {/* Initial Calibration Banner */}
-      {isInitialCalibrating && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-center gap-2 text-amber-300 text-xs font-semibold animate-pulse">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping flex-shrink-0" />
-          <span>Initial Board Calibration in Progress (Keep board clear)...</span>
-        </div>
-      )}
 
       {/* Main Content View */}
       {activeTab === 'play' ? (
@@ -1190,14 +1201,24 @@ function App() {
 
                 <hr className="border-slate-800/80 my-1" />
 
-                {/* Recalibrate Baselines */}
+                {/* Calibrate with Pieces Placed */}
+                <button
+                  onClick={handleCalibrateWithPieces}
+                  disabled={calibrating || !isConnected}
+                  className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                >
+                  <RefreshCw size={13} className={calibrating ? 'animate-spin' : ''} />
+                  <span>{calibrating ? 'Calibrating...' : 'Calibrate (Pieces Placed)'}</span>
+                </button>
+
+                {/* Recalibrate Empty Board */}
                 <button
                   onClick={handleCalibrate}
                   disabled={calibrating || !isConnected}
                   className="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
                 >
                   <RefreshCw size={13} className={calibrating ? 'animate-spin' : ''} />
-                  <span>{calibrating ? 'Recalibrating...' : 'Force Recalibrate Sensors'}</span>
+                  <span>{calibrating ? 'Recalibrating...' : 'Force Recalibrate (Empty Board)'}</span>
                 </button>
                 {calibrationStatus && (
                   <span className="text-[10px] text-emerald-400 font-mono text-center font-bold">{calibrationStatus}</span>

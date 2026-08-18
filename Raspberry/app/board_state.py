@@ -88,8 +88,6 @@ class BoardStateManager:
         self.led_test_active = False
         self.testing_led_index = -1
         self.is_calibrating: bool = False
-        self.initial_calibrating: bool = False
-        self._recalibrate_lock: asyncio.Lock | None = None
 
         # Setup verification and move tracking subsystems
         self.setup_validator = SetupValidator()
@@ -150,53 +148,27 @@ class BoardStateManager:
                     except Exception as e:
                         logger.error(f"Error turning off LEDs after calibration: {e}")
 
-    async def handle_webapp_connected(self):
-        """
-        Triggered when a connection to the webapp is detected.
-        Runs sensor recalibration with temporary high thresholds to prevent false positives.
-        """
-        if self.virtual_only:
-            return
-
-        if self._recalibrate_lock is None:
-            self._recalibrate_lock = asyncio.Lock()
-
-        if self._recalibrate_lock.locked():
-            logger.info("Recalibration already in progress for a webapp connection.")
-            return
-
-        async with self._recalibrate_lock:
-            from board_hardware import save_settings, settings
-            orig_pos = settings.get("threshold_positive", 150)
-            orig_neg = settings.get("threshold_negative", 150)
-
-            self.initial_calibrating = True
+    def _safe_calibrate_with_pieces(self):
+        with self.serial_lock:
             if self.strip:
                 try:
                     all_leds_off(self.strip)
                 except Exception as e:
-                    logger.error(f"Error turning off LEDs during initial webapp connect calibration: {e}")
-
-            logger.info(f"Webapp connection detected! Setting thresholds to ±1000 for 5s (original: +{orig_pos}/-{orig_neg}).")
-            settings["threshold_positive"] = 1000
-            settings["threshold_negative"] = 1000
-
+                    logger.error(f"Error turning off LEDs before calibration with pieces: {e}")
+            self.is_calibrating = True
             try:
-                await asyncio.to_thread(self._safe_calibrate)
-                await asyncio.sleep(3.0)
-            except Exception as e:
-                logger.error(f"Error during webapp connection recalibration: {e}")
+                from board_hardware import calibrate_board_with_pieces
+                res = calibrate_board_with_pieces(self.h, self.ser)
+                if res:
+                    self.move_tracker.reset()
+                return res
             finally:
-                settings["threshold_positive"] = orig_pos
-                settings["threshold_negative"] = orig_neg
-                await asyncio.to_thread(save_settings)
-                self.initial_calibrating = False
+                self.is_calibrating = False
                 if self.strip:
                     try:
                         all_leds_off(self.strip)
                     except Exception as e:
-                        logger.error(f"Error turning off LEDs after webapp connect calibration: {e}")
-                logger.info(f"Recalibration window completed. Restored thresholds to +{orig_pos} / -{orig_neg}.")
+                        logger.error(f"Error turning off LEDs after calibration with pieces: {e}")
 
     def get_physical_payload(self):
         from board_hardware import settings
@@ -215,7 +187,6 @@ class BoardStateManager:
             "led_test_active": self.led_test_active,
             "testing_led_index": self.testing_led_index,
             "disabled_squares": settings.get("disabled_squares", []),
-            "initial_calibrating": getattr(self, "initial_calibrating", False),
             "virtual_only": self.virtual_only,
             "setup": setup_data,
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
@@ -283,7 +254,6 @@ class BoardStateManager:
             self.virtual_only
             or not self.strip
             or self.led_test_active
-            or self.initial_calibrating
             or self.is_calibrating
         ):
             return

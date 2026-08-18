@@ -22,7 +22,6 @@ export interface BoardState {
     led_test_active?: boolean;
     testing_led_index?: number;
     disabled_squares?: number[][];
-    initial_calibrating?: boolean;
     virtual_only?: boolean;
     setup?: SetupStatus;
     lifted_square?: [number, number] | null;

@@ -134,6 +134,14 @@ export async function calibrateBoard() {
   return response.json();
 }
 
+export async function calibrateBoardWithPieces() {
+  const response = await fetch(`${API_BASE}/board/calibrate_with_pieces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
 export async function highlightSquare(col: number, row: number) {
   const response = await fetch(`${API_BASE}/board/highlight`, {
     method: 'POST',

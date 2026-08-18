@@ -78,7 +78,7 @@ def test_led_suppression_during_calibration():
     bsm.strip = MagicMock()
     bsm.highlighted_square = (0, 3)
 
-    bsm.initial_calibrating = True
+    bsm.is_calibrating = True
     bsm._update_leds()
     bsm.strip.setPixelColor.assert_not_called()
 
