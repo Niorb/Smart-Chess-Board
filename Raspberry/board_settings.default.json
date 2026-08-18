@@ -10,7 +10,7 @@
         [1550, 1550, 1550, 1550, 1550, 1550, 1550, 1550]
     ],
     "threshold_positive": 200,
-    "threshold_negative": 180,
+    "threshold_negative": 200,
     "col_mode": "auto",
     "manual_col": 0,
     "scan_delay": 10,

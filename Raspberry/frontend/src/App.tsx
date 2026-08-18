@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useBoardState } from './hooks/useBoardState'
 import { 
   seekGame, 
@@ -314,33 +314,128 @@ function App() {
     pieces_mode?: 'auto' | 'pieces' | 'empty';
   } | null>(null);
 
-  const [positiveThresh, setPositiveThresh] = useState<number>(200);
-  const [negativeThresh, setNegativeThresh] = useState<number>(180);
-  const [colMode, setColMode] = useState<'auto' | 'manual'>('auto');
-  const [manualCol, setManualCol] = useState<number>(0);
-  const [scanDelay, setScanDelay] = useState<number>(100);
-  const [muxSettleMs, setMuxSettleMs] = useState<number>(10);
-  const [debounceThreshold, setDebounceThreshold] = useState<number>(2);
-  const [baselineWindowS, setBaselineWindowS] = useState<number>(2);
-  const [piecesMode, setPiecesMode] = useState<'auto' | 'pieces' | 'empty'>('auto');
+  const [positiveThresh, setPositiveThresh] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_positive_thresh');
+    return saved ? parseInt(saved, 10) || 200 : 200;
+  });
+  const [negativeThresh, setNegativeThresh] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_negative_thresh');
+    return saved ? parseInt(saved, 10) || 200 : 200;
+  });
+  const [colMode, setColMode] = useState<'auto' | 'manual'>(() => {
+    return (localStorage.getItem('scb_col_mode') as 'auto' | 'manual') || 'auto';
+  });
+  const [manualCol, setManualCol] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_manual_col');
+    return saved !== null ? parseInt(saved, 10) : 0;
+  });
+  const [scanDelay, setScanDelay] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_scan_delay');
+    return saved ? parseInt(saved, 10) : 100;
+  });
+  const [muxSettleMs, setMuxSettleMs] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_mux_settle_ms');
+    return saved ? parseInt(saved, 10) : 10;
+  });
+  const [debounceThreshold, setDebounceThreshold] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_debounce_threshold');
+    return saved ? parseInt(saved, 10) : 2;
+  });
+  const [baselineWindowS, setBaselineWindowS] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_baseline_window_s');
+    return saved ? parseInt(saved, 10) : 2;
+  });
+  const [piecesMode, setPiecesMode] = useState<'auto' | 'pieces' | 'empty'>(() => {
+    return (localStorage.getItem('scb_pieces_mode') as 'auto' | 'pieces' | 'empty') || 'auto';
+  });
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
+
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const persistSettings = (
+    pos: number = positiveThresh,
+    neg: number = negativeThresh,
+    mode: 'auto' | 'manual' = colMode,
+    col: number = manualCol,
+    delay: number = scanDelay,
+    settle: number = muxSettleMs,
+    debounce: number = debounceThreshold,
+    window_s: number = baselineWindowS,
+    pMode: 'auto' | 'pieces' | 'empty' = piecesMode
+  ) => {
+    localStorage.setItem('scb_positive_thresh', String(pos));
+    localStorage.setItem('scb_negative_thresh', String(neg));
+    localStorage.setItem('scb_col_mode', mode);
+    localStorage.setItem('scb_manual_col', String(col));
+    localStorage.setItem('scb_scan_delay', String(delay));
+    localStorage.setItem('scb_mux_settle_ms', String(settle));
+    localStorage.setItem('scb_debounce_threshold', String(debounce));
+    localStorage.setItem('scb_baseline_window_s', String(window_s));
+    localStorage.setItem('scb_pieces_mode', pMode);
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const currentDisabled = state.physical.disabled_squares ?? [];
+        await updateBoardSettings(
+          pos,
+          neg,
+          mode,
+          col,
+          delay,
+          settle,
+          debounce,
+          window_s,
+          currentDisabled,
+          pMode
+        );
+      } catch (err) {
+        console.error("Error auto-persisting settings:", err);
+      }
+    }, 400);
+  };
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const res = await getBoardSettings();
         setSettings(res);
-        setPositiveThresh(res.threshold_positive ?? 200);
-        setNegativeThresh(res.threshold_negative ?? 180);
-        setColMode(res.col_mode || 'auto');
-        setManualCol(res.manual_col !== undefined ? res.manual_col : 0);
-        setScanDelay(res.scan_delay !== undefined ? res.scan_delay : 100);
-        setMuxSettleMs(res.mux_settle_ms !== undefined ? res.mux_settle_ms : 10);
-        setDebounceThreshold(res.debounce_threshold !== undefined ? res.debounce_threshold : 2);
-        setBaselineWindowS(res.baseline_window_s !== undefined ? res.baseline_window_s : 2);
-        setPiecesMode(res.pieces_mode ?? 'auto');
+        const pThresh = res.threshold_positive ?? 200;
+        const nThresh = res.threshold_negative ?? 200;
+        setPositiveThresh(pThresh);
+        setNegativeThresh(nThresh);
+        localStorage.setItem('scb_positive_thresh', String(pThresh));
+        localStorage.setItem('scb_negative_thresh', String(nThresh));
+        if (res.col_mode) {
+          setColMode(res.col_mode);
+          localStorage.setItem('scb_col_mode', res.col_mode);
+        }
+        if (res.manual_col !== undefined) {
+          setManualCol(res.manual_col);
+          localStorage.setItem('scb_manual_col', String(res.manual_col));
+        }
+        if (res.scan_delay !== undefined) {
+          setScanDelay(res.scan_delay);
+          localStorage.setItem('scb_scan_delay', String(res.scan_delay));
+        }
+        if (res.mux_settle_ms !== undefined) {
+          setMuxSettleMs(res.mux_settle_ms);
+          localStorage.setItem('scb_mux_settle_ms', String(res.mux_settle_ms));
+        }
+        if (res.debounce_threshold !== undefined) {
+          setDebounceThreshold(res.debounce_threshold);
+          localStorage.setItem('scb_debounce_threshold', String(res.debounce_threshold));
+        }
+        if (res.baseline_window_s !== undefined) {
+          setBaselineWindowS(res.baseline_window_s);
+          localStorage.setItem('scb_baseline_window_s', String(res.baseline_window_s));
+        }
+        if (res.pieces_mode) {
+          setPiecesMode(res.pieces_mode);
+          localStorage.setItem('scb_pieces_mode', res.pieces_mode);
+        }
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -1226,7 +1321,11 @@ function App() {
                     max="1000"
                     step="10"
                     value={positiveThresh}
-                    onChange={(e) => setPositiveThresh(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 200;
+                      setPositiveThresh(val);
+                      persistSettings(val, negativeThresh);
+                    }}
                     className="w-full h-1 bg-slate-950 rounded appearance-none cursor-pointer accent-red-500"
                   />
                 </div>
@@ -1242,7 +1341,11 @@ function App() {
                     max="1000"
                     step="10"
                     value={negativeThresh}
-                    onChange={(e) => setNegativeThresh(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 200;
+                      setNegativeThresh(val);
+                      persistSettings(positiveThresh, val);
+                    }}
                     className="w-full h-1 bg-slate-950 rounded appearance-none cursor-pointer accent-emerald-500"
                   />
                 </div>

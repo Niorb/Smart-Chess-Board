@@ -74,6 +74,11 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - Replaced full-board 64-square sinusoidal wash with dual high-speed sweeping diagonal laser comets ($a1 \to h8$ gold beam and $a8 \to h1$ emerald counter-beam), sparse high-threshold stardust twinkles (1-2 squares max), and a central diamond flare ($d4, d5, e4, e5$).
   - Reduced peak active simultaneous squares from 64 down to 3-6 squares (< 10% of board) and reduced power draw by > 90% while dramatically improving visual contrast and fluidity.
 
+- [x] Configured default positive and negative analog deviation thresholds to **±200** across backend defaults, fallback templates, and web UI.
+- [x] Implemented continuous settings remembering in Web UI:
+  - All slider movements and mode toggles (positive/negative shift, scan delay, col mode, pieces mode, settle time, debounce threshold, baseline window) immediately sync to `localStorage` and debounced auto-persist to the FastAPI backend (`board_settings.json`).
+  - On web app refresh or backend reboot, last-used values are automatically reloaded and used as defaults.
+
 ## Task Backlog
 
 ## Active Blockers
