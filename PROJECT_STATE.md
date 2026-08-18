@@ -61,6 +61,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **API & Web UI Controls**: Added `/api/leds/trigger_animation` and `/api/leds/test_trace` endpoints and debug testing buttons in `App.tsx`.
   - **Verification & Deployment**: All 94 unit/integration test suites and frontend production build verified cleanly on the physical Raspberry Pi over SSH.
 - [x] Applied 20% power and brightness reduction across all LED color channels and `LED_BRIGHTNESS` (from 50 to 40) in [`config.py`](file:///home/robin/Smart-Chess-Board/Raspberry/app/config.py) to stabilize the 5V power rail, eliminate transient voltage drops, and protect Hall sensor analog baseline stability during dense full-board animations. Verified on Pi with 94 passing pytest tests.
+- [x] Implemented baseline freezing and sensor reading suppression during animations:
+  - **Baseline Freezing**: Snapshots analog baselines before full-board lifecycle animations and LED diagnostic tests, suppresses dynamic baseline drift tracking during animation frames, and cleanly restores original baselines and resets drift window upon animation completion.
+  - **Reading Suppression**: Freezes physical piece state and disables debounce move tracking during active animations, preventing power-drop voltage ripples from triggering false piece lifts or invalid placements.
+  - **Default Thresholds Updated**: Set default positive and negative deviation thresholds to **180** in backend settings, config, and webapp UI sliders/initializers. All 97 unit/integration tests passing on the physical Raspberry Pi.
 
 ## Task Backlog
 
