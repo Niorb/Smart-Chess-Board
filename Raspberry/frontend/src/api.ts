@@ -160,11 +160,15 @@ export async function calibrateBoardWithPieces() {
   return response.json();
 }
 
-export async function highlightSquare(col: number, row: number) {
-  const response = await fetch(`${API_BASE}/board/highlight`, {
+export async function calibrateSquare(col: number, row: number, value?: number) {
+  const body: { col: number; row: number; value?: number } = { col, row };
+  if (value !== undefined && value !== null) {
+    body.value = value;
+  }
+  const response = await fetch(`${API_BASE}/board/calibrate_square`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ col, row }),
+    body: JSON.stringify(body),
   });
   return response.json();
 }

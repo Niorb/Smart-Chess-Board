@@ -269,6 +269,21 @@ def clear_baseline_history():
     baseline_history.clear()
 
 
+def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
+    """
+    Sets baseline for an individual square and removes it from dynamic baseline history.
+    If value is provided, updates settings["baselines"][col][row].
+    Returns the updated baseline value.
+    """
+    global baseline_history, settings
+    if 0 <= col < BOARD_COLS and 0 <= row < BOARD_ROWS:
+        if value is not None:
+            settings["baselines"][col][row] = int(value)
+            baseline_history.pop((col, row), None)
+        return settings["baselines"][col][row]
+    return -1
+
+
 # =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================

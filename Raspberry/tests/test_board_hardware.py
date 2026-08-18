@@ -744,6 +744,26 @@ def test_scan_board_in_loop_calibration_disabled_suppresses_drift():
     settings["in_loop_calibration"] = True
 
 
+def test_set_square_baseline_with_explicit_value():
+    """Verify that set_square_baseline updates settings and clears history for that square."""
+    from board_hardware import baseline_history, set_square_baseline, settings
+
+    baseline_history[(3, 4)] = [(100.0, 1600, False)]
+    val = set_square_baseline(3, 4, 1650)
+    assert val == 1650
+    assert settings["baselines"][3][4] == 1650
+    assert (3, 4) not in baseline_history
+
+
+def test_set_square_baseline_invalid_coords_returns_negative():
+    """Verify set_square_baseline returns -1 on invalid coordinates."""
+    from board_hardware import set_square_baseline
+    assert set_square_baseline(-1, 0, 1500) == -1
+    assert set_square_baseline(8, 0, 1500) == -1
+    assert set_square_baseline(0, 8, 1500) == -1
+
+
+
 
 
 

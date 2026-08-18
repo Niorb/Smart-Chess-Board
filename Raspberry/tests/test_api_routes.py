@@ -266,5 +266,51 @@ def test_settings_update_in_loop_calibration():
     assert data["settings"]["in_loop_calibration"] is True
 
 
+def test_calibrate_square_route_with_explicit_value():
+    """Verify POST /api/board/calibrate_square sets square baseline to provided value."""
+    from board_hardware import settings
+    client = TestClient(app)
+
+    response = client.post("/api/board/calibrate_square", json={"col": 2, "row": 3, "value": 1625})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["col"] == 2
+    assert data["row"] == 3
+    assert data["baseline"] == 1625
+    assert settings["baselines"][2][3] == 1625
+
+
+def test_calibrate_square_route_with_current_reading():
+    """Verify POST /api/board/calibrate_square falls back to state_manager raw analog values."""
+    from app.main import state_manager
+    from board_hardware import settings
+    state_manager.raw_analog_values[4][5] = 1780
+    client = TestClient(app)
+
+    response = client.post("/api/board/calibrate_square", json={"col": 4, "row": 5})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["col"] == 4
+    assert data["row"] == 5
+    assert data["baseline"] == 1780
+    assert settings["baselines"][4][5] == 1780
+
+
+def test_calibrate_square_route_invalid_coordinates():
+    """Verify POST /api/board/calibrate_square rejects out-of-bounds coordinates."""
+    client = TestClient(app)
+
+    response = client.post("/api/board/calibrate_square", json={"col": 8, "row": 0})
+    assert response.status_code == 200
+    assert response.json()["status"] == "error"
+
+    response = client.post("/api/board/calibrate_square", json={"col": -1, "row": 3})
+    assert response.status_code == 200
+    assert response.json()["status"] == "error"
+
+
+
 
 

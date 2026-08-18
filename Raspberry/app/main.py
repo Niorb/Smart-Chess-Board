@@ -103,9 +103,10 @@ class ThresholdSettings(BaseModel):
     in_loop_calibration: bool | None = None
 
 
-class HighlightRequest(BaseModel):
+class CalibrateSquareRequest(BaseModel):
     col: int
     row: int
+    value: int | float | None = None
 
 
 class TriggerAnimationRequest(BaseModel):
@@ -247,15 +248,27 @@ async def calibrate_board_with_pieces_route():
         return {"status": "error", "message": "Calibration failed"}
 
 
-@app.post("/api/board/highlight")
-async def highlight_square_route(body: HighlightRequest):
-    """Highlights or toggles an LED indicator on a board square."""
-    current = state_manager.highlighted_square
-    if current == (body.col, body.row):
-        state_manager.highlighted_square = None
-    else:
-        state_manager.highlighted_square = (body.col, body.row)
-    return {"status": "success", "highlighted_square": state_manager.highlighted_square}
+@app.post("/api/board/calibrate_square")
+async def calibrate_square_route(body: CalibrateSquareRequest):
+    """Sets the baseline value of a specific square to its current raw analog reading (or given value)."""
+    from board_hardware import BOARD_COLS, BOARD_ROWS, save_settings, set_square_baseline, settings
+    if 0 <= body.col < BOARD_COLS and 0 <= body.row < BOARD_ROWS:
+        if body.value is not None:
+            new_baseline = int(body.value)
+        else:
+            # Fallback to latest raw reading from state_manager
+            new_baseline = int(state_manager.raw_analog_values[body.col][body.row])
+
+        set_square_baseline(body.col, body.row, new_baseline)
+        await asyncio.to_thread(save_settings)
+        return {
+            "status": "success",
+            "col": body.col,
+            "row": body.row,
+            "baseline": new_baseline,
+            "settings": settings,
+        }
+    return {"status": "error", "message": "Invalid coordinates"}
 
 
 @app.post("/api/board/test_leds")

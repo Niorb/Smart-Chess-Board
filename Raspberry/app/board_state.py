@@ -558,11 +558,6 @@ class BoardStateManager:
                     set_square_leds(t_to_c, t_to_r, target_color)
                     render_move_trace(self.custom_trace_path, now, frame, trace_color=trace_color, blend_arrival=True)
 
-            # Layer 4: Diagnostic override (highest individual square priority)
-            if self.highlighted_square:
-                h_c, h_r = self.highlighted_square
-                set_square_leds(h_c, h_r, COLOR_INT_HIGHLIGHT)
-
             for idx, color in enumerate(frame):
                 self.strip.setPixelColor(idx, color)
             self.strip.show()

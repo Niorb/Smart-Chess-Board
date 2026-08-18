@@ -78,7 +78,7 @@ def test_virtual_only_mode_health_status():
 def test_led_suppression_during_calibration():
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
-    bsm.highlighted_square = (0, 3)
+    bsm.move_tracker.lifted_square = (0, 3)
 
     bsm.is_calibrating = True
     bsm._update_leds()
@@ -88,7 +88,7 @@ def test_led_suppression_during_calibration():
 def test_led_suppression_in_virtual_only_mode():
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
-    bsm.highlighted_square = (0, 3)
+    bsm.move_tracker.lifted_square = (0, 3)
 
     bsm.virtual_only = True
     bsm._update_leds()

@@ -13,7 +13,7 @@ import {
   calibrateBoard,
   calibrateBoardWithPieces,
   makeMove,
-  highlightSquare,
+  calibrateSquare,
   testLeds,
   clearAllLeds,
   triggerAnimation,
@@ -542,11 +542,16 @@ function App() {
     }
   }, [isConnected]);
 
-  const handleToggleHighlight = async (col: number, row: number) => {
+  const handleCalibrateSquare = async (col: number, row: number) => {
     try {
-      await highlightSquare(col, row);
+      const currentReading = state.physical.adc?.[col]?.[row];
+      const res = await calibrateSquare(col, row, currentReading);
+      if (res.status === 'success') {
+        setCalibrationStatus(`Square [${col},${row}] baseline set to ${res.baseline}`);
+        setTimeout(() => setCalibrationStatus(null), 3000);
+      }
     } catch (err) {
-      console.error("Error toggling highlight:", err);
+      console.error("Error calibrating square baseline:", err);
     }
   };
 
@@ -957,7 +962,6 @@ function App() {
                         const rankIdx = isFlipped ? rIdx : (7 - rIdx);
 
                         const sensorStateVal = state.physical.grid?.[fileIdx]?.[rankIdx] ?? 0;
-                        const isHighlighted = state.physical.highlighted_square?.[0] === fileIdx && state.physical.highlighted_square?.[1] === rankIdx;
                         const isDisabled = (state.physical.disabled_squares ?? []).some(
                           (sq) => sq[0] === fileIdx && sq[1] === rankIdx
                         );
@@ -965,8 +969,6 @@ function App() {
                         let bgClass = 'bg-slate-900/30';
                         if (isDisabled) {
                           bgClass = 'bg-slate-950/80 border border-slate-900/40 opacity-25 cursor-not-allowed';
-                        } else if (isHighlighted) {
-                          bgClass = 'bg-orange-500/80 ring-2 ring-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
                         } else if (sensorStateVal === 1) {
                           bgClass = 'bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
                         } else if (sensorStateVal === -1) {
@@ -976,8 +978,9 @@ function App() {
                         return (
                           <div 
                             key={`sensor-${fileIdx}-${rankIdx}`}
+                            title={`Square [${fileIdx},${rankIdx}] - Left-click: Calibrate baseline to current reading | Right-click: Disable`}
                             onClick={() => {
-                              if (!isDisabled) handleToggleHighlight(fileIdx, rankIdx);
+                              if (!isDisabled) handleCalibrateSquare(fileIdx, rankIdx);
                             }}
                             onContextMenu={(e) => {
                               e.preventDefault();
@@ -1524,7 +1527,6 @@ function App() {
                   const chessCoord = `${file}${rank}`;
 
                   const isColActive = colMode === 'auto' || sensorFile === manualCol;
-                  const isHighlighted = state.physical.highlighted_square?.[0] === sensorFile && state.physical.highlighted_square?.[1] === sensorRank;
                   const isDisabled = (state.physical.disabled_squares ?? []).some(
                     (sq) => sq[0] === sensorFile && sq[1] === sensorRank
                   );
@@ -1536,10 +1538,6 @@ function App() {
                   if (isDisabled) {
                     cardClass = 'bg-slate-950/20 border-slate-900/40 text-slate-600 opacity-40 line-through';
                     statusText = 'OFF';
-                  } else if (isHighlighted) {
-                    cardClass = 'bg-orange-950/40 border-orange-500/80 ring-2 ring-orange-500/40 text-orange-200';
-                    statusText = 'LIGHT';
-                    statusColor = 'text-orange-400';
                   } else if (sensorStateVal === 1) {
                     cardClass = 'bg-red-950/40 border-red-500/80 text-red-200';
                     statusText = 'NORTH';
@@ -1553,7 +1551,8 @@ function App() {
                   return (
                     <div 
                       key={`dbg-${sensorFile}-${sensorRank}`}
-                      onClick={() => !isDisabled && handleToggleHighlight(sensorFile, sensorRank)}
+                      title={`Square [${sensorFile},${sensorRank}] (${chessCoord}) - Left-click: Set baseline to current ADC (${rawAdc}) | Right-click: Disable`}
+                      onClick={() => !isDisabled && handleCalibrateSquare(sensorFile, sensorRank)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         handleToggleDisableSquare(sensorFile, sensorRank);
