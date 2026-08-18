@@ -13,6 +13,7 @@ from typing import Any
 import chess
 
 from app.config import ANIM_MOVE_CONFIRM_DURATION_S, BOARD_COLS, BOARD_ROWS
+from app.path_interpolator import get_castle_rook_move, is_castle_uci
 
 logger = logging.getLogger("smart-chess-app.tracker")
 
@@ -111,20 +112,34 @@ class PhysicalMoveTracker:
 
                 if 0 <= from_c < self.cols and 0 <= from_r < self.rows and 0 <= to_c < self.cols and 0 <= to_r < self.rows:
                     is_capture = False
+                    is_castling = False
+                    rook_coords = None
                     if hasattr(engine.board, "move_stack") and len(engine.board.move_stack) > 0:
                         last_move = engine.board.peek()
                         if last_move.uci() == last_move_uci:
                             m = engine.board.pop()
                             is_capture = bool(engine.board.is_capture(m))
+                            is_castling = bool(engine.board.is_castling(m))
                             engine.board.push(m)
+                            if is_castling:
+                                rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                    elif is_castle_uci(last_move_uci):
+                        is_castling = True
+                        rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
 
                     self.pending_opponent_move = {
                         "uci": last_move_uci,
                         "from": (from_c, from_r),
                         "to": (to_c, to_r),
                         "is_capture": is_capture,
+                        "is_castling": is_castling,
+                        "rook_from": rook_coords[0] if rook_coords else None,
+                        "rook_to": rook_coords[1] if rook_coords else None,
                     }
-                    logger.info(f"Opponent move pending physical mirroring: {last_move_uci} ({from_c},{from_r} -> {to_c},{to_r}) capture={is_capture}")
+                    logger.info(
+                        f"Opponent move pending physical mirroring: {last_move_uci} "
+                        f"({from_c},{from_r} -> {to_c},{to_r}) capture={is_capture} castling={is_castling}"
+                    )
             except (ValueError, IndexError) as e:
                 logger.warning(f"Failed to parse last move UCI '{last_move_uci}': {e}")
 
@@ -168,21 +183,45 @@ class PhysicalMoveTracker:
             opp_to = self.pending_opponent_move["to"]
             from_c, from_r = opp_from
             to_c, to_r = opp_to
+            is_castling = bool(self.pending_opponent_move.get("is_castling", False))
+            rook_from = self.pending_opponent_move.get("rook_from")
+            rook_to = self.pending_opponent_move.get("rook_to")
 
-            # Opponent move completed when piece lifted from origin and placed on target
-            origin_empty = (physical_state[from_c][from_r] == 0)
-            target_occupied = (physical_state[to_c][to_r] != 0)
+            if is_castling and rook_from and rook_to:
+                r_from_c, r_from_r = rook_from
+                r_to_c, r_to_r = rook_to
 
-            if origin_empty and target_occupied:
-                logger.info(f"Physical board confirmed opponent move: {self.pending_opponent_move['uci']}")
-                self.arrival_flash = {
-                    "square": (to_c, to_r),
-                    "start_time": time.time(),
-                    "duration": ANIM_MOVE_CONFIRM_DURATION_S,
-                    "is_capture": bool(self.pending_opponent_move.get("is_capture", False)),
-                }
-                self.pending_opponent_move = None
-                self.invalid_placement = None
+                king_origin_empty = (physical_state[from_c][from_r] == 0)
+                king_target_occupied = (physical_state[to_c][to_r] != 0)
+                rook_origin_empty = (physical_state[r_from_c][r_from_r] == 0)
+                rook_target_occupied = (physical_state[r_to_c][r_to_r] != 0)
+
+                # Castling complete when BOTH King and Rook have reached their targets
+                if king_origin_empty and king_target_occupied and rook_origin_empty and rook_target_occupied:
+                    logger.info(f"Physical board confirmed opponent castling move: {self.pending_opponent_move['uci']}")
+                    self.arrival_flash = {
+                        "square": (to_c, to_r),
+                        "start_time": time.time(),
+                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                        "is_capture": False,
+                    }
+                    self.pending_opponent_move = None
+                    self.invalid_placement = None
+            else:
+                # Opponent move completed when piece lifted from origin and placed on target
+                origin_empty = (physical_state[from_c][from_r] == 0)
+                target_occupied = (physical_state[to_c][to_r] != 0)
+
+                if origin_empty and target_occupied:
+                    logger.info(f"Physical board confirmed opponent move: {self.pending_opponent_move['uci']}")
+                    self.arrival_flash = {
+                        "square": (to_c, to_r),
+                        "start_time": time.time(),
+                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                        "is_capture": bool(self.pending_opponent_move.get("is_capture", False)),
+                    }
+                    self.pending_opponent_move = None
+                    self.invalid_placement = None
 
             return None
 

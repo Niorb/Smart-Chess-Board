@@ -1555,6 +1555,20 @@ function App() {
                     >
                       <span>d4 ⚔ e5 (Capture)</span>
                     </button>
+                    <button
+                      onClick={() => handleTestTrace('e1g1')}
+                      disabled={!isConnected}
+                      className="bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-500/40 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <span>e1g1 ♚ ♜ (Castle O-O)</span>
+                    </button>
+                    <button
+                      onClick={() => handleTestTrace('e1c1')}
+                      disabled={!isConnected}
+                      className="bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-500/40 py-1.5 px-2 rounded text-[10px] font-mono font-bold flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <span>e1c1 ♚ ♜ (Castle O-O-O)</span>
+                    </button>
                   </div>
                 </div>
               </div>

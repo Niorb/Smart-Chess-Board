@@ -11,8 +11,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.path_interpolator import (
     bresenham_line,
+    get_castle_rook_move,
     interpolate_move_path,
     interpolate_uci_move,
+    is_castle_uci,
 )
 
 
@@ -81,3 +83,27 @@ def test_interpolate_uci_move():
 def test_bresenham_line():
     line = bresenham_line(0, 0, 2, 2)
     assert line == [(0, 0), (1, 1), (2, 2)]
+
+
+def test_get_castle_rook_move():
+    # White Kingside (e1g1)
+    assert get_castle_rook_move(4, 0, 6, 0) == ((7, 0), (5, 0))
+    # White Queenside (e1c1)
+    assert get_castle_rook_move(4, 0, 2, 0) == ((0, 0), (3, 0))
+    # Black Kingside (e8g8)
+    assert get_castle_rook_move(4, 7, 6, 7) == ((7, 7), (5, 7))
+    # Black Queenside (e8c8)
+    assert get_castle_rook_move(4, 7, 2, 7) == ((0, 7), (3, 7))
+    # Non-castling moves
+    assert get_castle_rook_move(4, 1, 4, 3) is None
+    assert get_castle_rook_move(4, 0, 4, 1) is None
+
+
+def test_is_castle_uci():
+    assert is_castle_uci("e1g1") is True
+    assert is_castle_uci("e1c1") is True
+    assert is_castle_uci("e8g8") is True
+    assert is_castle_uci("e8c8") is True
+    assert is_castle_uci("e2e4") is False
+    assert is_castle_uci("g1f3") is False
+

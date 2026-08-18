@@ -150,3 +150,37 @@ def interpolate_uci_move(uci: str) -> List[Tuple[int, int]]:
     if 0 <= from_c < 8 and 0 <= from_r < 8 and 0 <= to_c < 8 and 0 <= to_r < 8:
         return interpolate_move_path(from_c, from_r, to_c, to_r)
     return []
+
+
+def get_castle_rook_move(
+    king_from_c: int, king_from_r: int, king_to_c: int, king_to_r: int
+) -> Tuple[Tuple[int, int], Tuple[int, int]] | None:
+    """
+    Returns the (rook_from, rook_to) coordinates for standard castling moves,
+    or None if the move is not a castling move.
+
+    Coordinates: (file 0..7, rank 0..7)
+      - White Kingside (e1g1): King (4, 0) -> (6, 0), Rook (7, 0) -> (5, 0) [h1 -> f1]
+      - White Queenside (e1c1): King (4, 0) -> (2, 0), Rook (0, 0) -> (3, 0) [a1 -> d1]
+      - Black Kingside (e8g8): King (4, 7) -> (6, 7), Rook (7, 7) -> (5, 7) [h8 -> f8]
+      - Black Queenside (e8c8): King (4, 7) -> (2, 7), Rook (0, 7) -> (3, 7) [a8 -> d8]
+    """
+    # White Kingside (e1g1)
+    if (king_from_c, king_from_r) == (4, 0) and (king_to_c, king_to_r) == (6, 0):
+        return ((7, 0), (5, 0))
+    # White Queenside (e1c1)
+    if (king_from_c, king_from_r) == (4, 0) and (king_to_c, king_to_r) == (2, 0):
+        return ((0, 0), (3, 0))
+    # Black Kingside (e8g8)
+    if (king_from_c, king_from_r) == (4, 7) and (king_to_c, king_to_r) == (6, 7):
+        return ((7, 7), (5, 7))
+    # Black Queenside (e8c8)
+    if (king_from_c, king_from_r) == (4, 7) and (king_to_c, king_to_r) == (2, 7):
+        return ((0, 7), (3, 7))
+    return None
+
+
+def is_castle_uci(uci: str) -> bool:
+    """Returns True if the UCI move string corresponds to a standard castling move."""
+    return uci.strip().lower() in ("e1g1", "e1c1", "e8g8", "e8c8")
+

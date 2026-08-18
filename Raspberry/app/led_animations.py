@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from app.config import (
+        ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
@@ -38,6 +39,7 @@ try:
     )
 except ImportError:
     from .config import (
+        ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
@@ -146,16 +148,22 @@ def render_move_trace(
         trace_color: Color of the moving pulse.
         period: Time in seconds for one complete traversal and decay cycle.
         blend_arrival: Whether to blend the arrival pulse onto the existing target square color.
-    """
-    if len(path) < 2 or period <= 0:
+def _render_sub_trace(
+    path: List[Tuple[int, int]],
+    sub_tau: float,
+    frame: List[int],
+    trace_color: int,
+    blend_arrival: bool,
+) -> None:
+    """Renders a single-trajectory moving comet pulse with destination arrival flare."""
+    if len(path) < 2:
         return
 
     num_squares = len(path)
     num_steps = num_squares - 1
     delta_overshoot = 1.2
     total_span = num_steps + delta_overshoot
-    tau = (now % period) / period  # 0.0 to 1.0
-    comet_pos = tau * total_span
+    comet_pos = max(0.0, min(1.0, sub_tau)) * total_span
 
     # Render comet tail across intermediate squares
     for i in range(1, num_steps):
@@ -177,6 +185,72 @@ def render_move_trace(
             for idx in get_led_indices(r_arr, c_arr):
                 if 0 <= idx < len(frame):
                     frame[idx] = add_colors(frame[idx], flare)
+
+
+def render_move_trace(
+    path: List[Tuple[int, int]],
+    now: float,
+    frame: List[int],
+    trace_color: int = COLOR_INT_MOVE_TRACE,
+    period: float = MOVE_TRACE_PERIOD_S,
+    blend_arrival: bool = True,
+) -> None:
+    """
+    Renders an animated comet pulse along a move trajectory path on top of an existing frame.
+    The destination/arrival square pulses with an additive luminance flare upon comet arrival.
+
+    Args:
+        path: Ordered list of (file, rank) tuples from origin to destination (len >= 2).
+        now: Current timestamp in seconds (time.time()).
+        frame: LED frame buffer (list of integer colors).
+        trace_color: Color of the moving pulse.
+        period: Time in seconds for one complete traversal and decay cycle.
+        blend_arrival: Whether to blend the arrival pulse onto the existing target square color.
+    """
+    if len(path) < 2 or period <= 0:
+        return
+    tau = (now % period) / period  # 0.0 to 1.0
+    _render_sub_trace(path, tau, frame, trace_color, blend_arrival)
+
+
+def render_castle_trace(
+    king_path: List[Tuple[int, int]],
+    rook_path: List[Tuple[int, int]],
+    now: float,
+    frame: List[int],
+    trace_color: int = COLOR_INT_MOVE_TRACE,
+    period: float = ANIM_CASTLE_PERIOD_S,
+    blend_arrival: bool = True,
+) -> None:
+    """
+    Renders a choreographed 2-phase castling move animation:
+      - Phase 1 (first half of period, tau in [0.0, 0.5]):
+        The King glides 2 squares along king_path (e.g. e1 -> f1 -> g1), flaring at destination.
+      - Phase 2 (second half of period, tau in [0.5, 1.0]):
+        The Rook glides along rook_path (e.g. h1 -> g1 -> f1), flaring at destination.
+
+    Args:
+        king_path: Ordered squares for the King move (e.g. [(4, 0), (5, 0), (6, 0)]).
+        rook_path: Ordered squares for the Rook move (e.g. [(7, 0), (6, 0), (5, 0)]).
+        now: Current timestamp in seconds (time.time()).
+        frame: LED frame buffer (list of integer colors).
+        trace_color: Color of the moving pulse.
+        period: Total duration of the 2-phase castling cycle.
+        blend_arrival: Whether to blend arrival flare on destination squares.
+    """
+    if not king_path or not rook_path or period <= 0:
+        return
+
+    tau = (now % period) / period  # 0.0 to 1.0
+
+    if tau < 0.5:
+        # Phase 1: King move (normalized to 0.0 -> 1.0)
+        sub_tau = tau * 2.0
+        _render_sub_trace(king_path, sub_tau, frame, trace_color, blend_arrival)
+    else:
+        # Phase 2: Rook move (normalized to 0.0 -> 1.0)
+        sub_tau = (tau - 0.5) * 2.0
+        _render_sub_trace(rook_path, sub_tau, frame, trace_color, blend_arrival)
 
 
 # =============================================================================

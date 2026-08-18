@@ -394,3 +394,75 @@ def test_piece_lift_distinguishes_legal_captures_from_quiet_moves(initial_physic
     assert len(tracker.legal_captures) == 0
 
 
+def test_sync_game_opponent_castling_detection(mock_engine):
+    """Verify sync_game correctly detects opponent castling moves (e.g. e8g8)."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Setup board for Black Kingside castle: 1. e4 e5 2. Nf3 Nf6 3. Bc4 Bc5 4. O-O O-O
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("e5")
+    mock_engine.board.push_san("Nf3")
+    mock_engine.board.push_san("Nf6")
+    mock_engine.board.push_san("Bc4")
+    mock_engine.board.push_san("Bc5")
+    mock_engine.board.push_san("O-O")
+    mock_engine.board.push_san("O-O")  # Black castles Kingside (e8g8)
+    mock_engine.game_info["last_move"] = "e8g8"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["uci"] == "e8g8"
+    assert tracker.pending_opponent_move["from"] == (4, 7)  # e8
+    assert tracker.pending_opponent_move["to"] == (6, 7)    # g8
+    assert tracker.pending_opponent_move["is_castling"] is True
+    assert tracker.pending_opponent_move["rook_from"] == (7, 7)  # h8
+    assert tracker.pending_opponent_move["rook_to"] == (5, 7)    # f8
+
+
+def test_opponent_castling_physical_mirror_requires_king_and_rook(mock_engine):
+    """Verify that opponent castling is only confirmed once both King and Rook are placed."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("e5")
+    mock_engine.board.push_san("Nf3")
+    mock_engine.board.push_san("Nf6")
+    mock_engine.board.push_san("Bc4")
+    mock_engine.board.push_san("Bc5")
+    mock_engine.board.push_san("O-O")
+    mock_engine.board.push_san("O-O")
+    mock_engine.game_info["last_move"] = "e8g8"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+
+    # Initial physical board state with pieces on e8 and h8
+    state = [[0] * 8 for _ in range(8)]
+    state[4][7] = 1  # Black King on e8
+    state[7][7] = 1  # Black Rook on h8
+
+    # Step 1: Human moves King only (e8 -> g8)
+    state[4][7] = 0  # e8 lifted
+    state[6][7] = 1  # g8 placed
+    res = tracker.process_physical_state(state, mock_engine)
+    assert res is None
+    # Pending move must STILL be active because Rook hasn't moved yet!
+    assert tracker.pending_opponent_move is not None
+
+    # Step 2: Human moves Rook (h8 -> f8)
+    state[7][7] = 0  # h8 lifted
+    state[5][7] = 1  # f8 placed
+    res2 = tracker.process_physical_state(state, mock_engine)
+    assert res2 is None
+    # Now both King and Rook are placed -> pending move is cleared and arrival flash triggered!
+    assert tracker.pending_opponent_move is None
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (6, 7)
+
+
+

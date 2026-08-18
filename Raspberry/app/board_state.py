@@ -341,8 +341,8 @@ class BoardStateManager:
 
         try:
             from board_hardware import settings
-            from app.led_animations import render_move_trace
-            from app.path_interpolator import interpolate_move_path
+            from app.led_animations import render_castle_trace, render_move_trace
+            from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 
             now = time.time()
             col_mode = settings.get("col_mode", "auto")
@@ -404,16 +404,32 @@ class BoardStateManager:
                     from_c, from_r = opp_from
                     to_c, to_r = opp_to
                     is_capture = bool(self.move_tracker.pending_opponent_move.get("is_capture", False))
+                    is_castling = bool(self.move_tracker.pending_opponent_move.get("is_castling", False))
+                    rook_from = self.move_tracker.pending_opponent_move.get("rook_from")
+                    rook_to = self.move_tracker.pending_opponent_move.get("rook_to")
+
                     target_color = COLOR_INT_OPPONENT_CAPTURE if is_capture else COLOR_INT_OPPONENT_TO
                     trace_color = COLOR_INT_CAPTURE_TRACE if is_capture else COLOR_INT_MOVE_TRACE
 
-                    # Keep start and arrival squares lit
-                    set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
-                    set_square_leds(to_c, to_r, target_color)
+                    if is_castling and rook_from and rook_to:
+                        # Highlight King from->to and Rook from->to
+                        set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
+                        set_square_leds(to_c, to_r, COLOR_INT_OPPONENT_TO)
+                        set_square_leds(rook_from[0], rook_from[1], COLOR_INT_OPPONENT_FROM)
+                        set_square_leds(rook_to[0], rook_to[1], COLOR_INT_OPPONENT_TO)
 
-                    # Interpolate path and render moving comet pulse with arrival flare
-                    path = interpolate_move_path(from_c, from_r, to_c, to_r)
-                    render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
+                        # Choreographed castling trace: King moves 2 squares first, followed by Rook move
+                        king_path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                        rook_path = interpolate_move_path(rook_from[0], rook_from[1], rook_to[0], rook_to[1])
+                        render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_color, blend_arrival=True)
+                    else:
+                        # Standard Move Trace: Keep start and arrival squares lit
+                        set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
+                        set_square_leds(to_c, to_r, target_color)
+
+                        # Interpolate path and render moving comet pulse with arrival flare
+                        path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                        render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
 
                 # 2. King in Check Indicator
                 if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
@@ -462,9 +478,20 @@ class BoardStateManager:
                 t_to_c, t_to_r = self.custom_trace_path[-1]
                 target_color = COLOR_INT_OPPONENT_CAPTURE if self.custom_trace_is_capture else COLOR_INT_OPPONENT_TO
                 trace_color = COLOR_INT_CAPTURE_TRACE if self.custom_trace_is_capture else COLOR_INT_MOVE_TRACE
-                set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
-                set_square_leds(t_to_c, t_to_r, target_color)
-                render_move_trace(self.custom_trace_path, now, frame, trace_color=trace_color, blend_arrival=True)
+
+                castle_rook = get_castle_rook_move(t_from_c, t_from_r, t_to_c, t_to_r)
+                if castle_rook:
+                    r_from, r_to = castle_rook
+                    set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(t_to_c, t_to_r, target_color)
+                    set_square_leds(r_from[0], r_from[1], COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(r_to[0], r_to[1], target_color)
+                    rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                    render_castle_trace(self.custom_trace_path, rook_path, now, frame, trace_color=trace_color, blend_arrival=True)
+                else:
+                    set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(t_to_c, t_to_r, target_color)
+                    render_move_trace(self.custom_trace_path, now, frame, trace_color=trace_color, blend_arrival=True)
 
             # Layer 4: Diagnostic override (highest individual square priority)
             if self.highlighted_square:

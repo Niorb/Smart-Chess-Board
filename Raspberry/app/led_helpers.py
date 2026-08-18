@@ -11,6 +11,7 @@ import time
 
 try:
     from app.config import (
+        ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
@@ -70,6 +71,7 @@ try:
     )
 except ImportError:
     from .config import (
+        ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,

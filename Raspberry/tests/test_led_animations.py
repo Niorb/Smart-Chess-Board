@@ -11,6 +11,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.config import (
+    ANIM_CASTLE_PERIOD_S,
     ANIM_SEEKING_DURATION_S,
     ANIM_SEEKING_PERIOD_S,
     MOVE_TRACE_PERIOD_S,
@@ -23,6 +24,7 @@ from app.led_animations import (
     blend_colors,
     color_rgb,
     create_animation,
+    render_castle_trace,
     render_game_drawn,
     render_game_lost,
     render_game_started,
@@ -266,3 +268,25 @@ def test_lifecycle_animation_seeking():
     frame = [0] * NUM_LEDS
     anim.render(time.time(), frame)
     assert any(frame)
+
+
+def test_render_castle_trace_two_phase():
+    """
+    Verify render_castle_trace:
+    - Phase 1 (tau < 0.5): King trajectory (e1 -> f1 -> g1) is animated.
+    - Phase 2 (tau >= 0.5): Rook trajectory (h1 -> g1 -> f1) is animated.
+    """
+    king_path = [(4, 0), (5, 0), (6, 0)]  # e1 -> f1 -> g1
+    rook_path = [(7, 0), (6, 0), (5, 0)]  # h1 -> g1 -> f1
+    period = ANIM_CASTLE_PERIOD_S
+
+    # Phase 1: King move at t = period * 0.25 (King passing through f1)
+    frame_p1 = [0] * NUM_LEDS
+    render_castle_trace(king_path, rook_path, period * 0.25, frame_p1, period=period)
+    assert any(frame_p1)
+
+    # Phase 2: Rook move at t = period * 0.75 (Rook passing through g1/f1)
+    frame_p2 = [0] * NUM_LEDS
+    render_castle_trace(king_path, rook_path, period * 0.75, frame_p2, period=period)
+    assert any(frame_p2)
+

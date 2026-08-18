@@ -102,6 +102,7 @@ FLASH_COUNT_CONNECT = 2  # Number of flashes on successful connection
 
 # Procedural Animation Timings (seconds)
 MOVE_TRACE_PERIOD_S = 0.8  # Traversal period for move trace pulse
+ANIM_CASTLE_PERIOD_S = 2.0  # Traversal period for 2-phase King + Rook castling cycle
 ANIM_MOVE_CONFIRM_DURATION_S = 0.45  # Snappy 450ms exponential decay
 ANIM_GAME_START_DURATION_S = 1.5  # Duration for game start radial burst
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves

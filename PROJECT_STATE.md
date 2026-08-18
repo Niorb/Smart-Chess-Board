@@ -83,8 +83,11 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Arrival Registration Feedback**: Whenever a physical move or opponent mirror move is registered on the physical board, triggers an instant 450ms exponential-decay flash on the destination square.
   - **Color Coding**: High-contrast vibrant emerald green (`COLOR_MOVE_CONFIRM = (48, 255, 128)`) for standard quiet moves; radiant ruby crimson (`COLOR_CAPTURE_CONFIRM = (255, 32, 64)`) for capture moves.
 - [x] Implemented distinct color differentiation for legal capture targets:
-  - **Capture Dot Highlight**: When a piece is lifted, destination squares where a capture is possible (`board.is_capture(m)`) illuminate in subtle deep ruby/rose (`COLOR_LEGAL_CAPTURE = (64, 10, 24)`), distinguishing them from quiet legal target dots in subtle deep cyan (`COLOR_LEGAL_TARGET = (0, 24, 48)`).
-  - **Data Model & Synchronization**: Added `legal_captures` tracking to `PhysicalMoveTracker`, serialized in physical WebSocket payloads, and integrated into `BoardStateManager._update_leds()`.
+- [x] Implemented choreographed 2-phase castling animation and physical dual-piece mirror tracking:
+  - **2-Phase Choreography**: For Kingside and Queenside castling (e1g1, e1c1, e8g8, e8c8), Phase 1 ($\tau \in [0.0, 0.5]$) animates the King's 2-square move with destination flare, and Phase 2 ($\tau \in [0.5, 1.0]$) animates the Rook's move with destination flare (`render_castle_trace()`).
+  - **4-Square Illumination**: Illuminates both King (from/to) and Rook (from/to) squares in the physical LED frame.
+  - **Physical Move Mirroring**: Opponent castling confirmation requires both King and Rook to be physically placed on their target squares before completing.
+  - **Interactive Diagnostic Buttons**: Added `e1g1 (Castle O-O)` and `e1c1 (Castle O-O-O)` test buttons to the Web UI.
 
 ## Task Backlog
 

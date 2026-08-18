@@ -274,6 +274,28 @@ def test_legal_target_and_capture_dots_colors():
     assert COLOR_INT_LEGAL_CAPTURE in colors_called
 
 
+def test_board_state_castling_move_led_render():
+    """Verify that _update_leds lights up King and Rook from/to squares on castling."""
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+
+    bsm.move_tracker.pending_opponent_move = {
+        "uci": "e1g1",
+        "from": (4, 0),
+        "to": (6, 0),
+        "is_capture": False,
+        "is_castling": True,
+        "rook_from": (7, 0),
+        "rook_to": (5, 0),
+    }
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+
 
 
 
