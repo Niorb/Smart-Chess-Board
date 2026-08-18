@@ -250,6 +250,7 @@ class BoardStateManager:
             "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
+            "pending_castling_rook": self.move_tracker.pending_castling_rook,
             "arrival_flash": (
                 {
                     "square": list(self.arrival_flash["square"] if self.arrival_flash else self.move_tracker.arrival_flash["square"]),
@@ -431,6 +432,15 @@ class BoardStateManager:
                         path = interpolate_move_path(from_c, from_r, to_c, to_r)
                         render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
 
+                # 1.5. Player Pending Castling Rook Prompt & Animated Trace
+                elif getattr(self.move_tracker, "pending_castling_rook", None):
+                    r_from = self.move_tracker.pending_castling_rook["from"]
+                    r_to = self.move_tracker.pending_castling_rook["to"]
+                    set_square_leds(r_from[0], r_from[1], COLOR_INT_OPPONENT_FROM)
+                    set_square_leds(r_to[0], r_to[1], COLOR_INT_OPPONENT_TO)
+                    rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                    render_move_trace(rook_path, now, frame, trace_color=COLOR_INT_MOVE_TRACE, blend_arrival=True)
+
                 # 2. King in Check Indicator
                 if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
                     king_sq = lichess_engine.board.king(lichess_engine.board.turn)
@@ -545,6 +555,7 @@ class BoardStateManager:
         self.arrival_flash = None
         if hasattr(self, "move_tracker") and self.move_tracker:
             self.move_tracker.arrival_flash = None
+            self.move_tracker.pending_castling_rook = None
         if self.active_animation is not None and self.frozen_baselines is not None:
             from board_hardware import settings, clear_baseline_history
             settings["baselines"] = [list(col) for col in self.frozen_baselines]

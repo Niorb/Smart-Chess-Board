@@ -465,4 +465,54 @@ def test_opponent_castling_physical_mirror_requires_king_and_rook(mock_engine):
     assert tracker.arrival_flash["square"] == (6, 7)
 
 
+def test_player_castling_triggers_pending_rook_and_placement_confirms(mock_engine):
+    """Verify that when a player castles (moves King 2 squares), pending_castling_rook is created and confirmed on Rook placement."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Setup board for White Kingside castle: 1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5
+    mock_engine.board = chess.Board()
+    mock_engine.board.push_san("e4")
+    mock_engine.board.push_san("e5")
+    mock_engine.board.push_san("Nf3")
+    mock_engine.board.push_san("Nc6")
+    mock_engine.board.push_san("Bc4")
+    mock_engine.board.push_san("Bc5")
+    mock_engine.game_info["turn"] = "white"
+
+    # Initial physical board state with pieces on e1 and h1
+    state = [[0] * 8 for _ in range(8)]
+    state[4][0] = -1  # White King on e1
+    state[7][0] = -1  # White Rook on h1
+
+    # Step 1: Lift White King from e1
+    state[4][0] = 0
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.lifted_square == (4, 0)
+    assert (6, 0) in tracker.legal_targets  # g1 is legal target for O-O
+
+    # Step 2: Place White King on g1 (King 2-square castling move completed)
+    state[6][0] = -1
+    res = tracker.process_physical_state(state, mock_engine)
+    # Move result (e1g1) returned to engine
+    assert res == (5, 1, 7, 1, None)
+    # Immediate arrival flash on g1
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (6, 0)
+    # pending_castling_rook prompted for Rook (h1 -> f1)
+    assert tracker.pending_castling_rook is not None
+    assert tracker.pending_castling_rook["from"] == (7, 0)  # h1
+    assert tracker.pending_castling_rook["to"] == (5, 0)    # f1
+
+    # Step 3: Move Rook from h1 to f1
+    state[7][0] = 0   # h1 lifted
+    state[5][0] = -1  # f1 placed
+    tracker.process_physical_state(state, mock_engine)
+    # Pending Rook prompt cleared and arrival flash on f1
+    assert tracker.pending_castling_rook is None
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (5, 0)
+
+
+
 

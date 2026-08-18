@@ -38,6 +38,7 @@ class PhysicalMoveTracker:
         self._last_synced_move_uci: str | None = None
         self.in_flight_move: dict[str, Any] | None = None
         self.arrival_flash: dict[str, Any] | None = None
+        self.pending_castling_rook: dict[str, Any] | None = None
 
     def set_in_flight_move(
         self, from_c: int, from_r: int, to_c: int, to_r: int, uci: str
@@ -64,6 +65,7 @@ class PhysicalMoveTracker:
         self._last_synced_move_uci = None
         self.in_flight_move = None
         self.arrival_flash = None
+        self.pending_castling_rook = None
 
     def sync_game(self, engine: Any) -> None:
         """
@@ -226,6 +228,29 @@ class PhysicalMoveTracker:
             return None
 
         # ---------------------------------------------------------------------
+        # 1.5 Handle Player's Pending Castling Rook Movement
+        # ---------------------------------------------------------------------
+        if self.pending_castling_rook is not None:
+            r_from_c, r_from_r = self.pending_castling_rook["from"]
+            r_to_c, r_to_r = self.pending_castling_rook["to"]
+            rook_origin_empty = (physical_state[r_from_c][r_from_r] == 0)
+            rook_target_occupied = (physical_state[r_to_c][r_to_r] != 0)
+            elapsed = time.time() - self.pending_castling_rook.get("start_time", 0.0)
+
+            if rook_origin_empty and rook_target_occupied:
+                logger.info(f"Physical board confirmed player castling Rook placement: ({r_to_c},{r_to_r})")
+                self.arrival_flash = {
+                    "square": (r_to_c, r_to_r),
+                    "start_time": time.time(),
+                    "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                    "is_capture": False,
+                }
+                self.pending_castling_rook = None
+            elif elapsed > 20.0:
+                logger.info("Player pending castling Rook timed out.")
+                self.pending_castling_rook = None
+
+        # ---------------------------------------------------------------------
         # 2. Handle Player Turn & Piece Lifting
         # ---------------------------------------------------------------------
         turn_color = board.turn  # chess.WHITE (True) or chess.BLACK (False)
@@ -298,6 +323,24 @@ class PhysicalMoveTracker:
                         "is_capture": is_capture,
                     }
 
+                    # Check for castling move to prompt the corresponding Rook movement
+                    castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
+                    if castle_rook is not None or any(
+                        m.from_square == sq_from and m.to_square == sq_to and board.is_castling(m)
+                        for m in board.legal_moves
+                    ):
+                        if castle_rook is None:
+                            castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
+                        if castle_rook:
+                            self.pending_castling_rook = {
+                                "from": castle_rook[0],
+                                "to": castle_rook[1],
+                                "start_time": time.time(),
+                            }
+                            logger.info(
+                                f"Player executed King castling move. Prompting Rook movement: {castle_rook[0]} -> {castle_rook[1]}"
+                            )
+
                     # Check for pawn promotion
                     promo_moves = [
                         m for m in board.legal_moves
@@ -348,6 +391,15 @@ class PhysicalMoveTracker:
             "legal_captures": [list(sq) for sq in self.legal_captures],
             "invalid_placement": list(self.invalid_placement) if self.invalid_placement else None,
             "pending_opponent_move": self.pending_opponent_move,
+            "pending_castling_rook": (
+                {
+                    "from": list(self.pending_castling_rook["from"]),
+                    "to": list(self.pending_castling_rook["to"]),
+                    "start_time": self.pending_castling_rook.get("start_time", 0.0),
+                }
+                if self.pending_castling_rook
+                else None
+            ),
             "arrival_flash": (
                 {
                     "square": list(self.arrival_flash["square"]),

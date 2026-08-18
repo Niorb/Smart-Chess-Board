@@ -37,6 +37,11 @@ export interface BoardState {
       from: [number, number];
       to: [number, number];
     } | null;
+    pending_castling_rook?: {
+      from: [number, number];
+      to: [number, number];
+      start_time?: number;
+    } | null;
     active_animation?: string | null;
     custom_trace_path?: [number, number][] | null;
     in_flight_move?: {

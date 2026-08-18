@@ -295,6 +295,24 @@ def test_board_state_castling_move_led_render():
     assert bsm.strip.show.called
 
 
+def test_board_state_player_pending_castling_rook_led_render():
+    """Verify that _update_leds lights up Rook from/to and renders trace when player castles."""
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+
+    bsm.move_tracker.pending_castling_rook = {
+        "from": (7, 0),
+        "to": (5, 0),
+        "start_time": time.time(),
+    }
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+
 
 
 

@@ -85,8 +85,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - [x] Implemented distinct color differentiation for legal capture targets:
 - [x] Implemented choreographed 2-phase castling animation and physical dual-piece mirror tracking:
   - **2-Phase Choreography**: For Kingside and Queenside castling (e1g1, e1c1, e8g8, e8c8), Phase 1 ($\tau \in [0.0, 0.5]$) animates the King's 2-square move with destination flare, and Phase 2 ($\tau \in [0.5, 1.0]$) animates the Rook's move with destination flare (`render_castle_trace()`).
-  - **4-Square Illumination**: Illuminates both King (from/to) and Rook (from/to) squares in the physical LED frame.
-  - **Physical Move Mirroring**: Opponent castling confirmation requires both King and Rook to be physically placed on their target squares before completing.
+  - **Player & Opponent Symmetry**:
+    - When the opponent castles, both King and Rook moves are animated in sequence and 4 squares are illuminated until both pieces are physically mirrored.
+    - When our player castles on the physical board, placing the King 2 squares over ($e1 \to g1$ or $e1 \to c1$) immediately registers the King touchdown, flashes arrival confirmation, and prompts the corresponding Rook movement ($h1 \to f1$ or $a1 \to d1$) with illuminated origin/destination and animated move trace until the Rook is placed!
   - **Interactive Diagnostic Buttons**: Added `e1g1 (Castle O-O)` and `e1c1 (Castle O-O-O)` test buttons to the Web UI.
 
 ## Task Backlog
