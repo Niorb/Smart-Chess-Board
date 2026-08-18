@@ -404,10 +404,11 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
 def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
     """
     Calibrates board baselines when pieces are already in standard starting layout.
-    Measures empty middle ranks (Ranks 3-6) and maps:
-    - Ranks 1 & 2 (r=0, 1) baselines are set to Rank 3 (r=2) baseline for each file.
-    - Ranks 7 & 8 (r=6, 7) baselines are set to Rank 6 (r=5) baseline for each file.
-    - Ranks 3, 4, 5, 6 (r in 2, 3, 4, 5) use their own directly measured baselines.
+    Ignores/does not read the first 2 columns (c=0, 1) and last 2 columns (c=6, 7)
+    where pieces are placed. Reads empty middle columns 3-6 (c=2, 3, 4, 5) directly:
+    - Columns 1 & 2 (c=0, 1) baselines are set to Column 3 (c=2) baseline for each row.
+    - Columns 7 & 8 (c=6, 7) baselines are set to Column 6 (c=5) baseline for each row.
+    - Columns 3, 4, 5, 6 (c in 2, 3, 4, 5) use their own directly measured baselines for each row.
     """
     if serial_conn is None:
         logger.error("Calibration with pieces failed: serial connection not initialized.")
@@ -438,47 +439,49 @@ def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 for mux_ch in range(BOARD_COLS):
                     c = col_mux_map[mux_ch]
-                    for r in range(BOARD_ROWS):
-                        val = vals[mux_ch * BOARD_ROWS + r]
-                        sums[c][r] += val
-                        counts[c][r] += 1
+                    # Only read empty middle columns 3, 4, 5, 6 (c=2, 3, 4, 5)
+                    if c in (2, 3, 4, 5):
+                        for r in range(BOARD_ROWS):
+                            val = vals[mux_ch * BOARD_ROWS + r]
+                            sums[c][r] += val
+                            counts[c][r] += 1
             else:
                 serial_conn.reset_input_buffer()
         else:
             serial_conn.reset_input_buffer()
         time.sleep(0.01)
 
-    total_valid_samples = sum(sum(counts[c]) for c in range(BOARD_COLS))
+    total_valid_samples = sum(sum(counts[c]) for c in (2, 3, 4, 5))
     if total_valid_samples == 0:
         logger.error("Calibration with pieces failed: no valid data packets received from hardware.")
         return False
 
-    # Compute raw average per square
+    # Compute raw average for measured middle columns
     measured_avg = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    for c in range(BOARD_COLS):
+    for c in (2, 3, 4, 5):
         for r in range(BOARD_ROWS):
             if counts[c][r] > 0:
                 avg_val = int(sums[c][r] / counts[c][r])
                 measured_avg[c][r] = avg_val if avg_val > 0 else 1550
 
-    # Update settings baselines using empty rank mapping
-    for c in range(BOARD_COLS):
-        base_rank3 = measured_avg[c][2]  # Rank 3 (r=2)
-        base_rank6 = measured_avg[c][5]  # Rank 6 (r=5)
+    # Update settings baselines:
+    for r in range(BOARD_ROWS):
+        base_col3 = measured_avg[2][r]  # Column 3 (c=2)
+        base_col6 = measured_avg[5][r]  # Column 6 (c=5)
 
-        # White starting ranks 1 & 2 -> mapped to Rank 3
-        settings["baselines"][c][0] = base_rank3
-        settings["baselines"][c][1] = base_rank3
+        # Columns 1 & 2 -> mapped to Column 3 (c=2)
+        settings["baselines"][0][r] = base_col3
+        settings["baselines"][1][r] = base_col3
 
-        # Middle empty ranks 3, 4, 5, 6 -> own measured baselines
-        settings["baselines"][c][2] = measured_avg[c][2]
-        settings["baselines"][c][3] = measured_avg[c][3]
-        settings["baselines"][c][4] = measured_avg[c][4]
-        settings["baselines"][c][5] = measured_avg[c][5]
+        # Middle columns 3, 4, 5, 6 -> own measured baselines
+        settings["baselines"][2][r] = measured_avg[2][r]
+        settings["baselines"][3][r] = measured_avg[3][r]
+        settings["baselines"][4][r] = measured_avg[4][r]
+        settings["baselines"][5][r] = measured_avg[5][r]
 
-        # Black starting ranks 7 & 8 -> mapped to Rank 6
-        settings["baselines"][c][6] = base_rank6
-        settings["baselines"][c][7] = base_rank6
+        # Columns 7 & 8 -> mapped to Column 6 (c=5)
+        settings["baselines"][6][r] = base_col6
+        settings["baselines"][7][r] = base_col6
 
     save_settings()
 
