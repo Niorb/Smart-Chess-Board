@@ -35,10 +35,10 @@ class PhysicalMoveTracker:
         self.legal_captures: list[tuple[int, int]] = []
         self.invalid_placement: tuple[int, int] | None = None
         self.pending_opponent_move: dict[str, Any] | None = None
-        self._last_synced_move_uci: str | None = None
         self.in_flight_move: dict[str, Any] | None = None
         self.arrival_flash: dict[str, Any] | None = None
         self.pending_castling_rook: dict[str, Any] | None = None
+        self.last_physical_state: list[list[int]] | None = None
 
     def set_in_flight_move(
         self, from_c: int, from_r: int, to_c: int, to_r: int, uci: str
@@ -55,7 +55,7 @@ class PhysicalMoveTracker:
         """Clears the in-flight move lock."""
         self.in_flight_move = None
 
-    def reset(self) -> None:
+    def reset(self, initial_state: list[list[int]] | None = None) -> None:
         """Resets all move tracking states."""
         self.lifted_square = None
         self.legal_targets = []
@@ -66,6 +66,7 @@ class PhysicalMoveTracker:
         self.in_flight_move = None
         self.arrival_flash = None
         self.pending_castling_rook = None
+        self.last_physical_state = [row[:] for row in initial_state] if initial_state is not None else None
 
     def sync_game(self, engine: Any) -> None:
         """
@@ -253,6 +254,14 @@ class PhysicalMoveTracker:
         # ---------------------------------------------------------------------
         # 2. Handle Player Turn & Piece Lifting
         # ---------------------------------------------------------------------
+        my_color = getattr(engine, "my_color", None)
+        if my_color is not None:
+            engine_turn_color = "white" if board.turn == chess.WHITE else "black"
+            if engine_turn_color != my_color:
+                # It's opponent's turn. Physical piece lift by player is suppressed.
+                self.last_physical_state = [row[:] for row in physical_state]
+                return None
+
         turn_color = board.turn  # chess.WHITE (True) or chess.BLACK (False)
         expected_polarity = -1 if turn_color == chess.WHITE else 1
 
@@ -263,8 +272,14 @@ class PhysicalMoveTracker:
                     sq = chess.square(c, r)
                     piece = board.piece_at(sq)
                     if piece and piece.color == turn_color:
-                        # Piece exists on digital board but sensor reads 0 (lifted)
-                        if physical_state[c][r] == 0:
+                        # Detect lift: transition from occupied (!= 0) to empty (== 0)
+                        is_lifted = False
+                        if self.last_physical_state is not None:
+                            is_lifted = (self.last_physical_state[c][r] != 0 and physical_state[c][r] == 0)
+                        else:
+                            is_lifted = (physical_state[c][r] == 0)
+
+                        if is_lifted:
                             self.lifted_square = (c, r)
                             self.invalid_placement = None
                             
@@ -282,6 +297,7 @@ class PhysicalMoveTracker:
                             self.legal_targets = targets
                             self.legal_captures = captures
                             logger.info(f"Piece lifted at ({c},{r}) -> Legal targets: {targets} (captures: {captures})")
+                            self.last_physical_state = [row[:] for row in physical_state]
                             return None
 
         # Case B: Piece is currently lifted -> Detect placement
@@ -296,6 +312,7 @@ class PhysicalMoveTracker:
                 self.legal_targets = []
                 self.legal_captures = []
                 self.invalid_placement = None
+                self.last_physical_state = [row[:] for row in physical_state]
                 return None
 
             # 2. Placed on a legal target square
@@ -358,6 +375,7 @@ class PhysicalMoveTracker:
                     self.legal_targets = []
                     self.legal_captures = []
                     self.invalid_placement = None
+                    self.last_physical_state = [row[:] for row in physical_state]
                     return move_result
 
             # 3. Placed on an illegal square
@@ -381,6 +399,7 @@ class PhysicalMoveTracker:
                 if physical_state[inv_c][inv_r] == 0:
                     self.invalid_placement = None
 
+        self.last_physical_state = [row[:] for row in physical_state]
         return None
 
     def to_dict(self) -> dict[str, Any]:

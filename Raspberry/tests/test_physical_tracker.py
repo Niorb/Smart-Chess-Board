@@ -517,5 +517,64 @@ def test_player_castling_triggers_pending_rook_and_placement_confirms(mock_engin
     assert tracker.arrival_flash["square"] == (5, 0)
 
 
+def test_no_phantom_lift_at_game_start_with_static_zero_square(initial_physical_state, mock_engine):
+    """Verify that a square reading 0 at game start does NOT trigger a phantom piece lift."""
+    tracker = PhysicalMoveTracker()
+
+    # Board state at start of game has e2 (4, 1) and f1 (5, 0) reading 0 (e.g. uncalibrated or weak sensor)
+    start_state = [row[:] for row in initial_physical_state]
+    start_state[4][1] = 0  # e2 is 0
+    start_state[5][0] = 0  # f1 is 0
+
+    # Reset tracker with the live initial physical state (as done when entering PLAYING state)
+    tracker.reset(start_state)
+
+    # First and subsequent poll cycles without physical piece movement
+    res = tracker.process_physical_state(start_state, mock_engine)
+    assert res is None
+    assert tracker.lifted_square is None
+    assert len(tracker.legal_targets) == 0
+
+    # Second cycle
+    res2 = tracker.process_physical_state(start_state, mock_engine)
+    assert res2 is None
+    assert tracker.lifted_square is None
+
+
+def test_lift_only_triggered_on_active_transition(initial_physical_state, mock_engine):
+    """Verify that a piece lift is only detected when a square transitions from occupied (!= 0) to empty (0)."""
+    tracker = PhysicalMoveTracker()
+    tracker.reset(initial_physical_state)
+
+    # Initial state: all starting pieces occupied
+    res = tracker.process_physical_state(initial_physical_state, mock_engine)
+    assert tracker.lifted_square is None
+
+    # Player physically lifts e2 pawn (transitions from -1 to 0)
+    lifted_state = [row[:] for row in initial_physical_state]
+    lifted_state[4][1] = 0
+
+    res = tracker.process_physical_state(lifted_state, mock_engine)
+    assert tracker.lifted_square == (4, 1)
+    assert (4, 2) in tracker.legal_targets
+    assert (4, 3) in tracker.legal_targets
+
+
+def test_piece_lift_suppressed_when_not_player_turn(initial_physical_state, mock_engine):
+    """Verify that when it is opponent's turn (e.g. user plays Black), piece lift detection is suppressed."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "black"  # User is playing Black, White's turn (board.turn == WHITE)
+
+    # Even if White's e2 pawn transitions to 0, player cannot move White's piece
+    lifted_state = [row[:] for row in initial_physical_state]
+    lifted_state[4][1] = 0
+
+    res = tracker.process_physical_state(lifted_state, mock_engine)
+    assert res is None
+    assert tracker.lifted_square is None
+    assert len(tracker.legal_targets) == 0
+
+
+
 
 

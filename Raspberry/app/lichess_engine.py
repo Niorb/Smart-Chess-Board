@@ -651,6 +651,8 @@ class LichessEngine:
             state_manager.game_status = "IDLE"
             self._trigger_end_animation(state_manager, state_data.get("winner"))
         else:
+            if state_manager and hasattr(state_manager, "move_tracker") and state_manager.move_tracker:
+                state_manager.move_tracker.reset(getattr(state_manager, "physical_state", None))
             if state_manager and hasattr(state_manager, "trigger_animation"):
                 state_manager.trigger_animation("GAME_STARTED", {"my_color": self.my_color})
 

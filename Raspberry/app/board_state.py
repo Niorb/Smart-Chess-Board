@@ -700,7 +700,7 @@ class BoardStateManager:
                                     _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
                                 )
                         else:
-                            self.move_tracker.reset()
+                            self.move_tracker.reset(self.physical_state)
 
                     self._update_leds()
                 else:
