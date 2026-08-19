@@ -106,8 +106,13 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Individual Square Baseline Setting (`Raspberry/board_hardware.py`)**: Added `set_square_baseline(col, row, value)` to immediately adopt the current ADC reading as that square's baseline and flush any stale drift history.
   - **REST API (`Raspberry/app/main.py`)**: Added `POST /api/board/calibrate_square` taking `{ col, row, value? }` with atomic persistence to `board_settings.json`.
   - **React UI Integration (`Raspberry/frontend/src/App.tsx`)**: Left-clicking any square in the **Play tab sensor matrix overlay** or **Debug tab physical ADC matrix** immediately calibrates that specific square's baseline to its live reading and displays a confirmation status toast.
+- [x] Resolved Raspberry Pi `git pull` hanging issue:
+  - **SSH Firewall / Outbound Block**: Identified that outbound SSH port 22 and 443 connections on the Raspberry Pi's local network timed out when connecting to GitHub.
+  - **Remote Switch to HTTPS**: Reconfigured `origin` remote URL in `~/chess_git` on the Pi to HTTPS (`https://github.com/Niorb/Smart-Chess-Board.git`), enabling instant pulls.
+  - **Physical Tracker & Test Isolation Fixes**: Initialized `_last_synced_move_uci` in `PhysicalMoveTracker.__init__` and isolated `test_board_hardware.py` in-loop calibration unit tests. Verified all 170 unit and integration tests passing on the physical Pi.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
