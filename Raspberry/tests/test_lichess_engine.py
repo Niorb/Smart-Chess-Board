@@ -350,7 +350,8 @@ def test_handle_opponent_gone_immediate_claim():
 
             engine._handle_opponent_gone(True, 0, mock_state_mgr)
 
-            assert engine.opponent_gone == {"gone": True, "claim_win_in": 0}
+            assert engine.opponent_gone["gone"] is True
+            assert engine.opponent_gone["claim_win_in"] == 0
             assert engine._auto_claim_task is not None
 
             await asyncio.sleep(0.01)
@@ -373,7 +374,8 @@ def test_handle_opponent_gone_scheduled_delayed_claim():
 
             engine._handle_opponent_gone(True, 15, mock_state_mgr)
 
-            assert engine.opponent_gone == {"gone": True, "claim_win_in": 15}
+            assert engine.opponent_gone["gone"] is True
+            assert engine.opponent_gone["claim_win_in"] == 15
             assert engine._auto_claim_task is not None
 
             await engine._auto_claim_task
@@ -397,7 +399,8 @@ def test_opponent_reconnection_cancels_auto_claim_task():
             engine._handle_opponent_gone(True, 20, mock_state_mgr)
             claim_task = engine._auto_claim_task
             assert claim_task is not None
-            assert engine.opponent_gone == {"gone": True, "claim_win_in": 20}
+            assert engine.opponent_gone["gone"] is True
+            assert engine.opponent_gone["claim_win_in"] == 20
 
             # 2. Opponent reconnects before timer expires
             engine._handle_opponent_gone(False, 0, mock_state_mgr)

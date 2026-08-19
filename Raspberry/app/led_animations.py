@@ -170,26 +170,20 @@ def _render_sub_trace(
     for i in range(1, num_steps):
         c, r = path[i]
         dist = abs(comet_pos - i)
-        d = head_pos - i
-        # Asymmetric tail: head is sharp (d < 0), tail decays backwards (d >= 0)
-        if -0.3 <= d <= 2.2:
-            if d < 0:
-                intensity = math.exp(-6.0 * d * d)
-            else:
-                intensity = math.exp(-1.4 * d)
+        # Pulse intensity with Gaussian falloff (width ~ 0.9 squares)
+        intensity = math.exp(-2.5 * dist * dist)
+        if intensity > 0.02:
+            scaled = scale_color(trace_color, intensity)
+            if 0 <= c < 8 and 0 <= r < 8:
+                for idx in get_led_indices(r, c):
+                    if 0 <= idx < len(frame):
+                        frame[idx] = add_colors(frame[idx], scaled)
 
-            if intensity > 0.03:
-                sq_color = scale_color(trace_color, intensity * 0.9)
-                if 0 <= c < 8 and 0 <= r < 8:
-                    for idx in get_led_indices(r, c):
-                        if 0 <= idx < len(frame):
-                            frame[idx] = add_colors(frame[idx], sq_color)
-
-    # 2. Additive Arrival Square Pulse Flare
-    if blend_arrival and head_pos >= (n - 1.2):
-        c_arr, r_arr = path[-1]
-        progress_arr = min(1.0, max(0.0, (head_pos - (n - 1.2)) / 1.5))
-        intensity_arr = math.exp(-2.5 * progress_arr) * (1.0 - progress_arr)
+    # Render arrival pulse flare on destination square
+    c_arr, r_arr = path[num_steps]
+    d_arr = abs(comet_pos - num_steps)
+    intensity_arr = math.exp(-2.5 * d_arr * d_arr)
+    if intensity_arr > 0.02 and blend_arrival:
         flare = scale_color(trace_color, intensity_arr * 0.85)
         if 0 <= c_arr < 8 and 0 <= r_arr < 8:
             for idx in get_led_indices(r_arr, c_arr):

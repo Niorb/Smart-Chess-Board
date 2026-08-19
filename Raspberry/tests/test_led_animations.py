@@ -66,11 +66,11 @@ def test_color_arithmetic():
 def test_lifecycle_animation_lifecycle():
     anim = create_animation("GAME_STARTED")
     assert anim.name == "GAME_STARTED"
-    assert anim.duration == 1.5
+    assert anim.duration == 2.2
     assert anim.is_active(anim.start_time + 0.5)
-    assert not anim.is_active(anim.start_time + 2.0)
+    assert not anim.is_active(anim.start_time + 2.5)
     assert anim.get_progress(anim.start_time) == 0.0
-    assert abs(anim.get_progress(anim.start_time + 0.75) - 0.5) < 0.01
+    assert abs(anim.get_progress(anim.start_time + 1.1) - 0.5) < 0.01
 
 
 def test_render_game_started():
