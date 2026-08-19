@@ -110,9 +110,15 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **SSH Firewall / Outbound Block**: Identified that outbound SSH port 22 and 443 connections on the Raspberry Pi's local network timed out when connecting to GitHub.
   - **Remote Switch to HTTPS**: Reconfigured `origin` remote URL in `~/chess_git` on the Pi to HTTPS (`https://github.com/Niorb/Smart-Chess-Board.git`), enabling instant pulls.
   - **Physical Tracker & Test Isolation Fixes**: Initialized `_last_synced_move_uci` in `PhysicalMoveTracker.__init__` and isolated `test_board_hardware.py` in-loop calibration unit tests. Verified all 170 unit and integration tests passing on the physical Pi.
+- [x] Implemented 90-Degree Physical Board Rotation Mapping (Old a1 -> New h1):
+  - **Hardware Sensor Coordinate Translation (`Raspberry/board_hardware.py`)**: Mapped physical multiplexer readings $(c_{phys}, r_{phys})$ to standard chess coordinates $(c_{chess} = 7 - r_{phys}, r_{chess} = c_{phys})$ in `scan_board()`, `calibrate_board()`, and `calibrate_board_with_pieces()`.
+  - **Serpentine LED Mapping Adaptation (`Raspberry/app/led_helpers.py`)**: Converted logical chess coordinates to physical strip layout ($c_{phys} = \text{rank}, r_{phys} = 7 - \text{file}$) mapping Strip 1 (GPIO 23) to Ranks 1–4 and Strip 2 (GPIO 22) to Ranks 5–8.
+  - **Diagnostics & Test Alignment**: Updated `hardware_test.py`, `WIRING_GUIDE.txt`, and test suites (`test_board_hardware.py`, `test_led_helpers.py`, `test_highlight_row_swap.py`, `test_coach_engine.py`, `test_webapp_recalibrate.py`).
+  - **Verification on Physical Pi**: Frontend production build (`tsc -b && vite build`) succeeded and all 170 pytest unit/integration tests passed cleanly.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
 
