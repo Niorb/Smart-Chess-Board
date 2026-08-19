@@ -138,7 +138,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
     - **Phase 1 (0.00 $\to$ 0.35) — Checkmate Strike Ray**: A laser bolt tracking from opposing lines directly into the defeated King's square with a blazing ruby strike head and crimson fissure tail (1–2 squares).
     - **Phase 2 (0.35 $\to$ 0.70) — Crown Shatter & Radial Spark Dispersal**: Crown fracture upon impact, sending 3 amber-gold/ruby shards flying outward along divergent vectors into the board (max 3 squares).
     - **Phase 3 (0.70 $\to$ 1.00) — Monarch's Dying Ember Pulse**: Lone dying heartbeat pulse on the King's square in smoldering ruby and cinder amber fading into total black (1 square).
-  - **Verification & Deployment**: Updated `Raspberry/tests/test_led_animations.py` verifying frame generation and strict $\le 4$ active square constraints across all progress intervals. Production frontend build (`vite build`) succeeded and all 194 unit and integration tests passed cleanly on the physical Raspberry Pi over SSH.
+- [x] Implemented "Save Current Stats as Defaults" Persistent Calibration & Settings Store:
+  - **Persistent Defaults Architecture (`Raspberry/board_hardware.py`)**: Added `save_defaults(overwrite_factory_template=True)` function that atomically writes live in-memory baselines, thresholds, timing delays, and board modes to both `board_settings.json` and the factory fallback template `board_settings.default.json`.
+  - **FastAPI REST Endpoint (`Raspberry/app/main.py`)**: Added `POST /api/board/save_defaults` accepting `SaveDefaultsRequest` with full parameter overrides and atomic background persistence.
+  - **React UI Integration (`Raspberry/frontend/src/App.tsx` & `api.ts`)**:
+    - Added dedicated **"Save Current Stats as Defaults"** button in the Debug tab under Calibration & Hardware Utilities.
+    - Captures live active baselines (including dynamic in-loop calibrated drifts and manual individual square calibrations), active positive/negative deviation thresholds, multiplexer timings, debounce settings, and piece modes.
+    - Synchronizes browser `localStorage` and server state with instant visual confirmation status toasts.
+  - **Verification & Raspberry Pi Deployment**: Added unit tests in `Raspberry/tests/test_api_routes.py` and `Raspberry/tests/test_board_hardware.py`. All 196 test suites passed and frontend production build succeeded on the physical Raspberry Pi over SSH.
 
 ## Task Backlog
 
