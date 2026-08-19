@@ -8,42 +8,42 @@ from app.led_helpers import get_led_indices
 
 
 def test_strip1_mapping():
-    # Strip 1: files a-d (row 0-3), 18 LEDs per column (16 active + 2 skipped OFF LEDs)
-    # File a (row 0): a8 (top, col 7) -> a1 (bottom, col 0)
-    assert get_led_indices(7, 0) == [0, 1]    # a8 (Starts Strip 1!)
-    assert get_led_indices(6, 0) == [2, 3]    # a7
-    assert get_led_indices(0, 0) == [16, 17]  # a1
+    # Strip 1: Ranks 1-4 (col 0-3), 18 LEDs per column (16 active + 2 skipped OFF LEDs)
+    # Rank 1 (col 0): a1 (left, row 0) -> h1 (right, row 7)
+    assert get_led_indices(0, 0) == [0, 1]    # a1 (Starts Strip 1!)
+    assert get_led_indices(0, 1) == [2, 3]    # b1
+    assert get_led_indices(0, 7) == [16, 17]  # h1
 
-    # File b (row 1): b1 (bottom, col 0) -> b8 (top, col 7)
-    assert get_led_indices(0, 1) == [18, 19]  # b1
-    assert get_led_indices(7, 1) == [34, 35]  # b8
+    # Rank 2 (col 1): h2 (right, row 7) -> a2 (left, row 0)
+    assert get_led_indices(1, 7) == [18, 19]  # h2
+    assert get_led_indices(1, 0) == [34, 35]  # a2
 
-    # File c (row 2): c8 (top, col 7) -> c1 (bottom, col 0)
-    assert get_led_indices(7, 2) == [36, 37]  # c8
-    assert get_led_indices(0, 2) == [52, 53]  # c1
+    # Rank 3 (col 2): a3 (left, row 0) -> h3 (right, row 7)
+    assert get_led_indices(2, 0) == [36, 37]  # a3
+    assert get_led_indices(2, 7) == [52, 53]  # h3
 
-    # File d (row 3): d1 (bottom, col 0) -> d8 (top, col 7)
-    assert get_led_indices(0, 3) == [54, 55]  # d1
-    assert get_led_indices(7, 3) == [70, 71]  # d8
+    # Rank 4 (col 3): h4 (right, row 7) -> a4 (left, row 0)
+    assert get_led_indices(3, 7) == [54, 55]  # h4
+    assert get_led_indices(3, 0) == [70, 71]  # a4
 
 
 def test_strip2_mapping():
-    # Strip 2: files e-h (row 4-7), 19 LEDs per column (16 active + 3 skipped LEDs at ranks 7, 5, 2)
-    # File h (row 7, c_rel 0): h8 (top, col 7) -> h1 (bottom, col 0)
-    assert get_led_indices(7, 7) == [76, 77]    # h8 (Starts Strip 2!)
-    assert get_led_indices(0, 7) == [93, 94]    # h1
+    # Strip 2: Ranks 5-8 (col 4-7), 19 LEDs per column (16 active + 3 skipped LEDs)
+    # Rank 8 (col 7, c_rel 0): a8 (left, row 0) -> h8 (right, row 7)
+    assert get_led_indices(7, 0) == [76, 77]    # a8 (Starts Strip 2!)
+    assert get_led_indices(7, 7) == [93, 94]    # h8
 
-    # File g (row 6, c_rel 1): g1 (bottom, col 0) -> g8 (top, col 7)
-    assert get_led_indices(0, 6) == [95, 96]    # g1
-    assert get_led_indices(7, 6) == [112, 113]  # g8
+    # Rank 7 (col 6, c_rel 1): h7 (right, row 7) -> a7 (left, row 0)
+    assert get_led_indices(6, 7) == [95, 96]    # h7
+    assert get_led_indices(6, 0) == [112, 113]  # a7
 
-    # File f (row 5, c_rel 2): f8 (top, col 7) -> f1 (bottom, col 0)
-    assert get_led_indices(7, 5) == [114, 115]  # f8
-    assert get_led_indices(0, 5) == [131, 132]  # f1
+    # Rank 6 (col 5, c_rel 2): a6 (left, row 0) -> h6 (right, row 7)
+    assert get_led_indices(5, 0) == [114, 115]  # a6
+    assert get_led_indices(5, 7) == [131, 132]  # h6
 
-    # File e (row 4, c_rel 3): e1 (bottom, col 0) -> e8 (top, col 7)
-    assert get_led_indices(0, 4) == [133, 134]  # e1
-    assert get_led_indices(7, 4) == [150, 151]  # e8 (Finishes Strip 2!)
+    # Rank 5 (col 4, c_rel 3): h5 (right, row 7) -> a5 (left, row 0)
+    assert get_led_indices(4, 7) == [133, 134]  # h5
+    assert get_led_indices(4, 0) == [150, 151]  # a5 (Finishes Strip 2!)
 
 
 def test_dual_pixel_strip_lock_and_show():

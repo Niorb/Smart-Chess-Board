@@ -136,9 +136,11 @@ def read_active_values(h, ser):
             import struct
             vals = struct.unpack('<64H', data)
             for mux_ch in range(8):
-                c = col_mux_map[mux_ch]
-                for r in range(8):
-                    val = vals[mux_ch * 8 + r]
+                c_phys = col_mux_map[mux_ch]
+                for r_phys in range(8):
+                    val = vals[mux_ch * 8 + r_phys]
+                    c = 7 - r_phys
+                    r = c_phys
                     if c in values:
                         if r in ACTIVE_ROWS:
                             row_idx = ACTIVE_ROWS.index(r)

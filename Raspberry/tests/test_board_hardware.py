@@ -114,12 +114,13 @@ def test_scan_board_binary_packet_mapping():
     thresh = settings.get("threshold_positive", 150)
     vals = [base_val] * 64
 
-    # With DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]:
-    # MUX channel 7, row 0 -> index 56 corresponds to square a1 (c=0, r=0)
-    # MUX channel 0, row 0 -> index 0 corresponds to square h1 (c=7, r=0)
-    # MUX channel 4, row 3 -> index 35 corresponds to square d4 (c=3, r=3)
-    vals[56] = base_val + thresh + 500  # Magnet on physical MUX ch 7, row 0 -> a1
-    vals[35] = base_val + thresh + 300  # Magnet on physical MUX ch 4, row 3 -> d4
+    # With DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0] in 90-deg CCW rotation:
+    # c_chess = 7 - r_phys, r_chess = c_phys
+    # MUX channel 7 (c_phys=0), r_phys 7 -> index 63 corresponds to square a1 (c=0, r=0)
+    # MUX channel 7 (c_phys=0), r_phys 0 -> index 56 corresponds to square h1 (c=7, r=0)
+    # MUX channel 4 (c_phys=3), r_phys 4 -> index 36 corresponds to square d4 (c=3, r=3)
+    vals[63] = base_val + thresh + 500  # Magnet on physical MUX ch 7, r_phys 7 -> a1 (c=0, r=0)
+    vals[36] = base_val + thresh + 300  # Magnet on physical MUX ch 4, r_phys 4 -> d4 (c=3, r=3)
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *vals)
@@ -152,7 +153,7 @@ def test_scan_board_custom_col_mux_map_override():
 
     from board_hardware import scan_board, settings
 
-    # Direct 1:1 identity mapping override
+    # Direct 1:1 identity mapping override: col_mux_map = [0..7]
     settings["col_mux_map"] = [0, 1, 2, 3, 4, 5, 6, 7]
     raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     mock_ser = MagicMock()
@@ -160,7 +161,8 @@ def test_scan_board_custom_col_mux_map_override():
     base_val = settings["baselines"][0][0]
     thresh = settings.get("threshold_positive", 150)
     vals = [base_val] * 64
-    vals[0] = base_val + thresh + 500  # Index 0 with identity mapping -> c=0, r=0 (a1)
+    # MUX ch 0 (c_phys=0 -> r_chess=0), r_phys 7 (c_chess = 7 - 7 = 0) -> a1 (c=0, r=0) -> idx = 0*8 + 7 = 7
+    vals[7] = base_val + thresh + 500
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *vals)
@@ -301,15 +303,17 @@ def test_scan_board_starting_ranks_do_not_average_their_own_pieces():
     # Middle ranks have empty reading 1550
     raw_vals = [0] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            if r in (0, 1):
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if r_chess in (0, 1):
                 val = 1200
-            elif r in (6, 7):
+            elif r_chess in (6, 7):
                 val = 1900
             else:
                 val = 1550
-            raw_vals[mux_ch * 8 + r] = val
+            raw_vals[mux_ch * 8 + r_phys] = val
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *raw_vals)
@@ -355,14 +359,16 @@ def test_scan_board_drift_suppressed_when_middle_square_occupied():
     # Piece placed on d4 (c=3, r=3) and c3 (c=2, r=2) -> val = 1800 (> 1550 + 120)
     raw_vals = [1550] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            if c == 3 and r == 3:
-                raw_vals[mux_ch * 8 + r] = 1800
-            elif c == 2 and r == 2:
-                raw_vals[mux_ch * 8 + r] = 1800
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if c_chess == 3 and r_chess == 3:
+                raw_vals[mux_ch * 8 + r_phys] = 1800
+            elif c_chess == 2 and r_chess == 2:
+                raw_vals[mux_ch * 8 + r_phys] = 1800
             else:
-                raw_vals[mux_ch * 8 + r] = 1550
+                raw_vals[mux_ch * 8 + r_phys] = 1550
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *raw_vals)
@@ -411,15 +417,17 @@ def test_starting_position_piece_detection_after_piece_calibration():
     # Occupied ranks 7-8 have Black piece reading (e.g. 1900)
     calib_vals = [0] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            if r in (0, 1):
-                val = 1200 + c * 10  # White pieces on ranks 1-2
-            elif r in (2, 3, 4, 5):
-                val = 1550 + c * 10  # Empty ranks 3-6
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if r_chess in (0, 1):
+                val = 1200 + c_chess * 10  # White pieces on ranks 1-2
+            elif r_chess in (2, 3, 4, 5):
+                val = 1550 + c_chess * 10  # Empty ranks 3-6
             else:
-                val = 1900 + c * 10  # Black pieces on ranks 7-8
-            calib_vals[mux_ch * 8 + r] = val
+                val = 1900 + c_chess * 10  # Black pieces on ranks 7-8
+            calib_vals[mux_ch * 8 + r_phys] = val
 
     packet_header = b'\xaa\x55'
     calib_packet = struct.pack('<64H', *calib_vals)
@@ -494,14 +502,16 @@ def test_smart_pieces_detection_auto_and_manual_modes():
     # 1. Full starting pieces layout
     raw_vals = [0] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            if r in (0, 1):
-                raw_vals[mux_ch * 8 + r] = 1200  # White pieces (< 1550 - 100)
-            elif r in (6, 7):
-                raw_vals[mux_ch * 8 + r] = 1900  # Black pieces (> 1550 + 100)
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if r_chess in (0, 1):
+                raw_vals[mux_ch * 8 + r_phys] = 1200  # White pieces (< 1550 - 100)
+            elif r_chess in (6, 7):
+                raw_vals[mux_ch * 8 + r_phys] = 1900  # Black pieces (> 1550 + 100)
             else:
-                raw_vals[mux_ch * 8 + r] = 1550  # Empty middle ranks
+                raw_vals[mux_ch * 8 + r_phys] = 1550  # Empty middle ranks
     
     mock_ser = MagicMock()
     mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
@@ -683,12 +693,14 @@ def test_baseline_not_calibrated_when_piece_lifted():
     # Piece is now lifted: raw reading returns to 1570 (minor offset)
     raw_vals = [1550] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            if c == 3 and r == 3:
-                raw_vals[mux_ch * 8 + r] = 1570
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if c_chess == 3 and r_chess == 3:
+                raw_vals[mux_ch * 8 + r_phys] = 1570
             else:
-                raw_vals[mux_ch * 8 + r] = 1550
+                raw_vals[mux_ch * 8 + r_phys] = 1550
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *raw_vals)

@@ -331,9 +331,11 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
             vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
             diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
             for mux_ch in range(BOARD_COLS):
-                c = col_mux_map[mux_ch]
-                for r in range(BOARD_ROWS):
-                    val = vals[mux_ch * BOARD_ROWS + r]
+                c_phys = col_mux_map[mux_ch]
+                for r_phys in range(BOARD_ROWS):
+                    val = vals[mux_ch * BOARD_ROWS + r_phys]
+                    c = 7 - r_phys
+                    r = c_phys
 
                     if col_mode == "manual" and c != manual_col:
                         matrix[c][r] = settings["baselines"][c][r]
@@ -504,9 +506,11 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 for mux_ch in range(BOARD_COLS):
-                    c = col_mux_map[mux_ch]
-                    for r in range(BOARD_ROWS):
-                        val = vals[mux_ch * BOARD_ROWS + r]
+                    c_phys = col_mux_map[mux_ch]
+                    for r_phys in range(BOARD_ROWS):
+                        val = vals[mux_ch * BOARD_ROWS + r_phys]
+                        c = 7 - r_phys
+                        r = c_phys
                         sums[c][r] += val
                         counts[c][r] += 1
             else:
@@ -578,12 +582,15 @@ def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
                 import struct
                 vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
                 for mux_ch in range(BOARD_COLS):
-                    c = col_mux_map[mux_ch]
-                    # Only read empty middle ranks 3, 4, 5, 6 (r=2, 3, 4, 5) for all columns
-                    for r in (2, 3, 4, 5):
-                        val = vals[mux_ch * BOARD_ROWS + r]
-                        sums[c][r] += val
-                        counts[c][r] += 1
+                    c_phys = col_mux_map[mux_ch]
+                    for r_phys in range(BOARD_ROWS):
+                        val = vals[mux_ch * BOARD_ROWS + r_phys]
+                        c = 7 - r_phys
+                        r = c_phys
+                        # Only read empty middle ranks 3, 4, 5, 6 (r=2, 3, 4, 5) for all columns
+                        if r in (2, 3, 4, 5):
+                            sums[c][r] += val
+                            counts[c][r] += 1
             else:
                 serial_conn.reset_input_buffer()
         else:

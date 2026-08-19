@@ -28,25 +28,27 @@ def test_calibrate_board_with_pieces_mapping():
     settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
     raw_vals = [0] * 64
     for mux_ch in range(8):
-        c = DEFAULT_COL_MUX_MAP[mux_ch]
-        for r in range(8):
-            # Give distinct values per rank r:
-            # ranks 1 & 2 (r=0, 1): 2100 (occupied with pieces)
-            # rank 3 (r=2): 1600 (empty)
-            # ranks 4, 5 (r=3, 4): 1650 (empty)
-            # rank 6 (r=5): 1700 (empty)
-            # ranks 7 & 8 (r=6, 7): 2200 (occupied with pieces)
-            if r in (0, 1):
-                val = 2100 + c * 10
-            elif r == 2:
-                val = 1600 + c * 10
-            elif r in (3, 4):
-                val = 1650 + c * 10
-            elif r == 5:
-                val = 1700 + c * 10
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            # Give distinct values per chess rank r_chess:
+            # ranks 1 & 2 (r_chess=0, 1): 2100 (occupied with pieces)
+            # rank 3 (r_chess=2): 1600 (empty)
+            # ranks 4, 5 (r_chess=3, 4): 1650 (empty)
+            # rank 6 (r_chess=5): 1700 (empty)
+            # ranks 7 & 8 (r_chess=6, 7): 2200 (occupied with pieces)
+            if r_chess in (0, 1):
+                val = 2100 + c_chess * 10
+            elif r_chess == 2:
+                val = 1600 + c_chess * 10
+            elif r_chess in (3, 4):
+                val = 1650 + c_chess * 10
+            elif r_chess == 5:
+                val = 1700 + c_chess * 10
             else:
-                val = 2200 + c * 10
-            raw_vals[mux_ch * 8 + r] = val
+                val = 2200 + c_chess * 10
+            raw_vals[mux_ch * 8 + r_phys] = val
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *raw_vals)

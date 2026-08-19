@@ -211,11 +211,11 @@ class TestCoachEngineAsync:
 
 class TestEvalBarLedIndexing:
     def test_eval_bar_file_h_indices(self):
-        """Eval bar operates along File 'h' (Strip 2, row 7, ranks 1..8)."""
+        """Eval bar operates along File 'h' (row 7, ranks 1..8)."""
         h1_leds = get_led_indices(0, 7)  # col 0 (Rank 1), row 7 (File h)
         h8_leds = get_led_indices(7, 7)  # col 7 (Rank 8), row 7 (File h)
-        assert h1_leds == [93, 94]
-        assert h8_leds == [76, 77]
+        assert h1_leds == [16, 17]
+        assert h8_leds == [93, 94]
 
 
 # =============================================================================

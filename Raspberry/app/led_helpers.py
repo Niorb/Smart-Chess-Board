@@ -293,15 +293,22 @@ def init_strip():
 
 def get_led_indices(col, row):
     """
-    Convert board coordinates to serpentine physical LED indices.
+    Convert board coordinates to serpentine physical LED indices for the 90-degree rotated board.
     col: rank index 0..7 (0 = Rank 1, 7 = Rank 8)
     row: file index 0..7 (0 = file a, 7 = file h)
 
-    Strip 1 (files a-d / row 0-3): 18 LEDs per column (16 active + 2 skipped OFF LEDs).
-    Strip 2 (files e-h / row 4-7): 19 LEDs per column (16 active + 3 skipped OFF LEDs).
+    Physical transformation (90-deg CCW rotation):
+      - Physical column (c_phys) = rank (col)
+      - Physical row (r_phys)    = 7 - file (7 - row)
+
+    Strip 1 (Ranks 1-4 / col 0-3): 18 LEDs per column (16 active + 2 skipped OFF LEDs).
+    Strip 2 (Ranks 5-8 / col 4-7): 19 LEDs per column (16 active + 3 skipped OFF LEDs).
     """
-    if row < 4:
-        # Strip 1 (files a-d / row 0-3)
+    c_phys = col
+    r_phys = 7 - row
+
+    if c_phys < 4:
+        # Strip 1 (Ranks 1-4 / physical columns 0-3)
         offsets_strip1 = {
             0: [0, 1],
             1: [2, 3],
@@ -312,12 +319,12 @@ def get_led_indices(col, row):
             6: [14, 15],
             7: [16, 17]
         }
-        base = row * 18
-        sq_idx = 7 - col if row % 2 == 0 else col
+        base = c_phys * 18
+        sq_idx = 7 - r_phys if c_phys % 2 == 0 else r_phys
         return [base + o for o in offsets_strip1[sq_idx]]
 
-    # Strip 2 (files e-h / row 4-7)
-    # Relative column from right to left: h=0, g=1, f=2, e=3
+    # Strip 2 (Ranks 5-8 / physical columns 4-7)
+    # Relative rank from top to bottom: Rank 8 = 0, Rank 7 = 1, Rank 6 = 2, Rank 5 = 3
     offsets_strip2 = {
         0: [0, 1],    # Square 0 (2 LEDs)
         1: [2, 3],    # Square 1 (2 active + 1 extra/skipped at offset 4)
@@ -328,9 +335,9 @@ def get_led_indices(col, row):
         6: [14, 15],  # Square 6 (2 active + 1 extra/skipped at offset 16)
         7: [17, 18],  # Square 7 (2 LEDs)
     }
-    c_rel = 7 - row
+    c_rel = 7 - c_phys
     base = LEDS_PER_STRIP + c_rel * 19
-    sq_idx = 7 - col if c_rel % 2 == 0 else col
+    sq_idx = 7 - r_phys if c_rel % 2 == 0 else r_phys
     return [base + o for o in offsets_strip2[sq_idx]]
 
 
