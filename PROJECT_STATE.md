@@ -132,7 +132,13 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Settings Persistence (`Raspberry/board_hardware.py` & `lichess_engine.py`)**: Added `last_game_params` schema to `board_settings.default.json` and automatically persist time control, rating range, color, opponent mode, and AI difficulty upon every seek.
   - **REST API Endpoints (`Raspberry/app/main.py`)**: Added `GET /api/game/last_params` and `POST /api/game/restart_previous`.
   - **Frontend UI & Visual Feedback (`Raspberry/frontend/src/App.tsx`)**: Added a quick-action "Restart Previous Game" button with subtitle parameters in the Play tab, and an animated Physical Gesture status banner with real-time countdown.
-  - **Unit Tests & Raspberry Pi Deployment**: Added 9 unit tests in `Raspberry/tests/test_gesture_engine.py`. All 194 unit and integration test suites pass and production frontend build succeeded on the physical Raspberry Pi over SSH.
+- [x] Reworked Game Lost (Defeat) Animation to Low-Power "The Sovereign's Requiem":
+  - **Strict Low-Power Budget**: Replaced heavy full-board collapsing ring with a cinematic 3-phase sequence strictly limited to **max 1–3 simultaneous active squares** (< 5% of board, $< 75\text{mA}$ total current draw), eliminating power rail drops and voltage sag.
+  - **3-Phase Narrative Choreography**:
+    - **Phase 1 (0.00 $\to$ 0.35) — Checkmate Strike Ray**: A laser bolt tracking from opposing lines directly into the defeated King's square with a blazing ruby strike head and crimson fissure tail (1–2 squares).
+    - **Phase 2 (0.35 $\to$ 0.70) — Crown Shatter & Radial Spark Dispersal**: Crown fracture upon impact, sending 3 amber-gold/ruby shards flying outward along divergent vectors into the board (max 3 squares).
+    - **Phase 3 (0.70 $\to$ 1.00) — Monarch's Dying Ember Pulse**: Lone dying heartbeat pulse on the King's square in smoldering ruby and cinder amber fading into total black (1 square).
+  - **Verification & Deployment**: Updated `Raspberry/tests/test_led_animations.py` verifying frame generation and strict $\le 4$ active square constraints across all progress intervals. Production frontend build (`vite build`) succeeded and all 194 unit and integration tests passed cleanly on the physical Raspberry Pi over SSH.
 
 ## Task Backlog
 
