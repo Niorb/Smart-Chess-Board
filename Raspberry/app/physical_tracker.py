@@ -35,6 +35,7 @@ class PhysicalMoveTracker:
         self.legal_captures: list[tuple[int, int]] = []
         self.invalid_placement: tuple[int, int] | None = None
         self.pending_opponent_move: dict[str, Any] | None = None
+        self._last_synced_move_uci: str | None = None
         self.in_flight_move: dict[str, Any] | None = None
         self.arrival_flash: dict[str, Any] | None = None
         self.pending_castling_rook: dict[str, Any] | None = None

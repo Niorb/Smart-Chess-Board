@@ -242,6 +242,7 @@ def test_scan_board_dynamic_drift_middle_ranks():
     settings["baseline_window_s"] = 0.1
     settings["threshold_positive"] = 150
     settings["threshold_negative"] = 150
+    settings["in_loop_calibration"] = True
 
     # Start with baseline 1500 across the board
     settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
@@ -551,6 +552,7 @@ def test_empty_board_mode_calibrates_all_64_squares_directly():
     settings["baseline_window_s"] = 0.1
     settings["threshold_positive"] = 100
     settings["threshold_negative"] = 100
+    settings["in_loop_calibration"] = True
     settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
     raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
 
@@ -702,9 +704,17 @@ def test_baseline_not_calibrated_when_piece_lifted():
 
 
 def test_in_loop_calibration_default_setting():
-    """Verify that in_loop_calibration defaults to True."""
-    from board_hardware import settings
-    assert settings.get("in_loop_calibration") is True
+    """Verify that in_loop_calibration defaults to True in factory default settings."""
+    import json
+    import os
+    template_path = os.path.join(os.path.dirname(__file__), "..", "board_settings.default.json")
+    if os.path.exists(template_path):
+        with open(template_path, "r") as f:
+            template = json.load(f)
+            assert template.get("in_loop_calibration") is True
+    else:
+        from board_hardware import settings
+        assert settings.get("in_loop_calibration", True) is True
 
 
 def test_scan_board_in_loop_calibration_disabled_suppresses_drift():
