@@ -19,7 +19,8 @@ import {
   testLeds,
   clearAllLeds,
   triggerAnimation,
-  testMoveTrace
+  testMoveTrace,
+  saveBoardDefaults
 } from './api'
 import type { LichessAccount, LastGameParams } from './api'
 import { 
@@ -44,7 +45,8 @@ import {
   Sparkles,
   Wand2,
   Radar,
-  RotateCcw
+  RotateCcw,
+  BookmarkCheck
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -500,6 +502,8 @@ function App() {
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
+  const [savingDefaults, setSavingDefaults] = useState(false);
+  const [saveDefaultsStatus, setSaveDefaultsStatus] = useState<string | null>(null);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -764,6 +768,44 @@ function App() {
       setSettingsStatus("Error saving thresholds");
     } finally {
       setTimeout(() => setSettingsStatus(null), 4000);
+    }
+  };
+
+  const handleSaveDefaults = async () => {
+    setSavingDefaults(true);
+    setSaveDefaultsStatus("Saving stats as defaults...");
+    try {
+      const currentDisabled = state.physical.disabled_squares ?? [];
+      const currentBaselines = state.physical.baselines ?? settings?.baselines;
+      const res = await saveBoardDefaults({
+        positive: positiveThresh,
+        negative: negativeThresh,
+        colMode,
+        manualCol,
+        scanDelay,
+        muxSettleMs,
+        debounceThreshold,
+        baselineWindowS,
+        disabledSquares: currentDisabled,
+        piecesMode,
+        coachHintsEnabled,
+        evalBarEnabled,
+        coachAiOnly,
+        inLoopCalibration,
+        baselines: currentBaselines,
+      });
+      if (res.status === 'success') {
+        setSettings(res.settings);
+        setSaveDefaultsStatus("✓ Current baselines & thresholds saved as defaults!");
+      } else {
+        setSaveDefaultsStatus("Failed to save defaults");
+      }
+    } catch (err) {
+      console.error("Error saving board defaults:", err);
+      setSaveDefaultsStatus("Error saving defaults");
+    } finally {
+      setSavingDefaults(false);
+      setTimeout(() => setSaveDefaultsStatus(null), 4000);
     }
   };
 
@@ -1829,6 +1871,20 @@ function App() {
                 </button>
                 {settingsStatus && (
                   <span className="text-[10px] text-blue-400 font-mono text-center font-bold">{settingsStatus}</span>
+                )}
+
+                {/* Save All Stats (Baselines & Thresholds) as Persistent Defaults */}
+                <button
+                  onClick={handleSaveDefaults}
+                  disabled={savingDefaults}
+                  className="w-full bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-200 border border-indigo-500/40 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
+                  title="Saves all current stats (live baselines, thresholds, timings, and mode) to persistent settings as defaults for new connections"
+                >
+                  <BookmarkCheck size={14} className={savingDefaults ? 'animate-spin text-indigo-300' : 'text-indigo-400'} />
+                  <span>{savingDefaults ? 'Saving Current Stats...' : 'Save Current Stats as Defaults'}</span>
+                </button>
+                {saveDefaultsStatus && (
+                  <span className="text-[10px] text-indigo-300 font-mono text-center font-bold">{saveDefaultsStatus}</span>
                 )}
 
                 <hr className="border-slate-800/80 my-1" />

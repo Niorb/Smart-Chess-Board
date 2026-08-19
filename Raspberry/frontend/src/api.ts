@@ -144,6 +144,48 @@ export async function updateBoardSettings(
   return response.json();
 }
 
+export async function saveBoardDefaults(options?: {
+  positive?: number | null;
+  negative?: number | null;
+  colMode?: 'auto' | 'manual';
+  manualCol?: number;
+  scanDelay?: number;
+  muxSettleMs?: number;
+  debounceThreshold?: number;
+  baselineWindowS?: number;
+  disabledSquares?: number[][];
+  piecesMode?: 'auto' | 'pieces' | 'empty';
+  coachHintsEnabled?: boolean;
+  evalBarEnabled?: boolean;
+  coachAiOnly?: boolean;
+  inLoopCalibration?: boolean;
+  baselines?: number[][];
+}) {
+  const body: Record<string, unknown> = {};
+  if (options?.positive !== undefined && options?.positive !== null && !isNaN(options.positive)) body.threshold_positive = options.positive;
+  if (options?.negative !== undefined && options?.negative !== null && !isNaN(options.negative)) body.threshold_negative = options.negative;
+  if (options?.colMode !== undefined && options?.colMode !== null) body.col_mode = options.colMode;
+  if (options?.manualCol !== undefined && options?.manualCol !== null) body.manual_col = options.manualCol;
+  if (options?.scanDelay !== undefined && options?.scanDelay !== null) body.scan_delay = options.scanDelay;
+  if (options?.muxSettleMs !== undefined && options?.muxSettleMs !== null) body.mux_settle_ms = options.muxSettleMs;
+  if (options?.debounceThreshold !== undefined && options?.debounceThreshold !== null) body.debounce_threshold = options.debounceThreshold;
+  if (options?.baselineWindowS !== undefined && options?.baselineWindowS !== null) body.baseline_window_s = options.baselineWindowS;
+  if (options?.disabledSquares !== undefined && options?.disabledSquares !== null) body.disabled_squares = options.disabledSquares;
+  if (options?.piecesMode !== undefined && options?.piecesMode !== null) body.pieces_mode = options.piecesMode;
+  if (options?.coachHintsEnabled !== undefined) body.coach_hints_enabled = options.coachHintsEnabled;
+  if (options?.evalBarEnabled !== undefined) body.eval_bar_enabled = options.evalBarEnabled;
+  if (options?.coachAiOnly !== undefined) body.coach_ai_only = options.coachAiOnly;
+  if (options?.inLoopCalibration !== undefined) body.in_loop_calibration = options.inLoopCalibration;
+  if (options?.baselines !== undefined && options?.baselines !== null) body.baselines = options.baselines;
+
+  const response = await fetch(`${API_BASE}/board/save_defaults`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 export async function calibrateBoard() {
   const response = await fetch(`${API_BASE}/board/calibrate`, {
     method: 'POST',

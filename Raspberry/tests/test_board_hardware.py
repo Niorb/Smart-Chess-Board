@@ -785,6 +785,34 @@ def test_set_square_baseline_invalid_coords_returns_negative():
     assert set_square_baseline(0, 8, 1500) == -1
 
 
+def test_save_defaults_function(tmp_path, monkeypatch):
+    """Verify that save_defaults saves to both board_settings.json and board_settings.default.json."""
+    import json
+    from board_hardware import save_defaults, settings
+    user_file = str(tmp_path / "board_settings.json")
+    monkeypatch.setenv("BOARD_SETTINGS_PATH", user_file)
+
+    settings["threshold_positive"] = 350
+    settings["threshold_negative"] = 450
+
+    res = save_defaults(overwrite_factory_template=True)
+    assert res is True
+    assert os.path.exists(user_file)
+    default_file = str(tmp_path / "board_settings.default.json")
+    assert os.path.exists(default_file)
+
+    with open(user_file) as f:
+        data = json.load(f)
+        assert data["threshold_positive"] == 350
+        assert data["threshold_negative"] == 450
+
+    with open(default_file) as f:
+        data_default = json.load(f)
+        assert data_default["threshold_positive"] == 350
+        assert data_default["threshold_negative"] == 450
+
+
+
 
 
 

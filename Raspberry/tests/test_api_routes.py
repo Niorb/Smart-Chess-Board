@@ -82,6 +82,24 @@ def test_settings_update_route_partial_and_floats():
     assert response.status_code == 200
 
 
+def test_save_defaults_route():
+    client = TestClient(app)
+    payload = {
+        "threshold_positive": 280,
+        "threshold_negative": 320,
+        "scan_delay": 50,
+    }
+    with patch("board_hardware.save_defaults", return_value=True):
+        response = client.post("/api/board/save_defaults", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["settings"]["threshold_positive"] == 280
+        assert data["settings"]["threshold_negative"] == 320
+        assert data["settings"]["scan_delay"] == 50
+        assert "persistent defaults" in data["message"]
+
+
 def test_clear_leds_route():
     client = TestClient(app)
     response = client.post("/api/board/clear_leds")

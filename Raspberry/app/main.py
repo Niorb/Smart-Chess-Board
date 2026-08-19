@@ -103,6 +103,25 @@ class ThresholdSettings(BaseModel):
     in_loop_calibration: bool | None = None
 
 
+class SaveDefaultsRequest(BaseModel):
+    threshold_positive: int | float | None = None
+    threshold_negative: int | float | None = None
+    col_mode: str | None = None
+    manual_col: int | float | None = None
+    scan_delay: int | float | None = None
+    mux_settle_ms: int | float | None = None
+    debounce_threshold: int | float | None = None
+    baseline_window_s: int | float | None = None
+    disabled_squares: list[list[int]] | None = None
+    pieces_mode: str | None = None
+    coach_hints_enabled: bool | None = None
+    eval_bar_enabled: bool | None = None
+    coach_ai_only: bool | None = None
+    in_loop_calibration: bool | None = None
+    baselines: list[list[int]] | None = None
+    overwrite_template: bool = True
+
+
 class CalibrateSquareRequest(BaseModel):
     col: int
     row: int
@@ -224,6 +243,55 @@ async def update_board_settings(body: ThresholdSettings):
         settings["in_loop_calibration"] = bool(body.in_loop_calibration)
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
+
+
+@app.post("/api/board/save_defaults")
+async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
+    """
+    Saves all current stats (baselines, thresholds, settings) to persistent storage
+    (board_settings.json and board_settings.default.json) as the defaults for future connections.
+    """
+    from board_hardware import save_defaults, settings
+    overwrite_template = True
+    if body is not None:
+        if body.threshold_positive is not None:
+            settings["threshold_positive"] = int(body.threshold_positive)
+        if body.threshold_negative is not None:
+            settings["threshold_negative"] = int(body.threshold_negative)
+        if body.col_mode is not None:
+            settings["col_mode"] = body.col_mode
+        if body.manual_col is not None:
+            settings["manual_col"] = int(body.manual_col)
+        if body.scan_delay is not None:
+            settings["scan_delay"] = int(body.scan_delay)
+        if body.mux_settle_ms is not None:
+            settings["mux_settle_ms"] = int(body.mux_settle_ms)
+        if body.debounce_threshold is not None:
+            settings["debounce_threshold"] = int(body.debounce_threshold)
+        if body.baseline_window_s is not None:
+            settings["baseline_window_s"] = int(body.baseline_window_s)
+        if body.disabled_squares is not None:
+            settings["disabled_squares"] = body.disabled_squares
+        if body.pieces_mode is not None:
+            settings["pieces_mode"] = body.pieces_mode
+        if body.coach_hints_enabled is not None:
+            settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
+        if body.eval_bar_enabled is not None:
+            settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
+        if body.coach_ai_only is not None:
+            settings["coach_ai_only"] = bool(body.coach_ai_only)
+        if body.in_loop_calibration is not None:
+            settings["in_loop_calibration"] = bool(body.in_loop_calibration)
+        if body.baselines is not None and isinstance(body.baselines, list) and len(body.baselines) == 8:
+            settings["baselines"] = body.baselines
+        overwrite_template = body.overwrite_template
+
+    await asyncio.to_thread(save_defaults, overwrite_factory_template=overwrite_template)
+    return {
+        "status": "success",
+        "message": "Current stats (baselines & thresholds) saved as persistent defaults",
+        "settings": settings,
+    }
 
 
 @app.post("/api/board/calibrate")
