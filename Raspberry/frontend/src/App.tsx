@@ -7,6 +7,8 @@ import {
   claimVictory,
   offerDraw,
   getLichessAccount,
+  getLastGameParams,
+  restartPreviousGame,
   setGameMode,
   getBoardSettings, 
   updateBoardSettings, 
@@ -19,7 +21,7 @@ import {
   triggerAnimation,
   testMoveTrace
 } from './api'
-import type { LichessAccount } from './api'
+import type { LichessAccount, LastGameParams } from './api'
 import { 
   Play, 
   XCircle, 
@@ -41,7 +43,8 @@ import {
   Target,
   Sparkles,
   Wand2,
-  Radar
+  Radar,
+  RotateCcw
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -82,6 +85,7 @@ function App() {
   const [ratingBoundary, setRatingBoundary] = useState<'any' | '100' | '200' | '300' | '500' | 'custom'>('any');
   const [customMinRating, setCustomMinRating] = useState<string>('1200');
   const [customMaxRating, setCustomMaxRating] = useState<string>('1800');
+  const [lastGameParams, setLastGameParams] = useState<LastGameParams | null>(null);
 
   // Calculate target rating range string for Lichess seek (e.g., "1350-1750")
   const computedRatingRange = useMemo(() => {
@@ -142,7 +146,18 @@ function App() {
     }
   };
 
-  // Fetch Lichess Account on mount and connection changes
+  // Fetch Lichess Account & Last Game Params on mount and connection changes
+  const fetchLastParams = async () => {
+    try {
+      const res = await getLastGameParams();
+      if (res.status === 'success' && res.last_game_params) {
+        setLastGameParams(res.last_game_params);
+      }
+    } catch (err) {
+      console.warn("Could not fetch last game params:", err);
+    }
+  };
+
   useEffect(() => {
     const fetchAccount = async () => {
       try {
@@ -154,8 +169,15 @@ function App() {
     };
     if (isConnected) {
       fetchAccount();
+      fetchLastParams();
     }
   }, [isConnected]);
+
+  useEffect(() => {
+    if (state.status === 'IDLE' || state.status === 'GAME_OVER' || state.status === 'PLAYING') {
+      fetchLastParams();
+    }
+  }, [state.status]);
 
   // Algebraic coordinate helper: col is rank index (0..7 -> 1..8), row is file index (0..7 -> a..h)
   const getChessCoord = (col: number, row: number): string => {
@@ -356,6 +378,17 @@ function App() {
       });
     } catch (err) {
       console.error("Error seeking match:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestartPrevious = async () => {
+    setLoading(true);
+    try {
+      await restartPreviousGame();
+    } catch (err) {
+      console.error("Error restarting previous game:", err);
     } finally {
       setLoading(false);
     }
@@ -882,6 +915,35 @@ function App() {
                       <span>Unexpected piece: {state.physical.guardrail.unexpected_pieces.map(([c, r]) => fileRankToChessCoord(c, r)).join(', ')}.</span>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Physical Gesture Active Banner */}
+            {((state.gesture && state.gesture.is_active) || (state.physical && state.physical.gesture && state.physical.gesture.is_active)) && (
+              <div className="mb-2 bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-emerald-500/20 border border-cyan-400/40 rounded-xl p-3 shadow-xl backdrop-blur-md animate-pulse flex items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300 flex-shrink-0">
+                    <Sparkles size={18} className="animate-spin text-cyan-300" style={{ animationDuration: '4s' }} />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-300">
+                        Physical Board Gesture
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-cyan-500/20 border border-cyan-400/30 text-cyan-200">
+                        Step {(state.gesture?.step || state.physical?.gesture?.step || 1)}/2
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-white">
+                      {state.gesture?.hint || state.physical?.gesture?.hint || "Kingside Corner Gate Active"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-slate-300 bg-slate-900/60 px-2 py-0.5 rounded border border-slate-700">
+                    {((state.gesture?.time_remaining || state.physical?.gesture?.time_remaining || 0)).toFixed(1)}s
+                  </span>
                 </div>
               </div>
             )}
@@ -1550,11 +1612,38 @@ function App() {
                   </p>
                 </div>
 
+                {/* Restart Previous Game Quick-Action Button */}
+                <button
+                  onClick={handleRestartPrevious}
+                  disabled={loading || !isConnected}
+                  className="w-full mt-2 bg-gradient-to-r from-slate-900 to-indigo-950/70 hover:from-slate-850 hover:to-indigo-900/80 border border-indigo-500/40 hover:border-indigo-400 disabled:opacity-50 text-indigo-100 font-bold text-xs py-3 px-4 rounded-xl shadow-md flex items-center justify-between gap-2 transition-all active:scale-[0.98] group"
+                  title="Quick restart using previous matchmaking settings (or physical gesture: lift h2 -> lift h1 -> replace both)"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 group-hover:text-white transition-colors">
+                      <RotateCcw size={15} />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-white">Restart Previous Game</span>
+                      <span className="text-[10px] text-indigo-300/80">
+                        {lastGameParams ? (
+                          `${lastGameParams.time_control || '10+0'} • ${lastGameParams.opponent === 'ai' ? `Stockfish AI (Lv. ${lastGameParams.ai_level || 3})` : 'Live Human'} • ${lastGameParams.color || 'random'}`
+                        ) : (
+                          'Default: 10+0 Rapid • Stockfish AI'
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono uppercase bg-indigo-900/60 border border-indigo-500/30 px-2 py-0.5 rounded text-indigo-300">
+                    h2 → h1 Gate
+                  </span>
+                </button>
+
                 {/* Seek / Start Match Button */}
                 <button
                   onClick={handleSeek}
                   disabled={loading || !isConnected}
-                  className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-extrabold text-base py-3.5 rounded-xl shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-extrabold text-base py-3.5 rounded-xl shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                 >
                   <Play size={18} fill="currentColor" />
                   <span>Start Match ({selectedTC})</span>

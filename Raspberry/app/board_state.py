@@ -90,6 +90,7 @@ from app.led_animations import (
     render_opponent_disconnected,
     scale_color,
 )
+from app.gesture_engine import PhysicalGestureEngine
 from app.lichess_engine import lichess_engine
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
@@ -126,9 +127,10 @@ class BoardStateManager:
         self.arrival_flash: dict | None = None
         self.guardrail_result: GameGuardrailResult | None = None
 
-        # Setup verification and move tracking subsystems
+        # Setup verification, move tracking, and physical gesture subsystems
         self.setup_validator = SetupValidator()
         self.move_tracker = PhysicalMoveTracker()
+        self.gesture_engine = PhysicalGestureEngine(state_manager=self)
         self.setup_result: SetupResult = self.setup_validator.validate(self.physical_state)
 
         # Hardware initialization (Serial for board + lgpio for MUX)
@@ -164,10 +166,15 @@ class BoardStateManager:
         r: int,
         is_capture: bool = False,
         duration: float = ANIM_MOVE_CONFIRM_DURATION_S,
+        extra_squares: list[tuple[int, int]] | None = None,
     ) -> None:
-        """Triggers an immediate visual confirmation flash on the arrival square."""
+        """Triggers an immediate visual confirmation flash on the arrival square(s)."""
+        squares = [(c, r)]
+        if extra_squares:
+            squares.extend(extra_squares)
         self.arrival_flash = {
             "square": (c, r),
+            "squares": squares,
             "start_time": time.time(),
             "duration": duration,
             "is_capture": is_capture,
@@ -302,6 +309,7 @@ class BoardStateManager:
                 if self.move_tracker.in_flight_move
                 else None
             ),
+            "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
         }
 
     def get_health_status(self):
@@ -413,8 +421,8 @@ class BoardStateManager:
                 self.strip.show()
                 return
 
-            # Layer 1: Setup / Idle Board Validation
-            if self.game_status in ["IDLE", "SETUP"]:
+            # Layer 1: Setup / Idle Board Validation & Physical Gesture Overlay
+            if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)
                 if not self.setup_result.is_setup_ready:
                     # Dim white for missing starting pieces
@@ -423,7 +431,12 @@ class BoardStateManager:
                     # Red for misplaced pieces
                     for c, r in self.setup_result.misplaced_pieces:
                         set_square_leds(c, r, COLOR_INT_SETUP_MISPLACED)
-                # When setup is ready, all LEDs remain off
+
+                # Physical Gesture LED Overlay (Armed/Step1/Step2)
+                if hasattr(self, "gesture_engine") and self.gesture_engine.is_active:
+                    gesture_overlay = self.gesture_engine.get_led_overlay(now)
+                    for (g_c, g_r), g_color in gesture_overlay.items():
+                        set_square_leds(g_c, g_r, g_color)
 
             # Layer 2: Playing State Highlights
             elif self.game_status == "PLAYING":
@@ -576,10 +589,10 @@ class BoardStateManager:
                         opp_king_coord,
                     )
 
-            # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square)
+            # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
                 if flash_source:
-                    flash_c, flash_r = flash_source["square"]
+                    flash_squares = flash_source.get("squares") or [flash_source["square"]]
                     flash_t0 = flash_source["start_time"]
                     flash_dur = flash_source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
                     is_capture = flash_source.get("is_capture", False)
@@ -588,7 +601,8 @@ class BoardStateManager:
                         progress = elapsed / flash_dur
                         intensity = math.exp(-3.5 * progress) * (1.0 - progress)
                         flash_color = COLOR_INT_CAPTURE_CONFIRM if is_capture else COLOR_INT_MOVE_CONFIRM
-                        set_square_leds(flash_c, flash_r, scale_color(flash_color, intensity))
+                        for f_c, f_r in flash_squares:
+                            set_square_leds(f_c, f_r, scale_color(flash_color, intensity))
                     else:
                         if self.arrival_flash is flash_source:
                             self.arrival_flash = None
@@ -771,6 +785,12 @@ class BoardStateManager:
                         else:
                             self.move_tracker.reset(self.physical_state)
                             self.guardrail_result = None
+                            # Physical gesture evaluation during IDLE / GAME_OVER
+                            if hasattr(self, "gesture_engine"):
+                                self.gesture_engine.evaluate(self.physical_state, self.game_status)
+
+                        if self.game_status not in ["IDLE", "GAME_OVER"] and hasattr(self, "gesture_engine"):
+                            self.gesture_engine.reset()
 
                     self._update_leds()
                 else:
@@ -843,6 +863,7 @@ class BoardStateManager:
                     "my_color": lichess_engine.my_color,
                     "game": lichess_engine.get_game_payload(),
                     "coach": coach_payload,
+                    "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
                     "diagnostics": diag_info,
                 }
 

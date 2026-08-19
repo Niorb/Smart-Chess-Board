@@ -24,6 +24,24 @@ export interface MoveHint {
   delta_cp: number;
 }
 
+export interface GestureItem {
+  name: string;
+  description: string;
+  is_active: boolean;
+  step: number;
+  hint?: string | null;
+  time_remaining?: number;
+}
+
+export interface GestureState {
+  is_active: boolean;
+  active_gesture?: string | null;
+  step: number;
+  hint?: string | null;
+  time_remaining?: number;
+  gestures?: GestureItem[];
+}
+
 export interface CoachPayload {
   enabled: boolean;
   eval_bar_enabled: boolean;
@@ -42,6 +60,7 @@ export interface CoachPayload {
 export interface BoardState {
   status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER';
   virtual_only?: boolean;
+  gesture?: GestureState;
   physical: {
     rows: number;
     cols: number;
@@ -53,6 +72,7 @@ export interface BoardState {
     testing_led_index?: number;
     disabled_squares?: number[][];
     virtual_only?: boolean;
+    gesture?: GestureState;
     setup?: SetupStatus;
     guardrail?: GuardrailStatus | null;
     pieces_detected?: boolean;

@@ -77,6 +77,7 @@ settings: dict[str, Any] = {
     "eval_bar_enabled": True,
     "coach_ai_only": True,
     "in_loop_calibration": True,
+    "last_game_params": None,
 }
 
 last_sent_settle_us = None

@@ -381,6 +381,52 @@ async def seek_game_route(body: SeekRequest | None = None):
     }
 
 
+@app.get("/api/game/last_params")
+async def get_last_game_params_route():
+    """Returns the stored last game matchmaking parameters from board settings."""
+    from board_hardware import settings
+    last_params = settings.get("last_game_params")
+    return {"status": "success", "last_game_params": last_params}
+
+
+@app.post("/api/game/restart_previous")
+async def restart_previous_game_route():
+    """Restarts a game using the persisted last_game_params (or standard defaults)."""
+    if state_manager.game_status not in ["IDLE", "GAME_OVER"]:
+        return {"status": "error", "message": f"Cannot restart game while status is {state_manager.game_status}"}
+
+    from board_hardware import settings
+    params = settings.get("last_game_params") or {}
+    tc = params.get("time_control", "10+0")
+    rated = bool(params.get("rated", False))
+    color = params.get("color", "random")
+    opponent = params.get("opponent", "auto")
+    ai_level = params.get("ai_level", 3)
+    rating_range = params.get("rating_range", None)
+
+    await lichess_engine.seek(
+        state_manager,
+        time_control=tc,
+        rated=rated,
+        color=color,
+        opponent=opponent,
+        ai_level=ai_level,
+        rating_range=rating_range,
+    )
+    return {
+        "status": "seeking_initiated",
+        "restarted": True,
+        "params": {
+            "time_control": tc,
+            "rated": rated,
+            "color": color,
+            "opponent": opponent,
+            "ai_level": ai_level,
+            "rating_range": rating_range,
+        },
+    }
+
+
 @app.post("/api/game/cancel")
 async def cancel_game_route():
     """Cancels the active seek or resigns the ongoing game."""

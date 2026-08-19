@@ -23,5 +23,6 @@
     "coach_hints_enabled": true,
     "eval_bar_enabled": true,
     "coach_ai_only": true,
-    "in_loop_calibration": true
+    "in_loop_calibration": true,
+    "last_game_params": null
 }

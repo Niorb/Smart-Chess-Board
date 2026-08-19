@@ -326,6 +326,22 @@ class LichessEngine:
         self._cancel_event.clear()
         state_manager.game_status = "SEEKING"
 
+        # Persist AI matchmaking parameters for restart gesture & last game recall
+        try:
+            from board_hardware import save_settings, settings
+            settings["last_game_params"] = {
+                "time_control": f"{time_mins}+{inc_secs}",
+                "increment": inc_secs,
+                "rated": False,
+                "color": color,
+                "opponent": "ai",
+                "ai_level": level,
+                "rating_range": None,
+            }
+            save_settings()
+        except Exception as e:
+            logger.warning(f"Could not persist last_game_params in challenge_ai(): {e}")
+
         form_data: dict[str, Any] = {
             "level": str(level),
             "color": color,
@@ -402,6 +418,22 @@ class LichessEngine:
 
         self._cancel_event.clear()
         state_manager.game_status = "SEEKING"
+
+        # Persist human/auto matchmaking parameters for restart gesture & last game recall
+        try:
+            from board_hardware import save_settings, settings
+            settings["last_game_params"] = {
+                "time_control": time_control,
+                "increment": inc_secs,
+                "rated": bool(rated),
+                "color": color,
+                "opponent": opponent,
+                "ai_level": ai_level,
+                "rating_range": rating_range,
+            }
+            save_settings()
+        except Exception as e:
+            logger.warning(f"Could not persist last_game_params in seek(): {e}")
 
         if self._seek_task and not self._seek_task.done():
             self._seek_task.cancel()

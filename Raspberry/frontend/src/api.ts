@@ -213,3 +213,26 @@ export async function testMoveTrace(options: {
   return response.json();
 }
 
+export interface LastGameParams {
+  time_control?: string;
+  increment?: number;
+  rated?: boolean;
+  color?: string;
+  opponent?: 'auto' | 'ai' | 'human';
+  ai_level?: number;
+  rating_range?: string | null;
+}
+
+export async function getLastGameParams(): Promise<{ status: string; last_game_params: LastGameParams | null }> {
+  const response = await fetch(`${API_BASE}/game/last_params`);
+  return response.json();
+}
+
+export async function restartPreviousGame() {
+  const response = await fetch(`${API_BASE}/game/restart_previous`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
