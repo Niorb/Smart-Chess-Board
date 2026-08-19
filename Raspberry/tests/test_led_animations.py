@@ -388,17 +388,22 @@ def test_render_guardrail_mismatch():
 
 def test_scale_color_gamma():
     """Verify perceptual gamma 2.8 correction and low brightness clamping."""
-    from app.led_animations import scale_color_gamma, unpack_rgb
+    from app.led_animations import GAMMA_LUT_28, scale_color_gamma, unpack_rgb
 
-    c = color_rgb(200, 100, 50)
+    c_white = color_rgb(255, 255, 255)
     # Zero factor gives 0
-    assert scale_color_gamma(c, 0.0) == 0
+    assert scale_color_gamma(c_white, 0.0) == 0
 
-    # Full factor preserves full brightness
-    full = scale_color_gamma(c, 1.0)
-    assert unpack_rgb(full) == unpack_rgb(c)
+    # Full factor on max channel preserves 255
+    full = scale_color_gamma(c_white, 1.0)
+    assert unpack_rgb(full) == (255, 255, 255)
 
-    # Low factor applies gamma curve
+    # Factor applies gamma LUT curve
+    c = color_rgb(200, 100, 50)
+    scaled = scale_color_gamma(c, 1.0)
+    assert unpack_rgb(scaled) == (GAMMA_LUT_28[200], GAMMA_LUT_28[100], GAMMA_LUT_28[50])
+
+    # Low factor applies gamma curve with floor clamping
     low = scale_color_gamma(c, 0.1, min_val=1)
     r, g, b = unpack_rgb(low)
     assert r >= 1

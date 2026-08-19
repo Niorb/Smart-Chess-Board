@@ -107,20 +107,21 @@ def test_keyframe_self_healing():
     mock_ser = MagicMock()
     strip.set_serial_conn(mock_ser)
 
+    # Frame 1: set pixel 5, show() transmits 1 chunk
     strip.setPixelColor(5, (100, 200, 50))
     strip.show()
     assert mock_ser.write.call_count == 1
 
-    # Unchanged frame: show() should NOT send data
+    # Frame 2: unchanged frame -> show() does NOT send data
     mock_ser.reset_mock()
     strip.show()
     assert mock_ser.write.call_count == 0
 
-    # Simulate 58 more unchanged frames up to frame 59
-    for _ in range(58):
+    # Frames 3 to 59 (57 iterations): all unchanged -> 0 transmissions
+    for _ in range(57):
         strip.show()
     assert mock_ser.write.call_count == 0
 
-    # 60th frame is keyframe -> must re-transmit active LEDs to self-heal
+    # Frame 60: Keyframe triggered -> transmits full 152-LED buffer in 4 chunks (152 / 38)
     strip.show()
-    assert mock_ser.write.call_count == 1
+    assert mock_ser.write.call_count == 4
