@@ -551,7 +551,19 @@ class LichessEngine:
             self._auto_claim_task = None
 
         if gone:
-            self.opponent_gone = {"gone": True, "claim_win_in": max(0, int(claim_win_in))}
+            initial_win_in = max(1, int(claim_win_in)) if claim_win_in > 0 else 30
+            if self.opponent_gone and self.opponent_gone.get("gone") and "initial_claim_win_in" in self.opponent_gone:
+                initial_win_in = self.opponent_gone["initial_claim_win_in"]
+                t0 = self.opponent_gone.get("start_time", time.time())
+            else:
+                t0 = time.time()
+
+            self.opponent_gone = {
+                "gone": True,
+                "claim_win_in": max(0, int(claim_win_in)),
+                "initial_claim_win_in": initial_win_in,
+                "start_time": t0,
+            }
             if claim_win_in <= 0:
                 logger.info("Opponent gone timer expired. Dispatching immediate victory claim...")
                 self._auto_claim_task = asyncio.create_task(self.claim_victory(state_manager))

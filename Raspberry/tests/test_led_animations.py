@@ -74,8 +74,39 @@ def test_lifecycle_animation_lifecycle():
 
 
 def test_render_game_started():
+    # Test White army start animation
+    for p in [0.1, 0.3, 0.6, 0.8, 0.95]:
+        frame = [0] * NUM_LEDS
+        render_game_started(p, frame, {"my_color": "white"})
+        assert any(frame)
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        # Strict low-power budget: max 6 active squares (< 10% of board)
+        assert lit_squares <= 6
+
+    # Test Black army start animation
+    for p in [0.1, 0.3, 0.6, 0.8, 0.95]:
+        frame_black = [0] * NUM_LEDS
+        render_game_started(p, frame_black, {"my_color": "black"})
+        assert any(frame_black)
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame_black[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 6
+
+
+def test_render_opponent_disconnected():
+    from app.led_animations import render_opponent_disconnected
     frame = [0] * NUM_LEDS
-    render_game_started(0.5, frame, {"my_color": "white"})
+    opponent_info = {"gone": True, "claim_win_in": 20, "initial_claim_win_in": 30, "start_time": time.time() - 10}
+    render_opponent_disconnected(time.time(), frame, opponent_info, my_color="white", opponent_king_sq=(4, 7))
     assert any(frame)
 
 

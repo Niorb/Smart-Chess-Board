@@ -117,7 +117,11 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
     - **Capture-in-Progress Aura**: Sinusoidal pulsing radiant ruby aura (`(255, 32, 64)`) on capture destination with warm golden breathing glow (`(220, 160, 20)`) on candidate attacking squares.
     - **Guardrail Mismatch Feedback**: Rapid amber pulse (`(204, 120, 0)`) on missing piece squares and alert crimson pulse (`(204, 0, 0)`) on unexpected piece squares.
   - **Frontend UI Overlays & Alerts (`Raspberry/frontend/src/App.tsx` & `useBoardState.ts`)**: Real-time "Capture in Progress" banner, "Board State Mismatch" alert banner, and virtual chessboard square highlight rings/badges.
-  - **Unit Test Coverage (`Raspberry/tests/`)**: Added test suites in `test_setup_validator.py`, `test_physical_tracker.py`, `test_board_state.py`, and `test_led_animations.py`.
+- [x] Reworked Game Started Animation, Active Turn Indicator & Opponent Disconnected Victory Claim Gauge:
+  - **Low-Power Color-Differentiated Game Started Animation (`Raspberry/app/led_animations.py`)**: Replaced power-heavy full-board radial wave with a lightweight, high-contrast army ignition sweep and royal pulse. Uses max 2–4 simultaneous active squares (< 6% board, < 50mA total draw), eliminating power drop artifacts. Color-announces player assignment: sweeping luminous warm ivory/gold across Ranks 1–2 with King $e1$/Queen $d1$ pulse for White, and cosmic electric cyan/sapphire across Ranks 8–7 with King $e8$/Queen $d8$ pulse for Black.
+  - **Active Player Turn Ambient Halo (`Raspberry/app/board_state.py`)**: Renders a subtle, non-intrusive breathing aura on the active turn King ($e1$ or $e8$) with color matching the active player (warm ivory for White, azure for Black), automatically suppressed when the King is in check or lifted.
+  - **Physical Opponent Disconnected Beacon & Victory Claim Countdown Gauge (`Raspberry/app/led_animations.py` & `lichess_engine.py`)**: Renders an alert amber beacon on the opponent King square and a linear 8-LED countdown progress bar along the opponent's back rank that smoothly drains down as the victory claim timer elapses.
+  - **UI Triggers & Unit Tests (`Raspberry/frontend/src/App.tsx` & `tests/`)**: Added Start (White) and Start (Black) animation debug triggers in the webapp, updated `test_led_animations.py`, and added test suites in `test_board_state.py`.
 
 ## Task Backlog
 

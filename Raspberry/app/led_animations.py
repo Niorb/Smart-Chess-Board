@@ -156,17 +156,26 @@ def _render_sub_trace(
     for i in range(1, num_steps):
         c, r = path[i]
         dist = abs(comet_pos - i)
-        # Pulse intensity with Gaussian falloff (width ~ 0.9 squares)
-        intensity = math.exp(-2.5 * dist * dist)
-        if intensity > 0.02:
-            scaled = scale_color(trace_color, intensity)
-            blend_square_in_frame(frame, c, r, scaled, intensity)
+        d = head_pos - i
+        # Asymmetric tail: head is sharp (d < 0), tail decays backwards (d >= 0)
+        if -0.3 <= d <= 2.2:
+            if d < 0:
+                intensity = math.exp(-6.0 * d * d)
+            else:
+                intensity = math.exp(-1.4 * d)
 
-    # Render arrival pulse flare on destination square
-    c_arr, r_arr = path[num_steps]
-    d_arr = abs(comet_pos - num_steps)
-    intensity_arr = math.exp(-2.5 * d_arr * d_arr)
-    if intensity_arr > 0.02 and blend_arrival:
+            if intensity > 0.03:
+                sq_color = scale_color(trace_color, intensity * 0.9)
+                if 0 <= c < 8 and 0 <= r < 8:
+                    for idx in get_led_indices(r, c):
+                        if 0 <= idx < len(frame):
+                            frame[idx] = add_colors(frame[idx], sq_color)
+
+    # 2. Additive Arrival Square Pulse Flare
+    if blend_arrival and head_pos >= (n - 1.2):
+        c_arr, r_arr = path[-1]
+        progress_arr = min(1.0, max(0.0, (head_pos - (n - 1.2)) / 1.5))
+        intensity_arr = math.exp(-2.5 * progress_arr) * (1.0 - progress_arr)
         flare = scale_color(trace_color, intensity_arr * 0.85)
         if 0 <= c_arr < 8 and 0 <= r_arr < 8:
             for idx in get_led_indices(r_arr, c_arr):
@@ -182,18 +191,7 @@ def render_move_trace(
     period: float = MOVE_TRACE_PERIOD_S,
     blend_arrival: bool = True,
 ) -> None:
-    """
-    Renders an animated comet pulse along a move trajectory path on top of an existing frame.
-    The destination/arrival square pulses with an additive luminance flare upon comet arrival.
-
-    Args:
-        path: Ordered list of (file, rank) tuples from origin to destination (len >= 2).
-        now: Current timestamp in seconds (time.time()).
-        frame: LED frame buffer (list of integer colors).
-        trace_color: Color of the moving pulse.
-        period: Time in seconds for one complete traversal and decay cycle.
-        blend_arrival: Whether to blend the arrival pulse onto the existing target square color.
-    """
+    """Renders an animated comet pulse along a move trajectory path on top of an existing frame."""
     if len(path) < 2 or period <= 0:
         return
     tau = (now % period) / period  # 0.0 to 1.0
@@ -209,33 +207,16 @@ def render_castle_trace(
     period: float = ANIM_CASTLE_PERIOD_S,
     blend_arrival: bool = True,
 ) -> None:
-    """
-    Renders a choreographed 2-phase castling move animation:
-      - Phase 1 (first half of period, tau in [0.0, 0.5]):
-        The King glides 2 squares along king_path (e.g. e1 -> f1 -> g1), flaring at destination.
-      - Phase 2 (second half of period, tau in [0.5, 1.0]):
-        The Rook glides along rook_path (e.g. h1 -> g1 -> f1), flaring at destination.
-
-    Args:
-        king_path: Ordered squares for the King move (e.g. [(4, 0), (5, 0), (6, 0)]).
-        rook_path: Ordered squares for the Rook move (e.g. [(7, 0), (6, 0), (5, 0)]).
-        now: Current timestamp in seconds (time.time()).
-        frame: LED frame buffer (list of integer colors).
-        trace_color: Color of the moving pulse.
-        period: Total duration of the 2-phase castling cycle.
-        blend_arrival: Whether to blend arrival flare on destination squares.
-    """
+    """Renders a choreographed 2-phase castling move animation."""
     if not king_path or not rook_path or period <= 0:
         return
 
     tau = (now % period) / period  # 0.0 to 1.0
 
     if tau < 0.5:
-        # Phase 1: King move (normalized to 0.0 -> 1.0)
         sub_tau = tau * 2.0
         _render_sub_trace(king_path, sub_tau, frame, trace_color, blend_arrival)
     else:
-        # Phase 2: Rook move (normalized to 0.0 -> 1.0)
         sub_tau = (tau - 0.5) * 2.0
         _render_sub_trace(rook_path, sub_tau, frame, trace_color, blend_arrival)
 
@@ -247,35 +228,73 @@ def render_castle_trace(
 def render_game_started(progress: float, frame: List[int], params: Dict[str, Any]) -> None:
     """
     GAME_STARTED animation:
-    Radial expanding wave from center (d4, d5, e4, e5) outward to perimeter.
+    Choreographed, low-power color announcement and army ignition sequence.
+    - Low power budget: Max 2-4 squares illuminated simultaneously (<6% board).
+    - Color Announcement:
+      * Playing White: Sweeping luminous warm ivory/gold beam across ranks 1 & 2 (White army),
+        followed by a focused royal pulse on King (e1) and Queen (d1).
+      * Playing Black: Sweeping cosmic electric cyan/sapphire beam across ranks 8 & 7 (Black army),
+        followed by a focused royal pulse on King (e8) and Queen (d8).
+      * Final battle line ignition: Dual spark pulses meeting at center battle squares (d4, e4).
     """
-    my_color = params.get("my_color", "white")
-    flare_color = (
-        COLOR_INT_VICTORY_GOLD if my_color == "white" else COLOR_INT_VICTORY_GREEN
-    )
+    my_color = str(params.get("my_color", "white")).lower()
+    is_white = (my_color == "white")
 
-    center_c = 3.5
-    center_r = 3.5
-    max_radius = 5.0
-    current_radius = progress * (max_radius + 1.2)
+    # 1. Path of 16 piece squares for player's army
+    if is_white:
+        # Ranks 1 and 2: a1->h1 then h2->a2
+        army_path = [
+            (0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0),
+            (7, 1), (6, 1), (5, 1), (4, 1), (3, 1), (2, 1), (1, 1), (0, 1),
+        ]
+        primary_col = COLOR_INT_START_WHITE_PRIMARY
+        secondary_col = COLOR_INT_START_WHITE_SECONDARY
+        royal_squares = [(4, 0), (3, 0)]  # e1 (King), d1 (Queen)
+        center_clash = [((3, 1), (3, 3)), ((4, 1), (4, 3))]  # d2->d4, e2->e4
+    else:
+        # Ranks 8 and 7: h8->a8 then a7->h7
+        army_path = [
+            (7, 7), (6, 7), (5, 7), (4, 7), (3, 7), (2, 7), (1, 7), (0, 7),
+            (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (7, 6),
+        ]
+        primary_col = COLOR_INT_START_BLACK_PRIMARY
+        secondary_col = COLOR_INT_START_BLACK_SECONDARY
+        royal_squares = [(4, 7), (3, 7)]  # e8 (King), d8 (Queen)
+        center_clash = [((3, 6), (3, 4)), ((4, 6), (4, 4))]  # d7->d5, e7->e5
 
-    for c in range(8):
-        for r in range(8):
-            dist = math.sqrt((c - center_c) ** 2 + (r - center_r) ** 2)
-            d = abs(dist - current_radius)
-            # Gaussian wavefront
-            wave = math.exp(-3.0 * d * d)
-            # Fading trail
-            trail = (
-                math.exp(-1.5 * dist) * (1.0 - progress) * 0.4
-                if dist < current_radius
-                else 0.0
-            )
-            intensity = max(0.0, min(1.0, wave + trail)) * (1.0 - 0.3 * progress)
+    # Phase 1 (progress 0.0 -> 0.65): Army Ignition Sweep
+    if progress < 0.65:
+        p_sweep = progress / 0.65
+        n_sq = len(army_path)
+        head_pos = p_sweep * (n_sq - 1)
+        for i, (c, r) in enumerate(army_path):
+            dist = abs(i - head_pos)
+            if dist < 2.2:
+                intensity = math.exp(-2.0 * dist * dist)
+                if intensity > 0.03:
+                    col = blend_colors(primary_col, secondary_col, min(1.0, dist * 0.7))
+                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.9))
 
-            if intensity > 0.02:
-                col = blend_colors(COLOR_INT_VICTORY_GREEN, flare_color, 0.5)
-                set_square_in_frame(frame, c, r, scale_color(col, intensity))
+    # Phase 2 (progress 0.50 -> 0.85): Royal Focus Pulse on King & Queen
+    if 0.50 <= progress <= 0.85:
+        p_royal = (progress - 0.50) / 0.35
+        royal_intensity = math.sin(p_royal * math.pi) * 0.85
+        if royal_intensity > 0.03:
+            for k_c, k_r in royal_squares:
+                col = blend_colors(primary_col, COLOR_INT_DRAW_WHITE, 0.3)
+                set_square_in_frame(frame, k_c, k_r, scale_color(col, royal_intensity))
+
+    # Phase 3 (progress 0.70 -> 1.0): Battle Line Center Ignition
+    if progress >= 0.70:
+        p_center = (progress - 0.70) / 0.30
+        for (from_c, from_r), (to_c, to_r) in center_clash:
+            curr_r = from_r + (to_r - from_r) * min(1.0, p_center * 1.4)
+            for r_cand in range(min(from_r, to_r), max(from_r, to_r) + 1):
+                dist = abs(r_cand - curr_r)
+                if dist < 1.2:
+                    spark_int = math.exp(-3.0 * dist * dist) * (1.0 - p_center * 0.5)
+                    if spark_int > 0.03:
+                        set_square_in_frame(frame, from_c, r_cand, scale_color(primary_col, spark_int * 0.7))
 
 
 def render_game_won(
@@ -631,3 +650,49 @@ def render_guardrail_mismatch(
         unexp_col = scale_color(COLOR_INT_GUARDRAIL_UNEXPECTED, unexp_intensity)
         for c, r in unexpected_pieces:
             set_square_in_frame(frame, c, r, unexp_col)
+
+
+def render_opponent_disconnected(
+    now: float,
+    frame: List[int],
+    opponent_gone_info: Dict[str, Any],
+    my_color: str,
+    opponent_king_sq: Optional[Tuple[int, int]] = None,
+) -> None:
+    """
+    Renders visual alerts on the physical board when the opponent disconnects:
+    1. Warning beacon: Alert pulsing amber beacon on the opponent's King square.
+    2. Linear Victory Claim Countdown Gauge: An 8-LED progress meter along the opponent's
+       back rank (Rank 8 for White player, Rank 1 for Black player) smoothly draining down
+       as the victory claim window elapses.
+    """
+    # 1. Warning beacon on opponent's King
+    if opponent_king_sq:
+        k_c, k_r = opponent_king_sq
+        pulse = math.sin(now * 3.0 * math.pi) * 0.5 + 0.5
+        beacon_col = scale_color(COLOR_INT_OPPONENT_DISCONNECTED, 0.35 + 0.65 * pulse)
+        set_square_in_frame(frame, k_c, k_r, beacon_col)
+
+    # 2. Linear countdown gauge along opponent's back rank
+    gauge_rank = 7 if str(my_color).lower() == "white" else 0
+    total_time = opponent_gone_info.get("initial_claim_win_in", 30)
+    if total_time <= 0:
+        total_time = 30
+    start_time = opponent_gone_info.get("start_time", now)
+    elapsed = max(0.0, now - start_time)
+    remaining = max(0.0, total_time - elapsed)
+    frac = max(0.0, min(1.0, remaining / total_time))  # 1.0 down to 0.0
+
+    # 8 segments from file 0 to 7
+    active_segments = frac * 8.0  # 8.0 down to 0.0
+    for c in range(8):
+        if c < int(active_segments):
+            # Fully active segment
+            set_square_in_frame(frame, c, gauge_rank, scale_color(COLOR_INT_OPPONENT_DISCONNECTED, 0.55))
+        elif c == int(active_segments):
+            # Fractional draining edge segment with subtle breathing pulse
+            rem = active_segments - int(active_segments)
+            edge_pulse = math.sin(now * 5.0) * 0.2 + 0.8
+            set_square_in_frame(
+                frame, c, gauge_rank, scale_color(COLOR_INT_OPPONENT_DISCONNECTED, 0.55 * rem * edge_pulse)
+            )

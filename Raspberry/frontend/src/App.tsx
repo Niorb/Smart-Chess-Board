@@ -1884,12 +1884,20 @@ function App() {
 
                   <div className="grid grid-cols-2 gap-1.5 mt-1">
                     <button
-                      onClick={() => handleTriggerAnimation('GAME_STARTED')}
+                      onClick={() => handleTriggerAnimation('GAME_STARTED', { my_color: 'white' })}
                       disabled={!isConnected}
-                      className="bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                      className="bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 text-amber-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
                     >
                       <Zap size={11} />
-                      <span>Start Anim</span>
+                      <span>Start (White)</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('GAME_STARTED', { my_color: 'black' })}
+                      disabled={!isConnected}
+                      className="bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 text-cyan-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Zap size={11} />
+                      <span>Start (Black)</span>
                     </button>
                     <button
                       onClick={() => handleTriggerAnimation('GAME_WON')}

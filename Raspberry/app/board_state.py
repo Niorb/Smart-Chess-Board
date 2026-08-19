@@ -68,11 +68,14 @@ from app.led_helpers import (
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
+    COLOR_INT_OPPONENT_DISCONNECTED,
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
     COLOR_INT_PIECE_LIFTED,
     COLOR_INT_SETUP_MISPLACED,
     COLOR_INT_SETUP_MISSING,
+    COLOR_INT_TURN_BLACK,
+    COLOR_INT_TURN_WHITE,
     Color,
     all_leds_off,
     get_led_indices,
@@ -84,6 +87,7 @@ from app.led_animations import (
     render_capture_aura,
     render_guardrail_mismatch,
     render_move_trace,
+    render_opponent_disconnected,
     scale_color,
 )
 from app.lichess_engine import lichess_engine
@@ -544,6 +548,32 @@ class BoardStateManager:
                         self.guardrail_result.unexpected_pieces,
                         now,
                         frame,
+                    )
+
+                # 6. Active Player Turn Ambient Indicator (Subtle breathing halo on active King)
+                if getattr(lichess_engine, "board", None) and not lichess_engine.board.is_check():
+                    active_turn = lichess_engine.board.turn
+                    active_king_sq = lichess_engine.board.king(active_turn)
+                    if active_king_sq is not None:
+                        ak_c = chess.square_file(active_king_sq)
+                        ak_r = chess.square_rank(active_king_sq)
+                        if self.move_tracker.lifted_square != (ak_c, ak_r):
+                            turn_col = COLOR_INT_TURN_WHITE if active_turn == chess.WHITE else COLOR_INT_TURN_BLACK
+                            turn_pulse = math.sin(now * 2.5) * 0.5 + 0.5
+                            turn_intensity = 0.14 + 0.09 * turn_pulse
+                            set_square_leds(ak_c, ak_r, scale_color(turn_col, turn_intensity))
+
+                # 7. Opponent Disconnected Warning Beacon & Victory Claim Countdown Gauge
+                if getattr(lichess_engine, "opponent_gone", None) and lichess_engine.opponent_gone.get("gone"):
+                    opp_color = chess.BLACK if (getattr(lichess_engine, "my_color", "white") or "white").lower() == "white" else chess.WHITE
+                    opp_king = lichess_engine.board.king(opp_color) if getattr(lichess_engine, "board", None) else None
+                    opp_king_coord = (chess.square_file(opp_king), chess.square_rank(opp_king)) if opp_king is not None else None
+                    render_opponent_disconnected(
+                        now,
+                        frame,
+                        lichess_engine.opponent_gone,
+                        getattr(lichess_engine, "my_color", "white"),
+                        opp_king_coord,
                     )
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square)

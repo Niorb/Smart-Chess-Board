@@ -87,6 +87,13 @@ COLOR_EVAL_WHITE = (80, 80, 100)      # Cool light tone for White advantage
 COLOR_EVAL_BLACK = (10, 20, 60)       # Dim navy tone for Black advantage
 COLOR_EVAL_NEUTRAL = (30, 30, 48)     # Neutral midpoint tone
 
+# Active Player Turn Ambient Indicator Colors — (R, G, B) tuples (subtle breathing halo on active King)
+COLOR_TURN_WHITE = (140, 130, 90)     # Warm ivory tone for White's turn King
+COLOR_TURN_BLACK = (20, 70, 140)      # Cool azure tone for Black's turn King
+
+# Opponent Disconnected & Victory Claim Indicator Colors — (R, G, B) tuples
+COLOR_OPPONENT_DISCONNECTED = (220, 100, 0)  # Alert amber beacon & countdown gauge
+
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
 COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
 COLOR_CAPTURE_TRACE = (204, 32, 64)  # High-energy rose-crimson pulse along capture trajectory
@@ -98,6 +105,10 @@ COLOR_DRAW_WHITE = (160, 160, 204)  # Cool white for draw curtain
 COLOR_SEEKING_HEAD = (140, 240, 255)  # Bright icy cyan head for seeking orbit
 COLOR_SEEKING_BODY = (0, 140, 255)  # Electric blue body for seeking orbit
 COLOR_SEEKING_TAIL = (0, 36, 160)  # Deep royal blue tail for seeking orbit
+COLOR_START_WHITE_PRIMARY = (255, 230, 160)  # Radiant ivory gold for White start scan
+COLOR_START_WHITE_SECONDARY = (200, 180, 120)  # Warm gold for White start tail
+COLOR_START_BLACK_PRIMARY = (0, 180, 255)  # Electric cyan-azure for Black start scan
+COLOR_START_BLACK_SECONDARY = (80, 60, 220)  # Royal violet for Black start tail
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
@@ -119,7 +130,7 @@ FLASH_COUNT_CONNECT = 2  # Number of flashes on successful connection
 MOVE_TRACE_PERIOD_S = 0.8  # Traversal period for move trace pulse
 ANIM_CASTLE_PERIOD_S = 2.0  # Traversal period for 2-phase King + Rook castling cycle
 ANIM_MOVE_CONFIRM_DURATION_S = 0.45  # Snappy 450ms exponential decay
-ANIM_GAME_START_DURATION_S = 1.5  # Duration for game start radial burst
+ANIM_GAME_START_DURATION_S = 2.2  # Duration for choreographed army scan & royal focus
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
 ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave
 ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave

@@ -365,6 +365,41 @@ def test_physical_payload_includes_guardrail_and_capture():
     assert payload["guardrail"]["missing_pieces"] == [[4, 1]]
 
 
+def test_board_state_active_turn_indicator_led_render():
+    """Verify that _update_leds renders subtle ambient turn indicator on active King."""
+    import chess
+    from app.lichess_engine import lichess_engine
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    lichess_engine.board = chess.Board()
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+def test_board_state_opponent_disconnected_led_render():
+    """Verify that _update_leds renders warning beacon and countdown gauge when opponent leaves."""
+    import chess
+    from app.lichess_engine import lichess_engine
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    lichess_engine.board = chess.Board()
+    lichess_engine.my_color = "white"
+    lichess_engine.opponent_gone = {
+        "gone": True,
+        "claim_win_in": 25,
+        "initial_claim_win_in": 30,
+        "start_time": time.time() - 5,
+    }
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
 
 
 
