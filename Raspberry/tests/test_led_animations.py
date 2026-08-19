@@ -385,3 +385,23 @@ def test_render_guardrail_mismatch():
     render_guardrail_mismatch(missing, unexpected, time.time(), frame)
     assert any(frame)
 
+
+def test_scale_color_gamma():
+    """Verify perceptual gamma 2.8 correction and low brightness clamping."""
+    from app.led_animations import scale_color_gamma, unpack_rgb
+
+    c = color_rgb(200, 100, 50)
+    # Zero factor gives 0
+    assert scale_color_gamma(c, 0.0) == 0
+
+    # Full factor preserves full brightness
+    full = scale_color_gamma(c, 1.0)
+    assert unpack_rgb(full) == unpack_rgb(c)
+
+    # Low factor applies gamma curve
+    low = scale_color_gamma(c, 0.1, min_val=1)
+    r, g, b = unpack_rgb(low)
+    assert r >= 1
+    assert g >= 1
+    assert b >= 1
+

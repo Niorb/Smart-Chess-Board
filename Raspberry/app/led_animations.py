@@ -87,6 +87,24 @@ except ImportError:
     )
 
 
+# Precomputed Gamma 2.8 perceptual brightness correction table (256 entries)
+GAMMA_LUT_28 = bytes([
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,
+    2,   2,   2,   3,   3,   3,   3,   4,   4,   4,   4,   5,   5,   5,   6,   6,
+    6,   7,   7,   7,   8,   8,   8,   9,   9,  10,  10,  11,  11,  12,  12,  13,
+   13,  14,  14,  15,  15,  16,  17,  17,  18,  18,  19,  20,  20,  21,  22,  22,
+   23,  24,  25,  25,  26,  27,  28,  29,  29,  30,  31,  32,  33,  34,  35,  36,
+   37,  37,  38,  39,  40,  41,  42,  44,  45,  46,  47,  48,  49,  50,  51,  53,
+   54,  55,  56,  57,  59,  60,  61,  63,  64,  65,  67,  68,  70,  71,  72,  74,
+   75,  77,  78,  80,  82,  83,  85,  86,  88,  90,  91,  93,  95,  97,  98, 100,
+  102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, 126, 128, 131, 133,
+  135, 137, 140, 142, 144, 147, 149, 152, 154, 156, 159, 161, 164, 166, 169, 172,
+  174, 177, 180, 182, 185, 188, 191, 193, 196, 199, 202, 205, 208, 211, 214, 217,
+  220, 223, 226, 230, 233, 236, 239, 243, 246, 249, 253, 255
+])
+
+
 # =============================================================================
 # COLOR ARITHMETIC HELPERS
 # =============================================================================
@@ -102,22 +120,51 @@ def unpack_rgb(color_int: int) -> Tuple[int, int, int]:
 
 
 def scale_color(color_int: int, factor: float) -> int:
-    """Scales color brightness by a float factor (0.0 to 1.0)."""
-    factor = max(0.0, min(1.0, factor))
-    r = int(((color_int >> 16) & 0xFF) * factor)
-    g = int(((color_int >> 8) & 0xFF) * factor)
-    b = int((color_int & 0xFF) * factor)
+    """Scales color brightness by a float factor (0.0 to 1.0) with proper rounding."""
+    if factor <= 0.0:
+        return 0
+    factor = min(1.0, factor)
+    r = round(((color_int >> 16) & 0xFF) * factor)
+    g = round(((color_int >> 8) & 0xFF) * factor)
+    b = round((color_int & 0xFF) * factor)
     return (r << 16) | (g << 8) | b
 
 
+def scale_color_gamma(color_int: int, factor: float, min_val: int = 0) -> int:
+    """Scales color intensity linearly and applies Gamma 2.8 perceptual correction."""
+    if factor <= 0.0:
+        return 0
+    factor = min(1.0, factor)
+    r_lin = min(255, round(((color_int >> 16) & 0xFF) * factor))
+    g_lin = min(255, round(((color_int >> 8) & 0xFF) * factor))
+    b_lin = min(255, round((color_int & 0xFF) * factor))
+
+    r_out = GAMMA_LUT_28[r_lin]
+    g_out = GAMMA_LUT_28[g_lin]
+    b_out = GAMMA_LUT_28[b_lin]
+
+    if min_val > 0:
+        if r_lin > 0 and r_out < min_val:
+            r_out = min_val
+        if g_lin > 0 and g_out < min_val:
+            g_out = min_val
+        if b_lin > 0 and b_out < min_val:
+            b_out = min_val
+
+    return (r_out << 16) | (g_out << 8) | b_out
+
+
 def blend_colors(c1: int, c2: int, factor: float) -> int:
-    """Linear interpolation between c1 (factor=0.0) and c2 (factor=1.0)."""
-    factor = max(0.0, min(1.0, factor))
+    """Linear interpolation between c1 (factor=0.0) and c2 (factor=1.0) with proper rounding."""
+    if factor <= 0.0:
+        return c1
+    if factor >= 1.0:
+        return c2
     r1, g1, b1 = (c1 >> 16) & 0xFF, (c1 >> 8) & 0xFF, c1 & 0xFF
     r2, g2, b2 = (c2 >> 16) & 0xFF, (c2 >> 8) & 0xFF, c2 & 0xFF
-    r = int(r1 + (r2 - r1) * factor)
-    g = int(g1 + (g2 - g1) * factor)
-    b = int(b1 + (b2 - b1) * factor)
+    r = round(r1 + (r2 - r1) * factor)
+    g = round(g1 + (g2 - g1) * factor)
+    b = round(b1 + (b2 - b1) * factor)
     return (r << 16) | (g << 8) | b
 
 

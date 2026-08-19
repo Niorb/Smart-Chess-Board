@@ -197,6 +197,67 @@ except ImportError:
         return (white << 24) | (red << 16) | (green << 8) | blue
 
 
+# =============================================================================
+# BINARY PACKET PROTOCOL & CRC-8 DEFINITIONS
+# =============================================================================
+
+HEADER_BYTES = b'\xaa\x55'
+
+CMD_PING = 0x00
+CMD_SCAN_ADC = 0x01
+CMD_SET_SETTLE = 0x02
+CMD_SET_LEDS = 0x10
+CMD_SET_ALL = 0x11
+CMD_CLEAR_LEDS = 0x12
+CMD_SHOW_LEDS = 0x13
+CMD_SET_AND_SHOW = 0x14
+
+RESP_PONG = 0x80
+RESP_ADC_DATA = 0x81
+
+# CRC-8-CCITT lookup table (polynomial 0x07, init 0x00)
+CRC8_TABLE = [
+    0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15, 0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
+    0x70, 0x77, 0x7E, 0x79, 0x6C, 0x6B, 0x62, 0x65, 0x48, 0x4F, 0x46, 0x41, 0x54, 0x53, 0x5A, 0x5D,
+    0xE0, 0xE7, 0xEE, 0xE9, 0xFC, 0xFB, 0xF2, 0xF5, 0xD8, 0xDF, 0xD6, 0xD1, 0xC4, 0xC3, 0xCA, 0xCD,
+    0x90, 0x97, 0x9E, 0x99, 0x8C, 0x8B, 0x82, 0x85, 0xA8, 0xAF, 0xA6, 0xA1, 0xB4, 0xB3, 0xBA, 0xBD,
+    0xC7, 0xC0, 0xC9, 0xCE, 0xDB, 0xDC, 0xD5, 0xD2, 0xFF, 0xF8, 0xF1, 0xF6, 0xE3, 0xE4, 0xED, 0xEA,
+    0xB7, 0xB0, 0xB9, 0xBE, 0xAB, 0xAC, 0xA5, 0xA2, 0x8F, 0x88, 0x81, 0x86, 0x93, 0x94, 0x9D, 0x9A,
+    0x27, 0x20, 0x29, 0x2E, 0x3B, 0x3C, 0x35, 0x32, 0x1F, 0x18, 0x11, 0x16, 0x03, 0x04, 0x0D, 0x0A,
+    0x57, 0x50, 0x59, 0x5E, 0x4B, 0x4C, 0x45, 0x42, 0x6F, 0x68, 0x61, 0x66, 0x73, 0x74, 0x7D, 0x7A,
+    0x89, 0x8E, 0x87, 0x80, 0x95, 0x92, 0x9B, 0x9C, 0xB1, 0xB6, 0xBF, 0xB8, 0xAD, 0xAA, 0xA3, 0xA4,
+    0xF9, 0xFE, 0xF7, 0xF0, 0xE5, 0xE2, 0xEB, 0xEC, 0xC1, 0xC6, 0xCF, 0xC8, 0xDD, 0xDA, 0xD3, 0xD4,
+    0x69, 0x6E, 0x67, 0x60, 0x75, 0x72, 0x7B, 0x7C, 0x51, 0x56, 0x5F, 0x58, 0x4D, 0x4A, 0x43, 0x44,
+    0x19, 0x1E, 0x17, 0x10, 0x05, 0x02, 0x0B, 0x0C, 0x21, 0x26, 0x2F, 0x28, 0x3D, 0x3A, 0x33, 0x34,
+    0x4E, 0x49, 0x40, 0x47, 0x52, 0x55, 0x5C, 0x5B, 0x76, 0x71, 0x78, 0x7F, 0x6A, 0x6D, 0x64, 0x63,
+    0x3E, 0x39, 0x30, 0x37, 0x22, 0x25, 0x2C, 0x2B, 0x06, 0x01, 0x08, 0x0F, 0x1A, 0x1D, 0x14, 0x13,
+    0xAE, 0xA9, 0xA0, 0xA7, 0xB2, 0xB5, 0xBC, 0xBB, 0x96, 0x91, 0x98, 0x9F, 0x8A, 0x8D, 0x84, 0x83,
+    0xDE, 0xD9, 0xD0, 0xD7, 0xC2, 0xC5, 0xCC, 0xCB, 0xE6, 0xE1, 0xE8, 0xEF, 0xFA, 0xFD, 0xF4, 0xF3
+]
+
+
+def calc_crc8(data: bytes, initial: int = 0x00) -> int:
+    """Calculates table-accelerated CRC-8-CCITT checksum (polynomial 0x07)."""
+    crc = initial
+    for b in data:
+        crc = CRC8_TABLE[crc ^ b]
+    return crc
+
+
+def build_packet(cmd_id: int, payload: bytes = b'') -> bytes:
+    """
+    Constructs a robust binary packet frame:
+    [0xAA, 0x55, CMD, LEN_LO, LEN_HI, ...PAYLOAD..., CRC8]
+    CRC8 covers: [CMD, LEN_LO, LEN_HI] + PAYLOAD.
+    """
+    length = len(payload)
+    len_bytes = bytes([length & 0xFF, (length >> 8) & 0xFF])
+    cmd_bytes = bytes([cmd_id & 0xFF])
+    header_crc_data = cmd_bytes + len_bytes + payload
+    crc = calc_crc8(header_crc_data)
+    return HEADER_BYTES + cmd_bytes + len_bytes + payload + bytes([crc])
+
+
 # Integer color constants for layered rendering pipeline
 COLOR_INT_OFF = Color(*COLOR_OFF)
 COLOR_INT_IDLE = Color(*COLOR_IDLE)
@@ -255,7 +316,12 @@ COLOR_INT_START_BLACK_SECONDARY = Color(*COLOR_START_BLACK_SECONDARY)
 class DualPixelStrip:
     """
     Controls two serial WS2812B strips mapped as a single 152-LED buffer
-    via commands to the ESP32 coprocessor.
+    via framed binary commands to the ESP32 coprocessor.
+    Features:
+    - Chunked binary packet transmission (up to 38 LEDs / 152 bytes per packet)
+    - Atomic CMD_SET_AND_SHOW execution
+    - Periodic self-healing keyframe sync every 60 frames (~2-3s)
+    - Thread-safety with external serial_lock
     """
     def __init__(self, num_leds_per_strip=76):
         self.num_leds_per_strip = num_leds_per_strip
@@ -263,6 +329,7 @@ class DualPixelStrip:
         self.lock = None
         self.current_colors = [0] * (2 * num_leds_per_strip)
         self.shown_colors = [0] * (2 * num_leds_per_strip)
+        self.frame_count = 0
 
     def set_serial_conn(self, ser, lock=None):
         self.ser = ser
@@ -278,8 +345,11 @@ class DualPixelStrip:
             return
 
         def _do_show():
-            # Check if frame changed
-            if self.current_colors == self.shown_colors:
+            self.frame_count += 1
+            is_keyframe = (self.frame_count % 60 == 0)
+
+            # Skip if frame hasn't changed and not keyframe
+            if not is_keyframe and self.current_colors == self.shown_colors:
                 return
 
             try:
@@ -287,23 +357,44 @@ class DualPixelStrip:
                 all_shown_off = not any(self.shown_colors)
 
                 if all_current_off:
-                    if not all_shown_off:
-                        ser.write(b'C')
+                    if is_keyframe or not all_shown_off:
+                        packet = build_packet(CMD_CLEAR_LEDS)
+                        ser.write(packet)
                     self.shown_colors = list(self.current_colors)
                     return
 
-                changed = False
+                # Collect changed LEDs (or all active/modified LEDs on keyframe)
+                changes = []
                 for idx in range(len(self.current_colors)):
                     curr = self.current_colors[idx]
-                    if curr != self.shown_colors[idx]:
-                        changed = True
+                    if is_keyframe or (curr != self.shown_colors[idx]):
                         r = (curr >> 16) & 0xFF
                         g = (curr >> 8) & 0xFF
                         b = curr & 0xFF
-                        ser.write(bytes([ord('L'), idx, r, g, b]))
+                        changes.append((idx, r, g, b))
 
-                if changed:
-                    ser.write(b'W')  # Commit show
+                if not changes:
+                    self.shown_colors = list(self.current_colors)
+                    return
+
+                # Chunk changes in batches of up to 38 LEDs (38 * 4 = 152 bytes payload)
+                chunk_size = 38
+                num_chunks = (len(changes) + chunk_size - 1) // chunk_size
+
+                for chunk_idx in range(num_chunks):
+                    chunk = changes[chunk_idx * chunk_size : (chunk_idx + 1) * chunk_size]
+                    payload_bytes = bytearray()
+                    for idx, r, g, b in chunk:
+                        payload_bytes.extend([idx, r, g, b])
+
+                    # Last chunk uses CMD_SET_AND_SHOW, preceding chunks use CMD_SET_LEDS
+                    if chunk_idx == num_chunks - 1:
+                        cmd = CMD_SET_AND_SHOW
+                    else:
+                        cmd = CMD_SET_LEDS
+
+                    packet = build_packet(cmd, bytes(payload_bytes))
+                    ser.write(packet)
 
                 self.shown_colors = list(self.current_colors)
             except Exception as e:
@@ -395,13 +486,14 @@ def get_led_indices(col, row):
 
 
 def all_leds_off(strip):
-    """Turn off all LEDs using hardware batch clear command 'C' when possible."""
+    """Turn off all LEDs using hardware batch clear binary packet CMD_CLEAR_LEDS when possible."""
     if not strip:
         return
     if hasattr(strip, 'ser') and strip.ser:
         def _do_off():
             try:
-                strip.ser.write(b'C')
+                packet = build_packet(CMD_CLEAR_LEDS)
+                strip.ser.write(packet)
                 if hasattr(strip, 'current_colors'):
                     for i in range(len(strip.current_colors)):
                         strip.current_colors[i] = 0
@@ -426,7 +518,7 @@ def all_leds_off(strip):
 
 
 def all_leds_color(strip, rgb):
-    """Set all LEDs to the same color using hardware batch command 'A' when possible."""
+    """Set all LEDs to the same color using hardware batch command CMD_SET_ALL when possible."""
     if not strip:
         return
     if isinstance(rgb, int):
@@ -441,7 +533,8 @@ def all_leds_color(strip, rgb):
     if hasattr(strip, 'ser') and strip.ser:
         def _do_color():
             try:
-                strip.ser.write(bytes([ord('A'), r, g, b]))
+                packet = build_packet(CMD_SET_ALL, bytes([r, g, b]))
+                strip.ser.write(packet)
                 if hasattr(strip, 'current_colors'):
                     for i in range(len(strip.current_colors)):
                         strip.current_colors[i] = val

@@ -145,7 +145,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
     - Added dedicated **"Save Current Stats as Defaults"** button in the Debug tab under Calibration & Hardware Utilities.
     - Captures live active baselines (including dynamic in-loop calibrated drifts and manual individual square calibrations), active positive/negative deviation thresholds, multiplexer timings, debounce settings, and piece modes.
     - Synchronizes browser `localStorage` and server state with instant visual confirmation status toasts.
-  - **Verification & Raspberry Pi Deployment**: Added unit tests in `Raspberry/tests/test_api_routes.py` and `Raspberry/tests/test_board_hardware.py`. All 196 test suites passed and frontend production build succeeded on the physical Raspberry Pi over SSH.
+- [x] Implemented Binary Packet Protocol, Non-Blocking ESP32 Firmware, Self-Healing Keyframe Sync & Perceptual Gamma Correction:
+  - **ESP32 Binary Framing Protocol (`Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino`)**: Upgraded UART receiver with 2048-byte RX buffer, non-blocking FSM parser (`0xAA 0x55`, CMD, LEN LE, Payload, CRC-8-CCITT), and atomic batch execution (`CMD_SET_AND_SHOW`, `CMD_CLEAR_LEDS`, `CMD_SET_ALL`, `CMD_SCAN_ADC`, `CMD_SET_SETTLE`). Eliminates ASCII byte collisions (preventing random blackouts, color flashes, or premature latching when RGB values match `'C'`, `'W'`, `'A'`, or `'B'`).
+  - **Self-Healing Keyframe & Chunked Transmission (`Raspberry/app/led_helpers.py`)**: Enhanced `DualPixelStrip` with chunked binary packet transmission (up to 38 LEDs / 152 bytes per packet) and an automated 60-frame (~2.0s) periodic keyframe resync that continuously heals any physical LED signal glitches.
+  - **Robust Board Hardware Scanner (`Raspberry/board_hardware.py`)**: Updated `scan_board`, `calibrate_board`, and `calibrate_board_with_pieces` with binary framed requests (`CMD_SCAN_ADC`, `CMD_SET_SETTLE`) and backwards-compatible response decoding with automatic buffer resync.
+  - **Perceptual Gamma 2.8 Correction & Float Rounding (`Raspberry/app/led_animations.py`)**: Integrated `GAMMA_LUT_28` and `scale_color_gamma` with floating-point channel rounding to eliminate color shifts (e.g. green/blue premature drop-off) and stepped quantization banding on low-brightness animation tails.
+  - **Unit Testing & Verification**: Added binary packet framing, CRC-8 verification, keyframe self-healing, and gamma scaling tests across `test_led_helpers.py` and `test_led_animations.py`.
 
 ## Task Backlog
 

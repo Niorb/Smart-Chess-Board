@@ -51,9 +51,13 @@ def test_dual_pixel_strip_lock_and_show():
     from unittest.mock import MagicMock
 
     from app.led_helpers import (
+        CMD_CLEAR_LEDS,
+        CMD_SET_ALL,
+        CMD_SET_AND_SHOW,
         DualPixelStrip,
         all_leds_color,
         all_leds_off,
+        build_packet,
     )
 
     strip = DualPixelStrip(num_leds_per_strip=76)
@@ -65,30 +69,58 @@ def test_dual_pixel_strip_lock_and_show():
     strip.setPixelColor(0, (255, 0, 0))
     strip.show()
 
-    # Differential check: L 0 255 0 0, then W (NO 'C' blackout!)
-    assert b'C' not in [call.args[0] for call in mock_ser.write.call_args_list]
-    mock_ser.write.assert_any_call(bytes([ord('L'), 0, 255, 0, 0]))
-    mock_ser.write.assert_any_call(b'W')
+    # Binary framed check: CMD_SET_AND_SHOW packet with idx 0, r 255, g 0, b 0
+    expected_packet = build_packet(CMD_SET_AND_SHOW, bytes([0, 255, 0, 0]))
+    mock_ser.write.assert_called_with(expected_packet)
     assert strip.shown_colors[0] == (255 << 16)
 
     # Change pixel 0 to green
     mock_ser.reset_mock()
     strip.setPixelColor(0, (0, 255, 0))
     strip.show()
-    assert b'C' not in [call.args[0] for call in mock_ser.write.call_args_list]
-    mock_ser.write.assert_any_call(bytes([ord('L'), 0, 0, 255, 0]))
-    mock_ser.write.assert_any_call(b'W')
+    expected_packet_green = build_packet(CMD_SET_AND_SHOW, bytes([0, 0, 255, 0]))
+    mock_ser.write.assert_called_with(expected_packet_green)
 
-    # Test all_leds_off with lock -> transitions to all-off, so 'C' is sent
+    # Test all_leds_off with lock -> transitions to all-off, CMD_CLEAR_LEDS packet is sent
     mock_ser.reset_mock()
     all_leds_off(strip)
-    mock_ser.write.assert_called_with(b'C')
+    expected_clear = build_packet(CMD_CLEAR_LEDS)
+    mock_ser.write.assert_called_with(expected_clear)
     assert strip.current_colors[0] == 0
     assert strip.shown_colors[0] == 0
 
-    # Test all_leds_color with lock
+    # Test all_leds_color with lock -> CMD_SET_ALL packet is sent
     mock_ser.reset_mock()
     all_leds_color(strip, (0, 255, 0))
-    mock_ser.write.assert_called_with(bytes([ord('A'), 0, 255, 0]))
+    expected_set_all = build_packet(CMD_SET_ALL, bytes([0, 255, 0]))
+    mock_ser.write.assert_called_with(expected_set_all)
     assert strip.current_colors[0] == (255 << 8)
     assert strip.shown_colors[0] == (255 << 8)
+
+
+def test_keyframe_self_healing():
+    from unittest.mock import MagicMock
+
+    from app.led_helpers import DualPixelStrip
+
+    strip = DualPixelStrip(num_leds_per_strip=76)
+    mock_ser = MagicMock()
+    strip.set_serial_conn(mock_ser)
+
+    strip.setPixelColor(5, (100, 200, 50))
+    strip.show()
+    assert mock_ser.write.call_count == 1
+
+    # Unchanged frame: show() should NOT send data
+    mock_ser.reset_mock()
+    strip.show()
+    assert mock_ser.write.call_count == 0
+
+    # Simulate 58 more unchanged frames up to frame 59
+    for _ in range(58):
+        strip.show()
+    assert mock_ser.write.call_count == 0
+
+    # 60th frame is keyframe -> must re-transmit active LEDs to self-heal
+    strip.show()
+    assert mock_ser.write.call_count == 1

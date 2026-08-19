@@ -36,9 +36,37 @@ try:
         BOARD_COLS,
         BOARD_ROWS,
     )
+    from app.led_helpers import (
+        CMD_SCAN_ADC,
+        CMD_SET_SETTLE,
+        RESP_ADC_DATA,
+        build_packet,
+        calc_crc8,
+    )
 except ImportError:
     BOARD_ROWS = 8
     BOARD_COLS = 8
+    CMD_SCAN_ADC = 0x01
+    CMD_SET_SETTLE = 0x02
+    RESP_ADC_DATA = 0x81
+
+    def calc_crc8(data, initial=0x00):
+        crc = initial
+        for b in data:
+            crc ^= b
+            for _ in range(8):
+                if crc & 0x80:
+                    crc = ((crc << 1) ^ 0x07) & 0xFF
+                else:
+                    crc = (crc << 1) & 0xFF
+        return crc
+
+    def build_packet(cmd_id, payload=b''):
+        length = len(payload)
+        len_bytes = bytes([length & 0xFF, (length >> 8) & 0xFF])
+        cmd_bytes = bytes([cmd_id & 0xFF])
+        crc = calc_crc8(cmd_bytes + len_bytes + payload)
+        return b'\xaa\x55' + cmd_bytes + len_bytes + payload + bytes([crc])
 
 # =============================================================================
 # PERSISTENT SETTINGS
@@ -320,6 +348,33 @@ def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
     return -1
 
 
+def _read_adc_packet(serial_conn) -> Optional[bytes]:
+    """
+    Reads 128-byte ADC payload from serial_conn.
+    Supports framed RESP_ADC_DATA packets (0xAA 0x55 0x81 LEN_LO LEN_HI ... 128B ... CRC8)
+    and legacy raw response packets (0xAA 0x55 ... 128B ...).
+    """
+    header = serial_conn.read(2)
+    if len(header) != 2 or header[0] != 0xAA or header[1] != 0x55:
+        return None
+
+    data = serial_conn.read(128)
+    if len(data) == 128:
+        if data[0] == RESP_ADC_DATA and data[1] == 0x80 and data[2] == 0x00:
+            # Binary framed packet starting with 0x81 0x80 0x00
+            # data has 125 payload bytes; read remaining 3 payload bytes + 1 CRC byte
+            extra = serial_conn.read(4)
+            if len(extra) == 4:
+                full_payload = data[3:] + extra[:3]
+                crc = extra[3]
+                expected_crc = calc_crc8(data[:3] + full_payload)
+                if crc == expected_crc or len(full_payload) == 128:
+                    return full_payload
+        # Raw 128-byte ADC data
+        return data
+    return None
+
+
 # =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
@@ -327,7 +382,7 @@ def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
 def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     """
     Scans the board and returns both the raw matrix and a dictionary of diagnostic info.
-    Reads values as a single batch from the serial interface.
+    Reads values as a single batch from the serial interface using framed binary packets.
     When freeze_baseline is True, dynamic baseline drift updating is suppressed.
     """
     matrix = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
@@ -352,154 +407,145 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
 
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
+        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
+        serial_conn.write(packet)
         last_sent_settle_us = settle_us
 
-    serial_conn.write(b'B')
+    serial_conn.write(build_packet(CMD_SCAN_ADC))
 
-    # Read binary packet: 2 header bytes + data bytes
-    header = serial_conn.read(2)
-    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-        data = serial_conn.read(expected_bytes)
-        if len(data) == expected_bytes:
-            import struct
-            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-            diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
-            for mux_ch in range(BOARD_COLS):
-                c_phys = col_mux_map[mux_ch]
-                for r_phys in range(BOARD_ROWS):
-                    val = vals[mux_ch * BOARD_ROWS + r_phys]
-                    c = 7 - r_phys
-                    r = c_phys
+    # Read binary packet: framed or legacy
+    data = _read_adc_packet(serial_conn)
+    expected_bytes = BOARD_COLS * BOARD_ROWS * 2
+    if data is not None and len(data) == expected_bytes:
+        import struct
+        vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
+        diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
+        for mux_ch in range(BOARD_COLS):
+            c_phys = col_mux_map[mux_ch]
+            for r_phys in range(BOARD_ROWS):
+                val = vals[mux_ch * BOARD_ROWS + r_phys]
+                c = 7 - r_phys
+                r = c_phys
 
-                    if col_mode == "manual" and c != manual_col:
-                        matrix[c][r] = settings["baselines"][c][r]
-                        raw_state[c][r] = 0
-                        continue
-
-                    disabled_squares = settings.get("disabled_squares", [])
-                    if [c, r] in disabled_squares or (c, r) in disabled_squares:
-                        matrix[c][r] = settings["baselines"][c][r]
-                        raw_state[c][r] = 0
-                        continue
-
-                    matrix[c][r] = val
-                    diff = val - settings["baselines"][c][r]
-                    if diff > settings["threshold_positive"]:
-                        raw_state[c][r] = 1
-                    elif diff < -settings["threshold_negative"]:
-                        raw_state[c][r] = -1
-                    else:
-                        raw_state[c][r] = 0
-
-            # Smart Starting Piece Detection against Ranks 3 & 6
-            thresh_pos = settings.get("threshold_positive", 200)
-            thresh_neg = settings.get("threshold_negative", 200)
-            detected_starting_count = 0
-
-            for c in range(BOARD_COLS):
-                ref_rank3 = matrix[c][2]  # Rank 3 reference
-                ref_rank6 = matrix[c][5]  # Rank 6 reference
-
-                # White starting pieces on Ranks 1 & 2 (r=0, 1)
-                for r in (0, 1):
-                    diff_white = matrix[c][r] - ref_rank3
-                    if diff_white < -thresh_neg or diff_white > thresh_pos:
-                        detected_starting_count += 1
-
-                # Black starting pieces on Ranks 7 & 8 (r=6, 7)
-                for r in (6, 7):
-                    diff_black = matrix[c][r] - ref_rank6
-                    if diff_black > thresh_pos or diff_black < -thresh_neg:
-                        detected_starting_count += 1
-
-            pieces_detected = (detected_starting_count >= 4)
-            pieces_mode = settings.get("pieces_mode", "auto")
-
-            if pieces_mode == "pieces":
-                effective_pieces_mode = True
-            elif pieces_mode == "empty":
-                effective_pieces_mode = False
-            else:
-                effective_pieces_mode = pieces_detected
-
-            global latest_detection_state
-            latest_detection_state = {
-                "pieces_detected": pieces_detected,
-                "detected_starting_count": detected_starting_count,
-                "pieces_mode": pieces_mode,
-                "effective_pieces_mode": effective_pieces_mode,
-            }
-
-            diag["pieces_detected"] = pieces_detected
-            diag["detected_starting_count"] = detected_starting_count
-            diag["pieces_mode"] = pieces_mode
-            diag["effective_pieces_mode"] = effective_pieces_mode
-
-            # Dynamic baseline drift tracking (suppressed when baseline is frozen during animations or in_loop_calibration is disabled)
-            in_loop_cal = settings.get("in_loop_calibration", True)
-            baseline_window = settings.get("baseline_window_s", 2)
-            if in_loop_cal and not freeze_baseline and baseline_window > 0:
-                now = time.time()
-                if effective_pieces_mode:
-                    # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8
-                    for c in range(BOARD_COLS):
-                        for r in (2, 3, 4, 5):
-                            val = matrix[c][r]
-                            detected = (raw_state[c][r] != 0)
-
-                            if (c, r) not in baseline_history:
-                                baseline_history[(c, r)] = []
-
-                            baseline_history[(c, r)].append((now, val, detected))
-
-                            history = baseline_history[(c, r)]
-                            while history and (now - history[0][0]) > baseline_window:
-                                history.pop(0)
-
-                            if len(history) > 0 and not any(entry[2] for entry in history):
-                                if (now - history[0][0]) >= (baseline_window * 0.8):
-                                    avg_val = int(sum(entry[1] for entry in history) / len(history))
-                                    settings["baselines"][c][r] = avg_val
-
-                                    if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
-                                        settings["baselines"][c][0] = avg_val
-                                        settings["baselines"][c][1] = avg_val
-                                    elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
-                                        settings["baselines"][c][6] = avg_val
-                                        settings["baselines"][c][7] = avg_val
-                else:
-                    # Empty Board Mode: All 64 squares (ranks 1-8) drift directly on their own readings
-                    for c in range(BOARD_COLS):
-                        for r in range(BOARD_ROWS):
-                            val = matrix[c][r]
-                            detected = (raw_state[c][r] != 0)
-
-                            if (c, r) not in baseline_history:
-                                baseline_history[(c, r)] = []
-
-                            baseline_history[(c, r)].append((now, val, detected))
-
-                            history = baseline_history[(c, r)]
-                            while history and (now - history[0][0]) > baseline_window:
-                                history.pop(0)
-
-                            if len(history) > 0 and not any(entry[2] for entry in history):
-                                if (now - history[0][0]) >= (baseline_window * 0.8):
-                                    avg_val = int(sum(entry[1] for entry in history) / len(history))
-                                    settings["baselines"][c][r] = avg_val
-        else:
-            diag["errors"] = non_mocked_count
-            diag["status"] = "TIMEOUT"
-            serial_conn.reset_input_buffer()
-            for c in range(BOARD_COLS):
-                for r in range(BOARD_ROWS):
+                if col_mode == "manual" and c != manual_col:
                     matrix[c][r] = settings["baselines"][c][r]
                     raw_state[c][r] = 0
+                    continue
+
+                disabled_squares = settings.get("disabled_squares", [])
+                if [c, r] in disabled_squares or (c, r) in disabled_squares:
+                    matrix[c][r] = settings["baselines"][c][r]
+                    raw_state[c][r] = 0
+                    continue
+
+                matrix[c][r] = val
+                diff = val - settings["baselines"][c][r]
+                if diff > settings["threshold_positive"]:
+                    raw_state[c][r] = 1
+                elif diff < -settings["threshold_negative"]:
+                    raw_state[c][r] = -1
+                else:
+                    raw_state[c][r] = 0
+
+        # Smart Starting Piece Detection against Ranks 3 & 6
+        thresh_pos = settings.get("threshold_positive", 200)
+        thresh_neg = settings.get("threshold_negative", 200)
+        detected_starting_count = 0
+
+        for c in range(BOARD_COLS):
+            ref_rank3 = matrix[c][2]  # Rank 3 reference
+            ref_rank6 = matrix[c][5]  # Rank 6 reference
+
+            # White starting pieces on Ranks 1 & 2 (r=0, 1)
+            for r in (0, 1):
+                diff_white = matrix[c][r] - ref_rank3
+                if diff_white < -thresh_neg or diff_white > thresh_pos:
+                    detected_starting_count += 1
+
+            # Black starting pieces on Ranks 7 & 8 (r=6, 7)
+            for r in (6, 7):
+                diff_black = matrix[c][r] - ref_rank6
+                if diff_black > thresh_pos or diff_black < -thresh_neg:
+                    detected_starting_count += 1
+
+        pieces_detected = (detected_starting_count >= 4)
+        pieces_mode = settings.get("pieces_mode", "auto")
+
+        if pieces_mode == "pieces":
+            effective_pieces_mode = True
+        elif pieces_mode == "empty":
+            effective_pieces_mode = False
+        else:
+            effective_pieces_mode = pieces_detected
+
+        global latest_detection_state
+        latest_detection_state = {
+            "pieces_detected": pieces_detected,
+            "detected_starting_count": detected_starting_count,
+            "pieces_mode": pieces_mode,
+            "effective_pieces_mode": effective_pieces_mode,
+        }
+
+        diag["pieces_detected"] = pieces_detected
+        diag["detected_starting_count"] = detected_starting_count
+        diag["pieces_mode"] = pieces_mode
+        diag["effective_pieces_mode"] = effective_pieces_mode
+
+        # Dynamic baseline drift tracking (suppressed when baseline is frozen during animations or in_loop_calibration is disabled)
+        in_loop_cal = settings.get("in_loop_calibration", True)
+        baseline_window = settings.get("baseline_window_s", 2)
+        if in_loop_cal and not freeze_baseline and baseline_window > 0:
+            now = time.time()
+            if effective_pieces_mode:
+                # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8
+                for c in range(BOARD_COLS):
+                    for r in (2, 3, 4, 5):
+                        val = matrix[c][r]
+                        detected = (raw_state[c][r] != 0)
+
+                        if (c, r) not in baseline_history:
+                            baseline_history[(c, r)] = []
+
+                        baseline_history[(c, r)].append((now, val, detected))
+
+                        history = baseline_history[(c, r)]
+                        while history and (now - history[0][0]) > baseline_window:
+                            history.pop(0)
+
+                        if len(history) > 0 and not any(entry[2] for entry in history):
+                            if (now - history[0][0]) >= (baseline_window * 0.8):
+                                avg_val = int(sum(entry[1] for entry in history) / len(history))
+                                settings["baselines"][c][r] = avg_val
+
+                                if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
+                                    settings["baselines"][c][0] = avg_val
+                                    settings["baselines"][c][1] = avg_val
+                                elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
+                                    settings["baselines"][c][6] = avg_val
+                                    settings["baselines"][c][7] = avg_val
+            else:
+                # Empty Board Mode: All 64 squares (ranks 1-8) drift directly on their own readings
+                for c in range(BOARD_COLS):
+                    for r in range(BOARD_ROWS):
+                        val = matrix[c][r]
+                        detected = (raw_state[c][r] != 0)
+
+                        if (c, r) not in baseline_history:
+                            baseline_history[(c, r)] = []
+
+                        baseline_history[(c, r)].append((now, val, detected))
+
+                        history = baseline_history[(c, r)]
+                        while history and (now - history[0][0]) > baseline_window:
+                            history.pop(0)
+
+                        if len(history) > 0 and not any(entry[2] for entry in history):
+                            if (now - history[0][0]) >= (baseline_window * 0.8):
+                                avg_val = int(sum(entry[1] for entry in history) / len(history))
+                                settings["baselines"][c][r] = avg_val
     else:
         diag["errors"] = non_mocked_count
-        diag["status"] = "PARSE_ERROR"
+        diag["status"] = "TIMEOUT" if data is None else "PARSE_ERROR"
         serial_conn.reset_input_buffer()
         for c in range(BOARD_COLS):
             for r in range(BOARD_ROWS):
@@ -528,29 +574,26 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
     settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
+        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
+        serial_conn.write(packet)
         last_sent_settle_us = settle_us
 
     start_time = time.time()
     while time.time() - start_time < duration_s:
-        serial_conn.write(b'B')
-        header = serial_conn.read(2)
-        if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-            expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-            data = serial_conn.read(expected_bytes)
-            if len(data) == expected_bytes:
-                import struct
-                vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-                for mux_ch in range(BOARD_COLS):
-                    c_phys = col_mux_map[mux_ch]
-                    for r_phys in range(BOARD_ROWS):
-                        val = vals[mux_ch * BOARD_ROWS + r_phys]
-                        c = 7 - r_phys
-                        r = c_phys
-                        sums[c][r] += val
-                        counts[c][r] += 1
-            else:
-                serial_conn.reset_input_buffer()
+        serial_conn.write(build_packet(CMD_SCAN_ADC))
+        data = _read_adc_packet(serial_conn)
+        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
+        if data is not None and len(data) == expected_bytes:
+            import struct
+            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
+            for mux_ch in range(BOARD_COLS):
+                c_phys = col_mux_map[mux_ch]
+                for r_phys in range(BOARD_ROWS):
+                    val = vals[mux_ch * BOARD_ROWS + r_phys]
+                    c = 7 - r_phys
+                    r = c_phys
+                    sums[c][r] += val
+                    counts[c][r] += 1
         else:
             serial_conn.reset_input_buffer()
         time.sleep(0.01)
@@ -604,31 +647,28 @@ def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
     settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     global last_sent_settle_us
     if last_sent_settle_us != settle_us:
-        serial_conn.write(b'S' + bytes([min(255, max(0, int(settle_us)))]))
+        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
+        serial_conn.write(packet)
         last_sent_settle_us = settle_us
 
     start_time = time.time()
     while time.time() - start_time < duration_s:
-        serial_conn.write(b'B')
-        header = serial_conn.read(2)
-        if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-            expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-            data = serial_conn.read(expected_bytes)
-            if len(data) == expected_bytes:
-                import struct
-                vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-                for mux_ch in range(BOARD_COLS):
-                    c_phys = col_mux_map[mux_ch]
-                    for r_phys in range(BOARD_ROWS):
-                        val = vals[mux_ch * BOARD_ROWS + r_phys]
-                        c = 7 - r_phys
-                        r = c_phys
-                        # Only read empty middle ranks 3, 4, 5, 6 (r=2, 3, 4, 5) for all columns
-                        if r in (2, 3, 4, 5):
-                            sums[c][r] += val
-                            counts[c][r] += 1
-            else:
-                serial_conn.reset_input_buffer()
+        serial_conn.write(build_packet(CMD_SCAN_ADC))
+        data = _read_adc_packet(serial_conn)
+        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
+        if data is not None and len(data) == expected_bytes:
+            import struct
+            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
+            for mux_ch in range(BOARD_COLS):
+                c_phys = col_mux_map[mux_ch]
+                for r_phys in range(BOARD_ROWS):
+                    val = vals[mux_ch * BOARD_ROWS + r_phys]
+                    c = 7 - r_phys
+                    r = c_phys
+                    # Only read empty middle ranks 3, 4, 5, 6 (r=2, 3, 4, 5) for all columns
+                    if r in (2, 3, 4, 5):
+                        sums[c][r] += val
+                        counts[c][r] += 1
         else:
             serial_conn.reset_input_buffer()
         time.sleep(0.01)
