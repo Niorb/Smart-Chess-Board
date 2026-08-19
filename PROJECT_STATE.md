@@ -122,10 +122,22 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Active Player Turn Ambient Halo (`Raspberry/app/board_state.py`)**: Renders a subtle, non-intrusive breathing aura on the active turn King ($e1$ or $e8$) with color matching the active player (warm ivory for White, azure for Black), automatically suppressed when the King is in check or lifted.
   - **Physical Opponent Disconnected Beacon & Victory Claim Countdown Gauge (`Raspberry/app/led_animations.py` & `lichess_engine.py`)**: Renders an alert amber beacon on the opponent King square and a linear 8-LED countdown progress bar along the opponent's back rank that smoothly drains down as the victory claim timer elapses.
   - **UI Triggers & Unit Tests (`Raspberry/frontend/src/App.tsx` & `tests/`)**: Added Start (White) and Start (Black) animation debug triggers in the webapp, updated `test_led_animations.py`, and added test suites in `test_board_state.py`.
+- [x] Implemented Extensible Physical Board Gesture Engine & "Restart Previous Game" Kingside Corner Gate:
+  - **Extensible Physical Gesture Framework (`Raspberry/app/gesture_engine.py`)**: Created `BaseGesture` abstract base class and `PhysicalGestureEngine` subsystem manager. Gated to `IDLE` and `GAME_OVER` states, providing pluggable gesture registration, state serialization for WebSocket broadcasting, time remaining calculations, and LED overlay generation.
+  - **Kingside Corner Gate Restart Gesture (`RestartPreviousGameGesture`)**:
+    - **Step 1 (Armed)**: Lifting White $h2$ pawn from initial starting setup illuminates $h2$ in solid amber and pulses $h1$ in vibrant azure.
+    - **Step 2 (Prompt)**: Lifting White $h1$ rook while $h2$ is lifted transitions both $h1$ and $h2$ to a rapid emerald pulse.
+    - **Step 3 (Completion & Auto-Seek)**: Replacing both pieces back onto their home squares confirms full board starting setup (`SetupValidator.is_setup_ready == True`), triggers a 600ms arrival confirmation flash on $h1$ and $h2$, and automatically launches matchmaking with `last_game_params`.
+    - **Safety Guards & Timeouts**: 5.0-second auto-timeout, premature $h2$ replacement cancellation, and multi-piece/center square bump cancellation prevent accidental triggers.
+  - **Settings Persistence (`Raspberry/board_hardware.py` & `lichess_engine.py`)**: Added `last_game_params` schema to `board_settings.default.json` and automatically persist time control, rating range, color, opponent mode, and AI difficulty upon every seek.
+  - **REST API Endpoints (`Raspberry/app/main.py`)**: Added `GET /api/game/last_params` and `POST /api/game/restart_previous`.
+  - **Frontend UI & Visual Feedback (`Raspberry/frontend/src/App.tsx`)**: Added a quick-action "Restart Previous Game" button with subtitle parameters in the Play tab, and an animated Physical Gesture status banner with real-time countdown.
+  - **Unit Tests & Raspberry Pi Deployment**: Added 9 unit tests in `Raspberry/tests/test_gesture_engine.py`. All 194 unit and integration test suites pass and production frontend build succeeded on the physical Raspberry Pi over SSH.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
 
 
