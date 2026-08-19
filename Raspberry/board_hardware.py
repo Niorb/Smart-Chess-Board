@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger("smart-chess-app.hardware")
 
