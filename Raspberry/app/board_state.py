@@ -81,13 +81,15 @@ from app.led_helpers import (
 from app.coach_engine import MoveQuality, coach_engine
 from app.led_animations import (
     render_castle_trace,
+    render_capture_aura,
+    render_guardrail_mismatch,
     render_move_trace,
     scale_color,
 )
 from app.lichess_engine import lichess_engine
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
-from app.setup_validator import SetupResult, SetupValidator
+from app.setup_validator import GameGuardrailResult, SetupResult, SetupValidator
 from board_hardware import (
     BOARD_COLS,
     BOARD_ROWS,
@@ -118,6 +120,7 @@ class BoardStateManager:
         self.custom_trace_is_capture: bool = False
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
         self.arrival_flash: dict | None = None
+        self.guardrail_result: GameGuardrailResult | None = None
 
         # Setup verification and move tracking subsystems
         self.setup_validator = SetupValidator()
@@ -263,6 +266,13 @@ class BoardStateManager:
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],
+            "pending_capture_target": list(self.move_tracker.pending_capture_target) if self.move_tracker.pending_capture_target else None,
+            "capture_candidate_attackers": [list(sq) for sq in self.move_tracker.capture_candidate_attackers],
+            "guardrail": (
+                self.guardrail_result.to_dict()
+                if self.guardrail_result is not None
+                else None
+            ),
             "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
             "pending_opponent_move": self.move_tracker.pending_opponent_move,
             "pending_castling_rook": self.move_tracker.pending_castling_rook,
@@ -472,6 +482,15 @@ class BoardStateManager:
                     rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
                     render_move_trace(rook_path, now, frame, trace_color=COLOR_INT_MOVE_TRACE, blend_arrival=True)
 
+                # 1.6. Capture in Progress Aura (Opponent piece lifted first)
+                if self.move_tracker.pending_capture_target:
+                    render_capture_aura(
+                        self.move_tracker.pending_capture_target,
+                        self.move_tracker.capture_candidate_attackers,
+                        now,
+                        frame,
+                    )
+
                 # 2. King in Check Indicator
                 if getattr(lichess_engine, "board", None) and lichess_engine.board.is_check():
                     king_sq = lichess_engine.board.king(lichess_engine.board.turn)
@@ -517,6 +536,15 @@ class BoardStateManager:
                 if self.move_tracker.invalid_placement:
                     inv_c, inv_r = self.move_tracker.invalid_placement
                     set_square_leds(inv_c, inv_r, COLOR_INT_ILLEGAL)
+
+                # 5. Live State Guardrail Mismatch Indicator (Alert pulses for missing/unexpected pieces)
+                if self.guardrail_result and not self.guardrail_result.is_synchronized:
+                    render_guardrail_mismatch(
+                        self.guardrail_result.missing_pieces,
+                        self.guardrail_result.unexpected_pieces,
+                        now,
+                        frame,
+                    )
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square)
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
@@ -699,8 +727,20 @@ class BoardStateManager:
                                 asyncio.create_task(
                                     _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
                                 )
+
+                            # Compute live guardrail synchronization status
+                            if getattr(lichess_engine, "board", None):
+                                self.guardrail_result = self.setup_validator.validate_game_state(
+                                    self.physical_state,
+                                    lichess_engine.board,
+                                    self.move_tracker,
+                                    lichess_engine.my_color,
+                                )
+                            else:
+                                self.guardrail_result = None
                         else:
                             self.move_tracker.reset(self.physical_state)
+                            self.guardrail_result = None
 
                     self._update_leds()
                 else:

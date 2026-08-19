@@ -9,6 +9,14 @@ export interface SetupStatus {
   black_count?: number;
 }
 
+export interface GuardrailStatus {
+  is_synchronized: boolean;
+  missing_pieces: [number, number][];
+  unexpected_pieces: [number, number][];
+  pending_capture?: [number, number] | null;
+  candidate_attackers?: [number, number][];
+}
+
 export interface MoveHint {
   target_square: [number, number];
   uci: string;
@@ -46,6 +54,7 @@ export interface BoardState {
     disabled_squares?: number[][];
     virtual_only?: boolean;
     setup?: SetupStatus;
+    guardrail?: GuardrailStatus | null;
     pieces_detected?: boolean;
     detected_starting_count?: number;
     pieces_mode?: 'auto' | 'pieces' | 'empty';
@@ -53,6 +62,8 @@ export interface BoardState {
     lifted_square?: [number, number] | null;
     legal_targets?: [number, number][];
     legal_captures?: [number, number][];
+    pending_capture_target?: [number, number] | null;
+    capture_candidate_attackers?: [number, number][];
     invalid_placement?: [number, number] | null;
     pending_opponent_move?: {
       uci: string;

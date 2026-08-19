@@ -214,6 +214,53 @@ function App() {
     return null;
   }, [state.game?.is_check, state.game?.turn, state.digital, state.status]);
 
+  // Physical file/rank index (0..7, 0..7) to chess square string (e.g. [4, 3] -> "e4")
+  const fileRankToChessCoord = (c: number, r: number): string => {
+    return `${String.fromCharCode(97 + c)}${r + 1}`;
+  };
+
+  // Guardrail missing piece squares
+  const guardrailMissingCoords = useMemo(() => {
+    const coords = new Set<string>();
+    if (state.physical?.guardrail?.missing_pieces) {
+      for (const [c, r] of state.physical.guardrail.missing_pieces) {
+        coords.add(fileRankToChessCoord(c, r));
+      }
+    }
+    return coords;
+  }, [state.physical?.guardrail?.missing_pieces]);
+
+  // Guardrail unexpected piece squares
+  const guardrailUnexpectedCoords = useMemo(() => {
+    const coords = new Set<string>();
+    if (state.physical?.guardrail?.unexpected_pieces) {
+      for (const [c, r] of state.physical.guardrail.unexpected_pieces) {
+        coords.add(fileRankToChessCoord(c, r));
+      }
+    }
+    return coords;
+  }, [state.physical?.guardrail?.unexpected_pieces]);
+
+  // Capture target lifted first coordinate
+  const pendingCaptureTargetCoord = useMemo(() => {
+    if (state.physical?.pending_capture_target) {
+      const [c, r] = state.physical.pending_capture_target;
+      return fileRankToChessCoord(c, r);
+    }
+    return null;
+  }, [state.physical?.pending_capture_target]);
+
+  // Candidate attacker coordinates for in-progress capture
+  const candidateAttackerCoords = useMemo(() => {
+    const coords = new Set<string>();
+    if (state.physical?.capture_candidate_attackers) {
+      for (const [c, r] of state.physical.capture_candidate_attackers) {
+        coords.add(fileRankToChessCoord(c, r));
+      }
+    }
+    return coords;
+  }, [state.physical?.capture_candidate_attackers]);
+
   const handleSquareClick = async (col: number, row: number) => {
     if (state.status !== 'PLAYING') return;
 
@@ -810,6 +857,35 @@ function App() {
           {/* Left / Center Column: 8x8 Chessboard */}
           <div className="w-full max-w-[460px] md:max-w-[520px] flex flex-col flex-shrink-0">
             
+            {/* Capture in Progress Banner */}
+            {pendingCaptureTargetCoord && (
+              <div className="mb-2 bg-gradient-to-r from-rose-950/90 to-amber-950/90 border border-rose-500/50 rounded-xl px-3 py-2 text-xs text-rose-200 flex items-center justify-between shadow-lg animate-pulse">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-amber-400 animate-spin" />
+                  <span className="font-bold">Capture in Progress:</span>
+                  <span>Opponent piece on <span className="font-mono font-bold text-amber-300 uppercase">{pendingCaptureTargetCoord}</span> lifted. Move your capturing piece to complete!</span>
+                </div>
+              </div>
+            )}
+
+            {/* Live Board State Mismatch Alert Banner */}
+            {state.status === 'PLAYING' && !state.virtual_only && state.physical?.guardrail && !state.physical.guardrail.is_synchronized && (
+              <div className="mb-2 bg-red-950/90 border border-red-500/60 rounded-xl px-3 py-2 text-xs text-red-200 flex items-center gap-2 shadow-lg">
+                <AlertTriangle size={16} className="text-red-400 flex-shrink-0 animate-bounce" />
+                <div className="flex flex-col text-left">
+                  <span className="font-bold text-red-300">Board State Mismatch:</span>
+                  <div className="text-[11px] text-red-200/90 font-mono">
+                    {state.physical.guardrail.missing_pieces.length > 0 && (
+                      <span>Missing piece: {state.physical.guardrail.missing_pieces.map(([c, r]) => fileRankToChessCoord(c, r)).join(', ')}. </span>
+                    )}
+                    {state.physical.guardrail.unexpected_pieces.length > 0 && (
+                      <span>Unexpected piece: {state.physical.guardrail.unexpected_pieces.map(([c, r]) => fileRankToChessCoord(c, r)).join(', ')}.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Opponent Header Bar */}
             <div className={`flex justify-between items-center bg-slate-900/80 border border-slate-800 rounded-t-2xl px-4 py-2.5 text-xs transition-all duration-300 ${
               isOpponentTurn ? 'border-amber-500/50 bg-amber-950/10 shadow-[0_0_12px_rgba(245,158,11,0.1)]' : ''
@@ -884,6 +960,10 @@ function App() {
                     const isLastMoveSrc = lastMoveSquares?.from === coord;
                     const isLastMoveDst = lastMoveSquares?.to === coord;
                     const isInCheck = kingInCheckCoord === coord;
+                    const isPendingCaptureTarget = pendingCaptureTargetCoord === coord;
+                    const isCandidateAttacker = candidateAttackerCoords.has(coord);
+                    const isGuardrailMissing = guardrailMissingCoords.has(coord);
+                    const isGuardrailUnexpected = guardrailUnexpectedCoords.has(coord);
 
                     let squareBgClass = isDark ? 'bg-slate-700/80' : 'bg-slate-600/60';
                     if (isLastMoveSrc || isLastMoveDst) {
@@ -898,10 +978,29 @@ function App() {
                           isSelected ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-400/30' : ''
                         } ${
                           isInCheck ? 'ring-4 ring-rose-500 ring-inset bg-rose-500/30 animate-pulse' : ''
+                        } ${
+                          isPendingCaptureTarget ? 'ring-4 ring-rose-500 ring-inset bg-rose-500/30 animate-pulse shadow-[0_0_12px_rgba(244,63,94,0.8)]' : ''
+                        } ${
+                          isCandidateAttacker ? 'ring-2 ring-amber-400 ring-dashed ring-inset bg-amber-400/20 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : ''
+                        } ${
+                          isGuardrailMissing ? 'ring-4 ring-amber-500 ring-dashed ring-inset bg-amber-500/25 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.7)]' : ''
+                        } ${
+                          isGuardrailUnexpected ? 'ring-4 ring-red-600 ring-dashed ring-inset bg-red-600/30 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]' : ''
                         }`}
                       >
                         {/* Piece Icon */}
                         {renderPiece(piece)}
+
+                        {/* Guardrail Mismatch Badge Overlay */}
+                        {isGuardrailMissing && (
+                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)]" title="Missing piece detected" />
+                        )}
+                        {isGuardrailUnexpected && (
+                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,1)]" title="Unexpected piece detected" />
+                        )}
+                        {isPendingCaptureTarget && (
+                          <span className="absolute top-0.5 right-0.5 text-[9px] select-none text-rose-300 font-bold" title="Capture target">⚔</span>
+                        )}
 
                         {/* Legal Move Indicator Dot (with Coach / Blunder Guard Color Tiers) */}
                         {isLegalDest && (

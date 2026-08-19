@@ -116,3 +116,101 @@ def test_result_serialization():
     assert "misplaced_pieces" in d
     assert "white_count" in d
     assert "black_count" in d
+
+
+def test_guardrail_synchronized_game_state():
+    import chess
+    validator = SetupValidator()
+    board = chess.Board()
+    state = [[0] * 8 for _ in range(8)]
+    # Populate starting positions
+    for c in range(8):
+        state[c][0] = -1
+        state[c][1] = -1
+        state[c][6] = 1
+        state[c][7] = 1
+
+    guardrail = validator.validate_game_state(state, board)
+    assert guardrail.is_synchronized is True
+    assert len(guardrail.missing_pieces) == 0
+    assert len(guardrail.unexpected_pieces) == 0
+
+
+def test_guardrail_detects_missing_and_unexpected_pieces():
+    import chess
+    validator = SetupValidator()
+    board = chess.Board()
+    state = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        state[c][0] = -1
+        state[c][1] = -1
+        state[c][6] = 1
+        state[c][7] = 1
+
+    # e2 pawn missing
+    state[4][1] = 0
+    # unexpected piece on e4
+    state[4][3] = -1
+
+    guardrail = validator.validate_game_state(state, board)
+    assert guardrail.is_synchronized is False
+    assert (4, 1) in guardrail.missing_pieces
+    assert (4, 3) in guardrail.unexpected_pieces
+
+
+def test_guardrail_exempts_transient_lift_and_captures():
+    import chess
+    from unittest.mock import MagicMock
+    validator = SetupValidator()
+    board = chess.Board()
+    state = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        state[c][0] = -1
+        state[c][1] = -1
+        state[c][6] = 1
+        state[c][7] = 1
+
+    tracker = MagicMock()
+    tracker.lifted_square = (4, 1)  # e2 pawn lifted
+    tracker.legal_captures = [(3, 4)]
+    tracker.in_flight_move = None
+    tracker.pending_opponent_move = None
+    tracker.pending_castling_rook = None
+    tracker.pending_capture_target = None
+    tracker.capture_candidate_attackers = []
+
+    state[4][1] = 0  # physically lifted
+
+    guardrail = validator.validate_game_state(state, board, tracker=tracker)
+    assert guardrail.is_synchronized is True
+    assert (4, 1) not in guardrail.missing_pieces
+
+
+def test_guardrail_exempts_capture_target_lifted_first():
+    import chess
+    from unittest.mock import MagicMock
+    validator = SetupValidator()
+    board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    state = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        state[c][0] = -1
+        state[c][1] = -1 if c != 4 else 0
+        state[c][6] = 1 if c != 3 else 0
+        state[c][7] = 1
+    state[4][3] = -1  # e4 White pawn
+    # Opponent d5 pawn (c=3, r=4) is physically lifted first: state[3][4] == 0
+    state[3][4] = 0
+
+    tracker = MagicMock()
+    tracker.lifted_square = None
+    tracker.legal_captures = []
+    tracker.in_flight_move = None
+    tracker.pending_opponent_move = None
+    tracker.pending_castling_rook = None
+    tracker.pending_capture_target = (3, 4)  # d5 lifted
+    tracker.capture_candidate_attackers = [(4, 3)]
+
+    guardrail = validator.validate_game_state(state, board, tracker=tracker)
+    assert guardrail.is_synchronized is True
+    assert guardrail.pending_capture == (3, 4)
+    assert (3, 4) not in guardrail.missing_pieces

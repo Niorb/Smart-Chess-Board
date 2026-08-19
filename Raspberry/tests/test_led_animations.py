@@ -290,3 +290,25 @@ def test_render_castle_trace_two_phase():
     render_castle_trace(king_path, rook_path, period * 0.75, frame_p2, period=period)
     assert any(frame_p2)
 
+
+def test_render_capture_aura():
+    """Verify render_capture_aura illuminates target square and candidate attacker squares."""
+    from app.led_animations import render_capture_aura
+    frame = [0] * NUM_LEDS
+    target_sq = (3, 4)
+    attackers = [(4, 3), (2, 3)]
+
+    render_capture_aura(target_sq, attackers, time.time(), frame)
+    assert any(frame)
+
+
+def test_render_guardrail_mismatch():
+    """Verify render_guardrail_mismatch illuminates missing and unexpected squares."""
+    from app.led_animations import render_guardrail_mismatch
+    frame = [0] * NUM_LEDS
+    missing = [(4, 1)]
+    unexpected = [(4, 3)]
+
+    render_guardrail_mismatch(missing, unexpected, time.time(), frame)
+    assert any(frame)
+

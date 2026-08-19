@@ -575,6 +575,108 @@ def test_piece_lift_suppressed_when_not_player_turn(initial_physical_state, mock
     assert len(tracker.legal_targets) == 0
 
 
+def test_capture_target_lifted_first_initiates_capture_intent(initial_physical_state, mock_engine):
+    """Test lifting opponent's piece first sets pending_capture_target and candidate attackers."""
+    tracker = PhysicalMoveTracker()
+    tracker.reset(initial_physical_state)
+
+    # Setup board position with e4 and d5 pawns
+    mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    mock_engine.my_color = "white"
+    
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0  # e2 empty
+    state[4][3] = -1 # e4 occupied by White
+    state[3][6] = 0  # d7 empty
+    state[3][4] = 1  # d5 occupied by Black
+    tracker.last_physical_state = [row[:] for row in state]
+
+    # Player lifts Black d5 pawn (transitions 1 -> 0)
+    lifted_d5 = [row[:] for row in state]
+    lifted_d5[3][4] = 0
+
+    res = tracker.process_physical_state(lifted_d5, mock_engine)
+    assert res is None
+    assert tracker.pending_capture_target == (3, 4)
+    assert (4, 3) in tracker.capture_candidate_attackers
+
+    # Returning opponent piece cancels capture intent
+    res_cancel = tracker.process_physical_state(state, mock_engine)
+    assert res_cancel is None
+    assert tracker.pending_capture_target is None
+    assert len(tracker.capture_candidate_attackers) == 0
+
+
+def test_capture_target_lifted_first_then_attacker_lifted_and_placed(initial_physical_state, mock_engine):
+    """Test complete capture sequence: lift opponent piece -> lift friendly attacker -> place on target square."""
+    tracker = PhysicalMoveTracker()
+    tracker.reset(initial_physical_state)
+
+    mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    mock_engine.my_color = "white"
+    
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0  # e2 empty
+    state[4][3] = -1 # e4 White
+    state[3][6] = 0  # d7 empty
+    state[3][4] = 1  # d5 Black
+    tracker.last_physical_state = [row[:] for row in state]
+
+    # Step 1: Lift Black d5 pawn
+    lifted_d5 = [row[:] for row in state]
+    lifted_d5[3][4] = 0
+    tracker.process_physical_state(lifted_d5, mock_engine)
+    assert tracker.pending_capture_target == (3, 4)
+
+    # Step 2: Lift White e4 attacker
+    lifted_both = [row[:] for row in lifted_d5]
+    lifted_both[4][3] = 0
+    tracker.process_physical_state(lifted_both, mock_engine)
+    assert tracker.lifted_square == (4, 3)
+    assert (3, 4) in tracker.legal_targets
+    assert (3, 4) in tracker.legal_captures
+
+    # Step 3: Place White pawn on d5 target
+    placed_d5 = [row[:] for row in lifted_both]
+    placed_d5[3][4] = -1 # White pawn on d5
+    move_res = tracker.process_physical_state(placed_d5, mock_engine)
+    assert move_res == (5, 4, 4, 5, None)  # 1-indexed: e4 (5,4) -> d5 (4,5)
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["is_capture"] is True
+    assert tracker.arrival_flash["square"] == (3, 4)
+
+
+def test_capture_target_lifted_first_direct_placement(initial_physical_state, mock_engine):
+    """Test fast single-cycle capture where attacker is directly placed on pre-lifted capture target."""
+    tracker = PhysicalMoveTracker()
+    tracker.reset(initial_physical_state)
+
+    mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+    mock_engine.my_color = "white"
+    
+    state = [row[:] for row in initial_physical_state]
+    state[4][1] = 0  # e2 empty
+    state[4][3] = -1 # e4 White
+    state[3][6] = 0  # d7 empty
+    state[3][4] = 1  # d5 Black
+    tracker.last_physical_state = [row[:] for row in state]
+
+    # Step 1: Lift Black d5 pawn
+    lifted_d5 = [row[:] for row in state]
+    lifted_d5[3][4] = 0
+    tracker.process_physical_state(lifted_d5, mock_engine)
+    assert tracker.pending_capture_target == (3, 4)
+
+    # Step 2: Direct swap: e4 becomes 0 and d5 becomes -1 in one cycle
+    swapped = [row[:] for row in lifted_d5]
+    swapped[4][3] = 0
+    swapped[3][4] = -1
+    move_res = tracker.process_physical_state(swapped, mock_engine)
+    assert move_res == (5, 4, 4, 5, None)
+    assert tracker.in_flight_move is not None
+    assert tracker.in_flight_move["uci"] == "e4d5"
+
+
 
 
 

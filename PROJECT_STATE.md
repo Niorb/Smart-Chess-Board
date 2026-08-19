@@ -110,11 +110,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **SSH Firewall / Outbound Block**: Identified that outbound SSH port 22 and 443 connections on the Raspberry Pi's local network timed out when connecting to GitHub.
   - **Remote Switch to HTTPS**: Reconfigured `origin` remote URL in `~/chess_git` on the Pi to HTTPS (`https://github.com/Niorb/Smart-Chess-Board.git`), enabling instant pulls.
   - **Physical Tracker & Test Isolation Fixes**: Initialized `_last_synced_move_uci` in `PhysicalMoveTracker.__init__` and isolated `test_board_hardware.py` in-loop calibration unit tests. Verified all 170 unit and integration tests passing on the physical Pi.
-- [x] Implemented 90-Degree Physical Board Rotation Mapping (Old a1 -> New h1):
-  - **Hardware Sensor Coordinate Translation (`Raspberry/board_hardware.py`)**: Mapped physical multiplexer readings $(c_{phys}, r_{phys})$ to standard chess coordinates $(c_{chess} = 7 - r_{phys}, r_{chess} = c_{phys})$ in `scan_board()`, `calibrate_board()`, and `calibrate_board_with_pieces()`.
-  - **Serpentine LED Mapping Adaptation (`Raspberry/app/led_helpers.py`)**: Converted logical chess coordinates to physical strip layout ($c_{phys} = \text{rank}, r_{phys} = 7 - \text{file}$) mapping Strip 1 (GPIO 23) to Ranks 1–4 and Strip 2 (GPIO 22) to Ranks 5–8.
-  - **Diagnostics & Test Alignment**: Updated `hardware_test.py`, `WIRING_GUIDE.txt`, and test suites (`test_board_hardware.py`, `test_led_helpers.py`, `test_highlight_row_swap.py`, `test_coach_engine.py`, `test_webapp_recalibrate.py`).
-  - **Verification on Physical Pi**: Frontend production build (`tsc -b && vite build`) succeeded and all 170 pytest unit/integration tests passed cleanly.
+- [x] Implemented In-Game Safety Guardrails & Capture-in-Progress Handling:
+  - **Live State Guardrail Synchronization (`Raspberry/app/setup_validator.py`)**: Continuously compares physical board matrix against digital engine state (`lichess_engine.board`), intelligently filtering out legitimate transient states (lifted friendly piece, legal capture destinations, pending capture target, pending opponent mirror, castling rook movement, and in-flight move locks).
+  - **Capture-First State Machine (`Raspberry/app/physical_tracker.py`)**: Seamlessly supports player lifting opponent's piece first when taking a piece. Identifies valid candidate friendly attackers, preserves capture intent, supports lifting candidate attacker or direct piece placement, and cancels intent if the opponent piece is returned.
+  - **Dynamic LED Animations & Alerts (`Raspberry/app/led_animations.py` & `board_state.py`)**:
+    - **Capture-in-Progress Aura**: Sinusoidal pulsing radiant ruby aura (`(255, 32, 64)`) on capture destination with warm golden breathing glow (`(220, 160, 20)`) on candidate attacking squares.
+    - **Guardrail Mismatch Feedback**: Rapid amber pulse (`(204, 120, 0)`) on missing piece squares and alert crimson pulse (`(204, 0, 0)`) on unexpected piece squares.
+  - **Frontend UI Overlays & Alerts (`Raspberry/frontend/src/App.tsx` & `useBoardState.ts`)**: Real-time "Capture in Progress" banner, "Board State Mismatch" alert banner, and virtual chessboard square highlight rings/badges.
+  - **Unit Test Coverage (`Raspberry/tests/`)**: Added test suites in `test_setup_validator.py`, `test_physical_tracker.py`, `test_board_state.py`, and `test_led_animations.py`.
 
 ## Task Backlog
 

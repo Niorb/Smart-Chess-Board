@@ -24,9 +24,13 @@ try:
         NUM_LEDS,
     )
     from app.led_helpers import (
+        COLOR_INT_CAPTURE_AURA_ATTACKER,
+        COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DEFEAT_RED,
         COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_WHITE,
+        COLOR_INT_GUARDRAIL_MISSING,
+        COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_FROM,
@@ -50,9 +54,13 @@ except ImportError:
         NUM_LEDS,
     )
     from .led_helpers import (
+        COLOR_INT_CAPTURE_AURA_ATTACKER,
+        COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DEFEAT_RED,
         COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_WHITE,
+        COLOR_INT_GUARDRAIL_MISSING,
+        COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_FROM,
@@ -567,3 +575,59 @@ def create_animation(
         start_time=time.time(),
         params=params or {},
     )
+
+
+def render_capture_aura(
+    target_sq: Tuple[int, int],
+    candidate_attackers: List[Tuple[int, int]],
+    now: float,
+    frame: List[int],
+) -> None:
+    """
+    Renders an active capture-in-progress aura on the board when the player
+    has lifted the opponent's piece first.
+    - Pulsing radiant ruby/gold aura on the target square.
+    - Warm golden breathing pulse on candidate friendly attacker squares.
+    """
+    t_c, t_r = target_sq
+    # Target square pulse: smooth sinusoidal oscillation between ruby/crimson and gold
+    pulse_t = math.sin(now * 5.0) * 0.5 + 0.5
+    target_col = blend_colors(COLOR_INT_CAPTURE_AURA_TARGET, COLOR_INT_CAPTURE_AURA_ATTACKER, pulse_t * 0.4)
+    intensity = 0.6 + 0.4 * pulse_t
+    scaled_target = scale_color(target_col, intensity)
+    set_square_in_frame(frame, t_c, t_r, scaled_target)
+
+    # Candidate attackers: rhythmic golden breathing pulse
+    for i, (a_c, a_r) in enumerate(candidate_attackers):
+        att_pulse = math.sin(now * 4.0 + i * 0.8) * 0.5 + 0.5
+        att_intensity = 0.4 + 0.6 * att_pulse
+        att_col = scale_color(COLOR_INT_CAPTURE_AURA_ATTACKER, att_intensity)
+        set_square_in_frame(frame, a_c, a_r, att_col)
+
+
+def render_guardrail_mismatch(
+    missing_pieces: List[Tuple[int, int]],
+    unexpected_pieces: List[Tuple[int, int]],
+    now: float,
+    frame: List[int],
+) -> None:
+    """
+    Renders visual alert pulses on squares with state mismatches during games.
+    - Missing pieces: Distinct pulsing amber alert (6 Hz).
+    - Unexpected pieces: Sharp pulsing crimson alert (8 Hz).
+    """
+    # Missing pieces pulse (amber/orange)
+    if missing_pieces:
+        miss_pulse = math.sin(now * 6.0 * 2.0 * math.pi) * 0.5 + 0.5
+        miss_intensity = 0.3 + 0.7 * miss_pulse
+        miss_col = scale_color(COLOR_INT_GUARDRAIL_MISSING, miss_intensity)
+        for c, r in missing_pieces:
+            set_square_in_frame(frame, c, r, miss_col)
+
+    # Unexpected pieces pulse (crimson/red)
+    if unexpected_pieces:
+        unexp_pulse = math.sin(now * 8.0 * 2.0 * math.pi) * 0.5 + 0.5
+        unexp_intensity = 0.35 + 0.65 * unexp_pulse
+        unexp_col = scale_color(COLOR_INT_GUARDRAIL_UNEXPECTED, unexp_intensity)
+        for c, r in unexpected_pieces:
+            set_square_in_frame(frame, c, r, unexp_col)

@@ -39,6 +39,8 @@ class PhysicalMoveTracker:
         self.in_flight_move: dict[str, Any] | None = None
         self.arrival_flash: dict[str, Any] | None = None
         self.pending_castling_rook: dict[str, Any] | None = None
+        self.pending_capture_target: tuple[int, int] | None = None
+        self.capture_candidate_attackers: list[tuple[int, int]] = []
         self.last_physical_state: list[list[int]] | None = None
 
     def set_in_flight_move(
@@ -67,6 +69,8 @@ class PhysicalMoveTracker:
         self.in_flight_move = None
         self.arrival_flash = None
         self.pending_castling_rook = None
+        self.pending_capture_target = None
+        self.capture_candidate_attackers = []
         self.last_physical_state = [row[:] for row in initial_state] if initial_state is not None else None
 
     def sync_game(self, engine: Any) -> None:
@@ -268,11 +272,96 @@ class PhysicalMoveTracker:
 
         # Case A: No piece currently lifted -> Detect lift
         if self.lifted_square is None:
-            for c in range(self.cols):
-                for r in range(self.rows):
-                    sq = chess.square(c, r)
-                    piece = board.piece_at(sq)
-                    if piece and piece.color == turn_color:
+            # Subcase A.1: Capture target piece was lifted first
+            if self.pending_capture_target is not None:
+                cap_c, cap_r = self.pending_capture_target
+                cap_sq = chess.square(cap_c, cap_r)
+
+                # 1. Opponent piece returned to capture square -> Cancel capture intent
+                if physical_state[cap_c][cap_r] != 0:
+                    any_attacker_empty = any(
+                        physical_state[ac][ar] == 0 for ac, ar in self.capture_candidate_attackers
+                    )
+                    if not any_attacker_empty:
+                        logger.info(f"Opponent piece returned to ({cap_c},{cap_r}). Capture intent cancelled.")
+                        self.pending_capture_target = None
+                        self.capture_candidate_attackers = []
+                        self.last_physical_state = [row[:] for row in physical_state]
+                        return None
+
+                # 2. Check if one of the candidate attacking friendly pieces was lifted
+                for ac, ar in self.capture_candidate_attackers:
+                    if physical_state[ac][ar] == 0:
+                        sq_att = chess.square(ac, ar)
+                        self.lifted_square = (ac, ar)
+                        self.invalid_placement = None
+
+                        targets = []
+                        captures = []
+                        for m in board.legal_moves:
+                            if m.from_square == sq_att:
+                                t_c = chess.square_file(m.to_square)
+                                t_r = chess.square_rank(m.to_square)
+                                if (t_c, t_r) not in targets:
+                                    targets.append((t_c, t_r))
+                                if board.is_capture(m) and (t_c, t_r) not in captures:
+                                    captures.append((t_c, t_r))
+                        self.legal_targets = targets
+                        self.legal_captures = captures
+                        logger.info(
+                            f"Friendly attacker lifted at ({ac},{ar}) for capture at ({cap_c},{cap_r}) -> targets: {targets}"
+                        )
+                        self.last_physical_state = [row[:] for row in physical_state]
+                        return None
+
+                # 3. Direct placement onto capture square (single cycle swap/slide where piece is placed immediately)
+                if physical_state[cap_c][cap_r] != 0:
+                    empty_attackers = [
+                        (ac, ar) for ac, ar in self.capture_candidate_attackers
+                        if physical_state[ac][ar] == 0
+                    ]
+                    if len(empty_attackers) == 1:
+                        from_c, from_r = empty_attackers[0]
+                        sq_from = chess.square(from_c, from_r)
+                        sq_to = cap_sq
+                        t_c, t_r = cap_c, cap_r
+
+                        self.arrival_flash = {
+                            "square": (t_c, t_r),
+                            "start_time": time.time(),
+                            "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                            "is_capture": True,
+                        }
+
+                        promo_moves = [
+                            m for m in board.legal_moves
+                            if m.from_square == sq_from and m.to_square == sq_to and m.promotion
+                        ]
+                        promo = "q" if promo_moves else None
+                        uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{promo or ''}"
+                        self.set_in_flight_move(from_c, from_r, t_c, t_r, uci_move)
+
+                        move_result = (from_c + 1, from_r + 1, t_c + 1, t_r + 1, promo)
+                        logger.info(f"Physical capture move completed directly: ({from_c},{from_r}) -> ({t_c},{t_r}) uci={uci_move}")
+
+                        self.lifted_square = None
+                        self.legal_targets = []
+                        self.legal_captures = []
+                        self.pending_capture_target = None
+                        self.capture_candidate_attackers = []
+                        self.invalid_placement = None
+                        self.last_physical_state = [row[:] for row in physical_state]
+                        return move_result
+
+            # Subcase A.2: Detect new lift
+            else:
+                for c in range(self.cols):
+                    for r in range(self.rows):
+                        sq = chess.square(c, r)
+                        piece = board.piece_at(sq)
+                        if piece is None:
+                            continue
+
                         # Detect lift: transition from occupied (!= 0) to empty (== 0)
                         is_lifted = False
                         if self.last_physical_state is not None:
@@ -280,13 +369,17 @@ class PhysicalMoveTracker:
                         else:
                             is_lifted = (physical_state[c][r] == 0)
 
-                        if is_lifted:
+                        if not is_lifted:
+                            continue
+
+                        # If friendly piece lifted
+                        if piece.color == turn_color:
                             self.lifted_square = (c, r)
                             self.invalid_placement = None
-                            
+
                             # Calculate legal destination squares & captures
-                            targets: list[tuple[int, int]] = []
-                            captures: list[tuple[int, int]] = []
+                            targets = []
+                            captures = []
                             for m in board.legal_moves:
                                 if m.from_square == sq:
                                     t_c = chess.square_file(m.to_square)
@@ -301,6 +394,23 @@ class PhysicalMoveTracker:
                             self.last_physical_state = [row[:] for row in physical_state]
                             return None
 
+                        # If opponent piece lifted first (Capture Intent)
+                        elif piece.color != turn_color:
+                            attackers = [
+                                (chess.square_file(m.from_square), chess.square_rank(m.from_square))
+                                for m in board.legal_moves
+                                if m.to_square == sq
+                            ]
+                            if len(attackers) > 0:
+                                self.pending_capture_target = (c, r)
+                                self.capture_candidate_attackers = attackers
+                                self.invalid_placement = None
+                                logger.info(
+                                    f"Opponent piece lifted first at ({c},{r})! Initiating capture intent. Candidate attackers: {attackers}"
+                                )
+                                self.last_physical_state = [row[:] for row in physical_state]
+                                return None
+
         # Case B: Piece is currently lifted -> Detect placement
         else:
             from_c, from_r = self.lifted_square
@@ -312,6 +422,8 @@ class PhysicalMoveTracker:
                 self.lifted_square = None
                 self.legal_targets = []
                 self.legal_captures = []
+                self.pending_capture_target = None
+                self.capture_candidate_attackers = []
                 self.invalid_placement = None
                 self.last_physical_state = [row[:] for row in physical_state]
                 return None
@@ -326,14 +438,14 @@ class PhysicalMoveTracker:
                 target_val = physical_state[t_c][t_r]
                 is_placed = False
 
-                if existing_piece is None:
+                if existing_piece is None or (t_c, t_r) == self.pending_capture_target:
                     is_placed = (target_val != 0)
                 else:
-                    # Capture square
+                    # Capture square where opponent piece was not pre-lifted
                     is_placed = (target_val == expected_polarity or (target_val != 0 and target_val != (-1 if existing_piece.color == chess.WHITE else 1)))
 
                 if is_placed:
-                    is_capture = (existing_piece is not None)
+                    is_capture = (existing_piece is not None or (t_c, t_r) == self.pending_capture_target)
                     self.arrival_flash = {
                         "square": (t_c, t_r),
                         "start_time": time.time(),
@@ -375,6 +487,8 @@ class PhysicalMoveTracker:
                     self.lifted_square = None
                     self.legal_targets = []
                     self.legal_captures = []
+                    self.pending_capture_target = None
+                    self.capture_candidate_attackers = []
                     self.invalid_placement = None
                     self.last_physical_state = [row[:] for row in physical_state]
                     return move_result
@@ -409,6 +523,8 @@ class PhysicalMoveTracker:
             "lifted_square": list(self.lifted_square) if self.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.legal_targets],
             "legal_captures": [list(sq) for sq in self.legal_captures],
+            "pending_capture_target": list(self.pending_capture_target) if self.pending_capture_target else None,
+            "capture_candidate_attackers": [list(sq) for sq in self.capture_candidate_attackers],
             "invalid_placement": list(self.invalid_placement) if self.invalid_placement else None,
             "pending_opponent_move": self.pending_opponent_move,
             "pending_castling_rook": (

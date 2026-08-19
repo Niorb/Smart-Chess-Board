@@ -313,6 +313,58 @@ def test_board_state_player_pending_castling_rook_led_render():
     assert bsm.strip.show.called
 
 
+def test_board_state_capture_in_progress_led_render():
+    """Verify that _update_leds renders capture aura when opponent piece was lifted first."""
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    bsm.move_tracker.pending_capture_target = (3, 4)  # d5
+    bsm.move_tracker.capture_candidate_attackers = [(4, 3)]  # e4
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+def test_board_state_guardrail_mismatch_led_render():
+    """Verify that _update_leds renders alert pulses when board state mismatch is detected."""
+    from app.setup_validator import GameGuardrailResult
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    bsm.guardrail_result = GameGuardrailResult(
+        is_synchronized=False,
+        missing_pieces=[(4, 1)],
+        unexpected_pieces=[(4, 3)],
+    )
+
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+
+def test_physical_payload_includes_guardrail_and_capture():
+    """Verify that get_physical_payload contains guardrail status and capture info."""
+    from app.setup_validator import GameGuardrailResult
+    bsm = BoardStateManager()
+    bsm.move_tracker.pending_capture_target = (3, 4)
+    bsm.move_tracker.capture_candidate_attackers = [(4, 3)]
+    bsm.guardrail_result = GameGuardrailResult(
+        is_synchronized=False,
+        missing_pieces=[(4, 1)],
+        unexpected_pieces=[],
+        pending_capture=(3, 4),
+        candidate_attackers=[(4, 3)],
+    )
+
+    payload = bsm.get_physical_payload()
+    assert payload["pending_capture_target"] == [3, 4]
+    assert payload["capture_candidate_attackers"] == [[4, 3]]
+    assert payload["guardrail"] is not None
+    assert payload["guardrail"]["is_synchronized"] is False
+    assert payload["guardrail"]["missing_pieces"] == [[4, 1]]
+
+
 
 
 

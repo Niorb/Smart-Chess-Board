@@ -9,6 +9,8 @@ Black=+1 / North on Ranks 7-8, Empty=0 on Ranks 3-6) and computes missing or mis
 from dataclasses import dataclass, field
 from typing import Any
 
+import chess
+
 from app.config import BOARD_COLS, BOARD_ROWS
 
 
@@ -31,6 +33,26 @@ class SetupResult:
             "misplaced_pieces": [list(sq) for sq in self.misplaced_pieces],
             "white_count": self.white_count,
             "black_count": self.black_count,
+        }
+
+
+@dataclass
+class GameGuardrailResult:
+    """Represents the live in-game synchronization state between digital and physical chessboards."""
+    is_synchronized: bool
+    missing_pieces: list[tuple[int, int]] = field(default_factory=list)
+    unexpected_pieces: list[tuple[int, int]] = field(default_factory=list)
+    pending_capture: tuple[int, int] | None = None
+    candidate_attackers: list[tuple[int, int]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializes the guardrail result for WebSocket state payloads."""
+        return {
+            "is_synchronized": self.is_synchronized,
+            "missing_pieces": [list(sq) for sq in self.missing_pieces],
+            "unexpected_pieces": [list(sq) for sq in self.unexpected_pieces],
+            "pending_capture": list(self.pending_capture) if self.pending_capture else None,
+            "candidate_attackers": [list(sq) for sq in self.candidate_attackers],
         }
 
 
@@ -113,4 +135,107 @@ class SetupValidator:
             misplaced_pieces=misplaced_pieces,
             white_count=white_count,
             black_count=black_count,
+        )
+
+    def validate_game_state(
+        self,
+        physical_state: list[list[int]],
+        board: Any,
+        tracker: Any | None = None,
+        my_color: str | None = None,
+    ) -> GameGuardrailResult:
+        """
+        Validates the physical 8x8 sensor matrix against the active chess.Board,
+        intelligently ignoring valid transient move, capture, castling, and opponent mirror states.
+        
+        Args:
+            physical_state: 2D list [cols][rows] of sensor readings (-1, 0, 1).
+            board: Active chess.Board object.
+            tracker: Optional PhysicalMoveTracker instance containing transient move locks.
+            my_color: "white" or "black" or None.
+            
+        Returns:
+            GameGuardrailResult indicating synchronization status and any anomalous squares.
+        """
+        if not board or not hasattr(board, "piece_at"):
+            return GameGuardrailResult(is_synchronized=True)
+
+        missing_pieces: list[tuple[int, int]] = []
+        unexpected_pieces: list[tuple[int, int]] = []
+
+        # Squares exempted from standard presence checks due to active transient transitions
+        exempt_squares: set[tuple[int, int]] = set()
+
+        pending_cap: tuple[int, int] | None = None
+        cand_attackers: list[tuple[int, int]] = []
+
+        if tracker is not None:
+            # 1. In-flight move lock exemption
+            if getattr(tracker, "in_flight_move", None):
+                f_c, f_r = tracker.in_flight_move["from"]
+                t_c, t_r = tracker.in_flight_move["to"]
+                exempt_squares.add((f_c, f_r))
+                exempt_squares.add((t_c, t_r))
+
+            # 2. Opponent move pending physical mirroring
+            if getattr(tracker, "pending_opponent_move", None):
+                opp_from = tracker.pending_opponent_move["from"]
+                opp_to = tracker.pending_opponent_move["to"]
+                exempt_squares.add(opp_from)
+                exempt_squares.add(opp_to)
+                if tracker.pending_opponent_move.get("is_castling"):
+                    r_from = tracker.pending_opponent_move.get("rook_from")
+                    r_to = tracker.pending_opponent_move.get("rook_to")
+                    if r_from:
+                        exempt_squares.add(r_from)
+                    if r_to:
+                        exempt_squares.add(r_to)
+
+            # 3. Player's pending castling Rook placement
+            if getattr(tracker, "pending_castling_rook", None):
+                r_from = tracker.pending_castling_rook["from"]
+                r_to = tracker.pending_castling_rook["to"]
+                exempt_squares.add(r_from)
+                exempt_squares.add(r_to)
+
+            # 4. Friendly piece currently lifted
+            if getattr(tracker, "lifted_square", None):
+                exempt_squares.add(tracker.lifted_square)
+                # If player is making a capture, the target square may be temporarily empty or occupied
+                if getattr(tracker, "legal_captures", None):
+                    for cap_sq in tracker.legal_captures:
+                        exempt_squares.add(cap_sq)
+
+            # 5. Capture-in-progress where opponent piece was lifted first
+            if getattr(tracker, "pending_capture_target", None):
+                pending_cap = tracker.pending_capture_target
+                cand_attackers = getattr(tracker, "capture_candidate_attackers", [])
+                exempt_squares.add(pending_cap)
+
+        for c in range(self.cols):
+            for r in range(self.rows):
+                if (c, r) in exempt_squares:
+                    continue
+
+                sq = chess.square(c, r)
+                piece = board.piece_at(sq)
+                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+
+                if piece is not None:
+                    # Expected occupied: if physically empty, it is missing
+                    if val == 0:
+                        missing_pieces.append((c, r))
+                else:
+                    # Expected empty: if physically occupied, it is unexpected
+                    if val != 0:
+                        unexpected_pieces.append((c, r))
+
+        is_sync = (len(missing_pieces) == 0 and len(unexpected_pieces) == 0)
+
+        return GameGuardrailResult(
+            is_synchronized=is_sync,
+            missing_pieces=missing_pieces,
+            unexpected_pieces=unexpected_pieces,
+            pending_capture=pending_cap,
+            candidate_attackers=cand_attackers,
         )

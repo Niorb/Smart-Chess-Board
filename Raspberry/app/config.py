@@ -71,6 +71,10 @@ COLOR_HIGHLIGHT = (204, 64, 0)  # Orange for diagnostic highlight
 COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
 COLOR_MOVE_CONFIRM = (48, 255, 128)  # Vibrant emerald/spring green arrival confirmation flash
 COLOR_CAPTURE_CONFIRM = (255, 32, 64)  # Radiant ruby/crimson capture confirmation flash
+COLOR_GUARDRAIL_MISSING = (204, 120, 0)  # Amber warning for missing piece during game
+COLOR_GUARDRAIL_UNEXPECTED = (204, 0, 0)  # Red alert for unexpected piece during game
+COLOR_CAPTURE_AURA_TARGET = (255, 32, 64)  # Radiant ruby for target capture square
+COLOR_CAPTURE_AURA_ATTACKER = (220, 160, 20)  # Warm gold glow for friendly candidate pieces that can capture target
 
 # Coach & Blunder Guard Move Quality Colors — (R, G, B) tuples (scaled 20% for power)
 COLOR_MOVE_BEST = (0, 204, 76)        # Emerald Green for Best Move
