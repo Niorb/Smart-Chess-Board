@@ -425,133 +425,139 @@ def render_game_lost(
 ) -> None:
     """
     GAME_LOST animation: "The Sovereign's Requiem"
-    Choreographed 3-act defeat narrative for the Smart Chess Board:
-    - Act I (0.00-0.32): Lethal strike laser traverses board towards King's square (1-2 squares).
-    - Act II (0.30-0.65): 4-quadrant crown shatter and orbital implosion vortex (max 3-4 squares).
-    - Act III (0.62-1.00): King's agonal double heartbeat pulse fading to black (1 square).
+    Choreographed 3-phase cinematic defeat sequence with strictly <= 4 active squares (< 6% board power):
+    - Phase 1: Checkmate Strike / Fissure Ray (0.00 <= progress < 0.35).
+      Lethal laser bolt tracking towards King's square (1-2 squares active).
+    - Phase 2: Crown Shatter / Radial Spark Dispersal (0.35 <= progress < 0.70).
+      3 distinct shards flying outward from King's square (max 3 squares active).
+    - Phase 3: Falling King's Dying Ember (0.70 <= progress <= 1.00).
+      Lone dying ember on King's square pulsing with a fading heartbeat rhythm (1 square active).
 
-    Strict Hardware Budget: Max 4 squares illuminated at any instant (<6% of board).
+    Hardware Budget: Max 4 squares illuminated at any instant (target 1-3 squares).
     """
-    # 1. Clear frame buffer
+    # 1. Clear frame buffer - ensure all inactive squares are completely OFF
     for c in range(8):
         for r in range(8):
             set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
-    if progress < 0.0 or progress >= 1.0:
-        return
+    progress = max(0.0, min(1.0, progress))
 
-    # 2. Determine Target King Coordinate
-    my_color = str(params.get("my_color", "white")).lower()
+    # 2. Determine King Position gracefully
     if "king_c" in params and "king_r" in params:
-        king_c = float(params["king_c"])
-        king_r = float(params["king_r"])
-    elif "king_sq" in params and isinstance(params["king_sq"], (tuple, list)):
-        king_c = float(params["king_sq"][0])
-        king_r = float(params["king_sq"][1])
+        try:
+            king_c = int(round(float(params["king_c"])))
+            king_r = int(round(float(params["king_r"])))
+            if not (0 <= king_c < 8 and 0 <= king_r < 8):
+                king_c, king_r = 4, 0
+        except (ValueError, TypeError):
+            king_c, king_r = 4, 0
+    elif "king_sq" in params and isinstance(params["king_sq"], (tuple, list)) and len(params["king_sq"]) == 2:
+        try:
+            king_c = int(round(float(params["king_sq"][0])))
+            king_r = int(round(float(params["king_sq"][1])))
+            if not (0 <= king_c < 8 and 0 <= king_r < 8):
+                king_c, king_r = 4, 0
+        except (ValueError, TypeError):
+            king_c, king_r = 4, 0
     else:
-        # Default home squares: White King at e1 (4, 0), Black King at e8 (4, 7)
-        king_c, king_r = (4.0, 0.0) if my_color == "white" else (4.0, 7.0)
-
-    origin_c = 7.0 - king_c
-    origin_r = 7.0 - king_r
-
-    candidate_squares: List[Tuple[float, int, int, int]] = []  # (intensity, c, r, color)
-
-    # -------------------------------------------------------------------------
-    # ACT I: Lethal Strike Trajectory (progress 0.00 -> 0.32)
-    # -------------------------------------------------------------------------
-    if progress <= 0.32:
-        s1 = progress / 0.32
-        u1 = s1 * s1 * (3.0 - 2.0 * s1)  # Smoothstep
-        p_c = (1.0 - u1) * origin_c + u1 * king_c
-        p_r = (1.0 - u1) * origin_r + u1 * king_r
-        strike_env = math.sin(s1 * math.pi) ** 0.75
-
-        # Scan neighborhood around beam position
-        for c in range(max(0, int(math.floor(p_c - 2))), min(8, int(math.ceil(p_c + 3)))):
-            for r in range(max(0, int(math.floor(p_r - 2))), min(8, int(math.ceil(p_r + 3)))):
-                dist_sq = (c - p_c) ** 2 + (r - p_r) ** 2
-                intensity = math.exp(-4.2 * dist_sq) * strike_env
-                if intensity > 0.035:
-                    col = blend_colors(COLOR_INT_STRIKE_RUBY, COLOR_INT_DEFEAT_RED, min(1.0, math.sqrt(dist_sq) * 0.8))
-                    candidate_squares.append((intensity, c, r, col))
-
-    # -------------------------------------------------------------------------
-    # ACT II: Crown Fracture & Orbital Implosion (progress 0.30 -> 0.65)
-    # -------------------------------------------------------------------------
-    elif progress <= 0.65:
-        s2 = (progress - 0.30) / 0.35
-        env2 = math.sin(s2 * math.pi) ** 1.1
-        radius2 = 1.35 * math.sin(s2 * math.pi) * (1.0 - 0.15 * s2)
-
-        # 4 quadrant shard positions
-        shards = []
-        for k in range(4):
-            theta_k = (k * math.pi * 0.5) + (math.pi * 0.25) + (1.25 * s2)
-            sh_c = king_c + radius2 * math.cos(theta_k)
-            sh_r = king_r + radius2 * math.sin(theta_k)
-            shards.append((sh_c, sh_r))
-
-        # Core impact flash on King square
-        core_int = math.exp(-12.0 * s2 * s2) * 0.85
-        if core_int > 0.035:
-            k_int_c, k_int_r = int(round(king_c)), int(round(king_r))
-            if 0 <= k_int_c < 8 and 0 <= k_int_r < 8:
-                candidate_squares.append((core_int, k_int_c, k_int_r, COLOR_INT_STRIKE_RUBY))
-
-        # Shard intensities
-        for sh_c, sh_r in shards:
-            for c in range(max(0, int(math.floor(sh_c - 1))), min(8, int(math.ceil(sh_c + 2)))):
-                for r in range(max(0, int(math.floor(sh_r - 1))), min(8, int(math.ceil(sh_r + 2)))):
-                    dist_sq = (c - sh_c) ** 2 + (r - sh_r) ** 2
-                    intensity = math.exp(-5.0 * dist_sq) * env2
-                    if intensity > 0.035:
-                        col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DEFEAT_RED, s2 * 0.7)
-                        candidate_squares.append((intensity, c, r, col))
-
-    # -------------------------------------------------------------------------
-    # ACT III: Agonal Double Heartbeat on King Square (progress 0.62 -> 1.00)
-    # -------------------------------------------------------------------------
-    else:
-        s3 = (progress - 0.62) / 0.38
-        b1 = 0.95 * math.exp(-42.0 * ((s3 - 0.14) ** 2))
-        b2 = 0.42 * math.exp(-32.0 * ((s3 - 0.58) ** 2))
-        cardiac_int = (b1 + b2) * max(0.0, 1.0 - (s3 ** 1.5))
-
-        if cardiac_int > 0.035:
-            k_int_c, k_int_r = int(round(king_c)), int(round(king_r))
-            if 0 <= k_int_c < 8 and 0 <= k_int_r < 8:
-                if s3 <= 0.35:
-                    col = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_CROWN_EMBER, s3 / 0.35)
-                else:
-                    t_fade = min(1.0, (s3 - 0.35) / 0.55)
-                    col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, t_fade)
-                candidate_squares.append((cardiac_int, k_int_c, k_int_r, col))
-
-    # -------------------------------------------------------------------------
-    # HARDWARE GATING: Strict Top-4 Active Squares Filter
-    # -------------------------------------------------------------------------
-    if not candidate_squares:
-        return
-
-    # Consolidate candidate intensities by square coordinate
-    consolidated: Dict[Tuple[int, int], Tuple[float, int]] = {}
-    for intensity, c, r, col in candidate_squares:
-        key = (c, r)
-        if key in consolidated:
-            prev_int, prev_col = consolidated[key]
-            if intensity > prev_int:
-                consolidated[key] = (intensity, col)
+        my_color = str(params.get("my_color", "white")).strip().lower()
+        if my_color == "black":
+            king_c, king_r = 4, 7
+        elif my_color == "white":
+            king_c, king_r = 4, 0
         else:
-            consolidated[key] = (intensity, col)
+            king_c, king_r = 4, 0
 
-    # Sort descending by intensity and take top <= 4 squares
-    top_squares = sorted(consolidated.items(), key=lambda item: item[1][0], reverse=True)[:4]
+    # 3. Phase Dispatch
+    if progress < 0.35:
+        # =========================================================================
+        # Phase 1: Checkmate Strike / Fissure Ray (progress: 0.00 -> 0.35)
+        # Laser bolt tracking towards King's square (1-2 squares active)
+        # =========================================================================
+        p1 = progress / 0.35  # 0.0 to 1.0
 
-    # Render selected top squares
-    for (c, r), (intensity, col) in top_squares:
-        clamped_int = max(0.0, min(1.0, intensity))
-        set_square_in_frame(frame, c, r, scale_color(col, clamped_int))
+        # Origin on opposite side of the board
+        if king_r < 4:
+            origin_c = 7 - king_c
+            origin_r = 7
+        else:
+            origin_c = 7 - king_c
+            origin_r = 0
+
+        dx = king_c - origin_c
+        dy = king_r - origin_r
+        vec_len = math.hypot(dx, dy)
+        if vec_len < 0.01:
+            dx, dy, vec_len = 0.0, 1.0, 1.0
+
+        curr_c = origin_c + dx * p1
+        curr_r = origin_r + dy * p1
+
+        c_head = max(0, min(7, int(round(curr_c))))
+        r_head = max(0, min(7, int(round(curr_r))))
+
+        # Trailing tail square behind head along trajectory
+        tail_c = curr_c - (dx / vec_len) * 0.9
+        tail_r = curr_r - (dy / vec_len) * 0.9
+        c_tail = max(0, min(7, int(round(tail_c))))
+        r_tail = max(0, min(7, int(round(tail_r))))
+
+        # Head square (blazing ruby strike with white-hot tip)
+        col_head = blend_colors(COLOR_INT_STRIKE_RUBY, 0xFFFFFF, 0.35)
+        intensity_head = 0.80 + 0.20 * p1
+        set_square_in_frame(frame, c_head, r_head, scale_color(col_head, intensity_head))
+
+        # Tail square (trailing crimson fissure glow)
+        if (c_tail, r_tail) != (c_head, r_head):
+            col_tail = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_OPPONENT_FROM, 0.40)
+            intensity_tail = 0.45 * (1.0 - 0.25 * p1)
+            set_square_in_frame(frame, c_tail, r_tail, scale_color(col_tail, intensity_tail))
+
+    elif progress < 0.70:
+        # =========================================================================
+        # Phase 2: Crown Shatter / Radial Spark Dispersal (progress: 0.35 -> 0.70)
+        # 3 distinct shards flying outward from King (max 3 squares active)
+        # =========================================================================
+        p2 = (progress - 0.35) / 0.35  # 0.0 to 1.0
+
+        # 3 distinct radial vectors pointing away from King
+        if king_r <= 3:
+            shard_dirs = [(-0.9, 1.0), (0.0, 1.3), (0.9, 1.0)]
+        else:
+            shard_dirs = [(-0.9, -1.0), (0.0, -1.3), (0.9, -1.0)]
+
+        burst_dist = (p2 ** 0.75) * 2.8
+
+        for i, (dir_x, dir_y) in enumerate(shard_dirs):
+            pos_c = king_c + dir_x * burst_dist
+            pos_r = king_r + dir_y * burst_dist
+            sc = max(0, min(7, int(round(pos_c))))
+            sr = max(0, min(7, int(round(pos_r))))
+
+            shard_intensity = max(0.10, 1.0 - p2 * 0.85)
+            # Crown amber shard shattering with fiery ruby sparks
+            col_shard = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DEFEAT_RED, 0.35 + 0.55 * p2)
+            if p2 < 0.20:
+                col_shard = blend_colors(col_shard, 0xFFFFFF, (0.20 - p2) * 3.0)
+            set_square_in_frame(frame, sc, sr, scale_color(col_shard, shard_intensity))
+
+    else:
+        # =========================================================================
+        # Phase 3: Falling King's Dying Ember (progress: 0.70 -> 1.00)
+        # 1 square active on King's square with a fading heartbeat pulse
+        # =========================================================================
+        p3 = (progress - 0.70) / 0.30  # 0.0 to 1.0
+
+        if p3 < 0.98:
+            decay = (1.0 - p3) ** 1.5
+            heartbeat_osc = math.sin(p3 * 3.5 * math.pi) ** 2
+            pulse_intensity = max(0.02, decay * (0.30 + 0.70 * heartbeat_osc))
+            # Dying ruby ember fading to deep cinder
+            col_ember = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_DYING_CINDER, p3)
+            set_square_in_frame(frame, king_c, king_r, scale_color(col_ember, pulse_intensity))
+        else:
+            set_square_in_frame(frame, king_c, king_r, COLOR_INT_OFF)
+
 
 
 
