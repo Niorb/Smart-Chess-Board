@@ -414,28 +414,146 @@ def render_game_won(
                 set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
 
-def render_game_lost(progress: float, frame: List[int], params: Dict[str, Any]) -> None:
-    """
-    GAME_LOST animation:
-    Collapsing perimeter red wave converging toward center and fading into dim ember glow.
-    """
-    king_c = params.get("king_c", 3.5)
-    king_r = params.get("king_r", 3.5)
+# Game Lost Palette: "The Sovereign's Requiem"
+COLOR_INT_STRIKE_RUBY = color_rgb(255, 20, 42)
+COLOR_INT_CROWN_EMBER = color_rgb(216, 88, 8)
+COLOR_INT_DYING_CINDER = color_rgb(90, 12, 4)
 
-    max_dist = 5.2
-    target_radius = (1.0 - progress) * max_dist
-    fade = max(0.0, 1.0 - (progress * progress))
 
+def render_game_lost(
+    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+) -> None:
+    """
+    GAME_LOST animation: "The Sovereign's Requiem"
+    Choreographed 3-act defeat narrative for the Smart Chess Board:
+    - Act I (0.00-0.32): Lethal strike laser traverses board towards King's square (1-2 squares).
+    - Act II (0.30-0.65): 4-quadrant crown shatter and orbital implosion vortex (max 3-4 squares).
+    - Act III (0.62-1.00): King's agonal double heartbeat pulse fading to black (1 square).
+
+    Strict Hardware Budget: Max 4 squares illuminated at any instant (<6% of board).
+    """
+    # 1. Clear frame buffer
     for c in range(8):
         for r in range(8):
-            dist = math.sqrt((c - king_c) ** 2 + (r - king_r) ** 2)
-            d = abs(dist - target_radius)
-            wave = math.exp(-2.5 * d * d)
-            trailing_embers = math.exp(-0.8 * dist) * 0.3 * (1.0 - progress)
+            set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
-            intensity = max(0.0, min(1.0, wave + trailing_embers)) * fade
-            color = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_OPPONENT_FROM, progress * 0.7)
-            set_square_in_frame(frame, c, r, scale_color(color, intensity))
+    if progress < 0.0 or progress >= 1.0:
+        return
+
+    # 2. Determine Target King Coordinate
+    my_color = str(params.get("my_color", "white")).lower()
+    if "king_c" in params and "king_r" in params:
+        king_c = float(params["king_c"])
+        king_r = float(params["king_r"])
+    elif "king_sq" in params and isinstance(params["king_sq"], (tuple, list)):
+        king_c = float(params["king_sq"][0])
+        king_r = float(params["king_sq"][1])
+    else:
+        # Default home squares: White King at e1 (4, 0), Black King at e8 (4, 7)
+        king_c, king_r = (4.0, 0.0) if my_color == "white" else (4.0, 7.0)
+
+    origin_c = 7.0 - king_c
+    origin_r = 7.0 - king_r
+
+    candidate_squares: List[Tuple[float, int, int, int]] = []  # (intensity, c, r, color)
+
+    # -------------------------------------------------------------------------
+    # ACT I: Lethal Strike Trajectory (progress 0.00 -> 0.32)
+    # -------------------------------------------------------------------------
+    if progress <= 0.32:
+        s1 = progress / 0.32
+        u1 = s1 * s1 * (3.0 - 2.0 * s1)  # Smoothstep
+        p_c = (1.0 - u1) * origin_c + u1 * king_c
+        p_r = (1.0 - u1) * origin_r + u1 * king_r
+        strike_env = math.sin(s1 * math.pi) ** 0.75
+
+        # Scan neighborhood around beam position
+        for c in range(max(0, int(math.floor(p_c - 2))), min(8, int(math.ceil(p_c + 3)))):
+            for r in range(max(0, int(math.floor(p_r - 2))), min(8, int(math.ceil(p_r + 3)))):
+                dist_sq = (c - p_c) ** 2 + (r - p_r) ** 2
+                intensity = math.exp(-4.2 * dist_sq) * strike_env
+                if intensity > 0.035:
+                    col = blend_colors(COLOR_INT_STRIKE_RUBY, COLOR_INT_DEFEAT_RED, min(1.0, math.sqrt(dist_sq) * 0.8))
+                    candidate_squares.append((intensity, c, r, col))
+
+    # -------------------------------------------------------------------------
+    # ACT II: Crown Fracture & Orbital Implosion (progress 0.30 -> 0.65)
+    # -------------------------------------------------------------------------
+    elif progress <= 0.65:
+        s2 = (progress - 0.30) / 0.35
+        env2 = math.sin(s2 * math.pi) ** 1.1
+        radius2 = 1.35 * math.sin(s2 * math.pi) * (1.0 - 0.15 * s2)
+
+        # 4 quadrant shard positions
+        shards = []
+        for k in range(4):
+            theta_k = (k * math.pi * 0.5) + (math.pi * 0.25) + (1.25 * s2)
+            sh_c = king_c + radius2 * math.cos(theta_k)
+            sh_r = king_r + radius2 * math.sin(theta_k)
+            shards.append((sh_c, sh_r))
+
+        # Core impact flash on King square
+        core_int = math.exp(-12.0 * s2 * s2) * 0.85
+        if core_int > 0.035:
+            k_int_c, k_int_r = int(round(king_c)), int(round(king_r))
+            if 0 <= k_int_c < 8 and 0 <= k_int_r < 8:
+                candidate_squares.append((core_int, k_int_c, k_int_r, COLOR_INT_STRIKE_RUBY))
+
+        # Shard intensities
+        for sh_c, sh_r in shards:
+            for c in range(max(0, int(math.floor(sh_c - 1))), min(8, int(math.ceil(sh_c + 2)))):
+                for r in range(max(0, int(math.floor(sh_r - 1))), min(8, int(math.ceil(sh_r + 2)))):
+                    dist_sq = (c - sh_c) ** 2 + (r - sh_r) ** 2
+                    intensity = math.exp(-5.0 * dist_sq) * env2
+                    if intensity > 0.035:
+                        col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DEFEAT_RED, s2 * 0.7)
+                        candidate_squares.append((intensity, c, r, col))
+
+    # -------------------------------------------------------------------------
+    # ACT III: Agonal Double Heartbeat on King Square (progress 0.62 -> 1.00)
+    # -------------------------------------------------------------------------
+    else:
+        s3 = (progress - 0.62) / 0.38
+        b1 = 0.95 * math.exp(-42.0 * ((s3 - 0.14) ** 2))
+        b2 = 0.42 * math.exp(-32.0 * ((s3 - 0.58) ** 2))
+        cardiac_int = (b1 + b2) * max(0.0, 1.0 - (s3 ** 1.5))
+
+        if cardiac_int > 0.035:
+            k_int_c, k_int_r = int(round(king_c)), int(round(king_r))
+            if 0 <= k_int_c < 8 and 0 <= k_int_r < 8:
+                if s3 <= 0.35:
+                    col = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_CROWN_EMBER, s3 / 0.35)
+                else:
+                    t_fade = min(1.0, (s3 - 0.35) / 0.55)
+                    col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, t_fade)
+                candidate_squares.append((cardiac_int, k_int_c, k_int_r, col))
+
+    # -------------------------------------------------------------------------
+    # HARDWARE GATING: Strict Top-4 Active Squares Filter
+    # -------------------------------------------------------------------------
+    if not candidate_squares:
+        return
+
+    # Consolidate candidate intensities by square coordinate
+    consolidated: Dict[Tuple[int, int], Tuple[float, int]] = {}
+    for intensity, c, r, col in candidate_squares:
+        key = (c, r)
+        if key in consolidated:
+            prev_int, prev_col = consolidated[key]
+            if intensity > prev_int:
+                consolidated[key] = (intensity, col)
+        else:
+            consolidated[key] = (intensity, col)
+
+    # Sort descending by intensity and take top <= 4 squares
+    top_squares = sorted(consolidated.items(), key=lambda item: item[1][0], reverse=True)[:4]
+
+    # Render selected top squares
+    for (c, r), (intensity, col) in top_squares:
+        clamped_int = max(0.0, min(1.0, intensity))
+        set_square_in_frame(frame, c, r, scale_color(col, clamped_int))
+
+
 
 
 def render_game_drawn(
@@ -565,7 +683,7 @@ class LifecycleAnimation:
         elif anim_name == "GAME_WON":
             render_game_won(progress, frame, self.params, now=now)
         elif anim_name == "GAME_LOST":
-            render_game_lost(progress, frame, self.params)
+            render_game_lost(progress, frame, self.params, now=now)
         elif anim_name == "GAME_DRAWN":
             render_game_drawn(progress, frame, self.params, now=now)
         elif anim_name in ("SEEKING", "WAITING_FOR_OPPONENT", "MATCHMAKING"):

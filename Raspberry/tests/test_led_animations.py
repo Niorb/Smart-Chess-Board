@@ -130,9 +130,51 @@ def test_render_game_won():
 
 
 def test_render_game_lost():
-    frame = [0] * NUM_LEDS
-    render_game_lost(0.5, frame, {})
-    assert any(frame)
+    """
+    Verify GAME_LOST animation:
+    - Strictly max 4 squares illuminated simultaneously at any single frame (< 6% of board).
+    - Works correctly for White King, Black King, and custom coordinates.
+    - All phases (strike ray, shard dispersal, dying ember) illuminate properly.
+    """
+    # 1. Test White King default
+    for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
+        frame = [0] * NUM_LEDS
+        render_game_lost(p, frame, {"my_color": "white"})
+        assert any(frame), f"Frame empty at progress {p} for White"
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for White"
+
+    # 2. Test Black King default
+    for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
+        frame_black = [0] * NUM_LEDS
+        render_game_lost(p, frame_black, {"my_color": "black"})
+        assert any(frame_black), f"Frame empty at progress {p} for Black"
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame_black[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for Black"
+
+    # 3. Test custom King coordinates
+    for p in [0.1, 0.5, 0.85]:
+        frame_custom = [0] * NUM_LEDS
+        render_game_lost(p, frame_custom, {"king_c": 3, "king_r": 4})
+        assert any(frame_custom), f"Frame empty at progress {p} for custom king pos"
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame_custom[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for custom king pos"
+
 
 
 def test_render_game_drawn():
