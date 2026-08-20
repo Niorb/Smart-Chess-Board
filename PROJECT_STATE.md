@@ -165,7 +165,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Pipeline-Wide Dimming Hook (`Raspberry/app/led_helpers.py`)**: Scaled outgoing RGB channel values by `intensity_factor = settings.get("led_intensity", 100) / 100.0` in `DualPixelStrip.show()`. Tracks intensity state changes to dynamically re-transmit active pixels immediately upon slider movement.
   - **Backend Settings & Defaults (`Raspberry/board_hardware.py`, `main.py`, `board_settings.default.json`)**: Added `led_intensity` (10..100) to hardware settings, REST schemas (`ThresholdSettings`, `SaveDefaultsRequest`), and WebSocket state payload (`get_physical_payload()`).
   - **React UI Slider & Persistence (`Raspberry/frontend/src/App.tsx`, `api.ts`)**: Added a Master LED Intensity range slider with percentage readout and `Sun` icon in the Debug tab under Calibration & Hardware Utilities. Integrates real-time debounced auto-persistence to `board_settings.json` and sync with browser `localStorage`.
-  - **Verification & Testing**: Added API unit test `test_settings_update_led_intensity()` and updated `test_render_game_lost()`. All 202 unit tests and Vite frontend build passed on Raspberry Pi.
+- [x] Implemented Night Mode Ambient Backlighting & Queenside Corner Gate Toggle Gesture:
+  - **Ultra-Low Current Ambient Backlighting (`Raspberry/app/board_state.py`, `config.py`, `led_helpers.py`)**: When Night Mode is enabled (`night_mode: true`), all 64 squares / 152 LEDs illuminate in deep moonlight sapphire (`COLOR_INT_NIGHT_MODE = (4, 12, 28)`), drawing $<400\text{mA}$ total across the entire board. Active highlights, coaching hints, move traces, and lifecycle animations cleanly layer on top without visual disturbance.
+  - **Queenside Corner Gate Physical Toggle Gesture (`Raspberry/app/gesture_engine.py`)**:
+    - **Step 1 (a2 lifted)**: Lift White $a2$ pawn from starting setup. Visual feedback on $a2$/$a1$ indicates current board mode: **Dark Blue (`Color(0, 70, 220)`)** if currently in Night Mode, or **Warm Sun Amber (`Color(255, 160, 0)`)** if currently in Day Mode.
+    - **Step 2 (a1 lifted)**: Lift White $a1$ rook while $a2$ is lifted. $a1$ and $a2$ rapidly pulse in the target mode's theme color.
+    - **Step 3 (Replacement & Confirmation)**: Replace both pieces to starting squares to toggle Night Mode on/off, auto-persist to `board_settings.json`, and trigger a 600ms arrival confirmation flash.
+  - **Web UI & REST Integration (`Raspberry/frontend/src/App.tsx`, `api.ts`, `main.py`)**: Added Night Mode toggle buttons in the Top Header navigation bar and in the Debug tab under Calibration & Hardware Utilities. Real-time bi-directional sync between physical board gestures and web UI.
+  - **Verification**: Added `TestToggleNightModeGesture` and `test_settings_update_night_mode()`. All 209 test suites passed and frontend built cleanly on Raspberry Pi.
 
 ## Task Backlog
 
