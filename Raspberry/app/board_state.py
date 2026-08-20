@@ -438,8 +438,8 @@ class BoardStateManager:
             c_move_trace = COLOR_INT_NIGHT_MOVE_TRACE if night_mode else COLOR_INT_MOVE_TRACE
             c_capture_trace = COLOR_INT_NIGHT_CAPTURE_TRACE if night_mode else COLOR_INT_CAPTURE_TRACE
             c_check = COLOR_INT_NIGHT_CHECK if night_mode else COLOR_INT_CHECK
-            c_turn_white = COLOR_NIGHT_TURN_WHITE if night_mode else COLOR_TURN_WHITE
-            c_turn_black = COLOR_NIGHT_TURN_BLACK if night_mode else COLOR_TURN_BLACK
+            c_turn_white = COLOR_INT_NIGHT_TURN_WHITE if night_mode else COLOR_INT_TURN_WHITE
+            c_turn_black = COLOR_INT_NIGHT_TURN_BLACK if night_mode else COLOR_INT_TURN_BLACK
             c_illegal = COLOR_INT_NIGHT_ILLEGAL if night_mode else COLOR_INT_ILLEGAL
             c_eval_white = COLOR_INT_NIGHT_EVAL_WHITE if night_mode else COLOR_INT_EVAL_WHITE
             c_eval_black = COLOR_INT_NIGHT_EVAL_BLACK if night_mode else COLOR_INT_EVAL_BLACK
