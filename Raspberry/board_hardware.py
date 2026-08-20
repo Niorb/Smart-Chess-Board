@@ -496,53 +496,28 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
         baseline_window = settings.get("baseline_window_s", 2)
         if in_loop_cal and not freeze_baseline and baseline_window > 0:
             now = time.time()
-            if effective_pieces_mode:
-                # Pieces Placed Mode: Only empty middle ranks 3..6 drift and propagate to ranks 1-2 & 7-8
-                for c in range(BOARD_COLS):
-                    for r in (2, 3, 4, 5):
-                        val = matrix[c][r]
-                        detected = (raw_state[c][r] != 0)
+            disabled_squares = settings.get("disabled_squares", [])
+            for c in range(BOARD_COLS):
+                for r in range(BOARD_ROWS):
+                    if [c, r] in disabled_squares or (c, r) in disabled_squares:
+                        continue
 
-                        if (c, r) not in baseline_history:
-                            baseline_history[(c, r)] = []
+                    val = matrix[c][r]
+                    detected = (raw_state[c][r] != 0)
 
-                        baseline_history[(c, r)].append((now, val, detected))
+                    if (c, r) not in baseline_history:
+                        baseline_history[(c, r)] = []
 
-                        history = baseline_history[(c, r)]
-                        while history and (now - history[0][0]) > baseline_window:
-                            history.pop(0)
+                    baseline_history[(c, r)].append((now, val, detected))
 
-                        if len(history) > 0 and not any(entry[2] for entry in history):
-                            if (now - history[0][0]) >= (baseline_window * 0.8):
-                                avg_val = int(sum(entry[1] for entry in history) / len(history))
-                                settings["baselines"][c][r] = avg_val
+                    history = baseline_history[(c, r)]
+                    while history and (now - history[0][0]) > baseline_window:
+                        history.pop(0)
 
-                                if r == 2:  # Rank 3 drift -> update Ranks 1 & 2
-                                    settings["baselines"][c][0] = avg_val
-                                    settings["baselines"][c][1] = avg_val
-                                elif r == 5:  # Rank 6 drift -> update Ranks 7 & 8
-                                    settings["baselines"][c][6] = avg_val
-                                    settings["baselines"][c][7] = avg_val
-            else:
-                # Empty Board Mode: All 64 squares (ranks 1-8) drift directly on their own readings
-                for c in range(BOARD_COLS):
-                    for r in range(BOARD_ROWS):
-                        val = matrix[c][r]
-                        detected = (raw_state[c][r] != 0)
-
-                        if (c, r) not in baseline_history:
-                            baseline_history[(c, r)] = []
-
-                        baseline_history[(c, r)].append((now, val, detected))
-
-                        history = baseline_history[(c, r)]
-                        while history and (now - history[0][0]) > baseline_window:
-                            history.pop(0)
-
-                        if len(history) > 0 and not any(entry[2] for entry in history):
-                            if (now - history[0][0]) >= (baseline_window * 0.8):
-                                avg_val = int(sum(entry[1] for entry in history) / len(history))
-                                settings["baselines"][c][r] = avg_val
+                    if len(history) > 0 and not any(entry[2] for entry in history):
+                        if (now - history[0][0]) >= (baseline_window * 0.8):
+                            avg_val = int(sum(entry[1] for entry in history) / len(history))
+                            settings["baselines"][c][r] = avg_val
     else:
         diag["errors"] = non_mocked_count
         diag["status"] = "TIMEOUT" if data is None else "PARSE_ERROR"

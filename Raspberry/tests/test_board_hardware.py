@@ -231,7 +231,7 @@ def test_settle_us_auto_migration_and_atomic_save(tmp_path=None):
 
 
 def test_scan_board_dynamic_drift_middle_ranks():
-    """Verify that empty middle ranks (r=2,3,4,5) drift over baseline_window_s when unoccupied."""
+    """Verify that unoccupied squares drift over baseline_window_s when unoccupied."""
     import struct
     import time
     from unittest.mock import MagicMock
@@ -257,28 +257,18 @@ def test_scan_board_dynamic_drift_middle_ranks():
     mock_ser = MagicMock()
     mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
 
-    # Seed baseline_history with an entry from 0.085s ago (within 0.1s window and >= 80% span)
+    # Seed baseline_history for all squares with an entry from 0.085s ago (within 0.1s window and >= 80% span)
     t0 = time.time() - 0.085
     for c in range(BOARD_COLS):
-        for r in (2, 3, 4, 5):
+        for r in range(BOARD_ROWS):
             baseline_history[(c, r)] = [(t0, 1540, False)]
 
     scan_board(None, mock_ser, raw_state)
 
-    # Middle ranks 3-6 (r in 2,3,4,5) should have drifted to 1540
+    # All unoccupied squares should have drifted directly to 1540
     for c in range(BOARD_COLS):
-        assert settings["baselines"][c][2] == 1540
-        assert settings["baselines"][c][3] == 1540
-        assert settings["baselines"][c][4] == 1540
-        assert settings["baselines"][c][5] == 1540
-
-        # Ranks 1 & 2 must inherit Rank 3 baseline (1540)
-        assert settings["baselines"][c][0] == 1540
-        assert settings["baselines"][c][1] == 1540
-
-        # Ranks 7 & 8 must inherit Rank 6 baseline (1540)
-        assert settings["baselines"][c][6] == 1540
-        assert settings["baselines"][c][7] == 1540
+        for r in range(BOARD_ROWS):
+            assert settings["baselines"][c][r] == 1540
 
 
 def test_scan_board_starting_ranks_do_not_average_their_own_pieces():
@@ -809,6 +799,172 @@ def test_save_defaults_function(tmp_path, monkeypatch):
         data_default = json.load(f)
         assert data_default["threshold_positive"] == 350
         assert data_default["threshold_negative"] == 450
+
+
+def test_vacated_square_calibrates_to_own_baseline_after_piece_moves():
+    """Verify that when a piece moves off a square, that square cleanly self-calibrates to its empty reading."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["in_loop_calibration"] = True
+
+    # Initial baselines
+    settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # e2 (c=4, r=1) vacates and has empty reading 1580; e1 (c=4, r=0) still has piece (1200)
+    raw_vals = [1550] * 64
+    for mux_ch in range(8):
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if c_chess == 4 and r_chess == 0:
+                raw_vals[mux_ch * 8 + r_phys] = 1200  # Occupied piece on e1
+            elif c_chess == 4 and r_chess == 1:
+                raw_vals[mux_ch * 8 + r_phys] = 1580  # Vacated e2
+            else:
+                raw_vals[mux_ch * 8 + r_phys] = 1550
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
+
+    # Seed baseline_history for e2 (c=4, r=1) with 1580
+    t0 = time.time() - 0.085
+    baseline_history[(4, 1)] = [(t0, 1580, False)]
+    # Seed baseline_history for e1 (c=4, r=0) with 1200 (detected)
+    baseline_history[(4, 0)] = [(t0, 1200, True)]
+
+    scan_board(None, mock_ser, raw_state)
+
+    # e2 (4, 1) drifts to 1580
+    assert settings["baselines"][4][1] == 1580
+    # e1 (4, 0) remains stable at 1550 (does NOT drift into 1200 piece reading)
+    assert settings["baselines"][4][0] == 1550
+
+
+def test_occupied_square_on_rank3_does_not_block_other_column_squares():
+    """Verify that an occupied piece on rank 3 does not block other unoccupied squares in that column from drifting."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["in_loop_calibration"] = True
+
+    settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # c3 (c=2, r=2) has a piece (1850). Other squares in col 2 have drifted to 1530.
+    raw_vals = [1550] * 64
+    for mux_ch in range(8):
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if c_chess == 2 and r_chess == 2:
+                raw_vals[mux_ch * 8 + r_phys] = 1850  # Occupied c3
+            elif c_chess == 2:
+                raw_vals[mux_ch * 8 + r_phys] = 1530  # Empty squares on c-file
+            else:
+                raw_vals[mux_ch * 8 + r_phys] = 1550
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
+
+    t0 = time.time() - 0.085
+    for r in range(BOARD_ROWS):
+        if r == 2:
+            baseline_history[(2, r)] = [(t0, 1850, True)]
+        else:
+            baseline_history[(2, r)] = [(t0, 1530, False)]
+
+    scan_board(None, mock_ser, raw_state)
+
+    # c3 (2, 2) is occupied and stays at 1550
+    assert settings["baselines"][2][2] == 1550
+    # c1, c2, c4, c5, c6, c7, c8 all drift independently to 1530 despite c3 being occupied
+    assert settings["baselines"][2][0] == 1530
+    assert settings["baselines"][2][1] == 1530
+    assert settings["baselines"][2][3] == 1530
+    assert settings["baselines"][2][4] == 1530
+    assert settings["baselines"][2][5] == 1530
+    assert settings["baselines"][2][6] == 1530
+    assert settings["baselines"][2][7] == 1530
+
+
+def test_independent_sensor_offsets_preserved():
+    """Verify that independent quiescent sensor baselines are preserved and do not overwrite each other."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["in_loop_calibration"] = True
+
+    # Set distinct initial baselines
+    settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    settings["baselines"][0][0] = 1510
+    settings["baselines"][0][1] = 1530
+    settings["baselines"][0][2] = 1570
+
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    raw_vals = [1550] * 64
+    for mux_ch in range(8):
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            c_chess = 7 - r_phys
+            r_chess = c_phys
+            if c_chess == 0 and r_chess == 0:
+                raw_vals[mux_ch * 8 + r_phys] = 1515
+            elif c_chess == 0 and r_chess == 1:
+                raw_vals[mux_ch * 8 + r_phys] = 1535
+            elif c_chess == 0 and r_chess == 2:
+                raw_vals[mux_ch * 8 + r_phys] = 1575
+            else:
+                raw_vals[mux_ch * 8 + r_phys] = 1550
+
+    packet_header = b'\xaa\x55'
+    packet_data = struct.pack('<64H', *raw_vals)
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: packet_header if n == 2 else (packet_data if n == 128 else b'')
+
+    t0 = time.time() - 0.085
+    baseline_history[(0, 0)] = [(t0, 1515, False)]
+    baseline_history[(0, 1)] = [(t0, 1535, False)]
+    baseline_history[(0, 2)] = [(t0, 1575, False)]
+
+    scan_board(None, mock_ser, raw_state)
+
+    assert settings["baselines"][0][0] == 1515
+    assert settings["baselines"][0][1] == 1535
+    assert settings["baselines"][0][2] == 1575
+
 
 
 
