@@ -47,7 +47,8 @@ import {
   Radar,
   RotateCcw,
   BookmarkCheck,
-  Sun
+  Sun,
+  Moon
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -449,6 +450,7 @@ function App() {
     coach_ai_only?: boolean;
     in_loop_calibration?: boolean;
     led_intensity?: number;
+    night_mode?: boolean;
   } | null>(null);
 
   const [positiveThresh, setPositiveThresh] = useState<number>(() => {
@@ -505,6 +507,10 @@ function App() {
     const saved = localStorage.getItem('scb_led_intensity');
     return saved ? parseInt(saved, 10) || 100 : 100;
   });
+  const [nightMode, setNightMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_night_mode');
+    return saved !== null ? saved === 'true' : false;
+  });
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -527,7 +533,8 @@ function App() {
     evalBar: boolean = evalBarEnabled,
     aiOnly: boolean = coachAiOnly,
     inLoopCal: boolean = inLoopCalibration,
-    intensity: number = ledIntensity
+    intensity: number = ledIntensity,
+    nMode: boolean = nightMode
   ) => {
     localStorage.setItem('scb_positive_thresh', String(pos));
     localStorage.setItem('scb_negative_thresh', String(neg));
@@ -543,6 +550,7 @@ function App() {
     localStorage.setItem('scb_coach_ai_only', String(aiOnly));
     localStorage.setItem('scb_in_loop_calibration', String(inLoopCal));
     localStorage.setItem('scb_led_intensity', String(intensity));
+    localStorage.setItem('scb_night_mode', String(nMode));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -563,7 +571,8 @@ function App() {
           evalBar,
           aiOnly,
           inLoopCal,
-          intensity
+          intensity,
+          nMode
         );
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
@@ -630,6 +639,10 @@ function App() {
           setLedIntensity(res.led_intensity);
           localStorage.setItem('scb_led_intensity', String(res.led_intensity));
         }
+        if (res.night_mode !== undefined) {
+          setNightMode(res.night_mode);
+          localStorage.setItem('scb_night_mode', String(res.night_mode));
+        }
       } catch (err) {
         console.error("Error fetching board settings:", err);
       }
@@ -638,6 +651,14 @@ function App() {
       fetchSettings();
     }
   }, [isConnected]);
+
+  // Synchronize night mode when toggled physically on the hardware board via gesture
+  useEffect(() => {
+    if (state.physical?.night_mode !== undefined && state.physical.night_mode !== nightMode) {
+      setNightMode(state.physical.night_mode);
+      localStorage.setItem('scb_night_mode', String(state.physical.night_mode));
+    }
+  }, [state.physical?.night_mode]);
 
   const handleCalibrateSquare = async (col: number, row: number) => {
     try {
@@ -806,6 +827,7 @@ function App() {
         coachAiOnly,
         inLoopCalibration,
         ledIntensity,
+        nightMode,
         baselines: currentBaselines,
       });
       if (res.status === 'success') {
@@ -903,6 +925,40 @@ function App() {
             >
               <Layers size={12} className={state.virtual_only ? 'text-purple-400' : 'text-emerald-400'} />
               <span>{state.virtual_only ? 'Virtual Only' : 'Hardware Board'}</span>
+            </button>
+
+            {/* Night Mode Ambient Backlight Switcher */}
+            <button
+              onClick={() => {
+                const next = !nightMode;
+                setNightMode(next);
+                persistSettings(
+                  positiveThresh,
+                  negativeThresh,
+                  colMode,
+                  manualCol,
+                  scanDelay,
+                  muxSettleMs,
+                  debounceThreshold,
+                  baselineWindowS,
+                  piecesMode,
+                  coachHintsEnabled,
+                  evalBarEnabled,
+                  coachAiOnly,
+                  inLoopCalibration,
+                  ledIntensity,
+                  next
+                );
+              }}
+              title={nightMode ? "Night Mode Active (Ambient Backlight ON) - Click to Switch to Day Mode" : "Day Mode Active - Click to Switch to Night Mode"}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider font-mono transition-all duration-300 ${
+                nightMode
+                  ? 'bg-indigo-950/90 text-indigo-300 border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.25)] hover:border-indigo-400'
+                  : 'bg-amber-500/10 text-amber-300 border-amber-500/20 hover:border-amber-500/40'
+              }`}
+            >
+              {nightMode ? <Moon size={12} className="text-indigo-400" /> : <Sun size={12} className="text-amber-400" />}
+              <span>{nightMode ? 'Night Mode' : 'Day Mode'}</span>
             </button>
 
             {/* Server Online Badge */}
@@ -1974,7 +2030,7 @@ function App() {
                       onClick={() => {
                         const next = !inLoopCalibration;
                         setInLoopCalibration(next);
-                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next);
+                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next, ledIntensity, nightMode);
                       }}
                       className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${
                         inLoopCalibration ? 'bg-emerald-600' : 'bg-slate-800'
@@ -1982,6 +2038,32 @@ function App() {
                     >
                       <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
                         inLoopCalibration ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* Night Mode Ambient Backlight Switch */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 mt-1">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-slate-200 flex items-center gap-1">
+                        <Moon size={12} className="text-indigo-400" />
+                        Night Mode (Ambient)
+                      </span>
+                      <span className="text-[9px] text-slate-400">Soft moonlight backlight across all 64 squares</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !nightMode;
+                        setNightMode(next);
+                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, ledIntensity, next);
+                      }}
+                      className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${
+                        nightMode ? 'bg-indigo-600' : 'bg-slate-800'
+                      }`}
+                    >
+                      <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                        nightMode ? 'translate-x-4' : 'translate-x-0'
                       }`} />
                     </button>
                   </div>
@@ -2054,7 +2136,7 @@ function App() {
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10) || 100;
                       setLedIntensity(val);
-                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, val);
+                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, val, nightMode);
                     }}
                     className="w-full h-1.5 bg-slate-900 rounded appearance-none cursor-pointer accent-amber-500"
                   />

@@ -110,6 +110,11 @@ COLOR_START_WHITE_SECONDARY = (200, 180, 120)  # Warm gold for White start tail
 COLOR_START_BLACK_PRIMARY = (0, 180, 255)  # Electric cyan-azure for Black start scan
 COLOR_START_BLACK_SECONDARY = (80, 60, 220)  # Royal violet for Black start tail
 
+# Night Mode Ambient & Physical Indicator Colors — (R, G, B) tuples
+COLOR_NIGHT_MODE = (4, 12, 28)  # Deep moonlight sapphire ambient background (low current draw)
+COLOR_NIGHT_INDICATOR = (0, 70, 220)  # Dark Blue indicator when board is in Night Mode
+COLOR_DAY_INDICATOR = (255, 160, 0)  # Warm Sun Amber indicator when board is in Day Mode
+
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
 # =============================================================================

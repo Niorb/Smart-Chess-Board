@@ -15,6 +15,7 @@ from app.gesture_engine import (
     COLOR_INT_EMERALD,
     PhysicalGestureEngine,
     RestartPreviousGameGesture,
+    ToggleNightModeGesture,
 )
 
 
@@ -149,3 +150,104 @@ class TestPhysicalGestureEngine:
         assert "is_active" in payload
         assert "gestures" in payload
         assert isinstance(payload["gestures"], list)
+
+
+class TestToggleNightModeGesture:
+    def test_initial_state(self):
+        gesture = ToggleNightModeGesture()
+        assert gesture.name == "toggle_night_mode"
+        assert not gesture.is_active
+        assert gesture.step == 0
+        assert gesture.hint is None
+        assert gesture.get_led_overlay(time.time()) == {}
+
+    def test_step1_trigger_on_a2_lift(self):
+        gesture = ToggleNightModeGesture()
+        board = create_starting_board()
+        board[0][1] = 0  # Lift a2
+
+        completed = gesture.evaluate(board, now=100.0)
+        assert not completed
+        assert gesture.is_active
+        assert gesture.step == 1
+        assert "Lift a1" in (gesture.hint or "")
+        overlay = gesture.get_led_overlay(now=100.0)
+        assert (0, 1) in overlay  # a2
+        assert (0, 0) in overlay  # a1
+
+    def test_step1_visual_feedback_colors(self):
+        from board_hardware import settings
+        gesture = ToggleNightModeGesture()
+        board = create_starting_board()
+        board[0][1] = 0
+
+        # When board is in Day Mode (night_mode=False)
+        settings["night_mode"] = False
+        gesture.evaluate(board, now=100.0)
+        overlay_day = gesture.get_led_overlay(now=100.0)
+        assert (0, 1) in overlay_day
+        assert (0, 0) in overlay_day
+
+        # When board is in Night Mode (night_mode=True)
+        settings["night_mode"] = True
+        overlay_night = gesture.get_led_overlay(now=100.0)
+        assert (0, 1) in overlay_night
+        assert (0, 0) in overlay_night
+        # Day and Night indicator colors must be distinct
+        assert overlay_day[(0, 1)] != overlay_night[(0, 1)]
+
+    def test_step1_premature_replace_cancels(self):
+        gesture = ToggleNightModeGesture()
+        board = create_starting_board()
+        board[0][1] = 0
+        gesture.evaluate(board, now=100.0)
+        assert gesture.step == 1
+
+        # Replace a2 without lifting a1
+        board[0][1] = -1
+        completed = gesture.evaluate(board, now=101.0)
+        assert not completed
+        assert gesture.step == 0
+        assert not gesture.is_active
+
+    def test_step2_trigger_on_a1_lift(self):
+        gesture = ToggleNightModeGesture()
+        board = create_starting_board()
+        board[0][1] = 0
+        gesture.evaluate(board, now=100.0)
+
+        # Lift a1
+        board[0][0] = 0
+        completed = gesture.evaluate(board, now=101.0)
+        assert not completed
+        assert gesture.step == 2
+        assert "Replace a1 and a2" in (gesture.hint or "")
+        overlay = gesture.get_led_overlay(now=101.0)
+        assert (0, 0) in overlay
+        assert (0, 1) in overlay
+
+    def test_step2_completion_toggles_night_mode(self):
+        from board_hardware import settings
+        mock_mgr = MagicMock()
+        gesture = ToggleNightModeGesture(state_manager=mock_mgr)
+
+        settings["night_mode"] = False
+        board = create_starting_board()
+        board[0][1] = 0
+        gesture.evaluate(board, now=100.0)
+        board[0][0] = 0
+        gesture.evaluate(board, now=101.0)
+
+        # Replace both a1 and a2
+        board[0][0] = -1
+        board[0][1] = -1
+        completed = gesture.evaluate(board, now=102.0)
+        assert completed
+        assert gesture.step == 0
+        assert not gesture.is_active
+
+        # Completion execution toggles night_mode
+        gesture.execute_completion()
+        assert settings["night_mode"] is True
+        mock_mgr.trigger_arrival_flash.assert_called_once_with(0, 0, duration=0.6, extra_squares=[(0, 1)])
+

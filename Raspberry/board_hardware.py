@@ -106,6 +106,7 @@ settings: dict[str, Any] = {
     "coach_ai_only": True,
     "in_loop_calibration": True,
     "led_intensity": 100,
+    "night_mode": False,
     "last_game_params": None,
 }
 
@@ -171,6 +172,12 @@ def load_settings():
                         loaded["led_intensity"] = 100
                 else:
                     loaded["led_intensity"] = 100
+
+                # Auto-migration/validation for night_mode
+                if "night_mode" in loaded:
+                    loaded["night_mode"] = bool(loaded["night_mode"])
+                else:
+                    loaded["night_mode"] = False
 
                 # Validate col_mux_map
                 col_mux_map = loaded.get("col_mux_map")

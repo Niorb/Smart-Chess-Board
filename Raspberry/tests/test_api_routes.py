@@ -301,6 +301,23 @@ def test_settings_update_led_intensity():
     assert data["settings"]["led_intensity"] == 100
 
 
+def test_settings_update_night_mode():
+    """Verify REST API updates and returns night_mode correctly."""
+    client = TestClient(app)
+
+    response = client.post("/api/board/settings", json={"night_mode": True})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["night_mode"] is True
+
+    response = client.post("/api/board/settings", json={"night_mode": False})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["night_mode"] is False
+
+
 def test_calibrate_square_route_with_explicit_value():
     """Verify POST /api/board/calibrate_square sets square baseline to provided value."""
     from board_hardware import settings

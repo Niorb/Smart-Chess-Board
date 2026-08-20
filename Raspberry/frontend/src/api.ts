@@ -119,7 +119,8 @@ export async function updateBoardSettings(
   evalBarEnabled?: boolean,
   coachAiOnly?: boolean,
   inLoopCalibration?: boolean,
-  ledIntensity?: number
+  ledIntensity?: number,
+  nightMode?: boolean
 ) {
   const body: Record<string, unknown> = {};
   if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
@@ -137,6 +138,7 @@ export async function updateBoardSettings(
   if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
   if (inLoopCalibration !== undefined) body.in_loop_calibration = inLoopCalibration;
   if (ledIntensity !== undefined && ledIntensity !== null && !isNaN(ledIntensity)) body.led_intensity = ledIntensity;
+  if (nightMode !== undefined) body.night_mode = nightMode;
 
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',
@@ -162,6 +164,7 @@ export async function saveBoardDefaults(options?: {
   coachAiOnly?: boolean;
   inLoopCalibration?: boolean;
   ledIntensity?: number;
+  nightMode?: boolean;
   baselines?: number[][];
 }) {
   const body: Record<string, unknown> = {};
@@ -180,6 +183,7 @@ export async function saveBoardDefaults(options?: {
   if (options?.coachAiOnly !== undefined) body.coach_ai_only = options.coachAiOnly;
   if (options?.inLoopCalibration !== undefined) body.in_loop_calibration = options.inLoopCalibration;
   if (options?.ledIntensity !== undefined && options?.ledIntensity !== null && !isNaN(options.ledIntensity)) body.led_intensity = options.ledIntensity;
+  if (options?.nightMode !== undefined) body.night_mode = options.nightMode;
   if (options?.baselines !== undefined && options?.baselines !== null) body.baselines = options.baselines;
 
   const response = await fetch(`${API_BASE}/board/save_defaults`, {

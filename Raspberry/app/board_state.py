@@ -66,6 +66,7 @@ from app.led_helpers import (
     COLOR_INT_MOVE_GOOD,
     COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
+    COLOR_INT_NIGHT_MODE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
     COLOR_INT_OPPONENT_DISCONNECTED,
@@ -275,6 +276,7 @@ class BoardStateManager:
             "pieces_mode": settings.get("pieces_mode", "auto"),
             "effective_pieces_mode": detection.get("effective_pieces_mode", False),
             "led_intensity": settings.get("led_intensity", 100),
+            "night_mode": settings.get("night_mode", False),
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],
@@ -386,8 +388,10 @@ class BoardStateManager:
             now = time.time()
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
+            night_mode = bool(settings.get("night_mode", False))
 
-            frame = [COLOR_INT_OFF] * NUM_LEDS
+            base_color = COLOR_INT_NIGHT_MODE if night_mode else COLOR_INT_OFF
+            frame = [base_color] * NUM_LEDS
 
             def set_square_leds(c: int, r: int, color_val: int):
                 if col_mode == "manual" and c != manual_col:

@@ -23,6 +23,8 @@ try:
     )
     from app.led_animations import scale_color
     from app.led_helpers import (
+        COLOR_INT_DAY_INDICATOR,
+        COLOR_INT_NIGHT_INDICATOR,
         COLOR_INT_PIECE_LIFTED,
         Color,
     )
@@ -35,6 +37,8 @@ except ImportError:
     )
     from .led_animations import scale_color
     from .led_helpers import (
+        COLOR_INT_DAY_INDICATOR,
+        COLOR_INT_NIGHT_INDICATOR,
         COLOR_INT_PIECE_LIFTED,
         Color,
     )
@@ -295,6 +299,180 @@ class RestartPreviousGameGesture(BaseGesture):
         asyncio.create_task(_dispatch_restart())
 
 
+class ToggleNightModeGesture(BaseGesture):
+    """
+    Queenside Corner Gate gesture to toggle Night Mode / Day Mode:
+      - Initial setup: Full standard chess starting position.
+      - Step 1: Lift a2 pawn (column 0, row 1).
+                Visual Feedback:
+                  - If currently in Night Mode: a2 solid Dark Blue, a1 pulsing Dark Blue.
+                  - If currently in Day Mode: a2 solid Sun Amber/Gold, a1 pulsing Sun Amber/Gold.
+      - Step 2: Lift a1 rook (column 0, row 0) while a2 remains lifted.
+                Visual Feedback:
+                  - Both a1 & a2: Rapid pulse in the TARGET mode's color.
+      - Step 3 (Completion): Replace both pieces back to standard starting position (0, 1) and (0, 0).
+      - Result:
+          - Toggles `settings["night_mode"] = not settings["night_mode"]`.
+          - Saves updated settings to disk.
+          - Triggers arrival confirmation flash on a1 & a2 in the new mode's theme color (0.6s).
+    """
+
+    A1_COORD: Tuple[int, int] = (0, 0)  # File a (c=0), Rank 1 (r=0)
+    A2_COORD: Tuple[int, int] = (0, 1)  # File a (c=0), Rank 2 (r=1)
+
+    def __init__(self, state_manager: Any = None, timeout: float = 5.0):
+        super().__init__(
+            name="toggle_night_mode",
+            description="Queenside Corner Gate: lift a2 -> lift a1 -> replace both to toggle Night/Day mode",
+            timeout=timeout,
+        )
+        self.state_manager = state_manager
+
+    @property
+    def hint(self) -> Optional[str]:
+        try:
+            from board_hardware import settings
+            is_night = bool(settings.get("night_mode", False))
+        except Exception:
+            is_night = False
+        target_name = "Day Mode" if is_night else "Night Mode"
+        if self.step == 1:
+            return f"Lift a1 (Rook) to toggle to {target_name}"
+        elif self.step == 2:
+            return f"Replace a1 and a2 to activate {target_name}"
+        return None
+
+    def _get_board_anomalies(
+        self, physical_state: List[List[int]]
+    ) -> Tuple[Set[Tuple[int, int]], Set[Tuple[int, int]]]:
+        lifted_starting: Set[Tuple[int, int]] = set()
+        extra_occupied: Set[Tuple[int, int]] = set()
+
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS):
+                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                if r in (0, 1, 6, 7):
+                    if val == 0:
+                        lifted_starting.add((c, r))
+                else:
+                    if val != 0:
+                        extra_occupied.add((c, r))
+
+        return lifted_starting, extra_occupied
+
+    def evaluate(self, physical_state: List[List[int]], now: float) -> bool:
+        lifted_starting, extra_occupied = self._get_board_anomalies(physical_state)
+
+        # Center squares bumped with pieces immediately cancels gesture
+        if len(extra_occupied) > 0:
+            if self.is_active:
+                logger.debug(f"Night mode gesture cancelled due to center pieces: {extra_occupied}")
+            self.reset()
+            return False
+
+        # Step 0: Idle / Armed
+        if self.step == 0:
+            # Gesture begins when ONLY a2 (0, 1) is lifted and a1 (0, 0) is placed
+            if lifted_starting == {self.A2_COORD}:
+                self.step = 1
+                self.start_time = now
+                logger.info("Night mode gesture armed: Step 1 (a2 lifted). Waiting for a1...")
+            return False
+
+        # Timeout Check for active gesture (Steps 1 & 2)
+        if now - self.start_time > self.timeout:
+            logger.info("Night mode gesture timed out. Resetting.")
+            self.reset()
+            return False
+
+        # Step 1: a2 lifted, waiting for a1 lift
+        if self.step == 1:
+            # Premature replacement of a2 before lifting a1 cancels gesture
+            if self.A2_COORD not in lifted_starting:
+                logger.debug("Night mode gesture cancelled: a2 replaced prematurely without lifting a1.")
+                self.reset()
+                return False
+
+            # Bumping extra starting pieces outside of a2 cancels gesture
+            if not lifted_starting.issubset({self.A2_COORD, self.A1_COORD}):
+                logger.debug(f"Night mode gesture cancelled: unexpected piece lifted {lifted_starting - {self.A2_COORD}}")
+                self.reset()
+                return False
+
+            # a1 is lifted while a2 is also lifted -> advance to Step 2
+            if lifted_starting == {self.A2_COORD, self.A1_COORD}:
+                self.step = 2
+                logger.info("Night mode gesture: Step 2 (a1 & a2 both lifted). Ready for replacement.")
+            return False
+
+        # Step 2: Both a1 & a2 lifted, waiting for replacement
+        if self.step == 2:
+            # Bumping extra starting pieces outside of {a1, a2} cancels gesture
+            if not lifted_starting.issubset({self.A2_COORD, self.A1_COORD}):
+                logger.debug(f"Night mode gesture cancelled in Step 2: extra pieces lifted {lifted_starting}")
+                self.reset()
+                return False
+
+            # Completion condition: Both a1 & a2 replaced, and full starting position intact
+            if len(lifted_starting) == 0:
+                logger.info("Night mode gesture COMPLETED: Queenside Corner Gate closed! Toggling Night Mode...")
+                self.reset()
+                return True
+
+            return False
+
+        return False
+
+    def get_led_overlay(self, now: float) -> Dict[Tuple[int, int], int]:
+        overlay: Dict[Tuple[int, int], int] = {}
+        try:
+            from board_hardware import settings
+            is_night = bool(settings.get("night_mode", False))
+        except Exception:
+            is_night = False
+
+        # Current mode indicator color: Dark Blue for Night Mode, Solar Gold for Day Mode
+        curr_color = COLOR_INT_NIGHT_INDICATOR if is_night else COLOR_INT_DAY_INDICATOR
+        # Target mode color: the opposite of current mode
+        target_color = COLOR_INT_DAY_INDICATOR if is_night else COLOR_INT_NIGHT_INDICATOR
+
+        if self.step == 1:
+            # a2: Solid color reflecting current board mode (Dark Blue if Night, Gold if Day)
+            overlay[self.A2_COORD] = curr_color
+            # a1: Breathing pulse in current mode color guiding next piece lift
+            pulse = math.sin(now * 8.0) * 0.5 + 0.5
+            intensity = 0.25 + 0.75 * pulse
+            overlay[self.A1_COORD] = scale_color(curr_color, intensity)
+        elif self.step == 2:
+            # Both a1 & a2: Rapid pulse in the TARGET mode's color
+            pulse = math.sin(now * 10.0) * 0.5 + 0.5
+            intensity = 0.35 + 0.65 * pulse
+            scaled_target = scale_color(target_color, intensity)
+            overlay[self.A1_COORD] = scaled_target
+            overlay[self.A2_COORD] = scaled_target
+        return overlay
+
+    def execute_completion(self) -> None:
+        """Toggles night_mode in settings, saves, and triggers arrival flash in new mode color."""
+        try:
+            from board_hardware import settings, save_settings
+            new_night_mode = not bool(settings.get("night_mode", False))
+            settings["night_mode"] = new_night_mode
+            save_settings()
+            logger.info(f"Physical gesture successfully toggled night_mode to: {new_night_mode}")
+        except Exception as e:
+            logger.error(f"Error toggling night_mode in gesture: {e}")
+            new_night_mode = True
+
+        if self.state_manager:
+            self.state_manager.trigger_arrival_flash(
+                self.A1_COORD[0],
+                self.A1_COORD[1],
+                duration=0.6,
+                extra_squares=[self.A2_COORD],
+            )
+
+
 class PhysicalGestureEngine:
     """
     Subsystem manager for physical board gestures.
@@ -307,6 +485,7 @@ class PhysicalGestureEngine:
         self.gestures: List[BaseGesture] = []
         # Register standard gestures
         self.register_gesture(RestartPreviousGameGesture(state_manager=state_manager))
+        self.register_gesture(ToggleNightModeGesture(state_manager=state_manager))
 
     def register_gesture(self, gesture: BaseGesture) -> None:
         """Registers a new gesture in the evaluation pipeline."""

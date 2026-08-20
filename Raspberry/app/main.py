@@ -102,6 +102,7 @@ class ThresholdSettings(BaseModel):
     coach_ai_only: bool | None = None
     in_loop_calibration: bool | None = None
     led_intensity: int | float | None = None
+    night_mode: bool | None = None
 
 
 class SaveDefaultsRequest(BaseModel):
@@ -120,6 +121,7 @@ class SaveDefaultsRequest(BaseModel):
     coach_ai_only: bool | None = None
     in_loop_calibration: bool | None = None
     led_intensity: int | float | None = None
+    night_mode: bool | None = None
     baselines: list[list[int]] | None = None
     overwrite_template: bool = True
 
@@ -245,6 +247,8 @@ async def update_board_settings(body: ThresholdSettings):
         settings["in_loop_calibration"] = bool(body.in_loop_calibration)
     if body.led_intensity is not None:
         settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
+    if body.night_mode is not None:
+        settings["night_mode"] = bool(body.night_mode)
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 
@@ -288,6 +292,8 @@ async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
             settings["in_loop_calibration"] = bool(body.in_loop_calibration)
         if body.led_intensity is not None:
             settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
+        if body.night_mode is not None:
+            settings["night_mode"] = bool(body.night_mode)
         if body.baselines is not None and isinstance(body.baselines, list) and len(body.baselines) == 8:
             settings["baselines"] = body.baselines
         overwrite_template = body.overwrite_template
