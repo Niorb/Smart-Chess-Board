@@ -550,16 +550,16 @@ def render_game_lost(
 
         # B. Expanding Gaussian Shockwave Ring
         wave_radius = (p2 ** 0.72) * 10.5
-        wave_sigma = 0.40 + 0.25 * p2
+        wave_sigma = 0.28 + 0.15 * p2
         ring_decay = 1.0 - 0.75 * p2
 
         for c in range(8):
             for r in range(8):
                 d_k = math.hypot(c - king_c, r - king_r)
                 dr = abs(d_k - wave_radius)
-                if dr < 1.0:
+                if dr < 0.58:
                     intensity = math.exp(-(dr * dr) / (2.0 * wave_sigma * wave_sigma)) * ring_decay
-                    if intensity > 0.10:
+                    if intensity > 0.18:
                         col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_OBSIDIAN_CRIMSON, min(1.0, d_k / 8.0))
                         blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.85)
 
@@ -572,7 +572,7 @@ def render_game_lost(
             s_c = king_c + dir_x * shard_dist
             s_r = king_r + dir_y * shard_dist
             sc_i, sr_i = int(round(s_c)), int(round(s_r))
-            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.08:
+            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.10:
                 shard_col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_STRIKE_RUBY, p2)
                 blend_square_in_frame(frame, sc_i, sr_i, scale_color(shard_col, shard_int), 0.95)
 
@@ -588,10 +588,10 @@ def render_game_lost(
                 d_k = math.hypot(c - king_c, r - king_r)
                 # Radial falloff combined with spatial harmonic cinder noise
                 flicker = 0.70 + 0.30 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
-                falloff = math.exp(-d_k / 2.2)
+                falloff = math.exp(-d_k / 1.6)
                 intensity = decay_env * falloff * flicker
 
-                if intensity > 0.12:
+                if intensity > 0.15:
                     col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, p3 + d_k * 0.08)
                     set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.75))
 
