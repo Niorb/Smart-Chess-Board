@@ -150,14 +150,17 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Self-Healing Keyframe & Chunked Transmission (`Raspberry/app/led_helpers.py`)**: Enhanced `DualPixelStrip` with chunked binary packet transmission (up to 38 LEDs / 152 bytes per packet) and an automated 60-frame (~2.0s) periodic keyframe resync that continuously heals any physical LED signal glitches.
   - **Robust Board Hardware Scanner (`Raspberry/board_hardware.py`)**: Updated `scan_board`, `calibrate_board`, and `calibrate_board_with_pieces` with binary framed requests (`CMD_SCAN_ADC`, `CMD_SET_SETTLE`) and backwards-compatible response decoding with automatic buffer resync.
   - **Perceptual Gamma 2.8 Correction & Float Rounding (`Raspberry/app/led_animations.py`)**: Integrated `GAMMA_LUT_28` and `scale_color_gamma` with floating-point channel rounding to eliminate color shifts (e.g. green/blue premature drop-off) and stepped quantization banding on low-brightness animation tails.
-- [x] Corrected Physical Rank Multiplexer Orientation (`DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7]`):
-  - Corrected `DEFAULT_COL_MUX_MAP` in [`board_hardware.py`](file:///home/robin/Smart-Chess-Board/Raspberry/board_hardware.py#L88) and fallback template [`board_settings.default.json`](file:///home/robin/Smart-Chess-Board/Raspberry/board_settings.default.json#L21) from inverted `[7, 6, 5, 4, 3, 2, 1, 0]` to standard `[0, 1, 2, 3, 4, 5, 6, 7]`.
-  - Fixes rank axis inversion where White starting pieces on Ranks 1 & 2 were mapped to Ranks 8 & 7 and Black pieces on Ranks 7 & 8 were mapped to Ranks 1 & 2.
+- [x] Implemented Unified 64-Square Dynamic Baseline Drift Engine (`Raspberry/board_hardware.py`):
+  - **Eliminated Destructive Rank Overwrite**: Removed piece-mode middle rank propagation (`settings["baselines"][c][0] = avg_val`), preventing Rank 3 and Rank 6 from destroying individual Hall sensor quiescent baselines on Ranks 1-2 and 7-8.
+  - **Independent 64-Square Dynamic Drift**: Every unoccupied square (`raw_state == 0`) across all 64 squares dynamically tracks its own rolling average over `baseline_window_s` ($\ge 80\%$ span) without copying or overwriting adjacent squares.
+  - **Occupied Square Isolation & Progressive Self-Calibration**: Occupied squares with magnets hold their calibrated baselines stable and isolated. When a piece vacates a square (e.g. `1. e4`), the square automatically self-calibrates to its measured ground truth baseline once unoccupied stability is reached.
+  - **Test Suite & Verification**: Added comprehensive unit test suites in `Raspberry/tests/test_board_hardware.py` verifying independent 64-square drift, piece movement vacation calibration, occupied rank non-blocking behavior, and individual quiescent offset preservation. All 201 tests and frontend production build verified on Raspberry Pi.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
 
 
 
