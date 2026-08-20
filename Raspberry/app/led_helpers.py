@@ -330,6 +330,7 @@ class DualPixelStrip:
         self.current_colors = [0] * (2 * num_leds_per_strip)
         self.shown_colors = [0] * (2 * num_leds_per_strip)
         self.frame_count = 0
+        self.last_applied_intensity = 1.0
 
     def set_serial_conn(self, ser, lock=None):
         self.ser = ser
@@ -348,8 +349,20 @@ class DualPixelStrip:
             self.frame_count += 1
             is_keyframe = (self.frame_count % 60 == 0)
 
-            # Skip if frame hasn't changed and not keyframe
-            if not is_keyframe and self.current_colors == self.shown_colors:
+            # Get master LED intensity factor (10% to 100%)
+            intensity_factor = 1.0
+            try:
+                from board_hardware import settings
+                pct = settings.get("led_intensity", 100)
+                if pct is not None:
+                    intensity_factor = max(0.10, min(1.0, float(pct) / 100.0))
+            except Exception:
+                intensity_factor = 1.0
+
+            intensity_changed = (intensity_factor != self.last_applied_intensity)
+
+            # Skip if frame hasn't changed, not keyframe, and intensity hasn't changed
+            if not is_keyframe and not intensity_changed and self.current_colors == self.shown_colors:
                 return
 
             try:
@@ -361,20 +374,28 @@ class DualPixelStrip:
                         packet = build_packet(CMD_CLEAR_LEDS)
                         ser.write(packet)
                     self.shown_colors = list(self.current_colors)
+                    self.last_applied_intensity = intensity_factor
                     return
 
-                # Collect changed LEDs (or all active/modified LEDs on keyframe)
+                # Collect changed LEDs (or all active/modified LEDs on keyframe or intensity change)
                 changes = []
                 for idx in range(len(self.current_colors)):
                     curr = self.current_colors[idx]
-                    if is_keyframe or (curr != self.shown_colors[idx]):
-                        r = (curr >> 16) & 0xFF
-                        g = (curr >> 8) & 0xFF
-                        b = curr & 0xFF
+                    if is_keyframe or intensity_changed or (curr != self.shown_colors[idx]):
+                        r_raw = (curr >> 16) & 0xFF
+                        g_raw = (curr >> 8) & 0xFF
+                        b_raw = curr & 0xFF
+                        if intensity_factor < 1.0:
+                            r = round(r_raw * intensity_factor)
+                            g = round(g_raw * intensity_factor)
+                            b = round(b_raw * intensity_factor)
+                        else:
+                            r, g, b = r_raw, g_raw, b_raw
                         changes.append((idx, r, g, b))
 
                 if not changes:
                     self.shown_colors = list(self.current_colors)
+                    self.last_applied_intensity = intensity_factor
                     return
 
                 # Chunk changes in batches of up to 38 LEDs (38 * 4 = 152 bytes payload)
@@ -397,6 +418,7 @@ class DualPixelStrip:
                     ser.write(packet)
 
                 self.shown_colors = list(self.current_colors)
+                self.last_applied_intensity = intensity_factor
             except Exception as e:
                 print(f"LED Wrapper: Error writing LED commands: {e}")
 

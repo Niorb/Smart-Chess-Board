@@ -274,6 +274,7 @@ class BoardStateManager:
             "detected_starting_count": detection.get("detected_starting_count", 0),
             "pieces_mode": settings.get("pieces_mode", "auto"),
             "effective_pieces_mode": detection.get("effective_pieces_mode", False),
+            "led_intensity": settings.get("led_intensity", 100),
             "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
             "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
             "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],

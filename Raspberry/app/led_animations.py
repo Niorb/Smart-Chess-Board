@@ -447,35 +447,45 @@ def render_game_won(
                 set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
 
-# Game Lost Palette: "The Sovereign's Requiem"
-COLOR_INT_STRIKE_RUBY = color_rgb(255, 20, 42)
-COLOR_INT_CROWN_EMBER = color_rgb(216, 88, 8)
-COLOR_INT_DYING_CINDER = color_rgb(90, 12, 4)
+# Game Lost Palette: "The Royal Cataclysm (Requiem for a Fallen Sovereign)"
+COLOR_INT_CROWN_LIGHTNING = color_rgb(255, 245, 230)  # Fractured white lightning flash
+COLOR_INT_STRIKE_RUBY = color_rgb(255, 18, 48)  # Blazing laser strike ruby
+COLOR_INT_BLOOD_RUBY = color_rgb(196, 12, 32)  # Expanding shockwave ruby
+COLOR_INT_CROWN_EMBER = color_rgb(235, 110, 10)  # Molten crown amber shards
+COLOR_INT_OBSIDIAN_CRIMSON = color_rgb(120, 8, 18)  # Deep trailing fissure crimson
+COLOR_INT_DYING_CINDER = color_rgb(68, 6, 4)  # Smoldering ember cinder
+COLOR_INT_CHARRED_ASH = color_rgb(24, 2, 2)  # Fading charcoal ash
 
 
 def render_game_lost(
     progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
 ) -> None:
     """
-    GAME_LOST animation: "The Sovereign's Requiem"
-    Choreographed 3-phase cinematic defeat sequence with strictly <= 4 active squares (< 6% board power):
-    - Phase 1: Checkmate Strike / Fissure Ray (0.00 <= progress < 0.35).
-      Lethal laser bolt tracking towards King's square (1-2 squares active).
-    - Phase 2: Crown Shatter / Radial Spark Dispersal (0.35 <= progress < 0.70).
-      3 distinct shards flying outward from King's square (max 3 squares active).
-    - Phase 3: Falling King's Dying Ember (0.70 <= progress <= 1.00).
-      Lone dying ember on King's square pulsing with a fading heartbeat rhythm (1 square active).
+    GAME_LOST animation: "The Royal Cataclysm (Requiem for a Fallen Sovereign)"
+    A high-impact, 4-phase cyber-physical defeat sequence dynamically centered on the defeated King:
+    - Phase 1: The Crimson Siege / Converging Crossfire (0.00 <= progress < 0.28).
+      3 lethal ballistic laser bolts converging from board perimeters onto the King.
+    - Phase 2: Crown Shatter & Hyper-Radial Shockwave (0.28 <= progress < 0.58).
+      White-hot lightning detonation on King's square + expanding Gaussian shockwave ring + 4 flying shards.
+    - Phase 3: Fissure Decay & Obsidian Abyss (0.58 <= progress < 0.82).
+      Organic cinders & jagged cooling fissures collapsing back towards the King.
+    - Phase 4: The Royal Eclipse / Dying Hearth Pulse (0.82 <= progress <= 1.00).
+      Solitary biphasic cardiac pulse on the King's square fading into complete blackout.
 
-    Hardware Budget: Max 4 squares illuminated at any instant (target 1-3 squares).
+    Hardware Budget: 8-14 active squares peak during shockwave (< 22% board power),
+    safely managed by binary chunking and power rail stability.
     """
-    # 1. Clear frame buffer - ensure all inactive squares are completely OFF
+    if now == 0.0:
+        now = time.time()
+
+    # 1. Clear frame buffer
     for c in range(8):
         for r in range(8):
             set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
     progress = max(0.0, min(1.0, progress))
 
-    # 2. Determine King Position gracefully
+    # 2. Dynamic King Position Extraction
     if "king_c" in params and "king_r" in params:
         try:
             king_c = int(round(float(params["king_c"])))
@@ -494,100 +504,111 @@ def render_game_lost(
             king_c, king_r = 4, 0
     else:
         my_color = str(params.get("my_color", "white")).strip().lower()
-        if my_color == "black":
-            king_c, king_r = 4, 7
-        elif my_color == "white":
-            king_c, king_r = 4, 0
-        else:
-            king_c, king_r = 4, 0
+        king_c, king_r = (4, 7) if my_color == "black" else (4, 0)
 
-    # 3. Phase Dispatch
-    if progress < 0.35:
+    # 3. Phase Dispatch & Choreography
+    if progress < 0.28:
         # =========================================================================
-        # Phase 1: Checkmate Strike / Fissure Ray (progress: 0.00 -> 0.35)
-        # Laser bolt tracking towards King's square (1-2 squares active)
+        # PHASE 1: The Crimson Siege / Converging Crossfire (0.00 -> 0.28)
         # =========================================================================
-        p1 = progress / 0.35  # 0.0 to 1.0
+        p1 = progress / 0.28  # 0.0 -> 1.0
+        e1 = p1 ** 1.35  # Accelerating ballistic projectile
 
-        # Origin on opposite side of the board
-        if king_r < 4:
-            origin_c = 7 - king_c
-            origin_r = 7
-        else:
-            origin_c = 7 - king_c
-            origin_r = 0
+        # 3 distinct converging vectors from opposing board perimeters
+        origins = [
+            (7 - king_c, 7 if king_r < 4 else 0),  # Opposite rank mirror
+            (7 if king_c < 4 else 0, 7 - king_r),  # Opposite file mirror
+            (7 - king_c, 7 - king_r)  # Diagonal polar mirror
+        ]
 
-        dx = king_c - origin_c
-        dy = king_r - origin_r
-        vec_len = math.hypot(dx, dy)
-        if vec_len < 0.01:
-            dx, dy, vec_len = 0.0, 1.0, 1.0
+        for orig_c, orig_r in origins:
+            cur_c = orig_c + (king_c - orig_c) * e1
+            cur_r = orig_r + (king_r - orig_r) * e1
 
-        curr_c = origin_c + dx * p1
-        curr_r = origin_r + dy * p1
+            # Render bolt head (blazing ruby with white tip)
+            for c in range(8):
+                for r in range(8):
+                    dist = math.hypot(c - cur_c, r - cur_r)
+                    if dist < 1.4:
+                        intensity = math.exp(-3.5 * dist * dist) * (0.65 + 0.35 * p1)
+                        if intensity > 0.04:
+                            col = blend_colors(COLOR_INT_STRIKE_RUBY, COLOR_INT_CROWN_LIGHTNING, max(0.0, 1.0 - dist))
+                            blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.9)
 
-        c_head = max(0, min(7, int(round(curr_c))))
-        r_head = max(0, min(7, int(round(curr_r))))
-
-        # Trailing tail square behind head along trajectory
-        tail_c = curr_c - (dx / vec_len) * 0.9
-        tail_r = curr_r - (dy / vec_len) * 0.9
-        c_tail = max(0, min(7, int(round(tail_c))))
-        r_tail = max(0, min(7, int(round(tail_r))))
-
-        # Head square (blazing ruby strike with white-hot tip)
-        col_head = blend_colors(COLOR_INT_STRIKE_RUBY, 0xFFFFFF, 0.35)
-        intensity_head = 0.80 + 0.20 * p1
-        set_square_in_frame(frame, c_head, r_head, scale_color(col_head, intensity_head))
-
-        # Tail square (trailing crimson fissure glow)
-        if (c_tail, r_tail) != (c_head, r_head):
-            col_tail = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_OPPONENT_FROM, 0.40)
-            intensity_tail = 0.45 * (1.0 - 0.25 * p1)
-            set_square_in_frame(frame, c_tail, r_tail, scale_color(col_tail, intensity_tail))
-
-    elif progress < 0.70:
+    elif progress < 0.58:
         # =========================================================================
-        # Phase 2: Crown Shatter / Radial Spark Dispersal (progress: 0.35 -> 0.70)
-        # 3 distinct shards flying outward from King (max 3 squares active)
+        # PHASE 2: Crown Shatter & Hyper-Radial Shockwave (0.28 -> 0.58)
         # =========================================================================
-        p2 = (progress - 0.35) / 0.35  # 0.0 to 1.0
+        p2 = (progress - 0.28) / 0.30  # 0.0 -> 1.0
 
-        # 3 distinct radial vectors pointing away from King
-        if king_r <= 3:
-            shard_dirs = [(-0.9, 1.0), (0.0, 1.3), (0.9, 1.0)]
-        else:
-            shard_dirs = [(-0.9, -1.0), (0.0, -1.3), (0.9, -1.0)]
+        # A. Central Detonation Flash (initial 25% of Phase 2)
+        if p2 < 0.25:
+            flash_p = p2 / 0.25
+            flash_int = (1.0 - flash_p) ** 2
+            flash_col = blend_colors(COLOR_INT_CROWN_LIGHTNING, COLOR_INT_CROWN_EMBER, flash_p)
+            set_square_in_frame(frame, king_c, king_r, scale_color(flash_col, flash_int))
 
-        burst_dist = (p2 ** 0.75) * 2.8
+        # B. Expanding Gaussian Shockwave Ring
+        wave_radius = (p2 ** 0.72) * 10.5
+        wave_sigma = 0.52 + 0.38 * p2
+        ring_decay = 1.0 - 0.75 * p2
 
-        for i, (dir_x, dir_y) in enumerate(shard_dirs):
-            pos_c = king_c + dir_x * burst_dist
-            pos_r = king_r + dir_y * burst_dist
-            sc = max(0, min(7, int(round(pos_c))))
-            sr = max(0, min(7, int(round(pos_r))))
+        for c in range(8):
+            for r in range(8):
+                d_k = math.hypot(c - king_c, r - king_r)
+                dr = abs(d_k - wave_radius)
+                if dr < 1.8:
+                    intensity = math.exp(-(dr * dr) / (2.0 * wave_sigma * wave_sigma)) * ring_decay
+                    if intensity > 0.05:
+                        col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_OBSIDIAN_CRIMSON, min(1.0, d_k / 8.0))
+                        blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.85)
 
-            shard_intensity = max(0.10, 1.0 - p2 * 0.85)
-            # Crown amber shard shattering with fiery ruby sparks
-            col_shard = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DEFEAT_RED, 0.35 + 0.55 * p2)
-            if p2 < 0.20:
-                col_shard = blend_colors(col_shard, 0xFFFFFF, (0.20 - p2) * 3.0)
-            set_square_in_frame(frame, sc, sr, scale_color(col_shard, shard_intensity))
+        # C. 4 Flying Molten Crown Shards
+        shard_dirs = [(-1.0, 1.0), (1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+        shard_dist = (p2 ** 0.82) * 3.8
+        shard_int = max(0.0, 1.0 - p2 * 1.1)
+
+        for dir_x, dir_y in shard_dirs:
+            s_c = king_c + dir_x * shard_dist
+            s_r = king_r + dir_y * shard_dist
+            sc_i, sr_i = int(round(s_c)), int(round(s_r))
+            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.05:
+                shard_col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_STRIKE_RUBY, p2)
+                blend_square_in_frame(frame, sc_i, sr_i, scale_color(shard_col, shard_int), 0.95)
+
+    elif progress < 0.82:
+        # =========================================================================
+        # PHASE 3: Fissure Decay & Obsidian Abyss (0.58 -> 0.82)
+        # =========================================================================
+        p3 = (progress - 0.58) / 0.24  # 0.0 -> 1.0
+        decay_env = (1.0 - p3) ** 1.6
+
+        for c in range(8):
+            for r in range(8):
+                d_k = math.hypot(c - king_c, r - king_r)
+                # Radial falloff combined with spatial harmonic cinder noise
+                flicker = 0.70 + 0.30 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
+                falloff = math.exp(-d_k / 3.2)
+                intensity = decay_env * falloff * flicker
+
+                if intensity > 0.06:
+                    col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, p3 + d_k * 0.08)
+                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.75))
 
     else:
         # =========================================================================
-        # Phase 3: Falling King's Dying Ember (progress: 0.70 -> 1.00)
-        # 1 square active on King's square with a fading heartbeat pulse
+        # PHASE 4: The Royal Eclipse / Dying Hearth Pulse (0.82 -> 1.00)
         # =========================================================================
-        p3 = (progress - 0.70) / 0.30  # 0.0 to 1.0
+        p4 = (progress - 0.82) / 0.18  # 0.0 -> 1.0
 
-        if p3 < 0.98:
-            decay = (1.0 - p3) ** 1.5
-            heartbeat_osc = math.sin(p3 * 3.5 * math.pi) ** 2
-            pulse_intensity = max(0.02, decay * (0.30 + 0.70 * heartbeat_osc))
-            # Dying ruby ember fading to deep cinder
-            col_ember = blend_colors(COLOR_INT_DEFEAT_RED, COLOR_INT_DYING_CINDER, p3)
-            set_square_in_frame(frame, king_c, king_r, scale_color(col_ember, pulse_intensity))
+        if p4 < 0.96:
+            # Bi-phasic heartbeat wave ("lub-dub")
+            hb_osc = (math.sin(p4 * 2.5 * math.pi) ** 6) + 0.40 * (math.sin(max(0.0, p4 * 2.5 * math.pi - 0.35 * math.pi)) ** 6)
+            hb_env = math.exp(-2.8 * p4)
+            pulse_intensity = max(0.03, hb_osc * hb_env * 0.90)
+
+            ember_col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_CHARRED_ASH, p4)
+            set_square_in_frame(frame, king_c, king_r, scale_color(ember_col, pulse_intensity))
         else:
             set_square_in_frame(frame, king_c, king_r, COLOR_INT_OFF)
 

@@ -284,6 +284,23 @@ def test_settings_update_in_loop_calibration():
     assert data["settings"]["in_loop_calibration"] is True
 
 
+def test_settings_update_led_intensity():
+    """Verify REST API updates and returns led_intensity correctly."""
+    client = TestClient(app)
+
+    response = client.post("/api/board/settings", json={"led_intensity": 50})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["led_intensity"] == 50
+
+    response = client.post("/api/board/settings", json={"led_intensity": 100})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["settings"]["led_intensity"] == 100
+
+
 def test_calibrate_square_route_with_explicit_value():
     """Verify POST /api/board/calibrate_square sets square baseline to provided value."""
     from board_hardware import settings

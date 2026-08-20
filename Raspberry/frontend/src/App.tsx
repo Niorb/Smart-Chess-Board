@@ -46,7 +46,8 @@ import {
   Wand2,
   Radar,
   RotateCcw,
-  BookmarkCheck
+  BookmarkCheck,
+  Sun
 } from 'lucide-react'
 
 // Helper to render digital piece characters/icons
@@ -447,6 +448,7 @@ function App() {
     eval_bar_enabled?: boolean;
     coach_ai_only?: boolean;
     in_loop_calibration?: boolean;
+    led_intensity?: number;
   } | null>(null);
 
   const [positiveThresh, setPositiveThresh] = useState<number>(() => {
@@ -499,6 +501,10 @@ function App() {
     const saved = localStorage.getItem('scb_in_loop_calibration');
     return saved !== null ? saved === 'true' : true;
   });
+  const [ledIntensity, setLedIntensity] = useState<number>(() => {
+    const saved = localStorage.getItem('scb_led_intensity');
+    return saved ? parseInt(saved, 10) || 100 : 100;
+  });
   const [calibrating, setCalibrating] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<string | null>(null);
   const [settingsStatus, setSettingsStatus] = useState<string | null>(null);
@@ -520,7 +526,8 @@ function App() {
     coachHints: boolean = coachHintsEnabled,
     evalBar: boolean = evalBarEnabled,
     aiOnly: boolean = coachAiOnly,
-    inLoopCal: boolean = inLoopCalibration
+    inLoopCal: boolean = inLoopCalibration,
+    intensity: number = ledIntensity
   ) => {
     localStorage.setItem('scb_positive_thresh', String(pos));
     localStorage.setItem('scb_negative_thresh', String(neg));
@@ -535,6 +542,7 @@ function App() {
     localStorage.setItem('scb_eval_bar_enabled', String(evalBar));
     localStorage.setItem('scb_coach_ai_only', String(aiOnly));
     localStorage.setItem('scb_in_loop_calibration', String(inLoopCal));
+    localStorage.setItem('scb_led_intensity', String(intensity));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -554,7 +562,8 @@ function App() {
           coachHints,
           evalBar,
           aiOnly,
-          inLoopCal
+          inLoopCal,
+          intensity
         );
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
@@ -616,6 +625,10 @@ function App() {
         if (res.in_loop_calibration !== undefined) {
           setInLoopCalibration(res.in_loop_calibration);
           localStorage.setItem('scb_in_loop_calibration', String(res.in_loop_calibration));
+        }
+        if (res.led_intensity !== undefined) {
+          setLedIntensity(res.led_intensity);
+          localStorage.setItem('scb_led_intensity', String(res.led_intensity));
         }
       } catch (err) {
         console.error("Error fetching board settings:", err);
@@ -792,6 +805,7 @@ function App() {
         evalBarEnabled,
         coachAiOnly,
         inLoopCalibration,
+        ledIntensity,
         baselines: currentBaselines,
       });
       if (res.status === 'success') {
@@ -2019,6 +2033,37 @@ function App() {
                 </button>
 
                 <hr className="border-slate-800/80 my-1" />
+
+                {/* Master LED Intensity Slider */}
+                <div className="flex flex-col gap-1.5 bg-slate-950 p-3 rounded-xl border border-slate-850 text-left">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                      <Sun size={14} className="text-amber-400" />
+                      Master LED Intensity
+                    </span>
+                    <span className="font-mono text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                      {ledIntensity}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={ledIntensity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 100;
+                      setLedIntensity(val);
+                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, val);
+                    }}
+                    className="w-full h-1.5 bg-slate-900 rounded appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                    <span>10% (Dim)</span>
+                    <span>50%</span>
+                    <span>100% (Full)</span>
+                  </div>
+                </div>
 
                 {/* LED Animations & Trace Testing */}
                 <div className="flex flex-col gap-2 bg-slate-950 p-3 rounded-xl border border-slate-850 text-left">

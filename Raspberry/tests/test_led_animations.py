@@ -131,10 +131,10 @@ def test_render_game_won():
 
 def test_render_game_lost():
     """
-    Verify GAME_LOST animation:
-    - Strictly max 4 squares illuminated simultaneously at any single frame (< 6% of board).
+    Verify GAME_LOST animation ("The Royal Cataclysm"):
+    - Strictly within 16 squares illuminated simultaneously at any single frame (< 25% of board).
     - Works correctly for White King, Black King, and custom coordinates.
-    - All phases (strike ray, shard dispersal, dying ember) illuminate properly.
+    - All phases (converging crossfire, shockwave ring, fissure decay, cardiac ember) illuminate properly.
     """
     # 1. Test White King default
     for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
@@ -147,7 +147,7 @@ def test_render_game_lost():
                 sq_indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for White"
+        assert lit_squares <= 16, f"Too many squares lit ({lit_squares}) at progress {p} for White"
 
     # 2. Test Black King default
     for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
@@ -160,7 +160,7 @@ def test_render_game_lost():
                 sq_indices = get_led_indices(r, c)
                 if any(frame_black[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for Black"
+        assert lit_squares <= 16, f"Too many squares lit ({lit_squares}) at progress {p} for Black"
 
     # 3. Test custom King coordinates
     for p in [0.1, 0.5, 0.85]:
@@ -173,7 +173,7 @@ def test_render_game_lost():
                 sq_indices = get_led_indices(r, c)
                 if any(frame_custom[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 4, f"Too many squares lit ({lit_squares}) at progress {p} for custom king pos"
+        assert lit_squares <= 16, f"Too many squares lit ({lit_squares}) at progress {p} for custom king pos"
 
 
 

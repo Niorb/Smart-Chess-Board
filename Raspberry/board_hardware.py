@@ -105,6 +105,7 @@ settings: dict[str, Any] = {
     "eval_bar_enabled": True,
     "coach_ai_only": True,
     "in_loop_calibration": True,
+    "led_intensity": 100,
     "last_game_params": None,
 }
 
@@ -161,6 +162,15 @@ def load_settings():
 
                 if "disabled_squares" not in loaded:
                     loaded["disabled_squares"] = []
+
+                # Auto-migration/validation for led_intensity (10..100)
+                if "led_intensity" in loaded:
+                    try:
+                        loaded["led_intensity"] = min(100, max(10, int(loaded["led_intensity"])))
+                    except (TypeError, ValueError):
+                        loaded["led_intensity"] = 100
+                else:
+                    loaded["led_intensity"] = 100
 
                 # Validate col_mux_map
                 col_mux_map = loaded.get("col_mux_map")
