@@ -969,6 +969,7 @@ def test_independent_sensor_offsets_preserved():
 def test_read_adc_packet_with_noisy_preamble():
     """Verify _read_adc_packet recovers from noisy/boot preamble and captures 128B payload."""
     import struct
+    from unittest.mock import MagicMock
     from board_hardware import _read_adc_packet
 
     raw_vals = [1550] * 64
