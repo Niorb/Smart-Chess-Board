@@ -167,12 +167,22 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **React UI Slider & Persistence (`Raspberry/frontend/src/App.tsx`, `api.ts`)**: Added a Master LED Intensity range slider with percentage readout and `Sun` icon in the Debug tab under Calibration & Hardware Utilities. Integrates real-time debounced auto-persistence to `board_settings.json` and sync with browser `localStorage`.
 - [x] Implemented Night Mode Ambient Backlighting & Queenside Corner Gate Toggle Gesture:
   - **Ultra-Low Current Ambient Backlighting (`Raspberry/app/board_state.py`, `config.py`, `led_helpers.py`)**: When Night Mode is enabled (`night_mode: true`), all 64 squares / 152 LEDs illuminate in deep moonlight sapphire (`COLOR_INT_NIGHT_MODE = (4, 12, 28)`), drawing $<400\text{mA}$ total across the entire board. Active highlights, coaching hints, move traces, and lifecycle animations cleanly layer on top without visual disturbance.
+  - **Dedicated High-Contrast Night Mode Color Palette (`Raspberry/app/config.py`, `led_helpers.py`, `board_state.py`, `led_animations.py`)**:
+    - **Day Mode Preserved 100%**: All daylight colors and effects remain completely unchanged.
+    - **Lifted Piece Legal Destination Dots**: Tuned to **Luminous Mint Emerald / Aqua Green (`COLOR_NIGHT_LEGAL_TARGET = (0, 210, 140)`)**, ensuring razor-sharp contrast against the deep blue floor.
+    - **Active Player Turn Breathing Halos**:
+      - White's turn King: **Radiant Warm Sunlight / Gold Halo (`COLOR_NIGHT_TURN_WHITE = (240, 210, 120)`)**.
+      - Black's turn King: **Electric Amethyst Purple Halo (`COLOR_NIGHT_TURN_BLACK = (170, 40, 230)`)**, unmistakable and distinct from the blue ambient background.
+    - **Captures & Attacks**: **Pure Laser/Radiant Crimson (`(240, 20, 60)`)** for legal captures and capture trajectory pulses.
+    - **Opponent Moves & Traces**: **Solar Orange (`(230, 90, 0)`)** origin square, **Vivid Mint-Cyan (`(0, 220, 200)`)** destination square, and **Vivid Magenta/Neon Violet (`(220, 30, 180)`)** comet trail.
+    - **Evaluation Bar & State Overlays**: **Bright Pearl Silver (`(150, 150, 190)`)** and **Velvet Violet (`(60, 10, 95)`)** for evaluation bar, **Starlight Silver (`(70, 80, 110)`)** for missing setup pieces, and **Vivid Amber (`(220, 60, 0)`)** for misplaced pieces.
+    - **Procedural Animations**: Updated `render_seeking`, `render_game_drawn`, `render_game_started`, `render_capture_aura`, and `render_guardrail_mismatch` to adapt to the Night Mode background.
   - **Queenside Corner Gate Physical Toggle Gesture (`Raspberry/app/gesture_engine.py`)**:
     - **Step 1 (a2 lifted)**: Lift White $a2$ pawn from starting setup. Visual feedback on $a2$/$a1$ indicates current board mode: **Dark Blue (`Color(0, 70, 220)`)** if currently in Night Mode, or **Warm Sun Amber (`Color(255, 160, 0)`)** if currently in Day Mode.
     - **Step 2 (a1 lifted)**: Lift White $a1$ rook while $a2$ is lifted. $a1$ and $a2$ rapidly pulse in the target mode's theme color.
     - **Step 3 (Replacement & Confirmation)**: Replace both pieces to starting squares to toggle Night Mode on/off, auto-persist to `board_settings.json`, and trigger a 600ms arrival confirmation flash.
   - **Web UI & REST Integration (`Raspberry/frontend/src/App.tsx`, `api.ts`, `main.py`)**: Added Night Mode toggle buttons in the Top Header navigation bar and in the Debug tab under Calibration & Hardware Utilities. Real-time bi-directional sync between physical board gestures and web UI.
-  - **Verification**: Added `TestToggleNightModeGesture` and `test_settings_update_night_mode()`. All 209 test suites passed and frontend built cleanly on Raspberry Pi.
+  - **Verification**: All 211 test suites passed and frontend built cleanly on Raspberry Pi.
 
 ## Task Backlog
 
