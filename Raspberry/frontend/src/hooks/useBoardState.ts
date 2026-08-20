@@ -79,6 +79,8 @@ export interface BoardState {
     detected_starting_count?: number;
     pieces_mode?: 'auto' | 'pieces' | 'empty';
     effective_pieces_mode?: boolean;
+    led_intensity?: number;
+    night_mode?: boolean;
     lifted_square?: [number, number] | null;
     legal_targets?: [number, number][];
     legal_captures?: [number, number][];
