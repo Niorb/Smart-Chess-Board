@@ -179,7 +179,8 @@ export function useBoardState() {
 
     const host = window.location.hostname || 'localhost';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${host}:8000/ws/state`;
+    const port = window.location.port === '5173' || !window.location.port ? '8000' : window.location.port;
+    const wsUrl = `${protocol}//${host}:${port}/ws/state`;
 
     console.log(`Connecting to WebSocket: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
@@ -210,16 +211,21 @@ export function useBoardState() {
     };
 
     ws.onclose = () => {
-      console.log('WebSocket Disconnected. Reconnecting in 3s...');
+      console.log('WebSocket Disconnected. Reconnecting in 1s...');
       setIsConnected(false);
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        connectRef.current();
-      }, 3000);
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connectRef.current();
+        }, 1000);
+      }
     };
 
     ws.onerror = (err) => {
       console.error('WebSocket Error', err);
-      ws.close();
+      try {
+        ws.close();
+      } catch (_) {}
     };
 
     wsRef.current = ws;

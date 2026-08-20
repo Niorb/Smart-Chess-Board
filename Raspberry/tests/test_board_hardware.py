@@ -966,6 +966,35 @@ def test_independent_sensor_offsets_preserved():
     assert settings["baselines"][0][2] == 1575
 
 
+def test_read_adc_packet_with_noisy_preamble():
+    """Verify _read_adc_packet recovers from noisy/boot preamble and captures 128B payload."""
+    import struct
+    from board_hardware import _read_adc_packet
+
+    raw_vals = [1550] * 64
+    payload = struct.pack('<64H', *raw_vals)
+
+    # Stream with junk bytes before 0xAA 0x55
+    stream_buffer = list(b'BOOTLOG:ESP32\r\n\xaa\x55' + payload)
+
+    mock_ser = MagicMock()
+    def mock_read(n=1):
+        nonlocal stream_buffer
+        if not stream_buffer:
+            return b''
+        chunk = stream_buffer[:n]
+        stream_buffer = stream_buffer[n:]
+        return bytes(chunk)
+
+    mock_ser.read.side_effect = mock_read
+
+    res = _read_adc_packet(mock_ser, timeout_s=0.5)
+    assert res is not None
+    assert len(res) == 128
+    assert res == payload
+
+
+
 
 
 

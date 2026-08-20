@@ -104,8 +104,29 @@ export async function getBoardSettings() {
   return response.json();
 }
 
+export interface BoardSettingsOptions {
+  threshold_positive?: number | null;
+  threshold_negative?: number | null;
+  col_mode?: 'auto' | 'manual';
+  manual_col?: number;
+  scan_delay?: number;
+  mux_settle_ms?: number;
+  mux_settle_us?: number;
+  debounce_threshold?: number;
+  baseline_window_s?: number;
+  disabled_squares?: number[][];
+  pieces_mode?: 'auto' | 'pieces' | 'empty';
+  coach_hints_enabled?: boolean;
+  eval_bar_enabled?: boolean;
+  coach_ai_only?: boolean;
+  in_loop_calibration?: boolean;
+  led_intensity?: number;
+  night_mode?: boolean;
+  baselines?: number[][];
+}
+
 export async function updateBoardSettings(
-  positive?: number | null,
+  positiveOrOptions?: number | BoardSettingsOptions | null,
   negative?: number | null,
   colMode?: 'auto' | 'manual',
   manualCol?: number,
@@ -122,23 +143,30 @@ export async function updateBoardSettings(
   ledIntensity?: number,
   nightMode?: boolean
 ) {
-  const body: Record<string, unknown> = {};
-  if (positive !== undefined && positive !== null && !isNaN(positive)) body.threshold_positive = positive;
-  if (negative !== undefined && negative !== null && !isNaN(negative)) body.threshold_negative = negative;
-  if (colMode !== undefined && colMode !== null) body.col_mode = colMode;
-  if (manualCol !== undefined && manualCol !== null) body.manual_col = manualCol;
-  if (scanDelay !== undefined && scanDelay !== null) body.scan_delay = scanDelay;
-  if (muxSettleMs !== undefined && muxSettleMs !== null) body.mux_settle_ms = muxSettleMs;
-  if (debounceThreshold !== undefined && debounceThreshold !== null) body.debounce_threshold = debounceThreshold;
-  if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
-  if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
-  if (piecesMode !== undefined && piecesMode !== null) body.pieces_mode = piecesMode;
-  if (coachHintsEnabled !== undefined) body.coach_hints_enabled = coachHintsEnabled;
-  if (evalBarEnabled !== undefined) body.eval_bar_enabled = evalBarEnabled;
-  if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
-  if (inLoopCalibration !== undefined) body.in_loop_calibration = inLoopCalibration;
-  if (ledIntensity !== undefined && ledIntensity !== null && !isNaN(ledIntensity)) body.led_intensity = ledIntensity;
-  if (nightMode !== undefined) body.night_mode = nightMode;
+  let body: Record<string, unknown> = {};
+  if (positiveOrOptions && typeof positiveOrOptions === 'object') {
+    body = { ...positiveOrOptions };
+  } else {
+    if (positiveOrOptions !== undefined && positiveOrOptions !== null && !isNaN(positiveOrOptions)) body.threshold_positive = positiveOrOptions;
+    if (negative !== undefined && negative !== null && !isNaN(negative)) body.threshold_negative = negative;
+    if (colMode !== undefined && colMode !== null) body.col_mode = colMode;
+    if (manualCol !== undefined && manualCol !== null) body.manual_col = manualCol;
+    if (scanDelay !== undefined && scanDelay !== null) body.scan_delay = scanDelay;
+    if (muxSettleMs !== undefined && muxSettleMs !== null) {
+      body.mux_settle_ms = muxSettleMs;
+      body.mux_settle_us = muxSettleMs > 50 ? muxSettleMs : muxSettleMs * 1000;
+    }
+    if (debounceThreshold !== undefined && debounceThreshold !== null) body.debounce_threshold = debounceThreshold;
+    if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
+    if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
+    if (piecesMode !== undefined && piecesMode !== null) body.pieces_mode = piecesMode;
+    if (coachHintsEnabled !== undefined) body.coach_hints_enabled = coachHintsEnabled;
+    if (evalBarEnabled !== undefined) body.eval_bar_enabled = evalBarEnabled;
+    if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
+    if (inLoopCalibration !== undefined) body.in_loop_calibration = inLoopCalibration;
+    if (ledIntensity !== undefined && ledIntensity !== null && !isNaN(ledIntensity)) body.led_intensity = ledIntensity;
+    if (nightMode !== undefined) body.night_mode = nightMode;
+  }
 
   const response = await fetch(`${API_BASE}/board/settings`, {
     method: 'POST',

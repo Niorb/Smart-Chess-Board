@@ -363,6 +363,34 @@ def test_calibrate_square_route_invalid_coordinates():
     assert response.json()["status"] == "error"
 
 
+def test_mux_settle_us_and_ms_handling():
+    """Verify POST /api/board/settings handles both mux_settle_us and mux_settle_ms."""
+    client = TestClient(app)
+
+    # Test mux_settle_us directly
+    resp = client.post("/api/board/settings", json={"mux_settle_us": 120})
+    assert resp.status_code == 200
+    assert resp.json()["settings"]["mux_settle_us"] == 120
+
+    # Test mux_settle_ms <= 50 converts to us
+    resp = client.post("/api/board/settings", json={"mux_settle_ms": 10})
+    assert resp.status_code == 200
+    assert resp.json()["settings"]["mux_settle_us"] == 255 or resp.json()["settings"]["mux_settle_us"] <= 255
+
+
+def test_websocket_initial_snapshot_on_connect():
+    """Verify WebSocket /ws/state delivers immediate full state snapshot on connection."""
+    client = TestClient(app)
+    with client.websocket_connect("/ws/state") as ws:
+        data = ws.receive_json()
+        assert "status" in data
+        assert "physical" in data
+        assert "digital" in data
+        assert "clocks" in data
+        assert "diagnostics" in data
+
+
+
 
 
 

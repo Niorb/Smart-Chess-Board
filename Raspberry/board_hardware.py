@@ -365,21 +365,47 @@ def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
     return -1
 
 
-def _read_adc_packet(serial_conn) -> Optional[bytes]:
+def _read_adc_packet(serial_conn, timeout_s=0.08) -> Optional[bytes]:
     """
     Reads 128-byte ADC payload from serial_conn.
+    Fast path: reads 2-byte header (0xAA 0x55) in 1 shot.
+    Recovery path: scans byte-by-byte to resynchronize if header is misaligned or noisy.
     Supports framed RESP_ADC_DATA packets (0xAA 0x55 0x81 LEN_LO LEN_HI ... 128B ... CRC8)
     and legacy raw response packets (0xAA 0x55 ... 128B ...).
     """
     header = serial_conn.read(2)
-    if len(header) != 2 or header[0] != 0xAA or header[1] != 0x55:
+    synced = (len(header) == 2 and header[0] == 0xAA and header[1] == 0x55)
+
+    if not synced:
+        t0 = time.time()
+        prev_byte = header[-1] if len(header) > 0 else None
+        while time.time() - t0 < timeout_s:
+            if prev_byte == 0xAA:
+                b2 = serial_conn.read(1)
+                if b2 and b2[0] == 0x55:
+                    synced = True
+                    break
+                prev_byte = b2[0] if b2 else None
+                continue
+            b = serial_conn.read(1)
+            if not b:
+                continue
+            if b[0] == 0xAA:
+                b2 = serial_conn.read(1)
+                if b2 and b2[0] == 0x55:
+                    synced = True
+                    break
+                prev_byte = b2[0] if b2 else None
+            else:
+                prev_byte = b[0]
+
+    if not synced:
         return None
 
     data = serial_conn.read(128)
     if len(data) == 128:
         if data[0] == RESP_ADC_DATA and data[1] == 0x80 and data[2] == 0x00:
             # Binary framed packet starting with 0x81 0x80 0x00
-            # data has 125 payload bytes; read remaining 3 payload bytes + 1 CRC byte
             extra = serial_conn.read(4)
             if len(extra) == 4:
                 full_payload = data[3:] + extra[:3]

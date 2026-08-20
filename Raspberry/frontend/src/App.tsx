@@ -519,23 +519,39 @@ function App() {
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persistSettings = (
-    pos: number = positiveThresh,
-    neg: number = negativeThresh,
-    mode: 'auto' | 'manual' = colMode,
-    col: number = manualCol,
-    delay: number = scanDelay,
-    settle: number = muxSettleMs,
-    debounce: number = debounceThreshold,
-    window_s: number = baselineWindowS,
-    pMode: 'auto' | 'pieces' | 'empty' = piecesMode,
-    coachHints: boolean = coachHintsEnabled,
-    evalBar: boolean = evalBarEnabled,
-    aiOnly: boolean = coachAiOnly,
-    inLoopCal: boolean = inLoopCalibration,
-    intensity: number = ledIntensity,
-    nMode: boolean = nightMode
-  ) => {
+  const persistSettings = (overrides?: {
+    pos?: number;
+    neg?: number;
+    mode?: 'auto' | 'manual';
+    col?: number;
+    delay?: number;
+    settle?: number;
+    debounce?: number;
+    window_s?: number;
+    pMode?: 'auto' | 'pieces' | 'empty';
+    coachHints?: boolean;
+    evalBar?: boolean;
+    aiOnly?: boolean;
+    inLoopCal?: boolean;
+    intensity?: number;
+    nMode?: boolean;
+  }) => {
+    const pos = overrides?.pos ?? positiveThresh;
+    const neg = overrides?.neg ?? negativeThresh;
+    const mode = overrides?.mode ?? colMode;
+    const col = overrides?.col ?? manualCol;
+    const delay = overrides?.delay ?? scanDelay;
+    const settle = overrides?.settle ?? muxSettleMs;
+    const debounce = overrides?.debounce ?? debounceThreshold;
+    const window_s = overrides?.window_s ?? baselineWindowS;
+    const pMode = overrides?.pMode ?? piecesMode;
+    const coachHints = overrides?.coachHints ?? coachHintsEnabled;
+    const evalBar = overrides?.evalBar ?? evalBarEnabled;
+    const aiOnly = overrides?.aiOnly ?? coachAiOnly;
+    const inLoopCal = overrides?.inLoopCal ?? inLoopCalibration;
+    const intensity = overrides?.intensity ?? ledIntensity;
+    const nMode = overrides?.nMode ?? nightMode;
+
     localStorage.setItem('scb_positive_thresh', String(pos));
     localStorage.setItem('scb_negative_thresh', String(neg));
     localStorage.setItem('scb_col_mode', mode);
@@ -556,24 +572,25 @@ function App() {
     saveTimeoutRef.current = setTimeout(async () => {
       try {
         const currentDisabled = state.physical.disabled_squares ?? [];
-        await updateBoardSettings(
-          pos,
-          neg,
-          mode,
-          col,
-          delay,
-          settle,
-          debounce,
-          window_s,
-          currentDisabled,
-          pMode,
-          coachHints,
-          evalBar,
-          aiOnly,
-          inLoopCal,
-          intensity,
-          nMode
-        );
+        await updateBoardSettings({
+          threshold_positive: pos,
+          threshold_negative: neg,
+          col_mode: mode,
+          manual_col: col,
+          scan_delay: delay,
+          mux_settle_us: settle,
+          mux_settle_ms: settle,
+          debounce_threshold: debounce,
+          baseline_window_s: window_s,
+          disabled_squares: currentDisabled,
+          pieces_mode: pMode,
+          coach_hints_enabled: coachHints,
+          eval_bar_enabled: evalBar,
+          coach_ai_only: aiOnly,
+          in_loop_calibration: inLoopCal,
+          led_intensity: intensity,
+          night_mode: nMode,
+        });
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
       }
@@ -603,10 +620,9 @@ function App() {
           setScanDelay(res.scan_delay);
           localStorage.setItem('scb_scan_delay', String(res.scan_delay));
         }
-        if (res.mux_settle_ms !== undefined) {
-          setMuxSettleMs(res.mux_settle_ms);
-          localStorage.setItem('scb_mux_settle_ms', String(res.mux_settle_ms));
-        }
+        const settleVal = res.mux_settle_us ?? res.mux_settle_ms ?? 100;
+        setMuxSettleMs(settleVal);
+        localStorage.setItem('scb_mux_settle_ms', String(settleVal));
         if (res.debounce_threshold !== undefined) {
           setDebounceThreshold(res.debounce_threshold);
           localStorage.setItem('scb_debounce_threshold', String(res.debounce_threshold));
@@ -716,17 +732,25 @@ function App() {
     }
 
     try {
-      const res = await updateBoardSettings(
-        positiveThresh,
-        negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        nextDisabled
-      );
+      const res = await updateBoardSettings({
+        threshold_positive: positiveThresh,
+        threshold_negative: negativeThresh,
+        col_mode: colMode,
+        manual_col: manualCol,
+        scan_delay: scanDelay,
+        mux_settle_us: muxSettleMs,
+        mux_settle_ms: muxSettleMs,
+        debounce_threshold: debounceThreshold,
+        baseline_window_s: baselineWindowS,
+        disabled_squares: nextDisabled,
+        pieces_mode: piecesMode,
+        coach_hints_enabled: coachHintsEnabled,
+        eval_bar_enabled: evalBarEnabled,
+        coach_ai_only: coachAiOnly,
+        in_loop_calibration: inLoopCalibration,
+        led_intensity: ledIntensity,
+        night_mode: nightMode,
+      });
       if (res.status === 'success') {
         setSettings(res.settings);
       }
@@ -779,18 +803,25 @@ function App() {
     setSettingsStatus("Saving thresholds...");
     const currentDisabled = state.physical.disabled_squares ?? [];
     try {
-      const res = await updateBoardSettings(
-        positiveThresh,
-        negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        currentDisabled,
-        piecesMode
-      );
+      const res = await updateBoardSettings({
+        threshold_positive: positiveThresh,
+        threshold_negative: negativeThresh,
+        col_mode: colMode,
+        manual_col: manualCol,
+        scan_delay: scanDelay,
+        mux_settle_us: muxSettleMs,
+        mux_settle_ms: muxSettleMs,
+        debounce_threshold: debounceThreshold,
+        baseline_window_s: baselineWindowS,
+        disabled_squares: currentDisabled,
+        pieces_mode: piecesMode,
+        coach_hints_enabled: coachHintsEnabled,
+        eval_bar_enabled: evalBarEnabled,
+        coach_ai_only: coachAiOnly,
+        in_loop_calibration: inLoopCalibration,
+        led_intensity: ledIntensity,
+        night_mode: nightMode,
+      });
       if (res.status === 'success') {
         setSettings(res.settings);
         setSettingsStatus("Success: Thresholds saved!");
@@ -832,6 +863,24 @@ function App() {
       });
       if (res.status === 'success') {
         setSettings(res.settings);
+        if (res.settings) {
+          if (res.settings.threshold_positive !== undefined) localStorage.setItem('scb_positive_thresh', String(res.settings.threshold_positive));
+          if (res.settings.threshold_negative !== undefined) localStorage.setItem('scb_negative_thresh', String(res.settings.threshold_negative));
+          if (res.settings.col_mode) localStorage.setItem('scb_col_mode', res.settings.col_mode);
+          if (res.settings.manual_col !== undefined) localStorage.setItem('scb_manual_col', String(res.settings.manual_col));
+          if (res.settings.scan_delay !== undefined) localStorage.setItem('scb_scan_delay', String(res.settings.scan_delay));
+          const settleVal = res.settings.mux_settle_us ?? res.settings.mux_settle_ms;
+          if (settleVal !== undefined) localStorage.setItem('scb_mux_settle_ms', String(settleVal));
+          if (res.settings.debounce_threshold !== undefined) localStorage.setItem('scb_debounce_threshold', String(res.settings.debounce_threshold));
+          if (res.settings.baseline_window_s !== undefined) localStorage.setItem('scb_baseline_window_s', String(res.settings.baseline_window_s));
+          if (res.settings.pieces_mode) localStorage.setItem('scb_pieces_mode', res.settings.pieces_mode);
+          if (res.settings.coach_hints_enabled !== undefined) localStorage.setItem('scb_coach_hints_enabled', String(res.settings.coach_hints_enabled));
+          if (res.settings.eval_bar_enabled !== undefined) localStorage.setItem('scb_eval_bar_enabled', String(res.settings.eval_bar_enabled));
+          if (res.settings.coach_ai_only !== undefined) localStorage.setItem('scb_coach_ai_only', String(res.settings.coach_ai_only));
+          if (res.settings.in_loop_calibration !== undefined) localStorage.setItem('scb_in_loop_calibration', String(res.settings.in_loop_calibration));
+          if (res.settings.led_intensity !== undefined) localStorage.setItem('scb_led_intensity', String(res.settings.led_intensity));
+          if (res.settings.night_mode !== undefined) localStorage.setItem('scb_night_mode', String(res.settings.night_mode));
+        }
         setSaveDefaultsStatus("✓ Current baselines & thresholds saved as defaults!");
       } else {
         setSaveDefaultsStatus("Failed to save defaults");
@@ -847,29 +896,9 @@ function App() {
 
   const handleSetPiecesMode = async (newMode: 'auto' | 'pieces' | 'empty') => {
     setPiecesMode(newMode);
-    const currentDisabled = state.physical.disabled_squares ?? [];
-    try {
-      const res = await updateBoardSettings(
-        positiveThresh,
-        negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        currentDisabled,
-        newMode
-      );
-      if (res.status === 'success') {
-        setSettings(res.settings);
-        setSettingsStatus(`Board mode set to ${newMode.toUpperCase()}`);
-      }
-    } catch (err) {
-      console.error("Error setting pieces mode:", err);
-    } finally {
-      setTimeout(() => setSettingsStatus(null), 4000);
-    }
+    persistSettings({ pMode: newMode });
+    setSettingsStatus(`Board mode set to ${newMode.toUpperCase()}`);
+    setTimeout(() => setSettingsStatus(null), 4000);
   };
 
   const isMyTurn = state.status === 'PLAYING' && state.game?.turn === state.my_color;
@@ -932,23 +961,7 @@ function App() {
               onClick={() => {
                 const next = !nightMode;
                 setNightMode(next);
-                persistSettings(
-                  positiveThresh,
-                  negativeThresh,
-                  colMode,
-                  manualCol,
-                  scanDelay,
-                  muxSettleMs,
-                  debounceThreshold,
-                  baselineWindowS,
-                  piecesMode,
-                  coachHintsEnabled,
-                  evalBarEnabled,
-                  coachAiOnly,
-                  inLoopCalibration,
-                  ledIntensity,
-                  next
-                );
+                persistSettings({ nMode: next });
               }}
               title={nightMode ? "Night Mode Active (Ambient Backlight ON) - Click to Switch to Day Mode" : "Day Mode Active - Click to Switch to Night Mode"}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider font-mono transition-all duration-300 ${
@@ -1427,7 +1440,7 @@ function App() {
                     onClick={() => {
                       const next = !evalBarEnabled;
                       setEvalBarEnabled(next);
-                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, next, coachAiOnly);
+                      persistSettings({ evalBar: next });
                     }}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
                       evalBarEnabled ? 'bg-indigo-600' : 'bg-slate-800'
@@ -1449,7 +1462,7 @@ function App() {
                     onClick={() => {
                       const next = !coachHintsEnabled;
                       setCoachHintsEnabled(next);
-                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, next, evalBarEnabled, coachAiOnly);
+                      persistSettings({ coachHints: next });
                     }}
                     className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
                       coachHintsEnabled ? 'bg-indigo-600' : 'bg-slate-800'
@@ -1497,7 +1510,7 @@ function App() {
                   onClick={() => {
                     const next = !inLoopCalibration;
                     setInLoopCalibration(next);
-                    persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next);
+                    persistSettings({ inLoopCal: next });
                   }}
                   className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
                     inLoopCalibration ? 'bg-emerald-600' : 'bg-slate-800'
@@ -1907,7 +1920,7 @@ function App() {
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10) || 200;
                       setPositiveThresh(val);
-                      persistSettings(val, negativeThresh);
+                      persistSettings({ pos: val });
                     }}
                     className="w-full h-1 bg-slate-950 rounded appearance-none cursor-pointer accent-red-500"
                   />
@@ -1927,7 +1940,7 @@ function App() {
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10) || 200;
                       setNegativeThresh(val);
-                      persistSettings(positiveThresh, val);
+                      persistSettings({ neg: val });
                     }}
                     className="w-full h-1 bg-slate-950 rounded appearance-none cursor-pointer accent-emerald-500"
                   />
@@ -2030,7 +2043,7 @@ function App() {
                       onClick={() => {
                         const next = !inLoopCalibration;
                         setInLoopCalibration(next);
-                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, next, ledIntensity, nightMode);
+                        persistSettings({ inLoopCal: next });
                       }}
                       className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${
                         inLoopCalibration ? 'bg-emerald-600' : 'bg-slate-800'
@@ -2056,7 +2069,7 @@ function App() {
                       onClick={() => {
                         const next = !nightMode;
                         setNightMode(next);
-                        persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, ledIntensity, next);
+                        persistSettings({ nMode: next });
                       }}
                       className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${
                         nightMode ? 'bg-indigo-600' : 'bg-slate-800'
@@ -2136,7 +2149,7 @@ function App() {
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10) || 100;
                       setLedIntensity(val);
-                      persistSettings(positiveThresh, negativeThresh, colMode, manualCol, scanDelay, muxSettleMs, debounceThreshold, baselineWindowS, piecesMode, coachHintsEnabled, evalBarEnabled, coachAiOnly, inLoopCalibration, val, nightMode);
+                      persistSettings({ intensity: val });
                     }}
                     className="w-full h-1.5 bg-slate-900 rounded appearance-none cursor-pointer accent-amber-500"
                   />

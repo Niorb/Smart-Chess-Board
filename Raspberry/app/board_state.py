@@ -172,7 +172,7 @@ class BoardStateManager:
             self.h = lgpio.gpiochip_open(0)
             init_mux_pins(self.h)
             if serial:
-                self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1.0)
+                self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.05)
             else:
                 self.ser = None
             logger.info(f"Hybrid board hardware initialized (MUX: lgpio, ADC: {SERIAL_PORT}).")
@@ -348,6 +348,45 @@ class BoardStateManager:
                 else None
             ),
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
+        }
+
+    def get_full_state(self, diag_info=None):
+        """Constructs a complete serialized snapshot of the full system state."""
+        from board_hardware import settings
+        is_ai = getattr(lichess_engine, "is_ai_game", False)
+        coach_ai_only = settings.get("coach_ai_only", True)
+        fair_play_active = coach_ai_only and not is_ai
+        coach_hints_enabled = settings.get("coach_hints_enabled", True)
+        eval_bar_enabled = settings.get("eval_bar_enabled", True)
+
+        coach_payload = {
+            "enabled": bool((coach_hints_enabled or eval_bar_enabled) and not fair_play_active),
+            "eval_bar_enabled": bool(eval_bar_enabled and not fair_play_active),
+            "coach_hints_enabled": bool(coach_hints_enabled and not fair_play_active),
+            "is_ai_game": bool(is_ai),
+            "fair_play_active": bool(fair_play_active),
+            "evaluation": None,
+            "lifted_move_hints": [],
+        }
+        if diag_info is None:
+            diag_info = {
+                "status": "OK" if (self.ser or self.virtual_only) else "DISCONNECTED",
+                "last_raw_line": "",
+                "timeouts": 0,
+                "errors": 0,
+            }
+
+        return {
+            "status": self.game_status,
+            "virtual_only": self.virtual_only,
+            "physical": self.get_physical_payload(),
+            "digital": self.digital_state,
+            "clocks": self.clocks,
+            "my_color": lichess_engine.my_color,
+            "game": lichess_engine.get_game_payload(),
+            "coach": coach_payload,
+            "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
+            "diagnostics": diag_info,
         }
 
     def get_health_status(self):

@@ -93,6 +93,7 @@ class ThresholdSettings(BaseModel):
     manual_col: int | float | None = None
     scan_delay: int | float | None = None
     mux_settle_ms: int | float | None = None
+    mux_settle_us: int | float | None = None
     debounce_threshold: int | float | None = None
     baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
@@ -112,6 +113,7 @@ class SaveDefaultsRequest(BaseModel):
     manual_col: int | float | None = None
     scan_delay: int | float | None = None
     mux_settle_ms: int | float | None = None
+    mux_settle_us: int | float | None = None
     debounce_threshold: int | float | None = None
     baseline_window_s: int | float | None = None
     disabled_squares: list[list[int]] | None = None
@@ -227,8 +229,15 @@ async def update_board_settings(body: ThresholdSettings):
         settings["manual_col"] = int(body.manual_col)
     if body.scan_delay is not None:
         settings["scan_delay"] = int(body.scan_delay)
-    if body.mux_settle_ms is not None:
-        settings["mux_settle_ms"] = int(body.mux_settle_ms)
+    if body.mux_settle_us is not None:
+        settle_us = min(255, max(0, int(body.mux_settle_us)))
+        settings["mux_settle_us"] = settle_us
+        settings["mux_settle_ms"] = settle_us
+    elif body.mux_settle_ms is not None:
+        raw_val = int(body.mux_settle_ms)
+        settle_us = min(255, max(0, raw_val if raw_val > 50 else raw_val * 1000))
+        settings["mux_settle_us"] = settle_us
+        settings["mux_settle_ms"] = raw_val
     if body.debounce_threshold is not None:
         settings["debounce_threshold"] = int(body.debounce_threshold)
     if body.baseline_window_s is not None:
@@ -272,8 +281,15 @@ async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
             settings["manual_col"] = int(body.manual_col)
         if body.scan_delay is not None:
             settings["scan_delay"] = int(body.scan_delay)
-        if body.mux_settle_ms is not None:
-            settings["mux_settle_ms"] = int(body.mux_settle_ms)
+        if body.mux_settle_us is not None:
+            settle_us = min(255, max(0, int(body.mux_settle_us)))
+            settings["mux_settle_us"] = settle_us
+            settings["mux_settle_ms"] = settle_us
+        elif body.mux_settle_ms is not None:
+            raw_val = int(body.mux_settle_ms)
+            settle_us = min(255, max(0, raw_val if raw_val > 50 else raw_val * 1000))
+            settings["mux_settle_us"] = settle_us
+            settings["mux_settle_ms"] = raw_val
         if body.debounce_threshold is not None:
             settings["debounce_threshold"] = int(body.debounce_threshold)
         if body.baseline_window_s is not None:
@@ -580,6 +596,11 @@ async def set_game_mode_route(body: ModeRequest):
 @app.websocket("/ws/state")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    try:
+        initial_payload = state_manager.get_full_state()
+        await websocket.send_json(initial_payload)
+    except Exception as e:
+        logger.debug(f"Error sending initial state snapshot on websocket connect: {e}")
     try:
         while True:
             await websocket.receive_text()
