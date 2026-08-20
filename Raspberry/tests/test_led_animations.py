@@ -410,3 +410,57 @@ def test_scale_color_gamma():
     assert g >= 1
     assert b >= 1
 
+
+def test_night_mode_color_palette_distinctness():
+    """Verify Night Mode colors are bright and distinct from deep moonlight sapphire floor."""
+    from app.config import (
+        COLOR_NIGHT_MODE,
+        COLOR_NIGHT_LEGAL_TARGET,
+        COLOR_NIGHT_LEGAL_CAPTURE,
+        COLOR_NIGHT_TURN_BLACK,
+        COLOR_NIGHT_TURN_WHITE,
+        COLOR_NIGHT_OPPONENT_TO,
+    )
+    # Legal target in Night mode must have high green/emerald component to contrast with blue
+    r, g, b = COLOR_NIGHT_LEGAL_TARGET
+    assert g > 150, "Night mode legal target should be luminous mint/emerald"
+
+    # Legal capture must have high red component
+    cr, cg, cb = COLOR_NIGHT_LEGAL_CAPTURE
+    assert cr > 200, "Night mode legal capture should be radiant crimson"
+
+    # Turn indicators
+    w_r, w_g, w_b = COLOR_NIGHT_TURN_WHITE
+    assert w_r > 200 and w_g > 150, "White turn indicator should be warm sunlight/gold"
+
+    b_r, b_g, b_b = COLOR_NIGHT_TURN_BLACK
+    assert b_r > 120 and b_b > 180, "Black turn indicator should be amethyst/purple"
+
+    # Deep moonlight sapphire background
+    bg_r, bg_g, bg_b = COLOR_NIGHT_MODE
+    assert bg_r <= 10 and bg_g <= 20 and bg_b <= 40, "Night mode background must be low-current deep blue"
+
+
+def test_night_mode_seeking_and_animations():
+    """Verify procedural animations correctly adapt to Night Mode parameter."""
+    from app.led_animations import render_seeking, render_game_drawn, render_game_started
+    from app.led_helpers import COLOR_INT_NIGHT_MODE
+
+    # Seeking in night mode
+    frame_night_seek = [0] * NUM_LEDS
+    render_seeking(0.5, frame_night_seek, {"night_mode": True})
+    assert any(frame_night_seek)
+    # Inactive perimeter square should be set to moonlight sapphire background
+    assert COLOR_INT_NIGHT_MODE in frame_night_seek
+
+    # Draw curtain in night mode
+    frame_draw = [0] * NUM_LEDS
+    render_game_drawn(0.5, frame_draw, {"night_mode": True})
+    assert any(frame_draw)
+
+    # Black army game start in night mode
+    frame_start_black = [0] * NUM_LEDS
+    render_game_started(0.3, frame_start_black, {"my_color": "black", "night_mode": True})
+    assert any(frame_start_black)
+
+

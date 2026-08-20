@@ -32,6 +32,13 @@ try:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_DRAW_BLUE,
+        COLOR_INT_NIGHT_MODE,
+        COLOR_INT_NIGHT_SEEKING_BODY,
+        COLOR_INT_NIGHT_SEEKING_HEAD,
+        COLOR_INT_NIGHT_SEEKING_TAIL,
+        COLOR_INT_NIGHT_START_BLACK_PRIMARY,
+        COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_OPPONENT_FROM,
@@ -69,6 +76,13 @@ except ImportError:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_DRAW_BLUE,
+        COLOR_INT_NIGHT_MODE,
+        COLOR_INT_NIGHT_SEEKING_BODY,
+        COLOR_INT_NIGHT_SEEKING_HEAD,
+        COLOR_INT_NIGHT_SEEKING_TAIL,
+        COLOR_INT_NIGHT_START_BLACK_PRIMARY,
+        COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_OPPONENT_FROM,
@@ -298,8 +312,12 @@ def render_game_started(progress: float, frame: List[int], params: Dict[str, Any
             (7, 7), (6, 7), (5, 7), (4, 7), (3, 7), (2, 7), (1, 7), (0, 7),
             (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (7, 6),
         ]
-        primary_col = COLOR_INT_START_BLACK_PRIMARY
-        secondary_col = COLOR_INT_START_BLACK_SECONDARY
+        if params.get("night_mode", False):
+            primary_col = COLOR_INT_NIGHT_START_BLACK_PRIMARY
+            secondary_col = COLOR_INT_NIGHT_START_BLACK_SECONDARY
+        else:
+            primary_col = COLOR_INT_START_BLACK_PRIMARY
+            secondary_col = COLOR_INT_START_BLACK_SECONDARY
         royal_squares = [(4, 7), (3, 7)]  # e8 (King), d8 (Queen)
         center_clash = [((3, 6), (3, 4)), ((4, 6), (4, 4))]  # d7->d5, e7->e5
 
@@ -631,6 +649,7 @@ def render_game_drawn(
 
     curtain_pos = progress * 4.2  # 0.0 (perimeter a, h) to 3.5 (center d, e)
     fade = 1.0 - (progress * 0.4)
+    blue_col = COLOR_INT_NIGHT_DRAW_BLUE if params.get("night_mode", False) else COLOR_INT_DRAW_BLUE
 
     for c in range(8):
         # Symmetrical file coordinate from perimeter (0 for a/h, 3 for d/e)
@@ -642,7 +661,7 @@ def render_game_drawn(
         for r in range(8):
             ripple = 0.85 + 0.15 * math.sin(now * 3.5 + r * 0.9)
             intensity = max(0.0, min(1.0, wave + settled)) * fade * ripple
-            color = blend_colors(COLOR_INT_DRAW_BLUE, COLOR_INT_DRAW_WHITE, 0.4)
+            color = blend_colors(blue_col, COLOR_INT_DRAW_WHITE, 0.4)
             set_square_in_frame(frame, c, r, scale_color(color, intensity))
 
 
@@ -683,31 +702,37 @@ def render_seeking(
     head_pos = tau * n
     tail_length = 7.0  # Tail span in perimeter squares (~1/4 ring)
 
+    is_night = bool(params.get("night_mode", False))
+    col_head = COLOR_INT_NIGHT_SEEKING_HEAD if is_night else COLOR_INT_SEEKING_HEAD
+    col_body = COLOR_INT_NIGHT_SEEKING_BODY if is_night else COLOR_INT_SEEKING_BODY
+    col_tail = COLOR_INT_NIGHT_SEEKING_TAIL if is_night else COLOR_INT_SEEKING_TAIL
+    col_idle = COLOR_INT_NIGHT_MODE if is_night else COLOR_INT_OFF
+
     for i, (c, r) in enumerate(PERIMETER_COORDS):
         delta_behind = (head_pos - i) % n
 
         if delta_behind <= 1.0:
             # Head and immediate trailing gradient
             intensity = 1.0 - 0.25 * delta_behind
-            col = blend_colors(COLOR_INT_SEEKING_HEAD, COLOR_INT_SEEKING_BODY, delta_behind)
+            col = blend_colors(col_head, col_body, delta_behind)
         elif delta_behind <= tail_length:
             # Body to tail decay
             t = (delta_behind - 1.0) / (tail_length - 1.0)
             intensity = 0.75 * ((1.0 - t) ** 1.8)
-            col = blend_colors(COLOR_INT_SEEKING_BODY, COLOR_INT_SEEKING_TAIL, t)
+            col = blend_colors(col_body, col_tail, t)
         elif delta_behind > (n - 0.75):
             # Smooth leading edge ahead of head
             delta_ahead = n - delta_behind
             intensity = (1.0 - delta_ahead / 0.75) ** 2
-            col = COLOR_INT_SEEKING_HEAD
+            col = col_head
         else:
             intensity = 0.0
-            col = COLOR_INT_OFF
+            col = col_idle
 
         if intensity > 0.02:
             set_square_in_frame(frame, c, r, scale_color(col, intensity))
         else:
-            set_square_in_frame(frame, c, r, COLOR_INT_OFF)
+            set_square_in_frame(frame, c, r, col_idle)
 
 
 # =============================================================================
@@ -790,6 +815,8 @@ def render_capture_aura(
     candidate_attackers: List[Tuple[int, int]],
     now: float,
     frame: List[int],
+    target_color: int = COLOR_INT_CAPTURE_AURA_TARGET,
+    attacker_color: int = COLOR_INT_CAPTURE_AURA_ATTACKER,
 ) -> None:
     """
     Renders an active capture-in-progress aura on the board when the player
@@ -800,7 +827,7 @@ def render_capture_aura(
     t_c, t_r = target_sq
     # Target square pulse: smooth sinusoidal oscillation between ruby/crimson and gold
     pulse_t = math.sin(now * 5.0) * 0.5 + 0.5
-    target_col = blend_colors(COLOR_INT_CAPTURE_AURA_TARGET, COLOR_INT_CAPTURE_AURA_ATTACKER, pulse_t * 0.4)
+    target_col = blend_colors(target_color, attacker_color, pulse_t * 0.4)
     intensity = 0.6 + 0.4 * pulse_t
     scaled_target = scale_color(target_col, intensity)
     set_square_in_frame(frame, t_c, t_r, scaled_target)
@@ -809,7 +836,7 @@ def render_capture_aura(
     for i, (a_c, a_r) in enumerate(candidate_attackers):
         att_pulse = math.sin(now * 4.0 + i * 0.8) * 0.5 + 0.5
         att_intensity = 0.4 + 0.6 * att_pulse
-        att_col = scale_color(COLOR_INT_CAPTURE_AURA_ATTACKER, att_intensity)
+        att_col = scale_color(attacker_color, att_intensity)
         set_square_in_frame(frame, a_c, a_r, att_col)
 
 
@@ -818,6 +845,8 @@ def render_guardrail_mismatch(
     unexpected_pieces: List[Tuple[int, int]],
     now: float,
     frame: List[int],
+    missing_color: int = COLOR_INT_GUARDRAIL_MISSING,
+    unexpected_color: int = COLOR_INT_GUARDRAIL_UNEXPECTED,
 ) -> None:
     """
     Renders visual alert pulses on squares with state mismatches during games.
@@ -828,7 +857,7 @@ def render_guardrail_mismatch(
     if missing_pieces:
         miss_pulse = math.sin(now * 6.0 * 2.0 * math.pi) * 0.5 + 0.5
         miss_intensity = 0.3 + 0.7 * miss_pulse
-        miss_col = scale_color(COLOR_INT_GUARDRAIL_MISSING, miss_intensity)
+        miss_col = scale_color(missing_color, miss_intensity)
         for c, r in missing_pieces:
             set_square_in_frame(frame, c, r, miss_col)
 
@@ -836,7 +865,7 @@ def render_guardrail_mismatch(
     if unexpected_pieces:
         unexp_pulse = math.sin(now * 8.0 * 2.0 * math.pi) * 0.5 + 0.5
         unexp_intensity = 0.35 + 0.65 * unexp_pulse
-        unexp_col = scale_color(COLOR_INT_GUARDRAIL_UNEXPECTED, unexp_intensity)
+        unexp_col = scale_color(unexpected_color, unexp_intensity)
         for c, r in unexpected_pieces:
             set_square_in_frame(frame, c, r, unexp_col)
 

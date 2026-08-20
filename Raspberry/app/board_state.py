@@ -44,10 +44,16 @@ except ImportError:
 from app.config import (
     ANIM_MOVE_CONFIRM_DURATION_S,
     BAUD_RATE,
+    COLOR_NIGHT_TURN_BLACK,
+    COLOR_NIGHT_TURN_WHITE,
+    COLOR_TURN_BLACK,
+    COLOR_TURN_WHITE,
     NUM_LEDS,
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_CAPTURE_AURA_ATTACKER,
+    COLOR_INT_CAPTURE_AURA_TARGET,
     COLOR_INT_CAPTURE_CONFIRM,
     COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_CHECK,
@@ -56,6 +62,8 @@ from app.led_helpers import (
     COLOR_INT_EVAL_BLACK,
     COLOR_INT_EVAL_NEUTRAL,
     COLOR_INT_EVAL_WHITE,
+    COLOR_INT_GUARDRAIL_MISSING,
+    COLOR_INT_GUARDRAIL_UNEXPECTED,
     COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_CAPTURE,
@@ -66,7 +74,30 @@ from app.led_helpers import (
     COLOR_INT_MOVE_GOOD,
     COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
+    COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER,
+    COLOR_INT_NIGHT_CAPTURE_AURA_TARGET,
+    COLOR_INT_NIGHT_CAPTURE_TRACE,
+    COLOR_INT_NIGHT_CHECK,
+    COLOR_INT_NIGHT_EVAL_BLACK,
+    COLOR_INT_NIGHT_EVAL_NEUTRAL,
+    COLOR_INT_NIGHT_EVAL_WHITE,
+    COLOR_INT_NIGHT_GUARDRAIL_MISSING,
+    COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED,
+    COLOR_INT_NIGHT_ILLEGAL,
+    COLOR_INT_NIGHT_LEGAL_CAPTURE,
+    COLOR_INT_NIGHT_LEGAL_TARGET,
     COLOR_INT_NIGHT_MODE,
+    COLOR_INT_NIGHT_MOVE_BEST,
+    COLOR_INT_NIGHT_MOVE_BLUNDER,
+    COLOR_INT_NIGHT_MOVE_GOOD,
+    COLOR_INT_NIGHT_MOVE_INACCURACY,
+    COLOR_INT_NIGHT_MOVE_TRACE,
+    COLOR_INT_NIGHT_OPPONENT_CAPTURE,
+    COLOR_INT_NIGHT_OPPONENT_FROM,
+    COLOR_INT_NIGHT_OPPONENT_TO,
+    COLOR_INT_NIGHT_PIECE_LIFTED,
+    COLOR_INT_NIGHT_SETUP_MISPLACED,
+    COLOR_INT_NIGHT_SETUP_MISSING,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
     COLOR_INT_OPPONENT_DISCONNECTED,
@@ -194,7 +225,9 @@ class BoardStateManager:
                 self.frozen_baselines = [list(col) for col in settings["baselines"]]
                 logger.info("Snapshotted and froze sensor baselines prior to lifecycle animation.")
 
-            anim = create_animation(name, params)
+            p = dict(params or {})
+            p.setdefault("night_mode", bool(settings.get("night_mode", False)))
+            anim = create_animation(name, p)
             self.active_animation = anim
             logger.info(f"Triggered LED lifecycle animation: {name} (duration={anim.duration}s)")
             return True
@@ -393,6 +426,32 @@ class BoardStateManager:
             base_color = COLOR_INT_NIGHT_MODE if night_mode else COLOR_INT_OFF
             frame = [base_color] * NUM_LEDS
 
+            # Active Palette Selection (Day Mode 100% untouched; Night Mode uses vivid high-contrast colors)
+            c_setup_missing = COLOR_INT_NIGHT_SETUP_MISSING if night_mode else COLOR_INT_SETUP_MISSING
+            c_setup_misplaced = COLOR_INT_NIGHT_SETUP_MISPLACED if night_mode else COLOR_INT_SETUP_MISPLACED
+            c_piece_lifted = COLOR_INT_NIGHT_PIECE_LIFTED if night_mode else COLOR_INT_PIECE_LIFTED
+            c_legal_target = COLOR_INT_NIGHT_LEGAL_TARGET if night_mode else COLOR_INT_LEGAL_TARGET
+            c_legal_capture = COLOR_INT_NIGHT_LEGAL_CAPTURE if night_mode else COLOR_INT_LEGAL_CAPTURE
+            c_opp_from = COLOR_INT_NIGHT_OPPONENT_FROM if night_mode else COLOR_INT_OPPONENT_FROM
+            c_opp_to_quiet = COLOR_INT_NIGHT_OPPONENT_TO if night_mode else COLOR_INT_OPPONENT_TO
+            c_opp_to_capture = COLOR_INT_NIGHT_OPPONENT_CAPTURE if night_mode else COLOR_INT_OPPONENT_CAPTURE
+            c_move_trace = COLOR_INT_NIGHT_MOVE_TRACE if night_mode else COLOR_INT_MOVE_TRACE
+            c_capture_trace = COLOR_INT_NIGHT_CAPTURE_TRACE if night_mode else COLOR_INT_CAPTURE_TRACE
+            c_check = COLOR_INT_NIGHT_CHECK if night_mode else COLOR_INT_CHECK
+            c_turn_white = COLOR_NIGHT_TURN_WHITE if night_mode else COLOR_TURN_WHITE
+            c_turn_black = COLOR_NIGHT_TURN_BLACK if night_mode else COLOR_TURN_BLACK
+            c_illegal = COLOR_INT_NIGHT_ILLEGAL if night_mode else COLOR_INT_ILLEGAL
+            c_eval_white = COLOR_INT_NIGHT_EVAL_WHITE if night_mode else COLOR_INT_EVAL_WHITE
+            c_eval_black = COLOR_INT_NIGHT_EVAL_BLACK if night_mode else COLOR_INT_EVAL_BLACK
+            c_move_best = COLOR_INT_NIGHT_MOVE_BEST if night_mode else COLOR_INT_MOVE_BEST
+            c_move_good = COLOR_INT_NIGHT_MOVE_GOOD if night_mode else COLOR_INT_MOVE_GOOD
+            c_move_inacc = COLOR_INT_NIGHT_MOVE_INACCURACY if night_mode else COLOR_INT_MOVE_INACCURACY
+            c_move_blunder = COLOR_INT_NIGHT_MOVE_BLUNDER if night_mode else COLOR_INT_MOVE_BLUNDER
+            c_guardrail_missing = COLOR_INT_NIGHT_GUARDRAIL_MISSING if night_mode else COLOR_INT_GUARDRAIL_MISSING
+            c_guardrail_unexp = COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED if night_mode else COLOR_INT_GUARDRAIL_UNEXPECTED
+            c_capture_aura_target = COLOR_INT_NIGHT_CAPTURE_AURA_TARGET if night_mode else COLOR_INT_CAPTURE_AURA_TARGET
+            c_capture_aura_attacker = COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER if night_mode else COLOR_INT_CAPTURE_AURA_ATTACKER
+
             def set_square_leds(c: int, r: int, color_val: int):
                 if col_mode == "manual" and c != manual_col:
                     return
@@ -420,7 +479,7 @@ class BoardStateManager:
             # Layer 0.5: Continuous Seeking / Matchmaking Radar Animation
             if self.game_status == "SEEKING":
                 from app.led_animations import render_seeking
-                render_seeking(now, frame, {})
+                render_seeking(now, frame, {"night_mode": night_mode})
                 for idx, color in enumerate(frame):
                     self.strip.setPixelColor(idx, color)
                 self.strip.show()
@@ -430,12 +489,12 @@ class BoardStateManager:
             if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)
                 if not self.setup_result.is_setup_ready:
-                    # Dim white for missing starting pieces
+                    # Missing starting pieces
                     for c, r in self.setup_result.missing_white + self.setup_result.missing_black:
-                        set_square_leds(c, r, COLOR_INT_SETUP_MISSING)
-                    # Red for misplaced pieces
+                        set_square_leds(c, r, c_setup_missing)
+                    # Misplaced pieces
                     for c, r in self.setup_result.misplaced_pieces:
-                        set_square_leds(c, r, COLOR_INT_SETUP_MISPLACED)
+                        set_square_leds(c, r, c_setup_misplaced)
 
                 # Physical Gesture LED Overlay (Armed/Step1/Step2)
                 if hasattr(self, "gesture_engine") and self.gesture_engine.is_active:
@@ -458,7 +517,7 @@ class BoardStateManager:
                     n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
                     # File h corresponds to column/file index 7 (Strip 2, row 7)
                     for r in range(8):
-                        eval_col = COLOR_INT_EVAL_WHITE if r < n_white else COLOR_INT_EVAL_BLACK
+                        eval_col = c_eval_white if r < n_white else c_eval_black
                         set_square_leds(7, r, eval_col)
 
                 # 1. Opponent Move Indication & Animated Trace
@@ -472,15 +531,15 @@ class BoardStateManager:
                     rook_from = self.move_tracker.pending_opponent_move.get("rook_from")
                     rook_to = self.move_tracker.pending_opponent_move.get("rook_to")
 
-                    target_color = COLOR_INT_OPPONENT_CAPTURE if is_capture else COLOR_INT_OPPONENT_TO
-                    trace_color = COLOR_INT_CAPTURE_TRACE if is_capture else COLOR_INT_MOVE_TRACE
+                    target_color = c_opp_to_capture if is_capture else c_opp_to_quiet
+                    trace_color = c_capture_trace if is_capture else c_move_trace
 
                     if is_castling and rook_from and rook_to:
                         # Highlight King from->to and Rook from->to
-                        set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
-                        set_square_leds(to_c, to_r, COLOR_INT_OPPONENT_TO)
-                        set_square_leds(rook_from[0], rook_from[1], COLOR_INT_OPPONENT_FROM)
-                        set_square_leds(rook_to[0], rook_to[1], COLOR_INT_OPPONENT_TO)
+                        set_square_leds(from_c, from_r, c_opp_from)
+                        set_square_leds(to_c, to_r, c_opp_to_quiet)
+                        set_square_leds(rook_from[0], rook_from[1], c_opp_from)
+                        set_square_leds(rook_to[0], rook_to[1], c_opp_to_quiet)
 
                         # Choreographed castling trace: King moves 2 squares first, followed by Rook move
                         king_path = interpolate_move_path(from_c, from_r, to_c, to_r)
@@ -488,7 +547,7 @@ class BoardStateManager:
                         render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_color, blend_arrival=True)
                     else:
                         # Standard Move Trace: Keep start and arrival squares lit
-                        set_square_leds(from_c, from_r, COLOR_INT_OPPONENT_FROM)
+                        set_square_leds(from_c, from_r, c_opp_from)
                         set_square_leds(to_c, to_r, target_color)
 
                         # Interpolate path and render moving comet pulse with arrival flare
@@ -499,10 +558,10 @@ class BoardStateManager:
                 elif getattr(self.move_tracker, "pending_castling_rook", None):
                     r_from = self.move_tracker.pending_castling_rook["from"]
                     r_to = self.move_tracker.pending_castling_rook["to"]
-                    set_square_leds(r_from[0], r_from[1], COLOR_INT_OPPONENT_FROM)
-                    set_square_leds(r_to[0], r_to[1], COLOR_INT_OPPONENT_TO)
+                    set_square_leds(r_from[0], r_from[1], c_opp_from)
+                    set_square_leds(r_to[0], r_to[1], c_opp_to_quiet)
                     rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                    render_move_trace(rook_path, now, frame, trace_color=COLOR_INT_MOVE_TRACE, blend_arrival=True)
+                    render_move_trace(rook_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
 
                 # 1.6. Capture in Progress Aura (Opponent piece lifted first)
                 if self.move_tracker.pending_capture_target:
@@ -511,6 +570,8 @@ class BoardStateManager:
                         self.move_tracker.capture_candidate_attackers,
                         now,
                         frame,
+                        target_color=c_capture_aura_target,
+                        attacker_color=c_capture_aura_attacker,
                     )
 
                 # 2. King in Check Indicator
@@ -519,12 +580,12 @@ class BoardStateManager:
                     if king_sq is not None:
                         k_c = chess.square_file(king_sq)
                         k_r = chess.square_rank(king_sq)
-                        set_square_leds(k_c, k_r, COLOR_INT_CHECK)
+                        set_square_leds(k_c, k_r, c_check)
 
                 # 3. Lifted Piece & Legal Target Dots (with Coach / Blunder Guard hints)
                 if self.move_tracker.lifted_square:
                     l_c, l_r = self.move_tracker.lifted_square
-                    set_square_leds(l_c, l_r, COLOR_INT_PIECE_LIFTED)
+                    set_square_leds(l_c, l_r, c_piece_lifted)
                     coach_hints_enabled = settings.get("coach_hints_enabled", True)
                     coach_active = coach_hints_enabled and not fair_play_active
                     cached_eval = (
@@ -535,7 +596,7 @@ class BoardStateManager:
 
                     for t_c, t_r in self.move_tracker.legal_targets:
                         is_cap = (t_c, t_r) in getattr(self.move_tracker, "legal_captures", [])
-                        target_col = COLOR_INT_LEGAL_CAPTURE if is_cap else COLOR_INT_LEGAL_TARGET
+                        target_col = c_legal_capture if is_cap else c_legal_target
 
                         if coach_active and cached_eval and cached_eval.moves_map:
                             from_sq = chess.square_name(chess.square(l_c, l_r))
@@ -544,20 +605,20 @@ class BoardStateManager:
                             move_analysis = cached_eval.moves_map.get(uci) or cached_eval.moves_map.get(f"{uci}q")
                             if move_analysis:
                                 if move_analysis.classification == MoveQuality.BEST:
-                                    target_col = COLOR_INT_MOVE_BEST
+                                    target_col = c_move_best
                                 elif move_analysis.classification == MoveQuality.GOOD:
-                                    target_col = COLOR_INT_MOVE_GOOD
+                                    target_col = c_move_good
                                 elif move_analysis.classification == MoveQuality.INACCURACY:
-                                    target_col = COLOR_INT_MOVE_INACCURACY
+                                    target_col = c_move_inacc
                                 else:
-                                    target_col = COLOR_INT_MOVE_BLUNDER
+                                    target_col = c_move_blunder
 
                         set_square_leds(t_c, t_r, target_col)
 
                 # 4. Invalid Placement Indicator
                 if self.move_tracker.invalid_placement:
                     inv_c, inv_r = self.move_tracker.invalid_placement
-                    set_square_leds(inv_c, inv_r, COLOR_INT_ILLEGAL)
+                    set_square_leds(inv_c, inv_r, c_illegal)
 
                 # 5. Live State Guardrail Mismatch Indicator (Alert pulses for missing/unexpected pieces)
                 if self.guardrail_result and not self.guardrail_result.is_synchronized:
@@ -566,6 +627,8 @@ class BoardStateManager:
                         self.guardrail_result.unexpected_pieces,
                         now,
                         frame,
+                        missing_color=c_guardrail_missing,
+                        unexpected_color=c_guardrail_unexp,
                     )
 
                 # 6. Active Player Turn Ambient Indicator (Subtle breathing halo on active King)
@@ -576,9 +639,9 @@ class BoardStateManager:
                         ak_c = chess.square_file(active_king_sq)
                         ak_r = chess.square_rank(active_king_sq)
                         if self.move_tracker.lifted_square != (ak_c, ak_r):
-                            turn_col = COLOR_INT_TURN_WHITE if active_turn == chess.WHITE else COLOR_INT_TURN_BLACK
+                            turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
                             turn_pulse = math.sin(now * 2.5) * 0.5 + 0.5
-                            turn_intensity = 0.14 + 0.09 * turn_pulse
+                            turn_intensity = 0.16 + 0.10 * turn_pulse
                             set_square_leds(ak_c, ak_r, scale_color(turn_col, turn_intensity))
 
                 # 7. Opponent Disconnected Warning Beacon & Victory Claim Countdown Gauge

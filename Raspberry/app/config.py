@@ -110,10 +110,60 @@ COLOR_START_WHITE_SECONDARY = (200, 180, 120)  # Warm gold for White start tail
 COLOR_START_BLACK_PRIMARY = (0, 180, 255)  # Electric cyan-azure for Black start scan
 COLOR_START_BLACK_SECONDARY = (80, 60, 220)  # Royal violet for Black start tail
 
-# Night Mode Ambient & Physical Indicator Colors — (R, G, B) tuples
+# =============================================================================
+# NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
+# (Engineered for crystal-clear contrast and vibrancy against moonlight blue floor)
+# =============================================================================
 COLOR_NIGHT_MODE = (4, 12, 28)  # Deep moonlight sapphire ambient background (low current draw)
 COLOR_NIGHT_INDICATOR = (0, 70, 220)  # Dark Blue indicator when board is in Night Mode
 COLOR_DAY_INDICATOR = (255, 160, 0)  # Warm Sun Amber indicator when board is in Day Mode
+
+# Setup & Pieces
+COLOR_NIGHT_SETUP_MISSING = (70, 80, 110)  # Luminous starlight silver for missing starting pieces
+COLOR_NIGHT_SETUP_MISPLACED = (220, 60, 0)  # Vivid amber warning for misplaced pieces
+COLOR_NIGHT_PIECE_LIFTED = (230, 130, 0)  # Radiant solar gold for lifted piece origin
+
+# Move Targets & Captures (tuned for extreme contrast against deep blue background)
+COLOR_NIGHT_LEGAL_TARGET = (0, 210, 140)  # Luminous mint emerald / aqua green (crystal-clear against blue)
+COLOR_NIGHT_LEGAL_CAPTURE = (240, 20, 60)  # Pure radiant crimson for legal captures
+
+# Opponent Moves & Traces
+COLOR_NIGHT_OPPONENT_FROM = (230, 90, 0)  # Radiant solar orange for opponent move origin
+COLOR_NIGHT_OPPONENT_TO = (0, 220, 200)  # Vivid electric mint-cyan for opponent destination
+COLOR_NIGHT_OPPONENT_CAPTURE = (255, 10, 40)  # Pure laser crimson for opponent capture target
+COLOR_NIGHT_MOVE_TRACE = (220, 30, 180)  # Vivid neon magenta/violet pulse along move trajectory
+COLOR_NIGHT_CAPTURE_TRACE = (255, 40, 70)  # High-energy rose-crimson pulse along capture trajectory
+
+# King Status & Turn Breathing Halos
+COLOR_NIGHT_CHECK = (255, 10, 10)  # Laser red on King in check
+COLOR_NIGHT_TURN_WHITE = (240, 210, 120)  # Radiant warm sunlight gold halo for White's turn
+COLOR_NIGHT_TURN_BLACK = (170, 40, 230)  # Electric amethyst purple halo for Black's turn (distinct from blue)
+
+# Diagnostics & Guardrails
+COLOR_NIGHT_ILLEGAL = (220, 0, 0)  # High-visibility red for invalid placement
+COLOR_NIGHT_GUARDRAIL_MISSING = (240, 150, 0)  # Vivid amber warning
+COLOR_NIGHT_GUARDRAIL_UNEXPECTED = (255, 20, 20)  # Vivid red alert
+COLOR_NIGHT_CAPTURE_AURA_TARGET = (255, 40, 80)
+COLOR_NIGHT_CAPTURE_AURA_ATTACKER = (255, 190, 30)
+
+# Coach & Move Quality
+COLOR_NIGHT_MOVE_BEST = (0, 255, 90)  # Neon Emerald for Best Move
+COLOR_NIGHT_MOVE_GOOD = (0, 230, 210)  # Electric Mint Aqua for Good Move
+COLOR_NIGHT_MOVE_INACCURACY = (255, 180, 0)  # Vivid Goldenrod for Inaccuracy
+COLOR_NIGHT_MOVE_BLUNDER = (255, 30, 40)  # Laser Crimson for Blunder
+
+# Live Evaluation Bar
+COLOR_NIGHT_EVAL_WHITE = (150, 150, 190)  # Bright pearl silver for White advantage
+COLOR_NIGHT_EVAL_BLACK = (60, 10, 95)  # Velvet violet for Black advantage (distinct from blue floor)
+COLOR_NIGHT_EVAL_NEUTRAL = (40, 35, 60)  # Neutral midpoint
+
+# Lifecycle & Animation Colors
+COLOR_NIGHT_DRAW_BLUE = (0, 140, 255)  # Luminous sky sapphire for draw curtain
+COLOR_NIGHT_SEEKING_HEAD = (240, 255, 220)  # Radiant starlight head
+COLOR_NIGHT_SEEKING_BODY = (0, 230, 200)  # Electric mint-cyan body
+COLOR_NIGHT_SEEKING_TAIL = (0, 80, 180)  # Royal twilight tail
+COLOR_NIGHT_START_BLACK_PRIMARY = (0, 210, 255)  # Vivid electric cyan
+COLOR_NIGHT_START_BLACK_SECONDARY = (130, 60, 240)  # Electric royal violet
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
