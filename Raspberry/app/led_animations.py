@@ -581,7 +581,7 @@ def render_game_lost(
         # PHASE 3: Fissure Decay & Obsidian Abyss (0.55 -> 0.80)
         # =========================================================================
         p3 = (progress - 0.55) / 0.25  # 0.0 -> 1.0
-        decay_env = (1.0 - p3) ** 1.5
+        decay_env = (1.0 - p3) ** 1.3
 
         for c in range(8):
             for r in range(8):
@@ -589,12 +589,14 @@ def render_game_lost(
                 if d_k <= 1.5:
                     # Harmonic cinder noise & tight radial falloff around shattered throne
                     flicker = 0.75 + 0.25 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
-                    falloff = math.exp(-d_k / 0.85)
+                    falloff = math.exp(-d_k / 0.95)
                     intensity = decay_env * falloff * flicker
+                    if d_k < 0.1:
+                        intensity = max(0.08 * decay_env, intensity)
 
-                    if intensity > 0.06:
-                        col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, p3 + d_k * 0.15)
-                        set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.85))
+                    if intensity > 0.02:
+                        col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, min(1.0, p3 + d_k * 0.15))
+                        set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.90))
 
     else:
         # =========================================================================
