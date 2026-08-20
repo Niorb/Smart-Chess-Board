@@ -183,11 +183,18 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
     - **Step 3 (Replacement & Confirmation)**: Replace both pieces to starting squares to toggle Night Mode on/off, auto-persist to `board_settings.json`, and trigger a 600ms arrival confirmation flash.
   - **Web UI & REST Integration (`Raspberry/frontend/src/App.tsx`, `api.ts`, `main.py`)**: Added Night Mode toggle buttons in the Top Header navigation bar and in the Debug tab under Calibration & Hardware Utilities. Real-time bi-directional sync between physical board gestures and web UI.
   - **Verification**: All 211 test suites passed and frontend built cleanly on Raspberry Pi.
+- [x] Fixed Settings Defaults Persistence & Initial Streaming Latency:
+  - **Bulletproof Settings Persistence (`Raspberry/frontend/src/App.tsx`, `api.ts`)**: Refactored `persistSettings` and API handlers from error-prone 15-argument positional calls to a unified options object with full state merging. Eliminated the critical bug where slider adjustments or UI toggles inadvertently reset unpassed parameters to default values and corrupted `localStorage` / `board_settings.json`.
+  - **Normalized Microsecond/Millisecond Timing (`Raspberry/board_hardware.py`, `app/main.py`, `frontend/src/api.ts`)**: Synchronized `mux_settle_us` and `mux_settle_ms` across frontend and backend, preventing timing values from being ignored or reverted.
+  - **Fast Serial Stream Synchronization (`Raspberry/board_hardware.py`, `app/board_state.py`)**: Enhanced `_read_adc_packet` with a fast-path 2-byte read and a sub-millisecond stream scanner fallback that instantly discards coprocessor boot text or stray noise bytes. Lowered serial timeout to 50ms, eliminating multi-second board recognition delays.
+  - **Instant 0ms WebSocket State Broadcast (`Raspberry/app/board_state.py`, `app/main.py`, `frontend/src/hooks/useBoardState.ts`)**: Added `get_full_state()` snapshot delivery immediately upon WebSocket `/ws/state` connection establishment. Reduced reconnect backoff to 1.0s, ensuring instantaneous streaming upon page load or server restart.
+  - **Verification**: All 216 test suites passed and frontend built cleanly on Raspberry Pi.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
 
 
 
