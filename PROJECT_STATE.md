@@ -149,17 +149,29 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **ESP32 Binary Framing Protocol (`Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino`)**: Upgraded UART receiver with 2048-byte RX buffer, non-blocking FSM parser (`0xAA 0x55`, CMD, LEN LE, Payload, CRC-8-CCITT), and atomic batch execution (`CMD_SET_AND_SHOW`, `CMD_CLEAR_LEDS`, `CMD_SET_ALL`, `CMD_SCAN_ADC`, `CMD_SET_SETTLE`). Eliminates ASCII byte collisions (preventing random blackouts, color flashes, or premature latching when RGB values match `'C'`, `'W'`, `'A'`, or `'B'`).
   - **Self-Healing Keyframe & Chunked Transmission (`Raspberry/app/led_helpers.py`)**: Enhanced `DualPixelStrip` with chunked binary packet transmission (up to 38 LEDs / 152 bytes per packet) and an automated 60-frame (~2.0s) periodic keyframe resync that continuously heals any physical LED signal glitches.
   - **Robust Board Hardware Scanner (`Raspberry/board_hardware.py`)**: Updated `scan_board`, `calibrate_board`, and `calibrate_board_with_pieces` with binary framed requests (`CMD_SCAN_ADC`, `CMD_SET_SETTLE`) and backwards-compatible response decoding with automatic buffer resync.
-  - **Perceptual Gamma 2.8 Correction & Float Rounding (`Raspberry/app/led_animations.py`)**: Integrated `GAMMA_LUT_28` and `scale_color_gamma` with floating-point channel rounding to eliminate color shifts (e.g. green/blue premature drop-off) and stepped quantization banding on low-brightness animation tails.
 - [x] Implemented Unified 64-Square Dynamic Baseline Drift Engine (`Raspberry/board_hardware.py`):
   - **Eliminated Destructive Rank Overwrite**: Removed piece-mode middle rank propagation (`settings["baselines"][c][0] = avg_val`), preventing Rank 3 and Rank 6 from destroying individual Hall sensor quiescent baselines on Ranks 1-2 and 7-8.
   - **Independent 64-Square Dynamic Drift**: Every unoccupied square (`raw_state == 0`) across all 64 squares dynamically tracks its own rolling average over `baseline_window_s` ($\ge 80\%$ span) without copying or overwriting adjacent squares.
   - **Occupied Square Isolation & Progressive Self-Calibration**: Occupied squares with magnets hold their calibrated baselines stable and isolated. When a piece vacates a square (e.g. `1. e4`), the square automatically self-calibrates to its measured ground truth baseline once unoccupied stability is reached.
-  - **Test Suite & Verification**: Added comprehensive unit test suites in `Raspberry/tests/test_board_hardware.py` verifying independent 64-square drift, piece movement vacation calibration, occupied rank non-blocking behavior, and individual quiescent offset preservation. All 201 tests and frontend production build verified on Raspberry Pi.
+  - **Test Suite & Verification**: Added comprehensive unit test suites in `Raspberry/tests/test_board_hardware.py` verifying independent 64-square drift, piece movement vacation calibration, occupied rank non-blocking behavior, and individual quiescent offset preservation.
+- [x] Redesigned Defeat Animation to "The Royal Cataclysm (Requiem for a Fallen Sovereign)":
+  - **4-Phase Cyber-Physical Choreography (`Raspberry/app/led_animations.py`)**:
+    - **Phase 1 (0.00 $\to$ 0.25) — The Crimson Siege**: 3 lethal ballistic laser bolts converging from opposing perimeter vectors onto the defeated King's coordinate.
+    - **Phase 2 (0.25 $\to$ 0.55) — Crown Shatter & Hyper-Radial Shockwave**: Detonation flash on King's square + expanding Gaussian shockwave ring ($R \to 8.2$) + 4 flying molten crown shards.
+    - **Phase 3 (0.55 $\to$ 0.80) — Fissure Decay & Obsidian Abyss**: Organic smoldering cinders with harmonic noise in a tight $3\times 3$ perimeter around the fallen throne.
+    - **Phase 4 (0.80 $\to$ 1.00) — The Royal Eclipse**: Solitary biphasic cardiac heartbeat pulse ("lub-dub") fading into total blackness.
+  - **Hardware Stability Budget**: Strictly capped to $\le 15$ simultaneous active squares peak, safely supported by binary packet chunking and power rail stability.
+- [x] Implemented Master LED Intensity Control (10%–100%) Across Hardware & Web UI:
+  - **Pipeline-Wide Dimming Hook (`Raspberry/app/led_helpers.py`)**: Scaled outgoing RGB channel values by `intensity_factor = settings.get("led_intensity", 100) / 100.0` in `DualPixelStrip.show()`. Tracks intensity state changes to dynamically re-transmit active pixels immediately upon slider movement.
+  - **Backend Settings & Defaults (`Raspberry/board_hardware.py`, `main.py`, `board_settings.default.json`)**: Added `led_intensity` (10..100) to hardware settings, REST schemas (`ThresholdSettings`, `SaveDefaultsRequest`), and WebSocket state payload (`get_physical_payload()`).
+  - **React UI Slider & Persistence (`Raspberry/frontend/src/App.tsx`, `api.ts`)**: Added a Master LED Intensity range slider with percentage readout and `Sun` icon in the Debug tab under Calibration & Hardware Utilities. Integrates real-time debounced auto-persistence to `board_settings.json` and sync with browser `localStorage`.
+  - **Verification & Testing**: Added API unit test `test_settings_update_led_intensity()` and updated `test_render_game_lost()`. All 202 unit tests and Vite frontend build passed on Raspberry Pi.
 
 ## Task Backlog
 
 ## Active Blockers
 - None
+
 
 
 
