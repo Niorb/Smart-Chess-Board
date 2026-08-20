@@ -150,7 +150,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Self-Healing Keyframe & Chunked Transmission (`Raspberry/app/led_helpers.py`)**: Enhanced `DualPixelStrip` with chunked binary packet transmission (up to 38 LEDs / 152 bytes per packet) and an automated 60-frame (~2.0s) periodic keyframe resync that continuously heals any physical LED signal glitches.
   - **Robust Board Hardware Scanner (`Raspberry/board_hardware.py`)**: Updated `scan_board`, `calibrate_board`, and `calibrate_board_with_pieces` with binary framed requests (`CMD_SCAN_ADC`, `CMD_SET_SETTLE`) and backwards-compatible response decoding with automatic buffer resync.
   - **Perceptual Gamma 2.8 Correction & Float Rounding (`Raspberry/app/led_animations.py`)**: Integrated `GAMMA_LUT_28` and `scale_color_gamma` with floating-point channel rounding to eliminate color shifts (e.g. green/blue premature drop-off) and stepped quantization banding on low-brightness animation tails.
-  - **Unit Testing & Verification**: Added binary packet framing, CRC-8 verification, keyframe self-healing, and gamma scaling tests across `test_led_helpers.py` and `test_led_animations.py`.
+- [x] Corrected Physical Rank Multiplexer Orientation (`DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7]`):
+  - Corrected `DEFAULT_COL_MUX_MAP` in [`board_hardware.py`](file:///home/robin/Smart-Chess-Board/Raspberry/board_hardware.py#L88) and fallback template [`board_settings.default.json`](file:///home/robin/Smart-Chess-Board/Raspberry/board_settings.default.json#L21) from inverted `[7, 6, 5, 4, 3, 2, 1, 0]` to standard `[0, 1, 2, 3, 4, 5, 6, 7]`.
+  - Fixes rank axis inversion where White starting pieces on Ranks 1 & 2 were mapped to Ranks 8 & 7 and Black pieces on Ranks 7 & 8 were mapped to Ranks 1 & 2.
 
 ## Task Backlog
 

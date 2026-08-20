@@ -85,7 +85,7 @@ def get_settings_filepath():
     )
 
 
-DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0]
+DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7]
 
 # Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
 settings: dict[str, Any] = {

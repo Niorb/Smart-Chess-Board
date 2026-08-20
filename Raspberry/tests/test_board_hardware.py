@@ -114,13 +114,13 @@ def test_scan_board_binary_packet_mapping():
     thresh = settings.get("threshold_positive", 150)
     vals = [base_val] * 64
 
-    # With DEFAULT_COL_MUX_MAP = [7, 6, 5, 4, 3, 2, 1, 0] in 90-deg CCW rotation:
+    # With DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7] in 90-deg CCW rotation:
     # c_chess = 7 - r_phys, r_chess = c_phys
-    # MUX channel 7 (c_phys=0), r_phys 7 -> index 63 corresponds to square a1 (c=0, r=0)
-    # MUX channel 7 (c_phys=0), r_phys 0 -> index 56 corresponds to square h1 (c=7, r=0)
-    # MUX channel 4 (c_phys=3), r_phys 4 -> index 36 corresponds to square d4 (c=3, r=3)
-    vals[63] = base_val + thresh + 500  # Magnet on physical MUX ch 7, r_phys 7 -> a1 (c=0, r=0)
-    vals[36] = base_val + thresh + 300  # Magnet on physical MUX ch 4, r_phys 4 -> d4 (c=3, r=3)
+    # MUX channel 0 (c_phys=0), r_phys 7 -> index 7 corresponds to square a1 (c=0, r=0)
+    # MUX channel 0 (c_phys=0), r_phys 0 -> index 0 corresponds to square h1 (c=7, r=0)
+    # MUX channel 3 (c_phys=3), r_phys 4 -> index 28 corresponds to square d4 (c=3, r=3)
+    vals[7] = base_val + thresh + 500   # Magnet on physical MUX ch 0, r_phys 7 -> a1 (c=0, r=0)
+    vals[28] = base_val + thresh + 300  # Magnet on physical MUX ch 3, r_phys 4 -> d4 (c=3, r=3)
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *vals)
@@ -151,18 +151,18 @@ def test_scan_board_custom_col_mux_map_override():
     import struct
     from unittest.mock import MagicMock
 
-    from board_hardware import scan_board, settings
+    from board_hardware import DEFAULT_COL_MUX_MAP, scan_board, settings
 
-    # Direct 1:1 identity mapping override: col_mux_map = [0..7]
-    settings["col_mux_map"] = [0, 1, 2, 3, 4, 5, 6, 7]
+    # Custom mapping override: col_mux_map = [7, 6, 5, 4, 3, 2, 1, 0]
+    settings["col_mux_map"] = [7, 6, 5, 4, 3, 2, 1, 0]
     raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
     mock_ser = MagicMock()
 
     base_val = settings["baselines"][0][0]
     thresh = settings.get("threshold_positive", 150)
     vals = [base_val] * 64
-    # MUX ch 0 (c_phys=0 -> r_chess=0), r_phys 7 (c_chess = 7 - 7 = 0) -> a1 (c=0, r=0) -> idx = 0*8 + 7 = 7
-    vals[7] = base_val + thresh + 500
+    # MUX ch 7 (c_phys=0 -> r_chess=0), r_phys 7 (c_chess = 7 - 7 = 0) -> a1 (c=0, r=0) -> idx = 7*8 + 7 = 63
+    vals[63] = base_val + thresh + 500
 
     packet_header = b'\xaa\x55'
     packet_data = struct.pack('<64H', *vals)
@@ -182,7 +182,6 @@ def test_scan_board_custom_col_mux_map_override():
     assert raw_state[0][0] == 1
 
     # Reset back to default
-    from board_hardware import DEFAULT_COL_MUX_MAP
     settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
 

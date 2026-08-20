@@ -18,7 +18,7 @@
     "debounce_threshold": 2,
     "baseline_window_s": 2,
     "disabled_squares": [],
-    "col_mux_map": [7, 6, 5, 4, 3, 2, 1, 0],
+    "col_mux_map": [0, 1, 2, 3, 4, 5, 6, 7],
     "pieces_mode": "auto",
     "coach_hints_enabled": true,
     "eval_bar_enabled": true,
