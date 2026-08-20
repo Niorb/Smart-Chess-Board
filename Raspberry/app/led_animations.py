@@ -507,11 +507,11 @@ def render_game_lost(
         king_c, king_r = (4, 7) if my_color == "black" else (4, 0)
 
     # 3. Phase Dispatch & Choreography
-    if progress < 0.28:
+    if progress < 0.25:
         # =========================================================================
-        # PHASE 1: The Crimson Siege / Converging Crossfire (0.00 -> 0.28)
+        # PHASE 1: The Crimson Siege / Converging Crossfire (0.00 -> 0.25)
         # =========================================================================
-        p1 = progress / 0.28  # 0.0 -> 1.0
+        p1 = progress / 0.25  # 0.0 -> 1.0
         e1 = p1 ** 1.35  # Accelerating ballistic projectile
 
         # 3 distinct converging vectors from opposing board perimeters
@@ -531,81 +531,81 @@ def render_game_lost(
                     dist = math.hypot(c - cur_c, r - cur_r)
                     if dist < 1.1:
                         intensity = math.exp(-4.0 * dist * dist) * (0.65 + 0.35 * p1)
-                        if intensity > 0.08:
+                        if intensity > 0.06:
                             col = blend_colors(COLOR_INT_STRIKE_RUBY, COLOR_INT_CROWN_LIGHTNING, max(0.0, 1.0 - dist))
                             blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.9)
 
-    elif progress < 0.58:
+    elif progress < 0.55:
         # =========================================================================
-        # PHASE 2: Crown Shatter & Hyper-Radial Shockwave (0.28 -> 0.58)
+        # PHASE 2: Crown Shatter & Hyper-Radial Shockwave (0.25 -> 0.55)
         # =========================================================================
-        p2 = (progress - 0.28) / 0.30  # 0.0 -> 1.0
+        p2 = (progress - 0.25) / 0.30  # 0.0 -> 1.0
 
-        # A. Central Detonation Flash (initial 25% of Phase 2)
-        if p2 < 0.25:
-            flash_p = p2 / 0.25
+        # A. Central Detonation Flash (initial 35% of Phase 2)
+        if p2 < 0.35:
+            flash_p = p2 / 0.35
             flash_int = (1.0 - flash_p) ** 2
             flash_col = blend_colors(COLOR_INT_CROWN_LIGHTNING, COLOR_INT_CROWN_EMBER, flash_p)
             set_square_in_frame(frame, king_c, king_r, scale_color(flash_col, flash_int))
 
         # B. Expanding Gaussian Shockwave Ring
-        wave_radius = (p2 ** 0.72) * 10.5
-        wave_sigma = 0.28 + 0.15 * p2
-        ring_decay = 1.0 - 0.75 * p2
+        wave_radius = (p2 ** 0.80) * 8.2
+        wave_sigma = 0.32 + 0.16 * p2
+        ring_decay = 1.0 - 0.55 * p2
 
         for c in range(8):
             for r in range(8):
                 d_k = math.hypot(c - king_c, r - king_r)
                 dr = abs(d_k - wave_radius)
-                if dr < 0.58:
+                if dr < 0.65:
                     intensity = math.exp(-(dr * dr) / (2.0 * wave_sigma * wave_sigma)) * ring_decay
-                    if intensity > 0.18:
+                    if intensity > 0.08:
                         col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_OBSIDIAN_CRIMSON, min(1.0, d_k / 8.0))
                         blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.85)
 
         # C. 4 Flying Molten Crown Shards
         shard_dirs = [(-1.0, 1.0), (1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
-        shard_dist = (p2 ** 0.82) * 3.8
-        shard_int = max(0.0, 1.0 - p2 * 1.1)
+        shard_dist = (p2 ** 0.75) * 3.2
+        shard_int = (1.0 - p2) * 0.90 + 0.08
 
         for dir_x, dir_y in shard_dirs:
             s_c = king_c + dir_x * shard_dist
             s_r = king_r + dir_y * shard_dist
             sc_i, sr_i = int(round(s_c)), int(round(s_r))
-            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.10:
+            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.06:
                 shard_col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_STRIKE_RUBY, p2)
                 blend_square_in_frame(frame, sc_i, sr_i, scale_color(shard_col, shard_int), 0.95)
 
-    elif progress < 0.82:
+    elif progress < 0.80:
         # =========================================================================
-        # PHASE 3: Fissure Decay & Obsidian Abyss (0.58 -> 0.82)
+        # PHASE 3: Fissure Decay & Obsidian Abyss (0.55 -> 0.80)
         # =========================================================================
-        p3 = (progress - 0.58) / 0.24  # 0.0 -> 1.0
-        decay_env = (1.0 - p3) ** 1.6
+        p3 = (progress - 0.55) / 0.25  # 0.0 -> 1.0
+        decay_env = ((1.0 - p3) ** 1.4) * 0.85 + 0.15 * (1.0 - p3)
 
         for c in range(8):
             for r in range(8):
                 d_k = math.hypot(c - king_c, r - king_r)
                 # Radial falloff combined with spatial harmonic cinder noise
-                flicker = 0.70 + 0.30 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
-                falloff = math.exp(-d_k / 1.6)
+                flicker = 0.75 + 0.25 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
+                falloff = math.exp(-d_k / 1.8)
                 intensity = decay_env * falloff * flicker
 
-                if intensity > 0.15:
+                if intensity > 0.06:
                     col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, p3 + d_k * 0.08)
-                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.75))
+                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.80))
 
     else:
         # =========================================================================
-        # PHASE 4: The Royal Eclipse / Dying Hearth Pulse (0.82 -> 1.00)
+        # PHASE 4: The Royal Eclipse / Dying Hearth Pulse (0.80 -> 1.00)
         # =========================================================================
-        p4 = (progress - 0.82) / 0.18  # 0.0 -> 1.0
+        p4 = (progress - 0.80) / 0.20  # 0.0 -> 1.0
 
-        if p4 < 0.96:
+        if p4 < 0.98:
             # Bi-phasic heartbeat wave ("lub-dub")
             hb_osc = (math.sin(p4 * 2.5 * math.pi) ** 6) + 0.40 * (math.sin(max(0.0, p4 * 2.5 * math.pi - 0.35 * math.pi)) ** 6)
-            hb_env = math.exp(-2.8 * p4)
-            pulse_intensity = max(0.03, hb_osc * hb_env * 0.90)
+            hb_env = math.exp(-2.5 * p4)
+            pulse_intensity = max(0.04, hb_osc * hb_env * 0.95)
 
             ember_col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_CHARRED_ASH, p4)
             set_square_in_frame(frame, king_c, king_r, scale_color(ember_col, pulse_intensity))
