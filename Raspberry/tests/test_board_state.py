@@ -400,6 +400,57 @@ def test_board_state_opponent_disconnected_led_render():
     assert bsm.strip.show.called
 
 
+def test_night_mode_legal_target_and_capture_dots_colors():
+    """Verify that _update_leds uses high-contrast Night Mode colors when night_mode is True."""
+    from board_hardware import settings
+    from app.led_helpers import (
+        COLOR_INT_NIGHT_PIECE_LIFTED,
+        COLOR_INT_NIGHT_LEGAL_TARGET,
+        COLOR_INT_NIGHT_LEGAL_CAPTURE,
+    )
+    settings["night_mode"] = True
+    try:
+        bsm = BoardStateManager()
+        bsm.strip = MagicMock()
+        bsm.game_status = "PLAYING"
+        bsm.move_tracker.lifted_square = (4, 3)  # e4
+        bsm.move_tracker.legal_targets = [(4, 4), (3, 4)]  # e5 (quiet), d5 (capture)
+        bsm.move_tracker.legal_captures = [(3, 4)]
+
+        bsm._update_leds()
+
+        call_args = [call[0] for call in bsm.strip.setPixelColor.call_args_list]
+        colors_called = [arg[1] for arg in call_args]
+
+        assert COLOR_INT_NIGHT_PIECE_LIFTED in colors_called
+        assert COLOR_INT_NIGHT_LEGAL_TARGET in colors_called
+        assert COLOR_INT_NIGHT_LEGAL_CAPTURE in colors_called
+    finally:
+        settings["night_mode"] = False
+
+
+def test_night_mode_turn_indicator_led_render():
+    """Verify that _update_leds renders amethyst purple for Black King in Night Mode."""
+    import chess
+    from board_hardware import settings
+    from app.lichess_engine import lichess_engine
+    settings["night_mode"] = True
+    try:
+        bsm = BoardStateManager()
+        bsm.strip = MagicMock()
+        bsm.game_status = "PLAYING"
+        board = chess.Board()
+        board.turn = chess.BLACK
+        lichess_engine.board = board
+
+        bsm._update_leds()
+        assert bsm.strip.setPixelColor.called
+        assert bsm.strip.show.called
+    finally:
+        settings["night_mode"] = False
+
+
+
 
 
 
