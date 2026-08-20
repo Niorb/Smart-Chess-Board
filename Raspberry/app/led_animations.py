@@ -550,16 +550,16 @@ def render_game_lost(
 
         # B. Expanding Gaussian Shockwave Ring
         wave_radius = (p2 ** 0.80) * 8.2
-        wave_sigma = 0.32 + 0.16 * p2
+        wave_sigma = 0.28 + 0.12 * p2
         ring_decay = 1.0 - 0.55 * p2
 
         for c in range(8):
             for r in range(8):
                 d_k = math.hypot(c - king_c, r - king_r)
                 dr = abs(d_k - wave_radius)
-                if dr < 0.65:
+                if dr < 0.48:
                     intensity = math.exp(-(dr * dr) / (2.0 * wave_sigma * wave_sigma)) * ring_decay
-                    if intensity > 0.08:
+                    if intensity > 0.12:
                         col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_OBSIDIAN_CRIMSON, min(1.0, d_k / 8.0))
                         blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.85)
 
