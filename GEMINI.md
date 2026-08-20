@@ -13,7 +13,7 @@ You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your
 > After making any code changes, ALWAYS execute the following deployment steps:
 > 1. Stage, commit, and push changes locally to GitHub (`git push origin main`).
 > 2. SSH into the Raspberry Pi (`ssh pi@pi`) and navigate to `~/chess_git`.
-> 3. Pull the updated code (`git pull`). Note: `Raspberry/board_settings.json` is git-ignored and automatically preserved without manual stashing; `Raspberry/board_settings.default.json` serves as the tracked factory template.
+> 3. Pull the updated code (`git pull`). Note: `board_settings.json` and `board_settings.default.json` are git-ignored and automatically preserved locally without manual stashing.
 > 4. Run `npm` operations (e.g. `npm run build` in `Raspberry/frontend`) on the Pi.
 > 5. Activate the virtual environment (`source ~/venv/chess/bin/activate`) and run tests (`pytest`) on the Pi to verify.
 
