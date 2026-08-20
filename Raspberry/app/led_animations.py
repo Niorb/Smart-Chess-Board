@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from app.config import (
+        ANIM_BOARD_READY_DURATION_S,
         ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
@@ -24,6 +25,9 @@ try:
         NUM_LEDS,
     )
     from app.led_helpers import (
+        COLOR_INT_BOARD_READY_AMBIENT,
+        COLOR_INT_BOARD_READY_PRIMARY,
+        COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DEFEAT_RED,
@@ -32,6 +36,9 @@ try:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
+        COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
+        COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
         COLOR_INT_NIGHT_DRAW_BLUE,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_SEEKING_BODY,
@@ -57,6 +64,7 @@ try:
     )
 except ImportError:
     from .config import (
+        ANIM_BOARD_READY_DURATION_S,
         ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
         ANIM_GAME_LOST_DURATION_S,
@@ -68,6 +76,9 @@ except ImportError:
         NUM_LEDS,
     )
     from .led_helpers import (
+        COLOR_INT_BOARD_READY_AMBIENT,
+        COLOR_INT_BOARD_READY_PRIMARY,
+        COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DEFEAT_RED,
@@ -76,6 +87,9 @@ except ImportError:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
+        COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
+        COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
         COLOR_INT_NIGHT_DRAW_BLUE,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_SEEKING_BODY,
@@ -665,6 +679,104 @@ def render_game_drawn(
             set_square_in_frame(frame, c, r, scale_color(color, intensity))
 
 
+def render_board_ready(
+    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+) -> None:
+    """
+    BOARD_READY / SETUP_COMPLETE animation ("The Emerald Resonance Sweep"):
+    Choreographed, low-power procedural celebration when all 32 pieces are correctly
+    placed in starting positions.
+
+    Phasing (Duration: 1.4s):
+    - Phase 1 (0.00 -> 0.50): Symmetrical inward army sweep from flank files (a/h) toward
+      center files (d/e) along Ranks 1-2 (White) and Ranks 7-8 (Black).
+    - Phase 2 (0.45 -> 0.85): Center battle line harmony flare on (d4, e4, d5, e5).
+    - Phase 3 (0.75 -> 1.00): Settle & Anchor transition: Center light fades while
+      the 4 corner rooks (a1, h1, a8, h8) and 2 kings (e1, e8) illuminate to transition
+      directly into the persistent ambient breathing state.
+
+    Lighting Budget: Strictly <= 10 squares active simultaneously (< 16% of board).
+    Adaptive: Supports both Day Mode and Night Mode sapphire palettes.
+    """
+    if now == 0.0:
+        now = time.time()
+
+    is_night = bool(params.get("night_mode", False))
+
+    col_primary = COLOR_INT_NIGHT_BOARD_READY_PRIMARY if is_night else COLOR_INT_BOARD_READY_PRIMARY
+    col_secondary = COLOR_INT_NIGHT_BOARD_READY_SECONDARY if is_night else COLOR_INT_BOARD_READY_SECONDARY
+    col_ambient = COLOR_INT_NIGHT_BOARD_READY_AMBIENT if is_night else COLOR_INT_BOARD_READY_AMBIENT
+    col_idle = COLOR_INT_NIGHT_MODE if is_night else COLOR_INT_OFF
+
+    # Clear entire frame to idle baseline
+    for c in range(8):
+        for r in range(8):
+            set_square_in_frame(frame, c, r, col_idle)
+
+    progress = max(0.0, min(1.0, progress))
+
+    # =========================================================================
+    # PHASE 1 (progress 0.00 -> 0.50): Dual Army Inward Sweep
+    # =========================================================================
+    if progress < 0.50:
+        p1 = progress / 0.50  # 0.0 -> 1.0
+        # Flank sweep position: 0.0 (files a/h) -> 3.5 (meeting at files d/e)
+        sweep_file_pos = p1 * 3.5
+
+        # Army ranks: White = [0, 1] (Ranks 1-2), Black = [6, 7] (Ranks 7-8)
+        army_ranks = [0, 1, 6, 7]
+
+        # Scan files 0..3 (a..d) and mirror 7..4 (h..e)
+        for flank_f in range(4):
+            dist = abs(flank_f - sweep_file_pos)
+            if dist < 1.4:
+                intensity = math.exp(-3.0 * dist * dist) * min(1.0, p1 * 2.0)
+                if intensity > 0.03:
+                    # Blend primary emerald and gold/cyan secondary along wave peak
+                    wave_col = blend_colors(col_primary, col_secondary, min(1.0, dist * 0.8))
+                    scaled_col = scale_color(wave_col, intensity * 0.9)
+
+                    file_w = flank_f       # Files a, b, c, d
+                    file_e = 7 - flank_f   # Files h, g, f, e
+
+                    for r in army_ranks:
+                        set_square_in_frame(frame, file_w, r, scaled_col)
+                        set_square_in_frame(frame, file_e, r, scaled_col)
+
+    # =========================================================================
+    # PHASE 2 (progress 0.45 -> 0.85): Center Battle Line Harmony Flare
+    # =========================================================================
+    if 0.45 <= progress <= 0.85:
+        p2 = (progress - 0.45) / 0.40  # 0.0 -> 1.0
+        # Sinusoidal attack-decay envelope
+        flare_int = math.sin(p2 * math.pi) * 0.85
+
+        if flare_int > 0.03:
+            # Diamond center squares: d4, e4, d5, e5 -> (3, 3), (4, 3), (3, 4), (4, 4)
+            center_squares = [(3, 3), (4, 3), (3, 4), (4, 4)]
+            flare_col = blend_colors(col_primary, COLOR_INT_DRAW_WHITE, 0.35)
+            scaled_flare = scale_color(flare_col, flare_int)
+
+            for c_sq, r_sq in center_squares:
+                set_square_in_frame(frame, c_sq, r_sq, scaled_flare)
+
+    # =========================================================================
+    # PHASE 3 (progress 0.75 -> 1.00): Royal Guard Anchor Handshake
+    # =========================================================================
+    if progress >= 0.75:
+        p3 = (progress - 0.75) / 0.25  # 0.0 -> 1.0
+        anchor_int = p3 * 0.25  # Smoothly ramp up to ~0.25 intensity
+
+        if anchor_int > 0.02:
+            # 4 Corner Rooks + 2 Kings: a1, h1, a8, h8, e1, e8
+            anchor_squares = [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]
+            anchor_col = blend_colors(col_ambient, col_primary, 0.4)
+            scaled_anchor = scale_color(anchor_col, anchor_int)
+
+            for c_sq, r_sq in anchor_squares:
+                set_square_in_frame(frame, c_sq, r_sq, scaled_anchor)
+
+
 # =============================================================================
 # PERIMETER COORDINATES & SEEKING ANIMATION
 # =============================================================================
@@ -774,6 +886,8 @@ class LifecycleAnimation:
             render_game_lost(progress, frame, self.params, now=now)
         elif anim_name == "GAME_DRAWN":
             render_game_drawn(progress, frame, self.params, now=now)
+        elif anim_name in ("BOARD_READY", "SETUP_COMPLETE"):
+            render_board_ready(progress, frame, self.params, now=now)
         elif anim_name in ("SEEKING", "WAITING_FOR_OPPONENT", "MATCHMAKING"):
             render_seeking(now, frame, self.params)
 
@@ -785,7 +899,7 @@ def create_animation(
     Animation factory creating configured LifecycleAnimation instances.
 
     Args:
-        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'SEEKING', 'WAITING_FOR_OPPONENT').
+        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'BOARD_READY', 'SETUP_COMPLETE', 'SEEKING', 'WAITING_FOR_OPPONENT').
         params: Optional metadata dict (e.g. {'my_color': 'white'}).
 
     Returns:
@@ -797,6 +911,8 @@ def create_animation(
         "GAME_WON": ANIM_GAME_WON_DURATION_S,
         "GAME_LOST": ANIM_GAME_LOST_DURATION_S,
         "GAME_DRAWN": ANIM_GAME_DRAWN_DURATION_S,
+        "BOARD_READY": ANIM_BOARD_READY_DURATION_S,
+        "SETUP_COMPLETE": ANIM_BOARD_READY_DURATION_S,
         "SEEKING": ANIM_SEEKING_DURATION_S,
         "WAITING_FOR_OPPONENT": ANIM_SEEKING_DURATION_S,
         "MATCHMAKING": ANIM_SEEKING_DURATION_S,

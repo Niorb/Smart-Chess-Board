@@ -1236,9 +1236,13 @@ function App() {
 
               {/* Physical Sensor Overlay (Visible when not actively playing and not virtual-only) */}
               {state.status !== 'PLAYING' && !state.virtual_only && (
-                <div className="absolute inset-0 bg-blue-950/10 border border-blue-500/20 backdrop-blur-[0.5px] z-10 pointer-events-none">
-                  <div className="absolute top-1 left-2 bg-blue-600/90 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white">
-                    Physical Sensors Active
+                <div className={`absolute inset-0 bg-blue-950/10 border transition-all duration-300 backdrop-blur-[0.5px] z-10 pointer-events-none ${
+                  state.physical?.setup?.is_setup_ready ? 'border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'border-blue-500/20'
+                }`}>
+                  <div className={`absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
+                    state.physical?.setup?.is_setup_ready ? 'bg-emerald-600/90' : 'bg-blue-600/90'
+                  }`}>
+                    {state.physical?.setup?.is_setup_ready ? 'Physical Board Ready' : 'Physical Sensors Active'}
                   </div>
                   <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
                     {Array(8).fill(null).map((_, rIdx) => (
@@ -1534,6 +1538,31 @@ function App() {
                     <strong className="text-white">Smart Matchmaking:</strong> Fast matches under 8 min (<span className="text-amber-300 font-mono">Bullet &amp; Blitz</span>) play instantly against <span className="text-amber-300 font-semibold">Stockfish AI</span>. For live human matchmaking on the Board API, select <span className="text-emerald-300 font-mono">Rapid (10+0 or 15+10)</span>.
                   </p>
                 </div>
+
+                {/* Board Physical Setup Status Banner */}
+                {!state.virtual_only && (
+                  state.physical?.setup?.is_setup_ready ? (
+                    <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-3 flex items-start gap-2.5 shadow-lg shadow-emerald-950/20">
+                      <CheckCircle2 className="text-emerald-400 flex-shrink-0 mt-0.5" size={16} />
+                      <div className="flex flex-col text-left">
+                        <span className="text-xs font-bold text-emerald-200">Board Setup Complete</span>
+                        <p className="text-[11px] text-emerald-300/80 leading-snug">
+                          All 32 physical pieces detected in starting positions — Ready to seek and play!
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5">
+                      <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={16} />
+                      <div className="flex flex-col text-left">
+                        <span className="text-xs font-bold text-amber-200">Setup Incomplete</span>
+                        <p className="text-[11px] text-amber-300/80 leading-snug">
+                          Place all White (Ranks 1–2) and Black (Ranks 7–8) pieces on their starting squares to prepare the board.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
 
                 {/* Time Control Buttons */}
                 <div className="flex flex-col gap-1.5">
@@ -2207,6 +2236,14 @@ function App() {
                     >
                       <Handshake size={11} />
                       <span>Draw Anim</span>
+                    </button>
+                    <button
+                      onClick={() => handleTriggerAnimation('BOARD_READY')}
+                      disabled={!isConnected}
+                      className="bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-300 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Sparkles size={11} />
+                      <span>Board Ready (Emerald)</span>
                     </button>
                     <button
                       onClick={() => handleTriggerAnimation('SEEKING')}

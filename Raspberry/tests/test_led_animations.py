@@ -11,6 +11,7 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.config import (
+    ANIM_BOARD_READY_DURATION_S,
     ANIM_CASTLE_PERIOD_S,
     ANIM_SEEKING_DURATION_S,
     ANIM_SEEKING_PERIOD_S,
@@ -24,6 +25,7 @@ from app.led_animations import (
     blend_colors,
     color_rgb,
     create_animation,
+    render_board_ready,
     render_castle_trace,
     render_game_drawn,
     render_game_lost,
@@ -462,5 +464,57 @@ def test_night_mode_seeking_and_animations():
     frame_start_black = [0] * NUM_LEDS
     render_game_started(0.3, frame_start_black, {"my_color": "black", "night_mode": True})
     assert any(frame_start_black)
+
+
+def test_board_ready_animation_factory():
+    """Verify BOARD_READY and SETUP_COMPLETE animations create valid LifecycleAnimation instances."""
+    anim_ready = create_animation("BOARD_READY")
+    assert anim_ready.name == "BOARD_READY"
+    assert anim_ready.duration == ANIM_BOARD_READY_DURATION_S
+
+    anim_setup = create_animation("SETUP_COMPLETE")
+    assert anim_setup.name == "SETUP_COMPLETE"
+    assert anim_setup.duration == ANIM_BOARD_READY_DURATION_S
+
+
+def test_render_board_ready_day_and_night():
+    """
+    Verify BOARD_READY animation ('The Emerald Resonance Sweep'):
+    - Strictly within 10 squares illuminated simultaneously at any single frame (< 16% of board).
+    - Works correctly in both Day Mode and Night Mode across all phases.
+    - Transitions smoothly through Dual Army Inward Sweep -> Center Flare -> Royal Guard Anchor.
+    """
+    progress_samples = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]
+
+    # 1. Day Mode Test
+    for p in progress_samples:
+        frame_day = [0] * NUM_LEDS
+        render_board_ready(p, frame_day, {"night_mode": False})
+        assert any(frame_day), f"Day frame empty at progress {p}"
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame_day[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        # Strict low power budget: max 10 active squares (< 16% of board)
+        assert lit_squares <= 10, f"Too many squares lit in day mode ({lit_squares}) at progress {p}"
+
+    # 2. Night Mode Test
+    from app.led_helpers import COLOR_INT_NIGHT_MODE
+    for p in progress_samples:
+        frame_night = [0] * NUM_LEDS
+        render_board_ready(p, frame_night, {"night_mode": True})
+        assert any(frame_night), f"Night frame empty at progress {p}"
+        # Assert background moonlight sapphire floor is active on unlit squares
+        assert COLOR_INT_NIGHT_MODE in frame_night
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                # Count squares with non-idle color
+                if any(frame_night[idx] != COLOR_INT_NIGHT_MODE for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 10, f"Too many squares lit in night mode ({lit_squares}) at progress {p}"
 
 

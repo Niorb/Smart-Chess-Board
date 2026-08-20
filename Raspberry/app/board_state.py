@@ -52,6 +52,8 @@ from app.config import (
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_BOARD_READY_AMBIENT,
+    COLOR_INT_BOARD_READY_PRIMARY,
     COLOR_INT_CAPTURE_AURA_ATTACKER,
     COLOR_INT_CAPTURE_AURA_TARGET,
     COLOR_INT_CAPTURE_CONFIRM,
@@ -74,6 +76,8 @@ from app.led_helpers import (
     COLOR_INT_MOVE_GOOD,
     COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
+    COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
+    COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
     COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER,
     COLOR_INT_NIGHT_CAPTURE_AURA_TARGET,
     COLOR_INT_NIGHT_CAPTURE_TRACE,
@@ -117,6 +121,7 @@ from app.led_helpers import (
 )
 from app.coach_engine import MoveQuality, coach_engine
 from app.led_animations import (
+    blend_colors,
     render_castle_trace,
     render_capture_aura,
     render_guardrail_mismatch,
@@ -166,6 +171,7 @@ class BoardStateManager:
         self.move_tracker = PhysicalMoveTracker()
         self.gesture_engine = PhysicalGestureEngine(state_manager=self)
         self.setup_result: SetupResult = self.setup_validator.validate(self.physical_state)
+        self.prev_setup_ready: bool = False
 
         # Hardware initialization (Serial for board + lgpio for MUX)
         try:
@@ -536,6 +542,17 @@ class BoardStateManager:
                     # Misplaced pieces
                     for c, r in self.setup_result.misplaced_pieces:
                         set_square_leds(c, r, c_setup_misplaced)
+                elif self.active_animation is None:
+                    # Persistent Visual Indication ("The Royal Guard Anchor"):
+                    # 4 Corner Rooks + 2 Royal Sovereigns with gentle 0.5 Hz breathing pulse
+                    c_ready_base = COLOR_INT_NIGHT_BOARD_READY_AMBIENT if night_mode else COLOR_INT_BOARD_READY_AMBIENT
+                    c_ready_pri = COLOR_INT_NIGHT_BOARD_READY_PRIMARY if night_mode else COLOR_INT_BOARD_READY_PRIMARY
+                    breath = (math.sin(2.0 * math.pi * 0.5 * now) * 0.5 + 0.5) ** 2
+                    anchor_int = 0.35 + 0.65 * breath
+                    c_anchor = scale_color(blend_colors(c_ready_base, c_ready_pri, 0.35), anchor_int)
+                    # Rooks: a1 (0,0), h1 (7,0), a8 (0,7), h8 (7,7); Kings: e1 (4,0), e8 (4,7)
+                    for c_sq, r_sq in [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]:
+                        set_square_leds(c_sq, r_sq, c_anchor)
 
                 # Physical Gesture LED Overlay (Armed/Step1/Step2)
                 if hasattr(self, "gesture_engine") and self.gesture_engine.is_active:
@@ -897,6 +914,30 @@ class BoardStateManager:
                             # Physical gesture evaluation during IDLE / GAME_OVER
                             if hasattr(self, "gesture_engine"):
                                 self.gesture_engine.evaluate(self.physical_state, self.game_status)
+
+                            # Setup Ready Edge Detection & Animation Triggering
+                            if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
+                                self.setup_result = self.setup_validator.validate(self.physical_state)
+                                is_ready = self.setup_result.is_setup_ready
+
+                                if is_ready and not self.prev_setup_ready:
+                                    if not (hasattr(self, "gesture_engine") and self.gesture_engine.is_active):
+                                        self.trigger_animation(
+                                            "BOARD_READY",
+                                            {"night_mode": bool(settings.get("night_mode", False))},
+                                        )
+                                    self.prev_setup_ready = True
+                                elif not is_ready and self.prev_setup_ready:
+                                    self.prev_setup_ready = False
+                                    if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
+                                        self.active_animation = None
+                                        if self.frozen_baselines is not None:
+                                            from board_hardware import clear_baseline_history
+                                            settings["baselines"] = [list(col) for col in self.frozen_baselines]
+                                            clear_baseline_history()
+                                            self.frozen_baselines = None
+                            else:
+                                self.prev_setup_ready = False
 
                         if self.game_status not in ["IDLE", "GAME_OVER"] and hasattr(self, "gesture_engine"):
                             self.gesture_engine.reset()

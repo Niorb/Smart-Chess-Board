@@ -109,6 +109,9 @@ COLOR_START_WHITE_PRIMARY = (255, 230, 160)  # Radiant ivory gold for White star
 COLOR_START_WHITE_SECONDARY = (200, 180, 120)  # Warm gold for White start tail
 COLOR_START_BLACK_PRIMARY = (0, 180, 255)  # Electric cyan-azure for Black start scan
 COLOR_START_BLACK_SECONDARY = (80, 60, 220)  # Royal violet for Black start tail
+COLOR_BOARD_READY_PRIMARY = (32, 220, 100)  # Luminous emerald for setup completion sweep
+COLOR_BOARD_READY_SECONDARY = (200, 220, 60)  # Luminous gold-lime accent
+COLOR_BOARD_READY_AMBIENT = (14, 70, 36)  # Subtle emerald breathing glow for persistent ready state
 
 # =============================================================================
 # NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
@@ -164,6 +167,9 @@ COLOR_NIGHT_SEEKING_BODY = (0, 230, 200)  # Electric mint-cyan body
 COLOR_NIGHT_SEEKING_TAIL = (0, 80, 180)  # Royal twilight tail
 COLOR_NIGHT_START_BLACK_PRIMARY = (0, 210, 255)  # Vivid electric cyan
 COLOR_NIGHT_START_BLACK_SECONDARY = (130, 60, 240)  # Electric royal violet
+COLOR_NIGHT_BOARD_READY_PRIMARY = (0, 240, 160)  # Vivid neon aqua for night setup completion sweep
+COLOR_NIGHT_BOARD_READY_SECONDARY = (0, 180, 255)  # Electric cyan accent
+COLOR_NIGHT_BOARD_READY_AMBIENT = (10, 60, 60)  # Subtle starlight mint breathing glow for ready state
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
@@ -189,6 +195,7 @@ ANIM_GAME_START_DURATION_S = 2.2  # Duration for choreographed army scan & royal
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
 ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave
 ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave
+ANIM_BOARD_READY_DURATION_S = 1.4  # Duration for board setup ready emerald sweep
 ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
 

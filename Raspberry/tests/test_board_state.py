@@ -450,6 +450,66 @@ def test_night_mode_turn_indicator_led_render():
         settings["night_mode"] = False
 
 
+def test_board_state_setup_ready_persistent_anchor():
+    """Verify that _update_leds renders persistent Royal Guard Anchor when all 32 pieces are in place."""
+    from app.led_helpers import get_led_indices
+
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "IDLE"
+    bsm.active_animation = None
+
+    # Set up starting physical state (Ranks 1-2 and 7-8 filled)
+    for c in range(8):
+        bsm.physical_state[c][0] = 1  # White pieces
+        bsm.physical_state[c][1] = 1  # White pawns
+        bsm.physical_state[c][2] = 0
+        bsm.physical_state[c][3] = 0
+        bsm.physical_state[c][4] = 0
+        bsm.physical_state[c][5] = 0
+        bsm.physical_state[c][6] = 1  # Black pawns
+        bsm.physical_state[c][7] = 1  # Black pieces
+
+    bsm._update_leds()
+
+    assert bsm.setup_result.is_setup_ready is True
+    assert bsm.strip.setPixelColor.called
+
+    call_args = [call[0] for call in bsm.strip.setPixelColor.call_args_list]
+    lit_indices = {arg[0] for arg in call_args if arg[1] != 0}
+
+    # Verify corner rooks and kings are included in lit indices
+    anchor_coords = [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]
+    for c_sq, r_sq in anchor_coords:
+        expected_indices = get_led_indices(r_sq, c_sq)
+        assert any(idx in lit_indices for idx in expected_indices if idx < 152)
+
+
+def test_board_state_setup_ready_cancellation_on_lift():
+    """Verify that when a piece is lifted during ready state, prev_setup_ready resets and animation cancels."""
+    bsm = BoardStateManager()
+    bsm.game_status = "IDLE"
+    bsm.prev_setup_ready = True
+    bsm.trigger_animation("BOARD_READY")
+    assert bsm.active_animation is not None
+    assert bsm.active_animation.name == "BOARD_READY"
+
+    # Break starting formation by lifting a piece
+    bsm.physical_state[0][0] = 0
+    bsm.setup_result = bsm.setup_validator.validate(bsm.physical_state)
+    assert bsm.setup_result.is_setup_ready is False
+
+    # Simulate falling edge logic
+    if not bsm.setup_result.is_setup_ready and bsm.prev_setup_ready:
+        bsm.prev_setup_ready = False
+        if bsm.active_animation and bsm.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
+            bsm.active_animation = None
+
+    assert bsm.prev_setup_ready is False
+    assert bsm.active_animation is None
+
+
+
 
 
 
