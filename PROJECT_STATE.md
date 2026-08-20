@@ -87,6 +87,17 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **2-Phase Choreography**: For Kingside and Queenside castling (e1g1, e1c1, e8g8, e8c8), Phase 1 ($\tau \in [0.0, 0.5]$) animates the King's 2-square move with destination flare, and Phase 2 ($\tau \in [0.5, 1.0]$) animates the Rook's move with destination flare (`render_castle_trace()`).
   - **Player & Opponent Symmetry**:
     - When the opponent castles, both King and Rook moves are animated in sequence and 4 squares are illuminated until both pieces are physically mirrored.
+- [x] Implemented Board Setup Ready Detection Animation & Persistent Ready Visual Indication:
+  - **State Machine Edge Detection (`Raspberry/app/board_state.py`)**: Automatically detects the exact rising edge (`is_setup_ready` changes from `False` to `True`) during `IDLE`, `SETUP`, and `GAME_OVER` states and triggers the celebratory 1.4s `BOARD_READY` animation. Falling edge immediately cancels any active ready animation and restores sensor baselines so missing piece indicators display without delay.
+  - **Procedural 3-Phase Animation (`Raspberry/app/led_animations.py` `render_board_ready`)**:
+    1. Phase 1 ($0.00 \le \tau < 0.48$, Dual Army Inward Sweep): Symmetrical inward sweep from flank files (a/h) toward center (d/e) along Ranks 1-2 (White) and Ranks 7-8 (Black) with emerald and gold/cyan secondary blending.
+    2. Phase 2 ($0.48 \le \tau < 0.76$, Center Battle Line Harmony Flare): Gentle sinusoidal diamond flare on center battle squares (`d4`, `e4`, `d5`, `e5`).
+    3. Phase 3 ($0.76 \le \tau \le 1.00$, Settle & Anchor Transition): Fades center light while illuminating the 4 corner rooks (`a1`, `h1`, `a8`, `h8`) and 2 kings (`e1`, `e8`) to transition seamlessly into the ambient steady indication.
+    - Strict power budget: Max $\le 8$ simultaneous illuminated squares at any single instant ($< 13\%$ of board).
+  - **Persistent Visual Indication ("The Royal Guard Anchor")**: Layer 1 in `_update_leds()` continuously renders a gentle 0.5 Hz breathing glow on the 4 corner rooks (`a1`, `h1`, `a8`, `h8`) and 2 kings (`e1`, `e8`) whenever all 32 pieces are in place and no animation or physical gesture is active.
+  - **Night Mode Adaptability**: Full support for both Day Mode (warm emerald / gold-lime) and Night Mode (vivid aqua / electric cyan against deep moonlight blue floor).
+  - **Web Frontend (`Raspberry/frontend/src/App.tsx`)**: Dynamic "Board Setup Complete" emerald confirmation banner in the Play tab, real-time "Physical Board Ready" badge and green aura on the board sensor overlay, and "Board Ready (Emerald)" debug test trigger button.
+  - **Verification**: All 220 pytest tests pass cleanly on the physical Raspberry Pi over SSH and frontend production build succeeds with 0 errors.
 - [x] Implemented Live Perimeter Evaluation Bar & Blunder Guard (Color-Coded Move Quality):
   - **Asynchronous Coach Engine (`Raspberry/app/coach_engine.py`)**: Real-time position analysis with multi-PV candidate evaluation, logistic win probability ($W = \frac{100}{1 + 10^{-cp / 400}}$), move delta classification (`best` $\le 10$ cp, `good` $\le 50$ cp, `inaccuracy` $\le 150$ cp, `blunder` $> 150$ cp), FEN caching, and graceful offline heuristic fallback.
   - **Physical LED File 'h' Perimeter Eval Bar (`app/board_state.py`)**: Ranks 1–8 along File 'h' (Strip 2, row 7) continuously render a smooth White vs Black win chance gauge when enabled during AI matches.
