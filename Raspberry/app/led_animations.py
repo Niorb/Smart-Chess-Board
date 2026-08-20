@@ -716,39 +716,31 @@ def render_board_ready(
     progress = max(0.0, min(1.0, progress))
 
     # =========================================================================
-    # PHASE 1 (progress 0.00 -> 0.50): Dual Army Inward Sweep
+    # PHASE 1 (progress 0.00 -> 0.48): Dual Army Inward Sweep
     # =========================================================================
-    if progress < 0.50:
-        p1 = progress / 0.50  # 0.0 -> 1.0
-        # Flank sweep position: 0.0 (files a/h) -> 3.5 (meeting at files d/e)
-        sweep_file_pos = p1 * 3.5
+    if progress < 0.48:
+        p1 = progress / 0.48  # 0.0 -> 1.0
+        # Active flank file index: 0 (a/h) -> 1 (b/g) -> 2 (c/f) -> 3 (d/e)
+        flank_idx = min(3, max(0, int(p1 * 4.0)))
+        file_w = flank_idx
+        file_e = 7 - flank_idx
+
+        # Local intra-step pulse
+        step_phase = (p1 * 4.0) % 1.0
+        intensity = 0.5 + 0.4 * math.sin(step_phase * math.pi)
+        wave_col = blend_colors(col_primary, col_secondary, p1 * 0.5)
+        scaled_col = scale_color(wave_col, intensity)
 
         # Army ranks: White = [0, 1] (Ranks 1-2), Black = [6, 7] (Ranks 7-8)
-        army_ranks = [0, 1, 6, 7]
-
-        # Scan files 0..3 (a..d) and mirror 7..4 (h..e)
-        for flank_f in range(4):
-            dist = abs(flank_f - sweep_file_pos)
-            if dist < 1.4:
-                intensity = math.exp(-3.0 * dist * dist) * min(1.0, p1 * 2.0)
-                if intensity > 0.03:
-                    # Blend primary emerald and gold/cyan secondary along wave peak
-                    wave_col = blend_colors(col_primary, col_secondary, min(1.0, dist * 0.8))
-                    scaled_col = scale_color(wave_col, intensity * 0.9)
-
-                    file_w = flank_f       # Files a, b, c, d
-                    file_e = 7 - flank_f   # Files h, g, f, e
-
-                    for r in army_ranks:
-                        set_square_in_frame(frame, file_w, r, scaled_col)
-                        set_square_in_frame(frame, file_e, r, scaled_col)
+        for r in [0, 1, 6, 7]:
+            set_square_in_frame(frame, file_w, r, scaled_col)
+            set_square_in_frame(frame, file_e, r, scaled_col)
 
     # =========================================================================
-    # PHASE 2 (progress 0.45 -> 0.85): Center Battle Line Harmony Flare
+    # PHASE 2 (progress 0.48 -> 0.76): Center Battle Line Harmony Flare
     # =========================================================================
-    if 0.45 <= progress <= 0.85:
-        p2 = (progress - 0.45) / 0.40  # 0.0 -> 1.0
-        # Sinusoidal attack-decay envelope
+    elif progress < 0.76:
+        p2 = (progress - 0.48) / 0.28  # 0.0 -> 1.0
         flare_int = math.sin(p2 * math.pi) * 0.85
 
         if flare_int > 0.03:
@@ -761,11 +753,11 @@ def render_board_ready(
                 set_square_in_frame(frame, c_sq, r_sq, scaled_flare)
 
     # =========================================================================
-    # PHASE 3 (progress 0.75 -> 1.00): Royal Guard Anchor Handshake
+    # PHASE 3 (progress 0.76 -> 1.00): Royal Guard Anchor Handshake
     # =========================================================================
-    if progress >= 0.75:
-        p3 = (progress - 0.75) / 0.25  # 0.0 -> 1.0
-        anchor_int = p3 * 0.25  # Smoothly ramp up to ~0.25 intensity
+    else:
+        p3 = (progress - 0.76) / 0.24  # 0.0 -> 1.0
+        anchor_int = 0.10 + 0.15 * min(1.0, p3 * 1.5)
 
         if anchor_int > 0.02:
             # 4 Corner Rooks + 2 Kings: a1, h1, a8, h8, e1, e8

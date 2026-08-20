@@ -459,10 +459,10 @@ def test_board_state_setup_ready_persistent_anchor():
     bsm.game_status = "IDLE"
     bsm.active_animation = None
 
-    # Set up starting physical state (Ranks 1-2 and 7-8 filled)
+    # Set up starting physical state (White=-1 on Ranks 1-2, Black=+1 on Ranks 7-8)
     for c in range(8):
-        bsm.physical_state[c][0] = 1  # White pieces
-        bsm.physical_state[c][1] = 1  # White pawns
+        bsm.physical_state[c][0] = -1  # White pieces
+        bsm.physical_state[c][1] = -1  # White pawns
         bsm.physical_state[c][2] = 0
         bsm.physical_state[c][3] = 0
         bsm.physical_state[c][4] = 0
