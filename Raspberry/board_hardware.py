@@ -210,12 +210,11 @@ def load_settings():
         logger.info(f"User settings {filepath} not found. Initializing with default settings.")
         settings.clear()
         settings.update(get_default_settings())
-        if "PYTEST_CURRENT_TEST" not in os.environ and "pytest" not in sys.modules:
-            try:
-                save_settings()
-                logger.info(f"Initialized user settings file at {filepath}")
-            except Exception as e:
-                logger.error(f"Error auto-initializing settings file: {e}")
+        try:
+            save_settings()
+            logger.info(f"Initialized user settings file at {filepath}")
+        except Exception as e:
+            logger.error(f"Error auto-initializing settings file: {e}")
 
     # Ensure col_mux_map is valid in settings
     col_mux_map = settings.get("col_mux_map")

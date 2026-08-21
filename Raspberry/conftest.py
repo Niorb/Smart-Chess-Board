@@ -2,14 +2,13 @@
 conftest.py - Global pytest configuration and test harness isolation.
 
 Strictly protects the physical board configuration file (board_settings.json)
-from being overwritten or modified during test execution.
+from being overwritten or modified during test execution by sandboxing
+BOARD_SETTINGS_PATH in a temporary directory for all test runs.
 """
 
 import copy
 import os
 import tempfile
-from unittest.mock import patch
-
 import pytest
 
 
@@ -36,17 +35,19 @@ def isolate_board_settings_file_globally():
 def isolate_board_settings_dict_per_test():
     """
     Snapshots the global board_hardware.settings dictionary before each test
-    and restores it cleanly after each test. Also patches save_settings by default.
+    and cleanly restores factory defaults or snapshot state after each test.
     """
     try:
-        import board_hardware
-        from board_hardware import settings
-        saved_settings = copy.deepcopy(settings)
+        from board_hardware import get_default_settings, settings
+        # Start each test with clean default settings
+        clean_defaults = get_default_settings()
+        settings.clear()
+        settings.update(clean_defaults)
+        saved_settings = copy.deepcopy(clean_defaults)
     except ImportError:
         saved_settings = None
 
-    with patch("board_hardware.save_settings"):
-        yield
+    yield
 
     if saved_settings is not None:
         try:
