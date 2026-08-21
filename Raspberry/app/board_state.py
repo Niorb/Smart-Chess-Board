@@ -946,6 +946,7 @@ class BoardStateManager:
             return
 
         try:
+            from board_hardware import settings
             now = time.time()
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
@@ -1001,7 +1002,7 @@ class BoardStateManager:
                 else:
                     self.active_animation = None
                     if self.frozen_baselines is not None:
-                        from board_hardware import settings, clear_baseline_history
+                        from board_hardware import clear_baseline_history
                         settings["baselines"] = [list(col) for col in self.frozen_baselines]
                         clear_baseline_history()
                         self.frozen_baselines = None
