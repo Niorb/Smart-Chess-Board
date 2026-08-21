@@ -13,6 +13,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Implemented Lichess Match History & Direct Analysis Mode Loading:
+  - **Lichess API Game History Engine (`Raspberry/app/lichess_engine.py`)**: Added `get_user_recent_games(username, max_games)` streaming and parsing NDJSON records from `GET https://lichess.org/api/games/user/{username}`. Automatically extracts user perspective (White vs Black), opponent username/rating/title/AI status, game result (Win/Loss/Draw), opening name and ECO code, time control, creation date, and converts SAN move strings into full UCI move lists using `python-chess`.
+  - **REST API Endpoint (`Raspberry/app/main.py`)**: Added `GET /api/lichess/games/recent?max_games=10` returning structured game summaries ready for 1-click analysis.
+  - **Frontend UI & Interactive Picker (`Raspberry/frontend/src/components/AnalysisTab.tsx` & `Raspberry/frontend/src/api.ts`)**:
+    - Added "Recent Lichess Matches" interactive drawer in Analysis Mode (`Game Review` submode).
+    - Features match cards showing Win/Loss/Draw badges, White/Black piece indicators, opponent names/ratings, opening details, time controls, move counts, and external links to Lichess.org.
+    - Added 1-click "⚡ Analyze" action that feeds the game's UCI moves directly into the Stockfish batch analysis pipeline, lighting up physical LED piece trajectory animations, blunder training puzzles, and centipawn loss graphs.
+  - **Testing & Deployment**: Added unit tests in `test_lichess_engine.py` and `test_api_routes.py`. Compiled frontend (`tsc -b && vite build`), passed all 244 unit tests on Raspberry Pi over SSH, and restarted `smart-chess.service`.
 - [x] Implemented Analysis Mode Move Quality Animations, Delta-Based Color Rules, Best Move Guidance, and Off-Game Variation Indicators:
   - **Full Move Animations in Review Mode**: Fixed the missing animation issue in Analysis mode by wiring `interpolate_move_path()`, `render_move_trace()`, and `render_castle_trace()` directly into the `BoardStateManager._update_leds()` review pipeline.
   - **Delta-Based Move Classification & Colors**:
