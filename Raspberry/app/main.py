@@ -197,6 +197,10 @@ class GMGuessRequest(BaseModel):
     uci: str
 
 
+class AnalysisMoveRequest(BaseModel):
+    uci: str
+
+
 # --- Helper Functions ---
 def parse_sq(sq: str) -> tuple[int, int] | None:
     """Parses standard algebraic chess notation (e.g. 'e4') into 1-indexed (file, rank)."""
@@ -558,7 +562,18 @@ async def cancel_game_route():
 
 @app.post("/api/game/move")
 async def make_move_route(body: MoveRequest):
-    """Submits a move to the active Lichess game."""
+    """Submits a move to the active Lichess game or active Analysis session."""
+    if state_manager.game_status == "ANALYSIS":
+        src = parse_sq(body.from_square)
+        dst = parse_sq(body.to_square)
+        if not src or not dst:
+            return {"status": "error", "message": "Invalid square coordinates"}
+        from_sq = body.from_square.lower().strip()
+        to_sq = body.to_square.lower().strip()
+        uci = f"{from_sq}{to_sq}{body.promotion or ''}"
+        res = state_manager.handle_analysis_move(uci)
+        return {"status": "success", "analysis": res}
+
     if state_manager.game_status != "PLAYING":
         return {"status": "error", "message": "No active game"}
 
@@ -686,6 +701,13 @@ async def submit_blunder_attempt_route(body: BlunderAttemptRequest):
 async def toggle_blunder_hint_route():
     """Toggles LED hint on the board for the active blunder challenge."""
     return {"hint_active": state_manager.toggle_blunder_hint()}
+
+
+@app.post("/api/analysis/move")
+async def analysis_move_route(body: AnalysisMoveRequest):
+    """Executes a move in Analysis mode, auto-advancing on game moves or branching on alternatives."""
+    res = state_manager.handle_analysis_move(body.uci)
+    return {"status": "success", "result": res}
 
 
 # --- WebSocket Stream ---

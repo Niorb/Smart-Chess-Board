@@ -88,3 +88,46 @@ def test_stop_analysis_mode():
         assert mgr.game_status == "IDLE"
 
     asyncio.run(_test())
+
+
+def test_handle_analysis_move_auto_advance():
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        assert mgr.analysis_current_ply == 0
+
+        # User plays the first move of the game (1. e4 -> e2e4)
+        res1 = mgr.handle_analysis_move("e2e4")
+        assert res1["action"] == "advance"
+        assert res1["ply"] == 1
+        assert mgr.analysis_current_ply == 1
+
+        # User plays the second move of the game (1... e5 -> e7e5)
+        res2 = mgr.handle_analysis_move("e7e5")
+        assert res2["action"] == "advance"
+        assert res2["ply"] == 2
+        assert mgr.analysis_current_ply == 2
+
+    asyncio.run(_test())
+
+
+def test_handle_analysis_move_branch():
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        # Move 1: e2e4
+        mgr.handle_analysis_move("e2e4")
+        assert mgr.analysis_current_ply == 1
+
+        # User plays alternative: 1... c5 (c7c5) instead of 1... e5
+        res_branch = mgr.handle_analysis_move("c7c5")
+        assert res_branch["action"] == "branch"
+        assert res_branch["branch_moves"] == ["c7c5"]
+        assert mgr.analysis_anchor_ply == 1
+        assert mgr.analysis_anchor_coord == (2, 6)  # c7 (file 2, rank 6)
+
+    asyncio.run(_test())

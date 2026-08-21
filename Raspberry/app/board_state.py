@@ -593,6 +593,75 @@ class BoardStateManager:
                 "advance": False,
             }
 
+    def handle_analysis_move(self, uci: str) -> dict[str, Any]:
+        """
+        Handles a move played on the board (physical move or web UI action) during ANALYSIS mode.
+        If playing the move matching the current game ply, automatically advances to the next ply!
+        If playing an alternative move, creates or extends a virtual exploration branch.
+        """
+        if self.game_status != "ANALYSIS":
+            return {"error": "Not in analysis mode"}
+
+        uci = uci.lower().strip()
+
+        # 1. Blunder Drill submode
+        if self.analysis_submode == "blunder_drill":
+            return self.submit_blunder_attempt(uci)
+
+        # 2. GM Relive submode
+        if self.analysis_submode == "gm_relive":
+            return self.submit_gm_guess(uci)
+
+        # 3. Game Review submode
+        # If on main game timeline and played the exact move played in the game:
+        if (
+            not self.analysis_anchor_coord
+            and 0 <= self.analysis_current_ply < len(self.analysis_game_moves)
+            and uci == self.analysis_game_moves[self.analysis_current_ply].lower()
+        ):
+            # Automatically advance to next ply!
+            next_ply = self.analysis_current_ply + 1
+            self.step_analysis(next_ply)
+            if len(uci) >= 4:
+                to_c = ord(uci[2]) - ord('a')
+                to_r = int(uci[3]) - 1
+                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
+            logger.info(f"Analysis auto-advanced to ply {self.analysis_current_ply} on move {uci}")
+            return {
+                "action": "advance",
+                "ply": self.analysis_current_ply,
+                "uci": uci,
+                "analysis": self.get_analysis_payload(),
+            }
+
+        # If user plays an alternative legal move in the active position:
+        try:
+            move = chess.Move.from_uci(uci)
+            if move in self.analysis_active_board.legal_moves:
+                if not self.analysis_anchor_coord:
+                    self.analysis_anchor_ply = self.analysis_current_ply
+                    self.analysis_anchor_coord = (ord(uci[0]) - ord('a'), int(uci[1]) - 1)
+                self.analysis_active_board.push(move)
+                self.analysis_branch_moves.append(uci)
+                coach_engine.request_analysis(self.analysis_active_board)
+                if len(uci) >= 4:
+                    to_c = ord(uci[2]) - ord('a')
+                    to_r = int(uci[3]) - 1
+                    self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
+                logger.info(f"Analysis created virtual branch on move {uci} (Branch depth: {len(self.analysis_branch_moves)})")
+                return {
+                    "action": "branch",
+                    "branch_moves": self.analysis_branch_moves,
+                    "uci": uci,
+                    "analysis": self.get_analysis_payload(),
+                }
+            else:
+                logger.warning(f"Illegal analysis move attempted: {uci}")
+                return {"action": "illegal", "uci": uci}
+        except Exception as e:
+            logger.error(f"Error executing analysis move {uci}: {e}")
+            return {"action": "error", "error": str(e)}
+
     def get_analysis_payload(self) -> dict[str, Any]:
         """Constructs serialized payload for Analysis and Training modes."""
         curr_eval = None
@@ -1251,6 +1320,35 @@ class BoardStateManager:
                                 )
                             else:
                                 self.guardrail_result = None
+                        elif self.game_status == "ANALYSIS":
+                            # Physical Move Tracking during ANALYSIS mode
+                            class AnalysisEngineAdapter:
+                                def __init__(self, board):
+                                    self.board = board
+                                    self.my_color = "white" if board.turn == chess.WHITE else "black"
+                                    self.game_info = {}
+
+                            adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                            move_result = self.move_tracker.process_physical_state(
+                                self.physical_state, adapter
+                            )
+                            if move_result:
+                                from_f, from_r, to_f, to_r, promo = move_result
+                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                uci = f"{from_sq}{to_sq}{promo or ''}"
+                                logger.info(f"Physical analysis move detected: {uci}")
+                                self.handle_analysis_move(uci)
+
+                            if getattr(self, "analysis_active_board", None):
+                                self.guardrail_result = self.setup_validator.validate_game_state(
+                                    self.physical_state,
+                                    self.analysis_active_board,
+                                    self.move_tracker,
+                                    adapter.my_color,
+                                )
+                            else:
+                                self.guardrail_result = None
                         else:
                             self.move_tracker.reset(self.physical_state)
                             self.guardrail_result = None
@@ -1294,10 +1392,20 @@ class BoardStateManager:
                         "errors": 0,
                     }
 
-                # 2. Digital Board Sync with Lichess Engine
+                # 2. Digital Board Sync with Lichess Engine or Analysis Board
                 if self.game_status == "PLAYING":
                     self.digital_state = lichess_engine.get_board()
                     self.clocks = lichess_engine.clocks
+                elif self.game_status == "ANALYSIS":
+                    board_grid = [["." for _ in range(8)] for _ in range(8)]
+                    for sq in chess.SQUARES:
+                        piece = self.analysis_active_board.piece_at(sq)
+                        if piece:
+                            f = chess.square_file(sq)
+                            r = chess.square_rank(sq)
+                            board_grid[f][r] = piece.symbol()
+                    self.digital_state = board_grid
+                    self.clocks = {"white": "∞", "black": "∞"}
                 else:
                     self.digital_state = [["." for _ in range(8)] for _ in range(8)]
                     self.clocks = {"white": "?", "black": "?"}

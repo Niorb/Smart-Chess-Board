@@ -404,3 +404,12 @@ export async function toggleBlunderHint() {
   return response.json();
 }
 
+export async function sendAnalysisMove(uci: string) {
+  const response = await fetch(`${API_BASE}/analysis/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uci }),
+  });
+  return response.json();
+}
+
