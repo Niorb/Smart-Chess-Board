@@ -20,7 +20,8 @@ import {
   clearAllLeds,
   triggerAnimation,
   testMoveTrace,
-  saveBoardDefaults
+  saveBoardDefaults,
+  startAnalysis
 } from './api'
 import type { LichessAccount, LastGameParams } from './api'
 import { 
@@ -61,12 +62,14 @@ const PIECE_ICONS_BLACK: Record<string, string> = {
   p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚'
 };
 
-function PieceIcon({ piece }: { piece: string }) {
-  const isWhite = piece === piece.toUpperCase();
-  const p = piece.toLowerCase();
-  const icon = isWhite ? PIECE_ICONS_WHITE[p] : PIECE_ICONS_BLACK[p];
+function renderPiece(p: string) {
+  if (!p || p === '.') return null;
+  const isWhite = p === p.toUpperCase();
+  const piece = p.toLowerCase();
+  const icon = isWhite ? PIECE_ICONS_WHITE[piece] : PIECE_ICONS_BLACK[piece];
+
   return (
-    <span className={`select-none leading-none ${isWhite ? 'text-slate-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' : 'text-slate-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]'}`}>
+    <span className={`text-4xl ${isWhite ? 'text-slate-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]' : 'text-slate-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]'} select-none transition-transform hover:scale-105`}>
       {icon || p}
     </span>
   );

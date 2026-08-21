@@ -1,24 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, 
-  Zap, 
   Trophy, 
-  Target, 
   RotateCcw, 
   RefreshCw, 
   CheckCircle2, 
-  AlertTriangle, 
-  Play, 
   ChevronLeft, 
   ChevronRight, 
   Layers, 
-  Sun, 
-  BookOpen, 
-  Award, 
   Compass, 
   Lightbulb, 
   Flame, 
-  HelpCircle,
   TrendingUp,
   History
 } from 'lucide-react';
@@ -607,7 +599,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       </h3>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-rose-400 font-bold bg-rose-950/50 px-3 py-1 rounded-full border border-rose-500/30">
-                      Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map((_, i) => '❤️').join('')}
+                      Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map(() => '❤️').join('')}
                     </div>
                   </div>
 
