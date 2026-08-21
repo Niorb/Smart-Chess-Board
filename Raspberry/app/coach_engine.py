@@ -231,6 +231,7 @@ class CoachEngine:
         self._engine: Optional[chess.engine.UciProtocol] = None
         self._transport = None
         self._analysis_task: Optional[asyncio.Task] = None
+        self._engine_lock: Optional[asyncio.Lock] = None
         self._cache: Dict[str, PositionEvaluation] = {}
         self._max_cache_entries: int = 128
         self._is_running: bool = False
@@ -351,12 +352,16 @@ class CoachEngine:
         multipv = min(len(legal), 8)
         limit = chess.engine.Limit(time=0.10, depth=12)
 
+        if not hasattr(self, "_engine_lock") or self._engine_lock is None:
+            self._engine_lock = asyncio.Lock()
+
         try:
-            infos = await self._engine.analyse(board, limit, multipv=multipv)
-            if not isinstance(infos, list):
-                infos = [infos]
-        except Exception as e:
-            logger.warning(f"Stockfish analysis failed: {e}. Falling back to heuristic.")
+            async with self._engine_lock:
+                infos = await self._engine.analyse(board, limit, multipv=multipv)
+                if not isinstance(infos, list):
+                    infos = [infos]
+        except (asyncio.CancelledError, Exception) as e:
+            logger.warning(f"Stockfish analysis interrupted: {e}. Falling back to heuristic.")
             return self._evaluate_heuristic(board, clean_fen)
 
         best_info = infos[0] if infos else {}
