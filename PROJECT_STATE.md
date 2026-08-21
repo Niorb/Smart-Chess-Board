@@ -13,6 +13,15 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Implemented Automatic Snap-Back to Game Timeline upon Physical Anchor Restoration:
+  - **Automatic Divergence Resolution (`Raspberry/app/board_state.py`)**: Added `_check_analysis_board_restoration()` executing on each cycle of the background state update loop during Analysis mode.
+  - **Physical State Validation**: When the player is in an off-game virtual branch, once the board detects that all physical pieces have been put back into the exact configuration of the divergence anchor position (the ply where the divergence began), it automatically snaps back to the main game timeline:
+    - Clears the anchor coordinate (`analysis_anchor_coord = None`), anchor ply, and virtual branch moves.
+    - Restores the active game review board to `analysis_anchor_ply`.
+    - Resets the physical move tracker and triggers a brief arrival confirmation flash.
+    - Immediately re-renders the game move at that ply (with move quality trajectory animations, comet pulse, or blunder refutations) and allows the user to seamlessly resume stepping through the game.
+  - **Step-by-Step Branch Undo**: Also supports undoing branch moves step-by-step; if the player takes back moves along the branch, it updates the branch depth accordingly until returning to the anchor position.
+  - **Testing & Deployment**: Added unit tests in `test_analysis_state.py` (`test_analysis_auto_snap_back_on_anchor_restoration`, `test_analysis_step_by_step_branch_undo`). All 249 unit tests pass on Raspberry Pi over SSH.
 - [x] Fixed Physical & UCI/SAN Castling in Analysis Mode (Preventing False Divergence / Branching):
   - **Root Cause**: During physical castling (King moves `e1 -> g1`, followed by Rook `h1 -> f1`), the King move advanced the active board to the next ply (changing turn to Black). When the user subsequently lifted and placed the `h1` Rook, `PhysicalMoveTracker.process_physical_state()` was falling through to standard piece movement detection instead of returning `None` while `pending_castling_rook` was active. This caused the Rook placement (`h1f1`) to be emitted as a separate move for Black, creating an unwanted off-game virtual branch.
   - **Physical Tracker Castling Absorption (`Raspberry/app/physical_tracker.py`)**: Updated `process_physical_state()` to suppress all other piece move evaluations while `pending_castling_rook` is in progress until the Rook reaches its target square or times out.
