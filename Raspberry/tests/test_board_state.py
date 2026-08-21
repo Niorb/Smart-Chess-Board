@@ -478,9 +478,9 @@ def test_board_state_setup_ready_persistent_anchor():
     call_args = [call[0] for call in bsm.strip.setPixelColor.call_args_list]
     lit_indices = {arg[0] for arg in call_args if arg[1] != 0}
 
-    # Verify corner rooks and kings are included in lit indices
-    anchor_coords = [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]
-    for c_sq, r_sq in anchor_coords:
+    # Verify gesture starter pawns (a2, e2, h2) are included in lit indices
+    starter_coords = [(0, 1), (4, 1), (7, 1)]
+    for c_sq, r_sq in starter_coords:
         expected_indices = get_led_indices(r_sq, c_sq)
         assert any(idx in lit_indices for idx in expected_indices if idx < 152)
 

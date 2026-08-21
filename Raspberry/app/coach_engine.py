@@ -99,6 +99,32 @@ class MoveAnalysis:
 
 
 @dataclass
+class BlunderChallenge:
+    ply_index: int
+    fen_before: str
+    played_move: str
+    classification: str
+    delta_cp: int
+    best_move: str
+    best_score_cp: Optional[int]
+    description: str
+    top_moves: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ply_index": self.ply_index,
+            "fen_before": self.fen_before,
+            "played_move": self.played_move,
+            "classification": self.classification,
+            "delta_cp": self.delta_cp,
+            "best_move": self.best_move,
+            "best_score_cp": self.best_score_cp,
+            "description": self.description,
+            "top_moves": self.top_moves,
+        }
+
+
+@dataclass
 class PositionEvaluation:
     fen: str
     score_cp: Optional[int]
@@ -406,6 +432,135 @@ class CoachEngine:
             top_moves=top_moves,
             moves_map=moves_map,
         )
+
+    async def batch_evaluate_game(self, moves_uci: List[str]) -> Dict[str, Any]:
+        """
+        Evaluates an entire sequence of game moves starting from standard FEN.
+        Returns positions evaluations, played move classifications, accuracy scores, and mistake summaries.
+        """
+        board = chess.Board()
+        evaluations: List[Dict[str, Any]] = []
+        played_analyses: List[Dict[str, Any]] = []
+
+        # Evaluate initial starting position
+        initial_eval = await self.evaluate_position(board.fen())
+        evaluations.append(initial_eval.to_dict())
+
+        white_accuracies: List[float] = []
+        black_accuracies: List[float] = []
+        counts: Dict[str, Dict[str, int]] = {
+            "white": {"best": 0, "good": 0, "inaccuracy": 0, "blunder": 0},
+            "black": {"best": 0, "good": 0, "inaccuracy": 0, "blunder": 0},
+        }
+
+        for idx, uci in enumerate(moves_uci):
+            try:
+                move = chess.Move.from_uci(uci)
+                if move not in board.legal_moves:
+                    logger.warning(f"Illegal move {uci} at ply {idx} during batch analysis.")
+                    break
+            except Exception:
+                logger.warning(f"Invalid UCI string {uci} at ply {idx}.")
+                break
+
+            prev_eval = evaluations[-1]
+            turn = "white" if board.turn == chess.WHITE else "black"
+
+            # Check played move analysis in the previous position
+            moves_map = prev_eval.get("moves_map", {})
+            move_info = moves_map.get(uci)
+            if not move_info:
+                board.push(move)
+                after_eval = await self.evaluate_position(board.fen())
+                board.pop()
+                best_score = prev_eval.get("score_cp") or 0
+                after_score = after_eval.score_cp or 0
+                delta = max(0, (best_score - after_score) if turn == "white" else (after_score - best_score))
+                classification = classify_move_delta(delta).value
+                move_info = {
+                    "uci": uci,
+                    "from": chess.square_name(move.from_square),
+                    "to": chess.square_name(move.to_square),
+                    "classification": classification,
+                    "delta_cp": delta,
+                    "score_cp": after_score,
+                }
+
+            classification = move_info.get("classification", "good")
+            if classification in counts[turn]:
+                counts[turn][classification] += 1
+
+            # Accuracy calculation
+            delta_cp = move_info.get("delta_cp", 0)
+            move_acc = max(0.0, min(100.0, 100.0 * math.exp(-0.004 * delta_cp)))
+            if turn == "white":
+                white_accuracies.append(move_acc)
+            else:
+                black_accuracies.append(move_acc)
+
+            played_analyses.append({
+                "ply": idx,
+                "turn": turn,
+                "uci": uci,
+                "san": board.san(move),
+                "from": move_info.get("from", ""),
+                "to": move_info.get("to", ""),
+                "classification": classification,
+                "delta_cp": delta_cp,
+                "best_move": prev_eval.get("best_move"),
+            })
+
+            board.push(move)
+            pos_eval = await self.evaluate_position(board.fen())
+            evaluations.append(pos_eval.to_dict())
+
+        white_acc = round(sum(white_accuracies) / len(white_accuracies), 1) if white_accuracies else 100.0
+        black_acc = round(sum(black_accuracies) / len(black_accuracies), 1) if black_accuracies else 100.0
+
+        blunders = self.extract_blunders(played_analyses, evaluations)
+
+        return {
+            "evaluations": evaluations,
+            "played_analyses": played_analyses,
+            "white_accuracy": white_acc,
+            "black_accuracy": black_acc,
+            "counts": counts,
+            "blunders": [b.to_dict() for b in blunders],
+            "total_plys": len(played_analyses),
+        }
+
+    def extract_blunders(
+        self,
+        played_analyses: List[Dict[str, Any]],
+        evaluations: List[Dict[str, Any]],
+        min_delta: int = 100,
+    ) -> List[BlunderChallenge]:
+        """Extracts critical mistakes from played moves to form training puzzles."""
+        challenges: List[BlunderChallenge] = []
+        for played in played_analyses:
+            ply = played["ply"]
+            delta = played.get("delta_cp", 0)
+            if delta >= min_delta or played.get("classification") == "blunder":
+                pos_eval = evaluations[ply] if ply < len(evaluations) else {}
+                best_move = played.get("best_move") or pos_eval.get("best_move") or ""
+                if not best_move:
+                    continue
+
+                desc = f"At move {ply // 2 + 1} ({played['turn'].capitalize()}), {played['san']} lost {delta} centipawns. Find the better move!"
+                challenges.append(
+                    BlunderChallenge(
+                        ply_index=ply,
+                        fen_before=pos_eval.get("fen", ""),
+                        played_move=played["uci"],
+                        classification=played.get("classification", "blunder"),
+                        delta_cp=delta,
+                        best_move=best_move,
+                        best_score_cp=pos_eval.get("score_cp"),
+                        description=desc,
+                        top_moves=pos_eval.get("top_moves", []),
+                    )
+                )
+        return challenges
 
 
 # Global singleton instance

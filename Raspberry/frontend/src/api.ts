@@ -314,3 +314,93 @@ export async function restartPreviousGame() {
   return response.json();
 }
 
+// --- Post-Game Analysis & Training API ---
+
+export async function startAnalysis(options?: { moves_uci?: string[]; game_id?: string }) {
+  const response = await fetch(`${API_BASE}/analysis/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || {}),
+  });
+  return response.json();
+}
+
+export async function stepAnalysis(ply: number) {
+  const response = await fetch(`${API_BASE}/analysis/step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ply }),
+  });
+  return response.json();
+}
+
+export async function resetAnalysisBranch() {
+  const response = await fetch(`${API_BASE}/analysis/branch_reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
+export async function stopAnalysis() {
+  const response = await fetch(`${API_BASE}/analysis/stop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
+export async function getAnalysisState() {
+  const response = await fetch(`${API_BASE}/analysis/state`);
+  return response.json();
+}
+
+export async function getGMGames() {
+  const response = await fetch(`${API_BASE}/analysis/gm/games`);
+  return response.json();
+}
+
+export async function startGMGame(gameId: string) {
+  const response = await fetch(`${API_BASE}/analysis/gm/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ game_id: gameId }),
+  });
+  return response.json();
+}
+
+export async function submitGMGuess(uci: string) {
+  const response = await fetch(`${API_BASE}/analysis/gm/guess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uci }),
+  });
+  return response.json();
+}
+
+export async function startBlunderDrill(index: number = 0) {
+  const response = await fetch(`${API_BASE}/analysis/blunder_drill/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ index }),
+  });
+  return response.json();
+}
+
+export async function submitBlunderAttempt(uci: string) {
+  const response = await fetch(`${API_BASE}/analysis/blunder_drill/attempt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uci }),
+  });
+  return response.json();
+}
+
+export async function toggleBlunderHint() {
+  const response = await fetch(`${API_BASE}/analysis/blunder_drill/hint`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+

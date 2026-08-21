@@ -48,6 +48,8 @@ logger = logging.getLogger("smart-chess-app.gesture")
 # Dedicated Gesture LED Colors
 COLOR_INT_AZURE = Color(0, 160, 255)      # Cool azure pulse for next step guidance
 COLOR_INT_EMERALD = Color(0, 220, 90)     # Radiant emerald pulse for completion gate
+COLOR_INT_ROYAL_VIOLET = Color(140, 40, 240)  # Royal violet for analysis mode
+COLOR_INT_MINT_EMERALD = Color(0, 220, 140)  # Mint emerald for analysis step guidance
 
 
 class BaseGesture(ABC):
@@ -55,6 +57,9 @@ class BaseGesture(ABC):
     Abstract Base Class for physical chessboard gestures.
     Subclasses evaluate the 8x8 sensor matrix and manage their step sequence and LED highlights.
     """
+
+    starter_coord: Optional[Tuple[int, int]] = None
+    starter_color: Optional[int] = None
 
     def __init__(self, name: str, description: str, timeout: float = 5.0):
         self.name = name
@@ -116,6 +121,7 @@ class BaseGesture(ABC):
             "step": self.step,
             "hint": self.hint,
             "time_remaining": round(self.time_remaining(now), 1),
+            "starter_coord": list(self.starter_coord) if self.starter_coord else None,
         }
 
 
@@ -135,6 +141,8 @@ class RestartPreviousGameGesture(BaseGesture):
 
     H1_COORD: Tuple[int, int] = (7, 0)  # File h (c=7), Rank 1 (r=0)
     H2_COORD: Tuple[int, int] = (7, 1)  # File h (c=7), Rank 2 (r=1)
+    starter_coord: Tuple[int, int] = (7, 1)
+    starter_color: int = Color(240, 160, 20)  # Warm Amber
 
     def __init__(self, state_manager: Any = None, timeout: float = 5.0):
         super().__init__(
@@ -319,6 +327,8 @@ class ToggleNightModeGesture(BaseGesture):
 
     A1_COORD: Tuple[int, int] = (0, 0)  # File a (c=0), Rank 1 (r=0)
     A2_COORD: Tuple[int, int] = (0, 1)  # File a (c=0), Rank 2 (r=1)
+    starter_coord: Tuple[int, int] = (0, 1)
+    starter_color: int = Color(0, 140, 255)  # Moonlight Azure
 
     def __init__(self, state_manager: Any = None, timeout: float = 5.0):
         super().__init__(
@@ -473,6 +483,151 @@ class ToggleNightModeGesture(BaseGesture):
             )
 
 
+class CenterRoyalGateGesture(BaseGesture):
+    """
+    Center Royal Gate gesture:
+      - Initial setup: Full standard chess starting position.
+      - Step 1: Lift e2 pawn (column 4, row 1).
+                LEDs: Solid Royal Violet on e2, pulsing Mint Emerald on d2.
+      - Step 2: Lift d2 pawn (column 3, row 1) while e2 remains lifted.
+                LEDs: Dual synchronous Emerald/Violet rapid pulse on d2 and e2.
+      - Step 3 (Completion): Replace both d2 and e2 pawns back into starting setup.
+      - Result: Activates Post-Game Analysis mode on the board and starts
+                batch Stockfish analysis of the last game.
+    """
+
+    E2_COORD: Tuple[int, int] = (4, 1)  # File e (c=4), Rank 2 (r=1)
+    D2_COORD: Tuple[int, int] = (3, 1)  # File d (c=3), Rank 2 (r=1)
+    starter_coord: Tuple[int, int] = (4, 1)
+    starter_color: int = COLOR_INT_ROYAL_VIOLET
+
+    def __init__(self, state_manager: Any = None, timeout: float = 5.0):
+        super().__init__(
+            name="start_analysis",
+            description="Center Royal Gate: lift e2 -> lift d2 -> replace both to activate Post-Game Analysis",
+            timeout=timeout,
+        )
+        self.state_manager = state_manager
+
+    @property
+    def hint(self) -> Optional[str]:
+        if self.step == 1:
+            return "Lift d2 (Queen Pawn) to arm Analysis Mode"
+        elif self.step == 2:
+            return "Replace e2 and d2 to activate Post-Game Analysis"
+        return None
+
+    def _get_board_anomalies(
+        self, physical_state: List[List[int]]
+    ) -> Tuple[Set[Tuple[int, int]], Set[Tuple[int, int]]]:
+        lifted_starting: Set[Tuple[int, int]] = set()
+        extra_occupied: Set[Tuple[int, int]] = set()
+
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS):
+                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                if r in (0, 1, 6, 7):
+                    if val == 0:
+                        lifted_starting.add((c, r))
+                else:
+                    if val != 0:
+                        extra_occupied.add((c, r))
+
+        return lifted_starting, extra_occupied
+
+    def evaluate(self, physical_state: List[List[int]], now: float) -> bool:
+        lifted_starting, extra_occupied = self._get_board_anomalies(physical_state)
+
+        # Center squares bumped with pieces immediately cancels gesture
+        if len(extra_occupied) > 0:
+            if self.is_active:
+                logger.debug(f"Analysis gesture cancelled due to center pieces: {extra_occupied}")
+            self.reset()
+            return False
+
+        # Step 0: Idle / Armed
+        if self.step == 0:
+            # Begins when ONLY e2 (4, 1) is lifted and d2 (3, 1) is placed
+            if lifted_starting == {self.E2_COORD}:
+                self.step = 1
+                self.start_time = now
+                logger.info("Analysis gesture armed: Step 1 (e2 lifted). Waiting for d2...")
+            return False
+
+        # Timeout Check for active gesture (Steps 1 & 2)
+        if now - self.start_time > self.timeout:
+            logger.info("Analysis gesture timed out. Resetting.")
+            self.reset()
+            return False
+
+        # Step 1: e2 lifted, waiting for d2 lift
+        if self.step == 1:
+            # Premature replacement of e2 without lifting d2 cancels gesture
+            if self.E2_COORD not in lifted_starting:
+                logger.debug("Analysis gesture cancelled: e2 replaced prematurely without lifting d2.")
+                self.reset()
+                return False
+
+            # Extra starting pieces lifted cancels gesture
+            if not lifted_starting.issubset({self.E2_COORD, self.D2_COORD}):
+                logger.debug(f"Analysis gesture cancelled: unexpected piece lifted {lifted_starting - {self.E2_COORD}}")
+                self.reset()
+                return False
+
+            # d2 lifted while e2 is lifted -> advance to Step 2
+            if lifted_starting == {self.E2_COORD, self.D2_COORD}:
+                self.step = 2
+                logger.info("Analysis gesture: Step 2 (e2 & d2 both lifted). Ready for replacement.")
+            return False
+
+        # Step 2: Both e2 & d2 lifted, waiting for replacement
+        if self.step == 2:
+            # Extra starting pieces lifted cancels gesture
+            if not lifted_starting.issubset({self.E2_COORD, self.D2_COORD}):
+                logger.debug(f"Analysis gesture cancelled in Step 2: extra pieces lifted {lifted_starting}")
+                self.reset()
+                return False
+
+            # Completion condition: Both e2 & d2 replaced, full starting position intact
+            if len(lifted_starting) == 0:
+                logger.info("Analysis gesture COMPLETED: Center Royal Gate closed! Activating Analysis Mode...")
+                self.reset()
+                return True
+
+            return False
+
+        return False
+
+    def get_led_overlay(self, now: float) -> Dict[Tuple[int, int], int]:
+        overlay: Dict[Tuple[int, int], int] = {}
+        if self.step == 1:
+            # e2: Solid Royal Violet
+            overlay[self.E2_COORD] = COLOR_INT_ROYAL_VIOLET
+            # d2: Pulsing Mint Emerald guiding next piece lift
+            pulse = math.sin(now * 8.0) * 0.5 + 0.5
+            intensity = 0.25 + 0.75 * pulse
+            overlay[self.D2_COORD] = scale_color(COLOR_INT_MINT_EMERALD, intensity)
+        elif self.step == 2:
+            # Both e2 & d2: Rapid synchronized pulse in dual Emerald/Violet
+            pulse = math.sin(now * 10.0) * 0.5 + 0.5
+            intensity = 0.35 + 0.65 * pulse
+            overlay[self.E2_COORD] = scale_color(COLOR_INT_ROYAL_VIOLET, intensity)
+            overlay[self.D2_COORD] = scale_color(COLOR_INT_MINT_EMERALD, intensity)
+        return overlay
+
+    def execute_completion(self) -> None:
+        """Triggers arrival confirmation flare on d2/e2 and activates analysis mode."""
+        if self.state_manager:
+            self.state_manager.trigger_arrival_flash(
+                self.E2_COORD[0],
+                self.E2_COORD[1],
+                duration=0.6,
+                extra_squares=[self.D2_COORD],
+            )
+            # Dispatch async start_analysis_mode
+            asyncio.create_task(self.state_manager.start_analysis_mode())
+
+
 class PhysicalGestureEngine:
     """
     Subsystem manager for physical board gestures.
@@ -486,6 +641,7 @@ class PhysicalGestureEngine:
         # Register standard gestures
         self.register_gesture(RestartPreviousGameGesture(state_manager=state_manager))
         self.register_gesture(ToggleNightModeGesture(state_manager=state_manager))
+        self.register_gesture(CenterRoyalGateGesture(state_manager=state_manager))
 
     def register_gesture(self, gesture: BaseGesture) -> None:
         """Registers a new gesture in the evaluation pipeline."""
@@ -528,6 +684,21 @@ class PhysicalGestureEngine:
                 gesture.execute_completion()
 
         return completed
+
+    def get_starter_indicators(self, now: Optional[float] = None) -> Dict[Tuple[int, int], int]:
+        """
+        Aggregates subtle ambient breathing glows on all gesture starter pieces (e.g. a2, e2, h2 pawns)
+        when the board is fully set up in starting configuration.
+        """
+        if now is None:
+            now = time.time()
+        indicators: Dict[Tuple[int, int], int] = {}
+        # Gentle 0.5 Hz breathing glow
+        pulse = 0.25 + 0.35 * (0.5 * (1.0 + math.sin(now * 3.0)))
+        for gesture in self.gestures:
+            if gesture.starter_coord and gesture.starter_color:
+                indicators[gesture.starter_coord] = scale_color(gesture.starter_color, pulse)
+        return indicators
 
     def get_led_overlay(self, now: Optional[float] = None) -> Dict[Tuple[int, int], int]:
         """Aggregates active LED overlays across all registered gestures."""

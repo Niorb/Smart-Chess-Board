@@ -127,9 +127,15 @@ from app.led_animations import (
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
+    render_opponent_disconnected,
     scale_color,
 )
-from app.gesture_engine import PhysicalGestureEngine
+from app.gesture_engine import (
+    COLOR_INT_MINT_EMERALD,
+    COLOR_INT_ROYAL_VIOLET,
+    PhysicalGestureEngine,
+)
+from app.gm_games import get_all_gm_games, get_gm_game
 from app.lichess_engine import lichess_engine
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
@@ -152,7 +158,7 @@ class BoardStateManager:
         self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.raw_analog_values = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.digital_state = [["." for _ in range(8)] for _ in range(8)]
-        self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, GAME_OVER, SETUP
+        self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, GAME_OVER, SETUP, ANALYSIS
         self.virtual_only: bool = False
         self.clocks = {"white": "?", "black": "?"}
         self.highlighted_square = None
@@ -165,6 +171,27 @@ class BoardStateManager:
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
         self.arrival_flash: dict | None = None
         self.guardrail_result: GameGuardrailResult | None = None
+
+        # Analysis & Training Mode State
+        self.analysis_submode: str = "review"  # "review" | "blunder_drill" | "gm_relive"
+        self.analysis_game_moves: list[str] = []
+        self.analysis_current_ply: int = 0
+        self.analysis_evaluations: list[dict] = []
+        self.analysis_played_analyses: list[dict] = []
+        self.analysis_accuracy: dict = {"white": 100.0, "black": 100.0}
+        self.analysis_counts: dict = {}
+        self.analysis_blunders: list[dict] = []
+        self.analysis_branch_moves: list[str] = []
+        self.analysis_anchor_ply: int | None = None
+        self.analysis_anchor_coord: tuple[int, int] | None = None
+        self.analysis_active_board: chess.Board = chess.Board()
+        self.analysis_blunder_index: int = 0
+        self.analysis_blunder_attempts: int = 3
+        self.analysis_blunder_hint_active: bool = False
+        self.analysis_gm_game_id: str | None = None
+        self.analysis_gm_score: int = 0
+        self.analysis_gm_guesses: list[dict] = []
+        self.analysis_is_loading: bool = False
 
         # Setup verification, move tracking, and physical gesture subsystems
         self.setup_validator = SetupValidator()
@@ -356,6 +383,249 @@ class BoardStateManager:
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
         }
 
+    async def start_analysis_mode(
+        self, moves_uci: list[str] | None = None, game_id: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Activates Post-Game Analysis mode on the board and starts asynchronous batch evaluation.
+        """
+        self.game_status = "ANALYSIS"
+        self.analysis_submode = "review"
+        self.analysis_is_loading = True
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        self.analysis_active_board = chess.Board()
+
+        if moves_uci is not None and len(moves_uci) > 0:
+            self.analysis_game_moves = list(moves_uci)
+        elif game_id:
+            gm_game = get_gm_game(game_id)
+            if gm_game:
+                self.analysis_game_moves = list(gm_game.moves)
+            else:
+                self.analysis_game_moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        else:
+            # Retrieve last game moves from Lichess engine or default opening
+            lichess_moves = getattr(lichess_engine, "board_moves", []) or getattr(lichess_engine, "last_game_moves", [])
+            if lichess_moves:
+                self.analysis_game_moves = list(lichess_moves)
+            else:
+                # Default classical opening if no game was played yet
+                self.analysis_game_moves = [
+                    "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5",
+                    "c2c3", "g8f6", "d2d4", "e5d4", "c3d4", "c5b4",
+                ]
+
+        self.analysis_current_ply = 0
+        try:
+            res = await coach_engine.batch_evaluate_game(self.analysis_game_moves)
+            self.analysis_evaluations = res.get("evaluations", [])
+            self.analysis_played_analyses = res.get("played_analyses", [])
+            self.analysis_accuracy = {
+                "white": res.get("white_accuracy", 100.0),
+                "black": res.get("black_accuracy", 100.0),
+            }
+            self.analysis_counts = res.get("counts", {})
+            self.analysis_blunders = res.get("blunders", [])
+        except Exception as e:
+            logger.error(f"Error in batch game evaluation: {e}")
+            self.analysis_evaluations = []
+            self.analysis_played_analyses = []
+            self.analysis_accuracy = {"white": 100.0, "black": 100.0}
+            self.analysis_counts = {}
+            self.analysis_blunders = []
+        finally:
+            self.analysis_is_loading = False
+
+        return self.get_analysis_payload()
+
+    def step_analysis(self, target_ply: int) -> dict[str, Any]:
+        """Steps forward/backward or jumps to a specific ply in the game review."""
+        if not self.analysis_game_moves:
+            return self.get_analysis_payload()
+
+        target_ply = max(0, min(len(self.analysis_game_moves), target_ply))
+        self.analysis_current_ply = target_ply
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+
+        # Reconstruct active board position
+        self.analysis_active_board = chess.Board()
+        for idx in range(target_ply):
+            try:
+                move = chess.Move.from_uci(self.analysis_game_moves[idx])
+                if move in self.analysis_active_board.legal_moves:
+                    self.analysis_active_board.push(move)
+            except Exception as e:
+                logger.warning(f"Error stepping move at ply {idx}: {e}")
+                break
+
+        return self.get_analysis_payload()
+
+    def reset_analysis_branch(self) -> dict[str, Any]:
+        """Snaps back to original game timeline from a virtual branch."""
+        restore_ply = self.analysis_anchor_ply if self.analysis_anchor_ply is not None else self.analysis_current_ply
+        return self.step_analysis(restore_ply)
+
+    def stop_analysis_mode(self) -> dict[str, Any]:
+        """Exits analysis mode and returns to IDLE."""
+        self.game_status = "IDLE"
+        self.analysis_submode = "review"
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        return self.get_analysis_payload()
+
+    def start_blunder_drill(self, index: int = 0) -> dict[str, Any]:
+        """Starts Blunder Blitz Drill mode for an extracted blunder."""
+        self.game_status = "ANALYSIS"
+        self.analysis_submode = "blunder_drill"
+        self.analysis_blunder_index = max(0, min(len(self.analysis_blunders) - 1, index)) if self.analysis_blunders else 0
+        self.analysis_blunder_attempts = 3
+        self.analysis_blunder_hint_active = False
+
+        if self.analysis_blunders and 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
+            blunder = self.analysis_blunders[self.analysis_blunder_index]
+            fen = blunder.get("fen_before")
+            if fen:
+                self.analysis_active_board = chess.Board(fen)
+        return self.get_analysis_payload()
+
+    def submit_blunder_attempt(self, uci: str) -> dict[str, Any]:
+        """Evaluates a blunder challenge attempt."""
+        if not self.analysis_blunders or self.analysis_blunder_index >= len(self.analysis_blunders):
+            return {"correct": False, "message": "No active blunder challenge."}
+
+        blunder = self.analysis_blunders[self.analysis_blunder_index]
+        best_move = blunder.get("best_move", "")
+
+        if uci.lower() == best_move.lower():
+            if len(uci) >= 4:
+                to_c = ord(uci[2]) - ord('a')
+                to_r = int(uci[3]) - 1
+                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.8)
+            return {
+                "correct": True,
+                "message": "Brilliant! You found the grandmaster solution.",
+                "best_move": best_move,
+            }
+        else:
+            self.analysis_blunder_attempts = max(0, self.analysis_blunder_attempts - 1)
+            return {
+                "correct": False,
+                "message": "Not quite the best move. Try again!",
+                "attempts_remaining": self.analysis_blunder_attempts,
+            }
+
+    def toggle_blunder_hint(self) -> bool:
+        """Toggles LED hint for the active blunder challenge."""
+        self.analysis_blunder_hint_active = not self.analysis_blunder_hint_active
+        return self.analysis_blunder_hint_active
+
+    def start_gm_game(self, game_id: str) -> dict[str, Any]:
+        """Starts Guess-the-Move session for a curated Grandmaster masterpiece."""
+        game = get_gm_game(game_id)
+        if not game:
+            return {"error": f"GM game '{game_id}' not found."}
+
+        self.game_status = "ANALYSIS"
+        self.analysis_submode = "gm_relive"
+        self.analysis_gm_game_id = game_id
+        self.analysis_game_moves = list(game.moves)
+        self.analysis_current_ply = 0
+        self.analysis_gm_score = 0
+        self.analysis_gm_guesses = []
+        self.analysis_active_board = chess.Board()
+
+        return self.get_analysis_payload()
+
+    def submit_gm_guess(self, uci: str) -> dict[str, Any]:
+        """Validates the user's guess against the historical Grandmaster move."""
+        if not self.analysis_gm_game_id or self.analysis_current_ply >= len(self.analysis_game_moves):
+            return {"error": "No active GM game session."}
+
+        game = get_gm_game(self.analysis_gm_game_id)
+        gm_move = self.analysis_game_moves[self.analysis_current_ply]
+        ply = self.analysis_current_ply
+
+        if uci.lower() == gm_move.lower():
+            points = 100
+            commentary = game.annotations.get(ply) if game else "Matched Grandmaster move!"
+            self.analysis_gm_score += points
+            self.analysis_gm_guesses.append({
+                "ply": ply,
+                "guess": uci,
+                "gm_move": gm_move,
+                "match": "exact",
+                "points": points,
+            })
+            if len(uci) >= 4:
+                to_c = ord(uci[2]) - ord('a')
+                to_r = int(uci[3]) - 1
+                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.8)
+
+            # Advance move
+            self.step_analysis(self.analysis_current_ply + 1)
+            return {
+                "match": "exact",
+                "points": points,
+                "total_score": self.analysis_gm_score,
+                "commentary": commentary,
+                "advance": True,
+            }
+        else:
+            self.analysis_gm_guesses.append({
+                "ply": ply,
+                "guess": uci,
+                "gm_move": gm_move,
+                "match": "incorrect",
+                "points": 0,
+            })
+            return {
+                "match": "incorrect",
+                "points": 0,
+                "total_score": self.analysis_gm_score,
+                "gm_move": gm_move,
+                "commentary": f"The Grandmaster played {gm_move}.",
+                "advance": False,
+            }
+
+    def get_analysis_payload(self) -> dict[str, Any]:
+        """Constructs serialized payload for Analysis and Training modes."""
+        curr_eval = None
+        if 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
+            curr_eval = self.analysis_evaluations[self.analysis_current_ply]
+
+        gm_game = get_gm_game(self.analysis_gm_game_id) if self.analysis_gm_game_id else None
+
+        return {
+            "active": self.game_status == "ANALYSIS",
+            "submode": self.analysis_submode,
+            "is_loading": self.analysis_is_loading,
+            "current_ply": self.analysis_current_ply,
+            "total_plys": len(self.analysis_game_moves),
+            "game_moves": self.analysis_game_moves,
+            "evaluations": self.analysis_evaluations,
+            "played_analyses": self.analysis_played_analyses,
+            "accuracy": self.analysis_accuracy,
+            "counts": self.analysis_counts,
+            "current_eval": curr_eval,
+            "branch_moves": self.analysis_branch_moves,
+            "is_branching": bool(self.analysis_anchor_coord is not None),
+            "anchor_ply": self.analysis_anchor_ply,
+            "anchor_coord": list(self.analysis_anchor_coord) if self.analysis_anchor_coord else None,
+            "blunders": self.analysis_blunders,
+            "blunder_index": self.analysis_blunder_index,
+            "blunder_attempts": self.analysis_blunder_attempts,
+            "blunder_hint_active": self.analysis_blunder_hint_active,
+            "gm_game": gm_game.to_dict() if gm_game else None,
+            "gm_score": self.analysis_gm_score,
+            "gm_guesses": self.analysis_gm_guesses,
+            "fen": self.analysis_active_board.fen(),
+        }
+
     def get_full_state(self, diag_info=None):
         """Constructs a complete serialized snapshot of the full system state."""
         from board_hardware import settings
@@ -392,6 +662,7 @@ class BoardStateManager:
             "game": lichess_engine.get_game_payload(),
             "coach": coach_payload,
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
+            "analysis": self.get_analysis_payload(),
             "diagnostics": diag_info,
         }
 
@@ -543,16 +814,12 @@ class BoardStateManager:
                     for c, r in self.setup_result.misplaced_pieces:
                         set_square_leds(c, r, c_setup_misplaced)
                 elif self.active_animation is None:
-                    # Persistent Visual Indication ("The Royal Guard Anchor"):
-                    # 4 Corner Rooks + 2 Royal Sovereigns with gentle 0.5 Hz breathing pulse
-                    c_ready_base = COLOR_INT_NIGHT_BOARD_READY_AMBIENT if night_mode else COLOR_INT_BOARD_READY_AMBIENT
-                    c_ready_pri = COLOR_INT_NIGHT_BOARD_READY_PRIMARY if night_mode else COLOR_INT_BOARD_READY_PRIMARY
-                    breath = (math.sin(2.0 * math.pi * 0.5 * now) * 0.5 + 0.5) ** 2
-                    anchor_int = 0.35 + 0.65 * breath
-                    c_anchor = scale_color(blend_colors(c_ready_base, c_ready_pri, 0.35), anchor_int)
-                    # Rooks: a1 (0,0), h1 (7,0), a8 (0,7), h8 (7,7); Kings: e1 (4,0), e8 (4,7)
-                    for c_sq, r_sq in [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]:
-                        set_square_leds(c_sq, r_sq, c_anchor)
+                    # Dynamic Gesture Starter Pawns Indication:
+                    # Ambient breathing glow on the pawns that initiate physical gestures (e.g. a2, e2, h2)
+                    if hasattr(self, "gesture_engine"):
+                        starter_indicators = self.gesture_engine.get_starter_indicators(now)
+                        for (s_c, s_r), s_color in starter_indicators.items():
+                            set_square_leds(s_c, s_r, s_color)
 
                 # Physical Gesture LED Overlay (Armed/Step1/Step2)
                 if hasattr(self, "gesture_engine") and self.gesture_engine.is_active:
@@ -714,6 +981,81 @@ class BoardStateManager:
                         getattr(lichess_engine, "my_color", "white"),
                         opp_king_coord,
                     )
+
+            # Layer 2.2: Analysis & Training State Highlights
+            elif self.game_status == "ANALYSIS":
+                eval_bar_enabled = settings.get("eval_bar_enabled", True)
+                # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
+                if eval_bar_enabled and self.analysis_evaluations:
+                    curr_eval = None
+                    if self.analysis_anchor_coord:
+                        curr_eval = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                    elif 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
+                        curr_eval = self.analysis_evaluations[self.analysis_current_ply]
+
+                    if curr_eval:
+                        win_chance = curr_eval.get("win_chance", 50.0) if isinstance(curr_eval, dict) else curr_eval.win_chance
+                        n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
+                        for r in range(8):
+                            eval_col = c_eval_white if r < n_white else c_eval_black
+                            set_square_leds(7, r, eval_col)
+
+                # 1. Sub-mode specific LED illumination
+                if self.analysis_submode == "review":
+                    if self.analysis_anchor_coord:
+                        # In virtual branch: Anchor square in Royal Violet
+                        set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], COLOR_INT_ROYAL_VIOLET)
+                        # Engine best reply if cached
+                        cached_branch = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                        if cached_branch and cached_branch.best_move and len(cached_branch.best_move) >= 4:
+                            bm = cached_branch.best_move
+                            bm_from = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
+                            bm_to = (ord(bm[2]) - ord('a'), int(bm[3]) - 1)
+                            set_square_leds(bm_from[0], bm_from[1], c_opp_from)
+                            set_square_leds(bm_to[0], bm_to[1], COLOR_INT_AZURE)
+                    else:
+                        # On main game line: Highlight played move and best alternative
+                        if 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
+                            curr_move = self.analysis_game_moves[self.analysis_current_ply]
+                            if len(curr_move) >= 4:
+                                f_c, f_r = ord(curr_move[0]) - ord('a'), int(curr_move[1]) - 1
+                                t_c, t_r = ord(curr_move[2]) - ord('a'), int(curr_move[3]) - 1
+                                set_square_leds(f_c, f_r, c_piece_lifted)
+
+                                quality_col = c_move_good
+                                if self.analysis_current_ply < len(self.analysis_played_analyses):
+                                    q_str = self.analysis_played_analyses[self.analysis_current_ply].get("classification", "good")
+                                    if q_str == "best": quality_col = c_move_best
+                                    elif q_str == "good": quality_col = c_move_good
+                                    elif q_str == "inaccuracy": quality_col = c_move_inacc
+                                    else: quality_col = c_move_blunder
+                                set_square_leds(t_c, t_r, quality_col)
+
+                                # Engine suggested best move alternative (pulsing Mint Halo)
+                                pos_eval = self.analysis_evaluations[self.analysis_current_ply] if self.analysis_current_ply < len(self.analysis_evaluations) else None
+                                best_m = pos_eval.get("best_move") if isinstance(pos_eval, dict) else (pos_eval.best_move if pos_eval else None)
+                                if best_m and best_m != curr_move and len(best_m) >= 4:
+                                    bm_to = (ord(best_m[2]) - ord('a'), int(best_m[3]) - 1)
+                                    mint_pulse = math.sin(now * 6.0) * 0.5 + 0.5
+                                    set_square_leds(bm_to[0], bm_to[1], scale_color(COLOR_INT_MINT_EMERALD, 0.4 + 0.6 * mint_pulse))
+
+                elif self.analysis_submode == "blunder_drill":
+                    if 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
+                        blunder = self.analysis_blunders[self.analysis_blunder_index]
+                        if self.analysis_blunder_hint_active:
+                            bm = blunder.get("best_move", "")
+                            if len(bm) >= 4:
+                                bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
+                                set_square_leds(bm_f[0], bm_f[1], COLOR_INT_MINT_EMERALD)
+
+                elif self.analysis_submode == "gm_relive":
+                    active_turn = self.analysis_active_board.turn
+                    k_sq = self.analysis_active_board.king(active_turn)
+                    if k_sq is not None:
+                        k_c, k_r = chess.square_file(k_sq), chess.square_rank(k_sq)
+                        turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
+                        turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                        set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
@@ -1014,6 +1356,7 @@ class BoardStateManager:
                     "game": lichess_engine.get_game_payload(),
                     "coach": coach_payload,
                     "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
+                    "analysis": self.get_analysis_payload(),
                     "diagnostics": diag_info,
                 }
 

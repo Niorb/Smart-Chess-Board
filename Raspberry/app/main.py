@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from .board_state import state_manager
 from .coach_engine import coach_engine
+from .gm_games import get_all_gm_games, get_gm_game
 from .lichess_engine import lichess_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -169,6 +170,31 @@ class DrawRequest(BaseModel):
 
 class ModeRequest(BaseModel):
     virtual_only: bool
+
+
+class StartAnalysisRequest(BaseModel):
+    moves_uci: list[str] | None = None
+    game_id: str | None = None
+
+
+class StepAnalysisRequest(BaseModel):
+    ply: int
+
+
+class StartBlunderDrillRequest(BaseModel):
+    index: int = 0
+
+
+class BlunderAttemptRequest(BaseModel):
+    uci: str
+
+
+class StartGMRequest(BaseModel):
+    game_id: str
+
+
+class GMGuessRequest(BaseModel):
+    uci: str
 
 
 # --- Helper Functions ---
@@ -589,6 +615,77 @@ async def set_game_mode_route(body: ModeRequest):
     if body.virtual_only and state_manager.strip:
         state_manager.clear_all_leds()
     return {"status": "success", "virtual_only": state_manager.virtual_only}
+
+
+# --- Analysis & Training Mode Endpoints ---
+
+@app.post("/api/analysis/start")
+async def start_analysis_route(body: StartAnalysisRequest | None = None):
+    """Activates post-game analysis on the last game or custom moves / GM game."""
+    moves = body.moves_uci if body else None
+    game_id = body.game_id if body else None
+    return await state_manager.start_analysis_mode(moves_uci=moves, game_id=game_id)
+
+
+@app.post("/api/analysis/step")
+async def step_analysis_route(body: StepAnalysisRequest):
+    """Steps to a specific move index in the game review."""
+    return state_manager.step_analysis(body.ply)
+
+
+@app.post("/api/analysis/branch_reset")
+async def reset_analysis_branch_route():
+    """Snaps back from a virtual analysis branch to the main game timeline."""
+    return state_manager.reset_analysis_branch()
+
+
+@app.post("/api/analysis/stop")
+async def stop_analysis_route():
+    """Exits analysis/training mode and returns the board to IDLE."""
+    return state_manager.stop_analysis_mode()
+
+
+@app.get("/api/analysis/state")
+async def get_analysis_state_route():
+    """Returns the current analysis state, evaluations, and mistake metrics."""
+    return state_manager.get_analysis_payload()
+
+
+@app.get("/api/analysis/gm/games")
+async def get_gm_games_route():
+    """Returns the library of historical Grandmaster masterpieces."""
+    return [g.to_dict() for g in get_all_gm_games()]
+
+
+@app.post("/api/analysis/gm/start")
+async def start_gm_game_route(body: StartGMRequest):
+    """Starts Guess-the-Move training mode for a specific GM game."""
+    return state_manager.start_gm_game(body.game_id)
+
+
+@app.post("/api/analysis/gm/guess")
+async def submit_gm_guess_route(body: GMGuessRequest):
+    """Validates a move guess in GM Relive mode."""
+    return state_manager.submit_gm_guess(body.uci)
+
+
+@app.post("/api/analysis/blunder_drill/start")
+async def start_blunder_drill_route(body: StartBlunderDrillRequest | None = None):
+    """Starts interactive Blunder Blitz training on game mistakes."""
+    idx = body.index if body else 0
+    return state_manager.start_blunder_drill(idx)
+
+
+@app.post("/api/analysis/blunder_drill/attempt")
+async def submit_blunder_attempt_route(body: BlunderAttemptRequest):
+    """Evaluates a tactical puzzle attempt in Blunder Blitz mode."""
+    return state_manager.submit_blunder_attempt(body.uci)
+
+
+@app.post("/api/analysis/blunder_drill/hint")
+async def toggle_blunder_hint_route():
+    """Toggles LED hint on the board for the active blunder challenge."""
+    return {"hint_active": state_manager.toggle_blunder_hint()}
 
 
 # --- WebSocket Stream ---

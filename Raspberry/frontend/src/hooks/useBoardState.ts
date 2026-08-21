@@ -24,6 +24,80 @@ export interface MoveHint {
   delta_cp: number;
 }
 
+export interface AnalysisMoveItem {
+  ply: number;
+  turn: 'white' | 'black';
+  uci: string;
+  san: string;
+  from: string;
+  to: string;
+  classification: 'best' | 'good' | 'inaccuracy' | 'blunder';
+  delta_cp: number;
+  best_move?: string | null;
+}
+
+export interface BlunderChallenge {
+  ply_index: number;
+  fen_before: string;
+  played_move: string;
+  classification: string;
+  delta_cp: number;
+  best_move: string;
+  best_score_cp?: number | null;
+  description: string;
+  top_moves?: any[];
+}
+
+export interface GMGameSummary {
+  id: string;
+  title: string;
+  event: string;
+  year: number;
+  white: string;
+  white_elo?: string | null;
+  black: string;
+  black_elo?: string | null;
+  result: string;
+  description: string;
+  eco: string;
+  opening: string;
+  moves_count: number;
+  key_plys?: number[];
+  annotations?: Record<number, string>;
+}
+
+export interface AnalysisState {
+  active: boolean;
+  submode: 'review' | 'blunder_drill' | 'gm_relive';
+  is_loading: boolean;
+  current_ply: number;
+  total_plys: number;
+  game_moves: string[];
+  evaluations: any[];
+  played_analyses: AnalysisMoveItem[];
+  accuracy: {
+    white: number;
+    black: number;
+  };
+  counts: {
+    white?: Record<string, number>;
+    black?: Record<string, number>;
+  };
+  current_eval?: any;
+  branch_moves: string[];
+  is_branching: boolean;
+  anchor_ply?: number | null;
+  anchor_coord?: [number, number] | null;
+  blunders: BlunderChallenge[];
+  blunder_index: number;
+  blunder_attempts: number;
+  blunder_hint_active: boolean;
+  gm_game?: GMGameSummary | null;
+  gm_score: number;
+  gm_guesses: any[];
+  fen: string;
+}
+
 export interface GestureItem {
   name: string;
   description: string;
@@ -31,6 +105,7 @@ export interface GestureItem {
   step: number;
   hint?: string | null;
   time_remaining?: number;
+  starter_coord?: [number, number] | null;
 }
 
 export interface GestureState {
@@ -58,9 +133,10 @@ export interface CoachPayload {
 }
 
 export interface BoardState {
-  status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER';
+  status: 'IDLE' | 'SEEKING' | 'PLAYING' | 'SETUP' | 'GAME_OVER' | 'ANALYSIS';
   virtual_only?: boolean;
   gesture?: GestureState;
+  analysis?: AnalysisState;
   physical: {
     rows: number;
     cols: number;

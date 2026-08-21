@@ -1,0 +1,757 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Sparkles, 
+  Zap, 
+  Trophy, 
+  Target, 
+  RotateCcw, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Play, 
+  ChevronLeft, 
+  ChevronRight, 
+  Layers, 
+  Sun, 
+  BookOpen, 
+  Award, 
+  Compass, 
+  Lightbulb, 
+  Flame, 
+  HelpCircle,
+  TrendingUp,
+  History
+} from 'lucide-react';
+import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
+import { 
+  startAnalysis, 
+  stepAnalysis, 
+  resetAnalysisBranch, 
+  stopAnalysis, 
+  getGMGames, 
+  startGMGame, 
+  submitGMGuess, 
+  startBlunderDrill, 
+  submitBlunderAttempt, 
+  toggleBlunderHint 
+} from '../api';
+
+interface AnalysisTabProps {
+  boardState: BoardState;
+}
+
+export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
+  const analysis = boardState.analysis;
+  const [subMode, setSubMode] = useState<'review' | 'blunder_drill' | 'gm_relive'>('review');
+  const [gmGamesList, setGmGamesList] = useState<GMGameSummary[]>([]);
+  const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [guessInput, setGuessInput] = useState<string>('');
+
+  // Fetch GM games on mount
+  useEffect(() => {
+    getGMGames().then((data) => {
+      if (Array.isArray(data)) {
+        setGmGamesList(data);
+      }
+    }).catch((err) => console.error('Error fetching GM games:', err));
+  }, []);
+
+  // Sync submode with backend state
+  useEffect(() => {
+    if (analysis?.submode) {
+      setSubMode(analysis.submode);
+    }
+  }, [analysis?.submode]);
+
+  const currentPly = analysis?.current_ply ?? 0;
+  const totalPlys = analysis?.total_plys ?? 0;
+  const playedAnalyses = analysis?.played_analyses ?? [];
+  const evaluations = analysis?.evaluations ?? [];
+  const blunders = analysis?.blunders ?? [];
+  const activeBlunderIndex = analysis?.blunder_index ?? 0;
+  const currentBlunder = blunders[activeBlunderIndex];
+
+  // SVG Evaluation Curve calculations
+  const evalPoints = useMemo(() => {
+    if (!evaluations.length) return [];
+    return evaluations.map((ev, idx) => {
+      const winChance = ev.win_chance ?? 50.0;
+      // Map win chance (0..100) to SVG Y coordinate (height 140, padded 10..130)
+      const y = 130 - (winChance / 100) * 120;
+      return { ply: idx, y, winChance, score_cp: ev.score_cp, mate: ev.mate };
+    });
+  }, [evaluations]);
+
+  const handleStartAnalysis = async () => {
+    setFeedbackMsg({ text: 'Analyzing game with Stockfish...', type: 'info' });
+    try {
+      await startAnalysis();
+      setFeedbackMsg({ text: 'Game analysis ready!', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch (err) {
+      setFeedbackMsg({ text: 'Failed to start analysis.', type: 'error' });
+    }
+  };
+
+  const handleStep = async (ply: number) => {
+    try {
+      await stepAnalysis(ply);
+    } catch (err) {
+      console.error('Error stepping analysis:', err);
+    }
+  };
+
+  const handleResetBranch = async () => {
+    try {
+      await resetAnalysisBranch();
+      setFeedbackMsg({ text: 'Restored main game timeline.', type: 'info' });
+      setTimeout(() => setFeedbackMsg(null), 2500);
+    } catch (err) {
+      console.error('Error resetting branch:', err);
+    }
+  };
+
+  const handleStartGM = async (gameId: string) => {
+    setSelectedGMId(gameId);
+    setFeedbackMsg({ text: 'Loading Grandmaster masterpiece...', type: 'info' });
+    try {
+      await startGMGame(gameId);
+      setSubMode('gm_relive');
+      setFeedbackMsg({ text: 'GM game loaded! Guess the first move.', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch (err) {
+      setFeedbackMsg({ text: 'Failed to load GM game.', type: 'error' });
+    }
+  };
+
+  const handleGMGuessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guessInput.trim()) return;
+    try {
+      const res = await submitGMGuess(guessInput.trim());
+      if (res.match === 'exact') {
+        setFeedbackMsg({ text: `🌟 ${res.commentary || 'Brilliant! You matched the Grandmaster!'} (+${res.points} pts)`, type: 'success' });
+      } else {
+        setFeedbackMsg({ text: `❌ ${res.commentary || 'Incorrect guess.'}`, type: 'error' });
+      }
+      setGuessInput('');
+    } catch (err) {
+      setFeedbackMsg({ text: 'Error submitting guess.', type: 'error' });
+    }
+  };
+
+  const handleBlunderAttemptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guessInput.trim()) return;
+    try {
+      const res = await submitBlunderAttempt(guessInput.trim());
+      if (res.correct) {
+        setFeedbackMsg({ text: `🏆 ${res.message}`, type: 'success' });
+      } else {
+        setFeedbackMsg({ text: `❌ ${res.message} (${res.attempts_remaining} attempts left)`, type: 'error' });
+      }
+      setGuessInput('');
+    } catch (err) {
+      setFeedbackMsg({ text: 'Error submitting blunder attempt.', type: 'error' });
+    }
+  };
+
+  const handleToggleHint = async () => {
+    try {
+      const res = await toggleBlunderHint();
+      setFeedbackMsg({ 
+        text: res.hint_active ? '💡 Move origin highlighted in Mint Emerald on the board.' : 'Hint turned off.', 
+        type: 'info' 
+      });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch (err) {
+      console.error('Error toggling hint:', err);
+    }
+  };
+
+  const getQualityBadge = (tier: string) => {
+    switch (tier) {
+      case 'best':
+        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">BEST</span>;
+      case 'good':
+        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-cyan-950/80 text-cyan-400 border border-cyan-500/30">GOOD</span>;
+      case 'inaccuracy':
+        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-amber-950/80 text-amber-400 border border-amber-500/30">INACC</span>;
+      case 'blunder':
+        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-rose-950/80 text-rose-400 border border-rose-500/30">BLUNDER</span>;
+      default:
+        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-slate-800 text-slate-400">MOVE</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Top Banner Navigation */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-violet-600/20 border border-violet-500/30 rounded-xl text-violet-400">
+            <Compass className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              Analysis & Training Laboratory
+              <span className="px-2 py-0.5 text-xs rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                Cyber-Physical
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400">
+              Interactive post-game review, blunder rehabilitation drills, and historical Grandmaster guess-the-move.
+            </p>
+          </div>
+        </div>
+
+        {/* Submode Selector */}
+        <div className="flex items-center bg-slate-950/80 p-1.5 rounded-xl border border-slate-800">
+          <button
+            onClick={() => setSubMode('review')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              subMode === 'review'
+                ? 'bg-violet-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Game Review
+          </button>
+          <button
+            onClick={() => {
+              setSubMode('blunder_drill');
+              if (blunders.length > 0) startBlunderDrill(0);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              subMode === 'blunder_drill'
+                ? 'bg-rose-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            Blunder Blitz ({blunders.length})
+          </button>
+          <button
+            onClick={() => setSubMode('gm_relive')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              subMode === 'gm_relive'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            GM Time Machine
+          </button>
+        </div>
+      </div>
+
+      {/* Feedback Toast Banner */}
+      {feedbackMsg && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium animate-fadeIn ${
+          feedbackMsg.type === 'success'
+            ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
+            : feedbackMsg.type === 'error'
+            ? 'bg-rose-950/80 border-rose-500/40 text-rose-300'
+            : 'bg-violet-950/80 border-violet-500/40 text-violet-300'
+        }`}>
+          <span>{feedbackMsg.text}</span>
+          <button onClick={() => setFeedbackMsg(null)} className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* SUB-VIEW 1: GAME REVIEW ("The Grandmaster's Lens") */}
+      {subMode === 'review' && (
+        <div className="space-y-6">
+          {/* Accuracy & Mistake Summary Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">White Accuracy</span>
+                <div className="text-2xl font-bold text-white mt-1">{analysis?.accuracy?.white ?? 100.0}%</div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Best: {analysis?.counts?.white?.best ?? 0} | Good: {analysis?.counts?.white?.good ?? 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-full border-4 border-emerald-500/40 flex items-center justify-center text-xs font-bold text-emerald-400 bg-emerald-500/10">
+                {Math.round(analysis?.accuracy?.white ?? 100)}%
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Black Accuracy</span>
+                <div className="text-2xl font-bold text-white mt-1">{analysis?.accuracy?.black ?? 100.0}%</div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Best: {analysis?.counts?.black?.best ?? 0} | Good: {analysis?.counts?.black?.good ?? 0}
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-full border-4 border-cyan-500/40 flex items-center justify-center text-xs font-bold text-cyan-400 bg-cyan-500/10">
+                {Math.round(analysis?.accuracy?.black ?? 100)}%
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Critical Mistakes</span>
+                <div className="text-2xl font-bold text-rose-400 mt-1">
+                  {(analysis?.counts?.white?.blunder ?? 0) + (analysis?.counts?.black?.blunder ?? 0)} Blunders
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {(analysis?.counts?.white?.inaccuracy ?? 0) + (analysis?.counts?.black?.inaccuracy ?? 0)} Inaccuracies
+                </div>
+              </div>
+              <button
+                onClick={handleStartAnalysis}
+                className="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Re-Analyze
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive SVG Evaluation Flow Graph */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-bold text-white">Evaluation Flow & Move Quality Graph</h3>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> Best</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> Good</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Inacc</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span> Blunder</span>
+              </div>
+            </div>
+
+            {/* SVG Graph Viewport */}
+            <div className="relative w-full h-36 bg-slate-950/80 rounded-xl border border-slate-800/80 overflow-hidden">
+              {evalPoints.length > 1 ? (
+                <svg className="w-full h-full" viewBox={`0 0 ${Math.max(400, evalPoints.length * 24)} 140`} preserveAspectRatio="none">
+                  {/* Center zero-evaluation line */}
+                  <line x1="0" y1="70" x2={Math.max(400, evalPoints.length * 24)} y2="70" stroke="#334155" strokeDasharray="3 3" strokeWidth="1" />
+
+                  {/* Shaded Win Area */}
+                  <path
+                    d={`M 0,70 ${evalPoints.map((p, i) => `L ${i * 24},${p.y}`).join(' ')} L ${(evalPoints.length - 1) * 24},70 Z`}
+                    fill="url(#evalGradient)"
+                    opacity="0.35"
+                  />
+
+                  {/* Gradient definition */}
+                  <defs>
+                    <linearGradient id="evalGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="50%" stopColor="#38bdf8" />
+                      <stop offset="100%" stopColor="#f43f5e" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Main Evaluation Line */}
+                  <polyline
+                    fill="none"
+                    stroke="#818cf8"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={evalPoints.map((p, i) => `${i * 24},${p.y}`).join(' ')}
+                  />
+
+                  {/* Interactive Nodes for each ply */}
+                  {evalPoints.map((p, i) => {
+                    const played = playedAnalyses[i];
+                    const tier = played?.classification || 'good';
+                    const nodeColor = tier === 'best' ? '#10b981' : tier === 'good' ? '#06b6d4' : tier === 'inaccuracy' ? '#f59e0b' : '#f43f5e';
+                    const isSelected = i === currentPly;
+
+                    return (
+                      <g key={i} onClick={() => handleStep(i)} className="cursor-pointer group">
+                        {isSelected && (
+                          <line x1={i * 24} y1="0" x2={i * 24} y2="140" stroke="#a855f7" strokeWidth="2" strokeDasharray="2 2" />
+                        )}
+                        <circle
+                          cx={i * 24}
+                          cy={p.y}
+                          r={isSelected ? 6 : (tier === 'blunder' ? 4.5 : 3)}
+                          fill={nodeColor}
+                          stroke={isSelected ? '#ffffff' : '#0f172a'}
+                          strokeWidth={isSelected ? 2 : 1}
+                          className="transition-all hover:scale-150"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
+                  Click "Re-Analyze" or activate the Center Royal Gate on the board to view the live evaluation curve.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Virtual Branch Banner */}
+          {analysis?.is_branching && (
+            <div className="p-4 bg-violet-950/70 border border-violet-500/40 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-violet-500/20 rounded-xl text-violet-300">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-violet-200">
+                    Virtual Analysis Branch Active (Diverged at Move {Math.floor((analysis.anchor_ply || 0) / 2) + 1})
+                  </div>
+                  <div className="text-xs text-violet-400">
+                    The deviation square is glowing in Royal Violet on the physical board. Return your pieces to snap back.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleResetBranch}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Return to Game Timeline
+              </button>
+            </div>
+          )}
+
+          {/* Step Navigation Controls & Move History List */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Step Controls & Position Details */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Position Navigator</h4>
+              
+              <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => handleStep(0)}
+                  disabled={currentPly <= 0}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30"
+                  title="First Move"
+                >
+                  ⏮
+                </button>
+                <button
+                  onClick={() => handleStep(currentPly - 1)}
+                  disabled={currentPly <= 0}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30"
+                  title="Previous Move"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-xs font-bold text-white">
+                  Ply {currentPly} / {totalPlys}
+                </span>
+                <button
+                  onClick={() => handleStep(currentPly + 1)}
+                  disabled={currentPly >= totalPlys}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30"
+                  title="Next Move"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleStep(totalPlys)}
+                  disabled={currentPly >= totalPlys}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30"
+                  title="Last Move"
+                >
+                  ⏭
+                </button>
+              </div>
+
+              {/* Current Move Assessment */}
+              {currentPly > 0 && currentPly <= playedAnalyses.length && (
+                <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Move Played:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">{playedAnalyses[currentPly - 1]?.san}</span>
+                      {getQualityBadge(playedAnalyses[currentPly - 1]?.classification)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Centipawn Loss:</span>
+                    <span className="font-mono text-slate-300">Δ {playedAnalyses[currentPly - 1]?.delta_cp} cp</span>
+                  </div>
+                  {playedAnalyses[currentPly - 1]?.best_move && (
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/50">
+                      <span className="text-emerald-400 font-semibold">Engine Best:</span>
+                      <span className="font-mono font-bold text-emerald-300">
+                        {playedAnalyses[currentPly - 1]?.best_move}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Top Engine Candidates */}
+              <div className="space-y-2 pt-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Candidates</span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {analysis?.current_eval?.top_moves?.slice(0, 3).map((m: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-950/50 rounded-lg text-xs border border-slate-800/60">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500 font-bold">{idx + 1}.</span>
+                        <span className="font-mono font-bold text-slate-200">{m.uci}</span>
+                        {getQualityBadge(m.classification)}
+                      </div>
+                      <span className="font-mono text-slate-400">
+                        {m.score_cp !== null ? `${m.score_cp > 0 ? '+' : ''}${(m.score_cp / 100).toFixed(1)}` : 'Mate'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Move History List */}
+            <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Game Notation & Evaluation Breakdown</h4>
+                <div className="max-h-72 overflow-y-auto pr-2 space-y-1">
+                  {Array.from({ length: Math.ceil(playedAnalyses.length / 2) }).map((_, moveIdx) => {
+                    const whitePly = moveIdx * 2;
+                    const blackPly = moveIdx * 2 + 1;
+                    const wMove = playedAnalyses[whitePly];
+                    const bMove = playedAnalyses[blackPly];
+
+                    return (
+                      <div key={moveIdx} className="grid grid-cols-11 gap-2 p-1.5 rounded-lg text-xs hover:bg-slate-800/40 transition-colors">
+                        <span className="col-span-1 text-slate-500 font-bold">{moveIdx + 1}.</span>
+                        
+                        {/* White Move */}
+                        <div
+                          onClick={() => handleStep(whitePly + 1)}
+                          className={`col-span-5 flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
+                            currentPly === whitePly + 1 ? 'bg-violet-600/30 border border-violet-500/50 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{wMove?.san || wMove?.uci}</span>
+                          {wMove && getQualityBadge(wMove.classification)}
+                        </div>
+
+                        {/* Black Move */}
+                        {bMove ? (
+                          <div
+                            onClick={() => handleStep(blackPly + 1)}
+                            className={`col-span-5 flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
+                              currentPly === blackPly + 1 ? 'bg-violet-600/30 border border-violet-500/50 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>{bMove.san || bMove.uci}</span>
+                            {getQualityBadge(bMove.classification)}
+                          </div>
+                        ) : (
+                          <div className="col-span-5"></div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end">
+                <button
+                  onClick={stopAnalysis}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                >
+                  Exit Analysis Mode
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-VIEW 2: BLUNDER BLITZ DRILL */}
+      {subMode === 'blunder_drill' && (
+        <div className="space-y-6">
+          {blunders.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Blunder selector sidebar */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mistakes Extracted ({blunders.length})</h4>
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {blunders.map((b, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => startBlunderDrill(idx)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        activeBlunderIndex === idx
+                          ? 'bg-rose-950/60 border-rose-500 text-white shadow-md'
+                          : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold mb-1">
+                        <span>Puzzle #{idx + 1} (Move {Math.floor(b.ply_index / 2) + 1})</span>
+                        {getQualityBadge(b.classification)}
+                      </div>
+                      <div className="text-xs text-slate-400 line-clamp-1">{b.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Active Blunder Challenge Card */}
+              <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-rose-400" />
+                      <h3 className="text-base font-bold text-white">
+                        Blunder Rehabilitation #{activeBlunderIndex + 1}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-rose-400 font-bold bg-rose-950/50 px-3 py-1 rounded-full border border-rose-500/30">
+                      Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map((_, i) => '❤️').join('')}
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-slate-300 bg-slate-950 p-4 rounded-xl border border-slate-800 leading-relaxed">
+                    {currentBlunder?.description || 'Find the best tactical refutation in this position.'}
+                  </p>
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      onClick={handleToggleHint}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border border-amber-500/20"
+                    >
+                      <Lightbulb className="w-4 h-4" />
+                      {analysis?.blunder_hint_active ? 'Hide LED Hint' : 'Show LED Hint on Board'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Move Guess Form */}
+                <form onSubmit={handleBlunderAttemptSubmit} className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Enter algebraic move (e.g. e2e4 or Re8)..."
+                    value={guessInput}
+                    onChange={(e) => setGuessInput(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-bold transition-all shadow-md"
+                  >
+                    Submit Move
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
+              <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">No Critical Blunders Found!</h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Your last game was played with sharp tactical precision, or analysis has not been run yet.
+              </p>
+              <button
+                onClick={handleStartAnalysis}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold"
+              >
+                Analyze Last Game
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-VIEW 3: MASTER GAME TIME MACHINE */}
+      {subMode === 'gm_relive' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Curated GM Games Carousel */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Historical GM Masterpieces</h4>
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                {gmGamesList.map((g) => (
+                  <div
+                    key={g.id}
+                    onClick={() => handleStartGM(g.id)}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                      selectedGMId === g.id
+                        ? 'bg-amber-950/60 border-amber-500 text-white shadow-md'
+                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold mb-1">
+                      <span>{g.title}</span>
+                      <span className="text-amber-400 font-mono">{g.year}</span>
+                    </div>
+                    <div className="text-xs text-slate-300 font-medium">{g.white} vs. {g.black}</div>
+                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                      <span>{g.opening}</span>
+                      <span>•</span>
+                      <span>{g.moves_count} moves</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Guess-the-Move Interactive Board Card */}
+            <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        {analysis?.gm_game?.title || 'Guess the Grandmaster Move'}
+                      </h3>
+                      <div className="text-xs text-slate-400">
+                        {analysis?.gm_game?.event} ({analysis?.gm_game?.year})
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400 uppercase font-semibold">Your Score</div>
+                    <div className="text-lg font-bold text-amber-400">{analysis?.gm_score ?? 0} pts</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">Historical Context</div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {analysis?.gm_game?.description || 'Relive this legendary match move-by-move on your real wooden board.'}
+                  </p>
+                </div>
+
+                {/* Key annotations callout */}
+                {analysis?.gm_game?.annotations?.[currentPly] && (
+                  <div className="mt-3 p-3.5 bg-amber-950/40 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>{analysis.gm_game.annotations[currentPly]}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Move Guess Form */}
+              <form onSubmit={handleGMGuessSubmit} className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Guess the next GM move (e.g. e2e4 or Rxd4)..."
+                  value={guessInput}
+                  onChange={(e) => setGuessInput(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-bold transition-all shadow-md"
+                >
+                  Guess Move
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

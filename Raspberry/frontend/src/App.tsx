@@ -48,8 +48,10 @@ import {
   RotateCcw,
   BookmarkCheck,
   Sun,
-  Moon
+  Moon,
+  Compass
 } from 'lucide-react'
+import { AnalysisTab } from './components/AnalysisTab'
 
 // Helper to render digital piece characters/icons
 const PIECE_ICONS_WHITE: Record<string, string> = {
@@ -59,14 +61,12 @@ const PIECE_ICONS_BLACK: Record<string, string> = {
   p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚'
 };
 
-function renderPiece(p: string) {
-  if (!p || p === '.') return null;
-  const isWhite = p === p.toUpperCase();
-  const piece = p.toLowerCase();
-  const icon = isWhite ? PIECE_ICONS_WHITE[piece] : PIECE_ICONS_BLACK[piece];
-
+function PieceIcon({ piece }: { piece: string }) {
+  const isWhite = piece === piece.toUpperCase();
+  const p = piece.toLowerCase();
+  const icon = isWhite ? PIECE_ICONS_WHITE[p] : PIECE_ICONS_BLACK[p];
   return (
-    <span className={`text-4xl ${isWhite ? 'text-slate-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]' : 'text-slate-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]'} select-none transition-transform hover:scale-105`}>
+    <span className={`select-none leading-none ${isWhite ? 'text-slate-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' : 'text-slate-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]'}`}>
       {icon || p}
     </span>
   );
@@ -75,7 +75,7 @@ function renderPiece(p: string) {
 function App() {
   const { state, isConnected } = useBoardState();
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'play' | 'debug'>('play');
+  const [activeTab, setActiveTab] = useState<'play' | 'analysis' | 'debug'>('play');
 
   // Lichess Account info
   const [account, setAccount] = useState<LichessAccount | null>(null);
@@ -996,6 +996,15 @@ function App() {
               Play
             </button>
             <button 
+              onClick={() => setActiveTab('analysis')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 ${
+                activeTab === 'analysis' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Compass size={12} />
+              Analysis
+            </button>
+            <button 
               onClick={() => setActiveTab('debug')}
               className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 ${
                 activeTab === 'debug' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
@@ -1404,12 +1413,22 @@ function App() {
 
               {/* Game Over Info */}
               {(state.status === 'GAME_OVER' || state.game?.is_game_over) && (
-                <div className="bg-purple-950/40 border border-purple-500/40 rounded-xl p-3 flex flex-col items-center gap-1 text-center">
+                <div className="bg-purple-950/40 border border-purple-500/40 rounded-xl p-3 flex flex-col items-center gap-2 text-center">
                   <CheckCircle2 className="text-purple-400" size={24} />
                   <span className="font-bold text-sm text-purple-200">Game Concluded</span>
                   <span className="text-xs text-purple-300/80 font-mono">
                     Winner: {state.game?.winner ? state.game.winner.toUpperCase() : 'Draw'} ({state.game?.end_reason || 'Finished'})
                   </span>
+                  <button
+                    onClick={() => {
+                      setActiveTab('analysis');
+                      startAnalysis();
+                    }}
+                    className="w-full mt-1 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs py-2 px-3 rounded-lg shadow flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Compass size={14} />
+                    <span>Analyze Game ("The Grandmaster's Lens")</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1419,26 +1438,20 @@ function App() {
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Sparkles size={14} className="text-indigo-400" />
-                  AI Coach & Training
+                  AI Coach &amp; Eval Bar
                 </h3>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
-                  state.coach?.fair_play_active
-                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    : state.coach?.enabled
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {state.coach?.fair_play_active ? 'Fair-Play Enforced' : state.coach?.enabled ? 'Coach Active' : 'Coach Off'}
+                <span className="text-[10px] font-bold font-mono text-indigo-400 bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-500/30">
+                  Stockfish 16 Multi-PV
                 </span>
               </div>
 
-              {/* Toggles */}
-              <div className="flex flex-col gap-2.5 pt-1">
-                {/* Live Eval Bar Toggle */}
+              {/* Evaluation Bar & Blunder Guard Toggles */}
+              <div className="flex flex-col gap-3 pt-1">
+                {/* File 'h' Evaluation Bar Toggle */}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-200">Live Evaluation Bar</span>
-                    <span className="text-[10px] text-slate-400">File 'h' LEDs &amp; virtual gauge</span>
+                    <span className="text-xs font-bold text-slate-200">Perimeter Eval Bar</span>
+                    <span className="text-[10px] text-slate-400">File 'h' 8-LED White vs. Black win chance</span>
                   </div>
                   <button
                     onClick={() => {
@@ -1547,7 +1560,7 @@ function App() {
                       <div className="flex flex-col text-left">
                         <span className="text-xs font-bold text-emerald-200">Board Setup Complete</span>
                         <p className="text-[11px] text-emerald-300/80 leading-snug">
-                          All 32 physical pieces detected in starting positions — Ready to seek and play!
+                          All 32 physical pieces detected in starting positions. Gesture starter pawns (<strong className="text-amber-200">a2 Night Mode</strong>, <strong className="text-violet-200">e2 Analysis</strong>, <strong className="text-emerald-200">h2 Restart</strong>) are glowing and ready!
                         </p>
                       </div>
                     </div>
@@ -1838,6 +1851,11 @@ function App() {
               </div>
             )}
           </div>
+        </main>
+      ) : activeTab === 'analysis' ? (
+        /* Analysis & Training Laboratory Tab */
+        <main className="flex-grow p-4 md:p-8 max-w-6xl mx-auto w-full">
+          <AnalysisTab boardState={state} />
         </main>
       ) : (
         /* Debug / Hardware Diagnostics Tab */

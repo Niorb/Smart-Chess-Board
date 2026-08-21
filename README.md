@@ -31,7 +31,80 @@ An intelligent, physical-to-digital chess board system built on **Raspberry Pi**
 
 - **📊 Comprehensive Web Dashboard**
   - **Play Tab**: Responsive 2D interactive chessboard, legal move indicator dots, pawn promotion modal dialogs, turn glow clock timers with low-time warnings, and game action controls (Seek, Cancel, Resign, Offer Draw).
+  - **Analysis & Training Laboratory**: Post-game evaluation graph, move classification breakdown, blunder rehabilitation drills, and historical Grandmaster guess-the-move classics.
   - **Debug & Calibration Tab**: 8x8 per-square raw ADC heatmaps, dynamic threshold adjustment sliders (up to ±3000), single-square LED testing, square disabling, and 2-second continuous baseline recalibration.
+
+---
+
+## 🕹️ Interactive Features & Physical Board Gestures
+
+The Smart Chess Board seamlessly bridges physical piece interactions with digital analysis and training workflows. Features can be activated directly via the Web Dashboard or using intuitive physical board gestures.
+
+### 🌟 Physical Board Gestures
+
+When the board is in its starting setup with all 32 physical pieces in place, the **Gesture Starter Pawns** illuminate with a gentle breathing aura, signaling that board gestures are ready to be triggered:
+
+| Starter Pawn | Color Aura | Physical Gesture Sequence | Triggered Feature |
+| :--- | :--- | :--- | :--- |
+| **`e2`** (King's Pawn) | 🔮 Royal Violet | **Center Royal Gate**: Lift `e2` $\to$ Lift `d2` $\to$ Replace both | **Post-Game Analysis & Interactive Branching** ("The Grandmaster's Lens") |
+| **`h2`** (Kingside Pawn) | 🟠 Amber | **Kingside Corner Gate**: Lift `h2` $\to$ Place on `h1` $\to$ Return to `h2` | **Instant Game Restart** (Re-seek previous time control & settings) |
+| **`a2`** (Queenside Pawn) | 🔷 Azure | **Queenside Corner Gate**: Lift `a2` $\to$ Place on `a1` $\to$ Return to `a2` | **Toggle Night Mode** (Dim LED brightness for ambient evening play) |
+
+---
+
+### 🔍 Post-Game Analysis ("The Grandmaster's Lens")
+- **Activation**:
+  - **Physical Gesture**: Center Royal Gate (`e2` $\to$ `d2` $\to$ Replace both).
+  - **Web App**: Click **Analysis** in the header navigation or **"Analyze Game"** on the match conclusion banner.
+- **Physical LED Guidance**:
+  - **Played Move**: Origin illuminates in **Amber**, destination square illuminates in a color grade indicating move quality:
+    - 🟢 **Mint Emerald**: Best Move ($\Delta \le 20$ cp)
+    - 🔷 **Cyan Azure**: Good Move ($\Delta \le 60$ cp)
+    - 🟡 **Warm Amber**: Inaccuracy ($\Delta \le 150$ cp)
+    - 🔴 **Rose Red**: Blunder ($\Delta > 150$ cp)
+  - **Engine Best Alternative**: Gently pulses with a **Mint Emerald halo** if different from the played move.
+  - **Interactive Virtual Branching**: Pick up and move any piece to test an alternative line! The deviation square is anchored in **Royal Violet**. Returning pieces back to the anchor square automatically snaps the board back to the original game timeline.
+- **Web App Companion**:
+  - Interactive SVG win-chance / centipawn curve with clickable ply nodes.
+  - White & Black overall accuracy percentages and move classification tallies.
+  - Stockfish Multi-PV candidate lines for every position.
+
+---
+
+### ⚡ Blunder Blitz Drill (Mistake Rehabilitation)
+- **Activation**:
+  - **Web App**: Select **Blunder Blitz** tab inside the Analysis laboratory.
+- **How It Works**:
+  - Automatically isolates tactical blunders and inaccuracies from your recent games.
+  - Sets up the board position and prompts you to find the grandmaster solution.
+  - Play moves on the physical board or enter them in the web UI.
+  - Includes a **"Show LED Hint"** button to spotlight the piece that needs to move in Mint Emerald.
+
+---
+
+### ⏳ Master Game Time Machine (Guess-the-Move Classics)
+- **Activation**:
+  - **Web App**: Select **GM Time Machine** tab inside the Analysis laboratory.
+- **Curated Classics**:
+  - *Garry Kasparov vs. Veselin Topalov (1999)* — "Kasparov's Immortal"
+  - *Mikhail Tal vs. Mikhail Botvinnik (1960)* — World Championship Game 6
+  - *Bobby Fischer vs. Donald Byrne (1956)* — "Game of the Century"
+  - *Paul Morphy vs. Duke of Brunswick & Count Isouard (1858)* — "The Opera Game"
+  - *Adolf Anderssen vs. Lionel Kieseritzky (1851)* — "The Immortal Game"
+  - *Magnus Carlsen vs. Viswanathan Anand (2013)* — World Championship Game 9
+- **Interactive Training**:
+  - Replay move-by-move on the physical wooden board.
+  - Test your intuition by guessing the Grandmaster's next move to earn points and read historical commentary annotations.
+
+---
+
+### 🤖 Live AI Coach & Perimeter Evaluation Bar
+- **Activation**:
+  - **Web App**: Toggle **Perimeter Eval Bar** or **Blunder Guard** in the Play tab sidebar.
+- **Features**:
+  - **File 'h' 8-LED Eval Bar**: Displays real-time Stockfish win chance on the 8 LEDs along the right edge of the board.
+  - **Blunder Guard**: Illuminates legal destination squares in color-coded tiers when you lift a piece.
+  - **Fair-Play Gate**: Automatically disabled during rated human online matches to strictly preserve fair-play on Lichess.
 
 ---
 
