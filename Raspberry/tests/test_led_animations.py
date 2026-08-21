@@ -518,3 +518,51 @@ def test_render_board_ready_day_and_night():
         assert lit_squares <= 10, f"Too many squares lit in night mode ({lit_squares}) at progress {p}"
 
 
+def test_render_analysis_computing_power_budget_and_night_mode():
+    """
+    Verify render_analysis_computing:
+    - Low-power budget: max active LEDs <= 14 simultaneously (<= 7 squares).
+    - Valid RGB pixel bounds: 0 <= r, g, b <= 255 across all timestamps.
+    - Night mode: scaled moonlight sapphire ambient base floor without budget violation.
+    """
+    from app.led_animations import render_analysis_computing, unpack_rgb
+    from app.led_helpers import COLOR_INT_NIGHT_MODE, get_led_indices
+
+    test_timestamps = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.5, 5.0, 10.0]
+
+    # 1. Day Mode Test
+    for ts in test_timestamps:
+        frame = [0] * NUM_LEDS
+        render_analysis_computing(ts, frame, {"night_mode": False})
+
+        active_leds = sum(1 for val in frame if val != 0)
+        assert active_leds <= 14, f"Power budget exceeded: {active_leds} LEDs at t={ts}"
+
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 7, f"Power budget exceeded: {lit_squares} squares at t={ts}"
+
+        for val in frame:
+            r, g, b = unpack_rgb(val)
+            assert 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255
+
+    # 2. Night Mode Test
+    for ts in test_timestamps:
+        frame_night = [0] * NUM_LEDS
+        render_analysis_computing(ts, frame_night, {"night_mode": True})
+
+        # Non-idle squares must adhere to the 7-square limit
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                indices = get_led_indices(r, c)
+                if any(frame_night[idx] != COLOR_INT_NIGHT_MODE and frame_night[idx] != 0 for idx in indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 7, f"Night power budget exceeded: {lit_squares} squares at t={ts}"
+
+
+

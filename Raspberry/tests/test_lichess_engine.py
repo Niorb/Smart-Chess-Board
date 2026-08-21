@@ -604,3 +604,78 @@ def test_get_user_recent_games_parsing():
     asyncio.run(_test())
 
 
+def test_record_last_game_records_moves_id_and_persists_settings():
+    """
+    Verify _record_last_game in LichessEngine:
+    - Extracts UCI moves from board.move_stack into last_game_moves.
+    - Sets last_game_id and last_game_moves on self.
+    - Synchronizes last_game_moves and last_game_id to state_manager.
+    - Persists last_game_moves and last_game_id into hardware settings.
+    """
+    from board_hardware import settings
+    from unittest.mock import MagicMock
+
+    engine = LichessEngine()
+    engine.current_game_id = "recGame_123"
+    engine.username = "RobinPi"
+    engine._apply_moves("e2e4 e7e5 g1f3 b8c6 f1c4")
+
+    mock_state_mgr = MagicMock()
+    mock_state_mgr.last_game_moves = None
+    mock_state_mgr.last_game_id = None
+
+    # Execute recording
+    engine._record_last_game(state_manager=mock_state_mgr)
+
+    expected_moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"]
+    assert engine.last_game_moves == expected_moves
+    assert engine.last_game_id == "recGame_123"
+
+    # State manager updated
+    assert mock_state_mgr.last_game_moves == expected_moves
+    assert mock_state_mgr.last_game_id == "recGame_123"
+
+    # Settings persisted
+    assert settings.get("last_game_moves") == expected_moves
+    assert settings.get("last_game_id") == "recGame_123"
+
+
+def test_record_last_game_empty_board_fallback():
+    """Verify _record_last_game handles an aborted or empty game (0 moves) gracefully."""
+    from board_hardware import settings
+    from unittest.mock import MagicMock
+
+    engine = LichessEngine()
+    engine.current_game_id = "emptyGame_000"
+    mock_state_mgr = MagicMock()
+
+    engine._record_last_game(state_manager=mock_state_mgr)
+
+    assert engine.last_game_moves == []
+    assert engine.last_game_id is None
+
+
+def test_game_over_triggers_record_last_game():
+    """Verify game termination in _handle_game_state automatically triggers _record_last_game."""
+    from unittest.mock import MagicMock, patch
+
+    engine = LichessEngine()
+    engine.current_game_id = "mateGame_789"
+    mock_state_mgr = MagicMock()
+    mock_state_mgr.game_status = "PLAYING"
+
+    event = {
+        "type": "gameState",
+        "moves": "e2e4 e7e5 d1h5 b8c6 f1c4 g8f6 h5f7",
+        "wtime": 120000,
+        "btime": 115000,
+        "status": "mate",
+        "winner": "white",
+    }
+
+    with patch.object(engine, "_record_last_game") as mock_record:
+        engine._handle_game_state(event, mock_state_mgr)
+        mock_record.assert_called_once_with(mock_state_mgr)
+
+
+

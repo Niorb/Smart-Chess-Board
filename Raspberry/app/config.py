@@ -206,4 +206,5 @@ ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave
 ANIM_BOARD_READY_DURATION_S = 1.4  # Duration for board setup ready emerald sweep
 ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
+ANIM_ANALYSIS_COMPUTING_DURATION_S = 10.0  # Duration for analysis computing animation
 

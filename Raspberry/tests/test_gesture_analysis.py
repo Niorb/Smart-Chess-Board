@@ -112,3 +112,50 @@ def test_gesture_timeout():
     res = gesture.evaluate(grid, now + 3.5)
     assert res is False
     assert gesture.step == 0  # Timed out!
+
+
+def test_center_royal_gate_triggers_start_analysis_mode_async():
+    """
+    Verify CenterRoyalGateGesture full cycle and execution:
+    - Lift e2 -> Lift d2 -> Replace both e2 & d2.
+    - execute_completion triggers arrival flash on e2 & d2.
+    - Dispatches start_analysis_mode() on state_manager.
+    """
+    from unittest.mock import AsyncMock
+    import asyncio
+
+    async def _test():
+        mock_mgr = MockStateManager()
+        mock_mgr.start_analysis_mode = AsyncMock()
+        gesture = CenterRoyalGateGesture(state_manager=mock_mgr)
+        grid = make_standard_starting_grid()
+
+        # Step 1: Lift e2 (4, 1)
+        grid[4][1] = 0
+        gesture.evaluate(grid, now=10.0)
+        assert gesture.step == 1
+
+        # Step 2: Lift d2 (3, 1)
+        grid[3][1] = 0
+        gesture.evaluate(grid, now=11.0)
+        assert gesture.step == 2
+
+        # Step 3: Replace both e2 and d2
+        grid[4][1] = 1
+        grid[3][1] = 1
+        completed = gesture.evaluate(grid, now=12.0)
+        assert completed is True
+        assert gesture.step == 0
+
+        # Execute completion inside running loop
+        gesture.execute_completion()
+        assert len(mock_mgr.flashes) == 1
+        assert mock_mgr.flashes[0][0] == (4, 1)
+        assert mock_mgr.flashes[0][1] == [(3, 1)]
+
+        # Yield control to let scheduled task run
+        await asyncio.sleep(0.01)
+        mock_mgr.start_analysis_mode.assert_called_once()
+
+    asyncio.run(_test())
+

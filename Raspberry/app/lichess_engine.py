@@ -121,6 +121,10 @@ class LichessEngine:
             "end_reason": None,
         }
         self.opponent_gone: dict[str, Any] | None = None
+        self.last_game_moves: list[str] = []
+        self.last_game_id: str | None = None
+        self.last_game_info: dict[str, Any] = {}
+        self.last_game_my_color: str | None = None
         self._auto_claim_task: asyncio.Task | None = None
         self._seek_task: asyncio.Task | None = None
         self._stream_task: asyncio.Task | None = None
@@ -721,8 +725,38 @@ class LichessEngine:
                 self._auto_claim_task.cancel()
                 self._auto_claim_task = None
             self.opponent_gone = None
-            if state_manager.game_status == "PLAYING":
+            if self.board and self.board.move_stack:
+                self._record_last_game(state_manager)
+            if state_manager and state_manager.game_status == "PLAYING":
                 state_manager.game_status = "IDLE"
+
+    def _record_last_game(self, state_manager=None) -> None:
+        """Records the moves and metadata of the most recently finished game for analysis."""
+        if not (self.board and self.board.move_stack):
+            return
+
+        moves = [m.uci() for m in self.board.move_stack]
+        self.last_game_moves = list(moves)
+        self.last_game_id = self.current_game_id
+        self.last_game_info = dict(self.game_info)
+        self.last_game_my_color = self.my_color
+
+        if state_manager:
+            state_manager.last_game_moves = list(moves)
+            state_manager.last_game_id = self.current_game_id
+            state_manager.last_game_metadata = dict(self.game_info)
+
+        try:
+            try:
+                from app.board_hardware import save_settings, settings
+            except ImportError:
+                from board_hardware import save_settings, settings
+            settings["last_game_moves"] = list(moves)
+            settings["last_game_id"] = self.current_game_id
+            settings["last_game_my_color"] = self.my_color
+            save_settings()
+        except Exception as e:
+            logger.warning(f"Could not persist last_game_moves to settings: {e}")
 
     def _handle_opponent_gone(self, gone: bool, claim_win_in: int | float, state_manager):
         """Tracks opponent disconnection and schedules automated victory claiming."""
@@ -840,6 +874,7 @@ class LichessEngine:
             self.game_info["is_game_over"] = True
             self.game_info["winner"] = state_data.get("winner")
             self.game_info["end_reason"] = status
+            self._record_last_game(state_manager)
             state_manager.game_status = "IDLE"
             self._trigger_end_animation(state_manager, state_data.get("winner"))
         else:
@@ -867,10 +902,11 @@ class LichessEngine:
         status = event.get("status")
         winner = event.get("winner")
 
-        if (status and status != "started") or winner:
+        if (status and status != "started") or winner or self.game_info.get("is_game_over"):
             self.game_info["is_game_over"] = True
             self.game_info["winner"] = winner
             self.game_info["end_reason"] = status
+            self._record_last_game(state_manager)
             state_manager.game_status = "IDLE"
             self._trigger_end_animation(state_manager, winner)
 
@@ -999,6 +1035,7 @@ class LichessEngine:
                     self.game_info["is_game_over"] = True
                     self.game_info["winner"] = self.my_color
                     self.game_info["end_reason"] = "opponent_left"
+                    self._record_last_game(state_manager)
                     self.opponent_gone = None
                     if self._auto_claim_task and not self._auto_claim_task.done():
                         self._auto_claim_task.cancel()
@@ -1029,12 +1066,18 @@ class LichessEngine:
         try:
             async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/resign")
+                if res.status_code == 200:
+                    self.game_info["is_game_over"] = True
+                    self.game_info["winner"] = "black" if self.my_color == "white" else "white"
+                    self.game_info["end_reason"] = "resign"
+                self._record_last_game(state_manager)
                 state_manager.game_status = "IDLE"
                 if state_manager and hasattr(state_manager, "trigger_animation"):
                     state_manager.trigger_animation("GAME_LOST")
                 return res.status_code == 200
         except Exception as e:
             logger.error(f"Error resigning game: {e}")
+            self._record_last_game(state_manager)
             state_manager.game_status = "IDLE"
             return False
 
@@ -1052,12 +1095,19 @@ class LichessEngine:
         try:
             async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/abort")
+                if res.status_code == 200:
+                    self.game_info["is_game_over"] = True
+                    self.game_info["end_reason"] = "abort"
+                self._record_last_game(state_manager)
                 state_manager.game_status = "IDLE"
                 return res.status_code == 200
         except Exception as e:
             logger.error(f"Error aborting game: {e}")
+            self._record_last_game(state_manager)
             state_manager.game_status = "IDLE"
             return False
+
+    abort_game = abort
 
     async def draw(self, state_manager, accept: bool = True) -> bool:
         """Offers or accepts a draw via POST /api/board/game/{game_id}/draw/{yes/no}."""

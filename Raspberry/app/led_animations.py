@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from app.config import (
+        ANIM_ANALYSIS_COMPUTING_DURATION_S,
         ANIM_BOARD_READY_DURATION_S,
         ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
@@ -64,6 +65,7 @@ try:
     )
 except ImportError:
     from .config import (
+        ANIM_ANALYSIS_COMPUTING_DURATION_S,
         ANIM_BOARD_READY_DURATION_S,
         ANIM_CASTLE_PERIOD_S,
         ANIM_GAME_DRAWN_DURATION_S,
@@ -839,6 +841,87 @@ def render_seeking(
             set_square_in_frame(frame, c, r, col_idle)
 
 
+# Color constants for Analysis Computing Animation
+COLOR_INT_ANALYSIS_CORE = 0x5000A0   # Royal Violet power-scaled
+COLOR_INT_ANALYSIS_PULSE = 0x009040  # Mint Emerald power-scaled
+COLOR_INT_ANALYSIS_ACCENT = 0x006090 # Cyan Azure power-scaled
+
+ANALYSIS_CORE_COORDS: List[Tuple[int, int]] = [
+    (3, 3), (4, 3), (3, 4), (4, 4)
+]
+
+ANALYSIS_ORBITAL_RING: List[Tuple[int, int]] = [
+    (2, 2), (3, 2), (4, 2), (5, 2),
+    (5, 3), (5, 4), (5, 5),
+    (4, 5), (3, 5), (2, 5),
+    (2, 4), (2, 3),
+]
+
+
+def render_analysis_computing(
+    now: float,
+    frame: List[int],
+    params: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    Renders the Analysis Computing Animation on the board during Stockfish evaluation:
+    - Central 2x2 Core (d4, e4, d5, e5) breathing softly in Royal Violet.
+    - Orbital 12-square ring surrounding center with dual sweeping Mint Emerald / Azure
+      probes rotating at ~1.35 rev/sec (180 degrees opposing phase).
+    - Power-optimized to illuminate <= 6-7 squares simultaneously (< 250mA power budget).
+    - Respects night_mode with a 0.45 power attenuation factor.
+    """
+    params = params or {}
+    night_mode = bool(params.get("night_mode", False))
+    p_scale = 0.45 if night_mode else 1.0
+
+    # 1. Central 2x2 Core Breathing in Royal Violet (d4, e4, d5, e5)
+    core_breath = math.sin(now * 3.0) * 0.5 + 0.5
+    core_intensity = (0.20 + 0.55 * core_breath) * p_scale
+    core_color = scale_color(COLOR_INT_ANALYSIS_CORE, core_intensity)
+    for c, r in ANALYSIS_CORE_COORDS:
+        set_square_in_frame(frame, c, r, core_color)
+
+    # 2. Orbital 12-Square Ring with Dual Sweeping Probes (~1.35 rev/sec)
+    n_ring = len(ANALYSIS_ORBITAL_RING)  # 12
+    rot_speed = 1.35  # rev/sec
+    tau = (now * rot_speed) % 1.0  # 0.0 to 1.0
+    head1 = tau * n_ring
+    head2 = (head1 + n_ring / 2.0) % n_ring
+
+    for i, (c, r) in enumerate(ANALYSIS_ORBITAL_RING):
+        # Probe 1: Mint Emerald (head1)
+        d_behind1 = (head1 - i) % n_ring
+        if d_behind1 <= 0.4:
+            int1 = 1.0 - 0.5 * d_behind1
+        elif d_behind1 <= 1.6:
+            int1 = 0.8 * ((1.0 - (d_behind1 - 0.4) / 1.2) ** 2)
+        elif d_behind1 > (n_ring - 0.4):
+            int1 = (n_ring - d_behind1) / 0.4 * 0.5
+        else:
+            int1 = 0.0
+
+        # Probe 2: Cyan Azure (head2)
+        d_behind2 = (head2 - i) % n_ring
+        if d_behind2 <= 0.4:
+            int2 = 1.0 - 0.5 * d_behind2
+        elif d_behind2 <= 1.6:
+            int2 = 0.8 * ((1.0 - (d_behind2 - 0.4) / 1.2) ** 2)
+        elif d_behind2 > (n_ring - 0.4):
+            int2 = (n_ring - d_behind2) / 0.4 * 0.5
+        else:
+            int2 = 0.0
+
+        col = 0
+        if int1 > 0.02:
+            col = add_colors(col, scale_color(COLOR_INT_ANALYSIS_PULSE, int1 * p_scale))
+        if int2 > 0.02:
+            col = add_colors(col, scale_color(COLOR_INT_ANALYSIS_ACCENT, int2 * p_scale))
+
+        if col != 0:
+            set_square_in_frame(frame, c, r, col)
+
+
 # =============================================================================
 # LIFECYCLE ANIMATION CLASS & FACTORY
 # =============================================================================
@@ -882,6 +965,8 @@ class LifecycleAnimation:
             render_board_ready(progress, frame, self.params, now=now)
         elif anim_name in ("SEEKING", "WAITING_FOR_OPPONENT", "MATCHMAKING"):
             render_seeking(now, frame, self.params)
+        elif anim_name in ("ANALYSIS_COMPUTING", "ANALYSIS_LOADING"):
+            render_analysis_computing(now, frame, self.params)
 
 
 def create_animation(
@@ -891,7 +976,7 @@ def create_animation(
     Animation factory creating configured LifecycleAnimation instances.
 
     Args:
-        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'BOARD_READY', 'SETUP_COMPLETE', 'SEEKING', 'WAITING_FOR_OPPONENT').
+        name: Name of animation ('GAME_STARTED', 'GAME_WON', 'GAME_LOST', 'GAME_DRAWN', 'BOARD_READY', 'SETUP_COMPLETE', 'SEEKING', 'WAITING_FOR_OPPONENT', 'ANALYSIS_COMPUTING').
         params: Optional metadata dict (e.g. {'my_color': 'white'}).
 
     Returns:
@@ -908,6 +993,8 @@ def create_animation(
         "SEEKING": ANIM_SEEKING_DURATION_S,
         "WAITING_FOR_OPPONENT": ANIM_SEEKING_DURATION_S,
         "MATCHMAKING": ANIM_SEEKING_DURATION_S,
+        "ANALYSIS_COMPUTING": ANIM_ANALYSIS_COMPUTING_DURATION_S,
+        "ANALYSIS_LOADING": ANIM_ANALYSIS_COMPUTING_DURATION_S,
     }
     duration = durations.get(clean_name, 2.0)
     return LifecycleAnimation(

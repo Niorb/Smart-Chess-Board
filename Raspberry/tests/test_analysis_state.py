@@ -533,5 +533,127 @@ def test_analysis_board_reset_to_starting_position_transitions_to_idle():
     asyncio.run(_test())
 
 
+def test_start_analysis_mode_resolution_hierarchy():
+    """
+    Verify BoardStateManager.start_analysis_mode() resolution hierarchy when moves_uci is None:
+    1) state_manager.last_game_moves
+    2) lichess_engine.last_game_moves
+    3) lichess_engine.board.move_stack
+    4) settings['last_game_moves']
+    5) Italian Game fallback (12 plies)
+    """
+    async def _test():
+        from unittest.mock import AsyncMock, patch
+        import chess
+        from board_hardware import settings
+        import app.board_state as bs_module
+
+        italian_default = [
+            "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5",
+            "c2c3", "g8f6", "d2d4", "e5d4", "c3d4", "c5b4",
+        ]
+
+        with patch("app.coach_engine.coach_engine.batch_evaluate_game", new_callable=AsyncMock) as mock_batch:
+            mock_batch.return_value = {
+                "evaluations": [],
+                "played_analyses": [],
+                "white_accuracy": 95.0,
+                "black_accuracy": 90.0,
+                "counts": {},
+                "blunders": [],
+            }
+
+            # Scenario A: Explicit moves_uci provided
+            mgr = BoardStateManager()
+            await mgr.start_analysis_mode(moves_uci=["d2d4", "d7d5"])
+            assert mgr.analysis_game_moves == ["d2d4", "d7d5"]
+
+            # Scenario B: Resolved from mgr.last_game_moves
+            mgr = BoardStateManager()
+            mgr.last_game_moves = ["c2c4", "e7e5"]
+            await mgr.start_analysis_mode()
+            assert mgr.analysis_game_moves == ["c2c4", "e7e5"]
+
+            # Scenario C: Resolved from lichess_engine.last_game_moves
+            mgr = BoardStateManager()
+            mgr.last_game_moves = None
+            bs_module.lichess_engine.last_game_moves = ["e2e4", "c7c5", "g1f3"]
+            await mgr.start_analysis_mode()
+            assert mgr.analysis_game_moves == ["e2e4", "c7c5", "g1f3"]
+            bs_module.lichess_engine.last_game_moves = []
+
+            # Scenario D: Resolved from lichess_engine.board.move_stack
+            mgr = BoardStateManager()
+            mgr.last_game_moves = None
+            bs_module.lichess_engine.last_game_moves = []
+            test_board = chess.Board()
+            test_board.push_uci("g1f3")
+            test_board.push_uci("d7d5")
+            bs_module.lichess_engine.board = test_board
+            await mgr.start_analysis_mode()
+            assert mgr.analysis_game_moves == ["g1f3", "d7d5"]
+            bs_module.lichess_engine.board = chess.Board()
+
+            # Scenario E: Resolved from settings['last_game_moves']
+            mgr = BoardStateManager()
+            mgr.last_game_moves = None
+            bs_module.lichess_engine.last_game_moves = []
+            bs_module.lichess_engine.board = chess.Board()
+            settings["last_game_moves"] = ["e2e4", "e7e6", "d2d4", "d7d5"]
+            await mgr.start_analysis_mode()
+            assert mgr.analysis_game_moves == ["e2e4", "e7e6", "d2d4", "d7d5"]
+            settings["last_game_moves"] = None
+
+            # Scenario F: Total fallback to Italian Game
+            mgr = BoardStateManager()
+            mgr.last_game_moves = None
+            bs_module.lichess_engine.last_game_moves = []
+            bs_module.lichess_engine.board = chess.Board()
+            settings["last_game_moves"] = None
+            await mgr.start_analysis_mode()
+            assert mgr.analysis_game_moves == italian_default
+
+    asyncio.run(_test())
+
+
+def test_update_leds_analysis_loading_vs_review_transition():
+    """
+    Verify _update_leds behavior in ANALYSIS state:
+    1. analysis_is_loading == True: Renders render_analysis_computing animation.
+    2. analysis_is_loading == False: Transitions to review mode move rendering & eval bar.
+    """
+    from unittest.mock import MagicMock, patch
+    from app.led_helpers import COLOR_INT_MINT_EMERALD
+
+    mgr = BoardStateManager()
+    mgr.strip = MagicMock()
+    mgr.game_status = "ANALYSIS"
+    mgr.analysis_submode = "review"
+    mgr.analysis_game_moves = ["e2e4", "e7e5"]
+    mgr.analysis_current_ply = 0
+    mgr.analysis_played_analyses = [
+        {"ply": 0, "delta_cp": 5, "classification": "best", "best_move": "e2e4"}
+    ]
+    mgr.analysis_evaluations = [{"win_chance": 50.0, "best_move": "e2e4"}]
+
+    # Phase 1: Loading == True -> Calls render_analysis_computing
+    mgr.analysis_is_loading = True
+    with patch("app.board_state.render_analysis_computing") as mock_computing:
+        mgr._update_leds()
+        mock_computing.assert_called_once()
+        assert mgr.strip.show.called
+
+    # Phase 2: Loading == False -> Renders Best Move review trace in Mint Emerald
+    mgr.analysis_is_loading = False
+    mgr.strip.reset_mock()
+    mgr._update_leds()
+
+    assert mgr.strip.setPixelColor.called
+    assert mgr.strip.show.called
+    colors_called = [call[0][1] for call in mgr.strip.setPixelColor.call_args_list]
+    assert COLOR_INT_MINT_EMERALD in colors_called
+
+
+
 
 
