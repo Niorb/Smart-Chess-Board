@@ -221,18 +221,17 @@ GM_GAMES_DATABASE: List[GMGame] = [
             "d2d4", "g8f6", "c2c4", "e7e6", "b1c3", "f8b4", "f2f3", "d7d5", "a2a3", "b4c3",
             "b2c3", "c7c5", "c4d5", "e6d5", "e2e3", "c5c4", "g1e2", "b8c6", "g2g4", "e8g8",
             "f1g2", "c6a5", "e1g1", "a5b3", "a1a2", "b7b5", "e2g3", "a7a5", "g4g5", "f6e8",
-            "e3e4", "b3c1", "a2c1", "d8g5", "e4e5", "g5e3", "g1h1", "e3c3", "f3f4", "c8g4",
-            "d1d2", "c3d2", "c1d2", "e8c7", "f4f5", "b5b4", "a3b4", "a5b4", "c1b1", "b4b3",
-            "g3e2", "a8a2", "b1b3", "a2e2", "g2e4", "e2e4", "h1g2", "f8a8", "b3b7", "c7e8",
-            "f5f6", "g7f6", "e5f6", "e8f6", "f1f6", "g4h5",
+            "e3e4", "b3c1", "d1c1", "a8a6", "e4e5", "e8c7", "f3f4", "b5b4", "a3b4", "a5b4",
+            "a2a6", "c7a6", "f4f5", "b4b3", "c1f4", "a6c7", "f5f6", "g7g6", "f4h4", "c7e8",
+            "h4h6", "b3b2", "f1f4", "b2b1q", "g3f1", "b1e1",
         ],
-        key_plys=[35, 41, 47, 51],  # 18... Nxc1, 21... Qg5, 24... b4!, 26... Ra2!
+        key_plys=[35, 41, 47, 51],  # 18... Nxc1, 21... b4!, 24... b3!, 26... b1=Q+!
         annotations={
             0: "World Chess Championship 2013, Chennai - Game 9.",
             35: "Move 18. Black eliminates White's dangerous dark-squared bishop with 18... Nxc1.",
-            47: "Move 24. 24... b4! Carlsen activates his queenside pawn avalanche.",
-            51: "Move 26. 26... Ra2! Dominating the second rank and breaking through Anand's lines.",
-            57: "Black secures a decisive 2-pawn lead and Anand resigns.",
+            43: "Move 22. 22... b3! Carlsen's passed b-pawn becomes an unstoppable juggernaut.",
+            53: "Move 27... b1=Q+! Carlsen promotes on b1 with check, forcing Anand's resignation after 28. Nf1 Qe1.",
+            55: "28... Qe1 - White cannot stop checkmate or defend against Black's two queens.",
         },
     ),
 ]
