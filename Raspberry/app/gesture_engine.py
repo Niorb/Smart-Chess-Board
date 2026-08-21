@@ -625,7 +625,11 @@ class CenterRoyalGateGesture(BaseGesture):
                 extra_squares=[self.D2_COORD],
             )
             # Dispatch async start_analysis_mode
-            asyncio.create_task(self.state_manager.start_analysis_mode())
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.state_manager.start_analysis_mode())
+            except RuntimeError:
+                pass
 
 
 class PhysicalGestureEngine:
