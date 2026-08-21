@@ -210,11 +210,12 @@ def load_settings():
         logger.info(f"User settings {filepath} not found. Initializing with default settings.")
         settings.clear()
         settings.update(get_default_settings())
-        try:
-            save_settings()
-            logger.info(f"Initialized user settings file at {filepath}")
-        except Exception as e:
-            logger.error(f"Error auto-initializing settings file: {e}")
+        if "PYTEST_CURRENT_TEST" not in os.environ and "pytest" not in sys.modules:
+            try:
+                save_settings()
+                logger.info(f"Initialized user settings file at {filepath}")
+            except Exception as e:
+                logger.error(f"Error auto-initializing settings file: {e}")
 
     # Ensure col_mux_map is valid in settings
     col_mux_map = settings.get("col_mux_map")
@@ -252,6 +253,14 @@ def save_settings():
         target_dir = os.path.dirname(filepath)
         if target_dir:
             os.makedirs(target_dir, exist_ok=True)
+
+        # Create a backup of the existing settings before atomic replace
+        if os.path.exists(filepath):
+            try:
+                import shutil
+                shutil.copyfile(filepath, filepath + ".bak")
+            except Exception:
+                pass
 
         with open(tmp_path, "w") as f:
             json.dump(settings, f, indent=4)

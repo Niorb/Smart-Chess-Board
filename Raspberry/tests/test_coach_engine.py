@@ -223,15 +223,6 @@ class TestEvalBarLedIndexing:
 # =============================================================================
 
 class TestCoachSettingsPersistence:
-    @pytest.fixture(autouse=True)
-    def preserve_settings(self):
-        from board_hardware import settings
-        saved = copy.deepcopy(settings)
-        with patch("board_hardware.save_settings"):
-            yield
-        settings.clear()
-        settings.update(saved)
-
     def test_settings_manager_coach_fields(self):
         from board_hardware import settings
         assert "coach_hints_enabled" in settings
