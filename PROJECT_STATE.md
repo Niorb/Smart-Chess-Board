@@ -211,7 +211,10 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Post-Game Analysis & Interactive Branch Exploration ("The Grandmaster's Lens", `Raspberry/app/board_state.py`, `coach_engine.py`)**:
     - Asynchronous batch evaluation with Stockfish / heuristic fallback computing accuracy percentages, per-ply evaluations, centipawn losses, and move quality tiers (Best, Good, Inaccuracy, Blunder).
     - LED Visual Language: Origin illuminates in Amber, destination illuminates in move quality grade (Mint Emerald $\le 20$ cp, Cyan Azure $\le 60$ cp, Warm Amber $\le 150$ cp, Rose Red $> 150$ cp), suggested best alternative pulses with a Mint Emerald halo.
-    - Virtual Branching: Move any physical piece off the main line to explore alternative branches; original deviation square is anchored in Royal Violet. Returning pieces back to the anchor square snaps back to the game timeline.
+  - **Automatic Ply Progression & Physical Analysis Move Execution (`Raspberry/app/board_state.py`, `app/main.py`)**:
+    - Physical board piece manipulations and web app move inputs during `ANALYSIS` mode are routed through `handle_analysis_move()`.
+    - Playing the highlighted game move immediately auto-advances to the next ply, triggers the arrival confirmation flash, updates the active board FEN, and syncs the 2D digital board without needing to press the "Next Ply" button in the webapp.
+    - Playing an alternative legal move dynamically spawns or extends a virtual exploration branch and evaluates it in real-time.
   - **Concept A: Blunder Blitz Drill (Mistake Rehabilitation Mode, `Raspberry/app/coach_engine.py`, `board_state.py`, `frontend/src/components/AnalysisTab.tsx`)**:
     - Auto-extracts critical mistakes and blunders from the analyzed game.
     - Prompts user to find the grandmaster refutation with physical piece moves or web input, with attempt tracking (❤️❤️❤️) and physical board LED hint assistance.
