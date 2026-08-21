@@ -18,8 +18,6 @@ import {
   Globe,
   ExternalLink,
   Clock,
-  Calendar,
-  Swords,
   PlayCircle
 } from 'lucide-react';
 import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
