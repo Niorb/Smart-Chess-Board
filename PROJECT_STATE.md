@@ -201,13 +201,31 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Normalized Microsecond/Millisecond Timing (`Raspberry/board_hardware.py`, `app/main.py`, `frontend/src/api.ts`)**: Synchronized `mux_settle_us` and `mux_settle_ms` across frontend and backend, preventing timing values from being ignored or reverted.
   - **Fast Serial Stream Synchronization (`Raspberry/board_hardware.py`, `app/board_state.py`)**: Enhanced `_read_adc_packet` with a fast-path 2-byte read and a sub-millisecond stream scanner fallback that instantly discards coprocessor boot text or stray noise bytes. Lowered serial timeout to 50ms, eliminating multi-second board recognition delays.
   - **Instant 0ms WebSocket State Broadcast (`Raspberry/app/board_state.py`, `app/main.py`, `frontend/src/hooks/useBoardState.ts`)**: Added `get_full_state()` snapshot delivery immediately upon WebSocket `/ws/state` connection establishment. Reduced reconnect backoff to 1.0s, ensuring instantaneous streaming upon page load or server restart.
-  - **Verification**: All 216 test suites passed and frontend built cleanly on Raspberry Pi.
+- [x] Implemented Post-Game Analysis ("The Grandmaster's Lens"), Blunder Blitz Drill, Master Game Time Machine & Dynamic Gesture Starter Pawns:
+  - **Dynamic Gesture Starter Pawns & Board Ready Indicator Upgrade (`Raspberry/app/gesture_engine.py`, `board_state.py`)**:
+    - Upgraded Layer 1 in `_update_leds()`: Replaced legacy 6 anchor squares with dynamic breathing glow on all registered gesture starter pawns ($a2$ Night Mode [Azure], $e2$ Post-Game Analysis [Royal Violet], $h2$ Instant Restart [Amber]).
+    - Automatically discovers and updates starter squares as new physical gestures are registered in `PhysicalGestureEngine`.
+  - **Center Royal Gate Physical Gesture (`Raspberry/app/gesture_engine.py`)**:
+    - Intuitive 3-step physical gesture from starting setup: Lift $e2$ (White King's pawn) $\to$ Lift $d2$ (White Queen's pawn) while $e2$ is lifted $\to$ Replace both back to starting squares.
+    - Activates Post-Game Analysis mode with Royal Violet and Mint Emerald feedback.
+  - **Post-Game Analysis & Interactive Branch Exploration ("The Grandmaster's Lens", `Raspberry/app/board_state.py`, `coach_engine.py`)**:
+    - Asynchronous batch evaluation with Stockfish / heuristic fallback computing accuracy percentages, per-ply evaluations, centipawn losses, and move quality tiers (Best, Good, Inaccuracy, Blunder).
+    - LED Visual Language: Origin illuminates in Amber, destination illuminates in move quality grade (Mint Emerald $\le 20$ cp, Cyan Azure $\le 60$ cp, Warm Amber $\le 150$ cp, Rose Red $> 150$ cp), suggested best alternative pulses with a Mint Emerald halo.
+    - Virtual Branching: Move any physical piece off the main line to explore alternative branches; original deviation square is anchored in Royal Violet. Returning pieces back to the anchor square snaps back to the game timeline.
+  - **Concept A: Blunder Blitz Drill (Mistake Rehabilitation Mode, `Raspberry/app/coach_engine.py`, `board_state.py`, `frontend/src/components/AnalysisTab.tsx`)**:
+    - Auto-extracts critical mistakes and blunders from the analyzed game.
+    - Prompts user to find the grandmaster refutation with physical piece moves or web input, with attempt tracking (❤️❤️❤️) and physical board LED hint assistance.
+  - **Concept B: Master Game Time Machine (Guess-the-Move Classics, `Raspberry/app/gm_games.py`, `board_state.py`, `frontend/src/components/AnalysisTab.tsx`)**:
+    - Curated database of 6 historical masterpieces (*Kasparov's Immortal 1999*, *Tal's Hurricane Attack 1960*, *Fischer's Game of the Century 1956*, *Morphy's Opera Game 1858*, *The Immortal Game 1851*, *Carlsen's Python Squeeze 2013*).
+    - Guess-the-move scoring system, move step navigation, and historical commentary annotations.
+  - **Comprehensive Web Dashboard & Documentation (`Raspberry/frontend/src/components/AnalysisTab.tsx`, `App.tsx`, `README.md`)**:
+    - Dedicated Analysis & Training Laboratory tab with interactive SVG win-chance / centipawn curve, move classification badges, candidate engine lines, blunder drill selector, and GM game library.
+    - Updated `README.md` with complete documentation of all features, LED colors, and physical gestures.
+    - Verified with all 236 passing pytest unit/integration tests and frontend production build on the physical Raspberry Pi over SSH.
 
 ## Task Backlog
 
 ## Active Blockers
-- None
-
 
 
 
