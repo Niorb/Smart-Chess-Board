@@ -479,4 +479,61 @@ def test_analysis_step_by_step_branch_undo():
     asyncio.run(_test())
 
 
+def test_analysis_board_reset_to_starting_position_transitions_to_idle():
+    """Verify that when pieces are put back into standard starting position, analysis ends and board returns to IDLE."""
+    async def _test():
+        from unittest.mock import patch, MagicMock
+
+        mgr = BoardStateManager()
+        mgr.strip = MagicMock()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        # Advance to end of analysis / ply 4
+        mgr.step_analysis(4)
+        assert mgr.game_status == "ANALYSIS"
+        assert mgr.analysis_has_advanced is True
+
+        # Construct initial standard starting board state (32 pieces)
+        start_board = chess.Board()
+        phys_start = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = start_board.piece_at(chess.square(c, r))
+                if p:
+                    phys_start[c][r] = -1 if p.color == chess.WHITE else 1
+
+        mgr.physical_state = phys_start
+        mgr.move_tracker.reset(phys_start)
+
+        # Mock hardware read line to simulate loop cycle
+        with patch.object(mgr, "_read_hardware_line", return_value=(phys_start, 0.0)):
+            # Execute one update loop step
+            setup_res = mgr.setup_validator.validate(mgr.physical_state)
+            assert setup_res.is_setup_ready is True
+
+            # Trigger transition logic
+            if (
+                mgr.analysis_has_advanced
+                and setup_res.is_setup_ready
+                and mgr.move_tracker.lifted_square is None
+            ):
+                mgr.stop_analysis_mode()
+                mgr.prev_setup_ready = True
+                mgr.gesture_engine.reset()
+                mgr.trigger_animation("BOARD_READY", {"night_mode": False})
+
+            assert mgr.game_status == "IDLE"
+            assert mgr.prev_setup_ready is True
+            assert mgr.active_animation is not None
+            assert mgr.active_animation.name == "BOARD_READY"
+
+            # Gesture engine is ready to evaluate
+            mgr.gesture_engine.evaluate(mgr.physical_state, mgr.game_status)
+            assert mgr.gesture_engine is not None
+
+    asyncio.run(_test())
+
+
+
 

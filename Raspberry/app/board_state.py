@@ -197,6 +197,7 @@ class BoardStateManager:
         self.analysis_gm_score: int = 0
         self.analysis_gm_guesses: list[dict] = []
         self.analysis_is_loading: bool = False
+        self.analysis_has_advanced: bool = False
 
         # Setup verification, move tracking, and physical gesture subsystems
         self.setup_validator = SetupValidator()
@@ -397,6 +398,7 @@ class BoardStateManager:
         self.game_status = "ANALYSIS"
         self.analysis_submode = "review"
         self.analysis_is_loading = True
+        self.analysis_has_advanced = False
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
@@ -452,6 +454,8 @@ class BoardStateManager:
 
         target_ply = max(0, min(len(self.analysis_game_moves), target_ply))
         self.analysis_current_ply = target_ply
+        if target_ply > 0:
+            self.analysis_has_advanced = True
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
@@ -487,6 +491,7 @@ class BoardStateManager:
         """Starts Blunder Blitz Drill mode for an extracted blunder."""
         self.game_status = "ANALYSIS"
         self.analysis_submode = "blunder_drill"
+        self.analysis_has_advanced = True
         self.analysis_blunder_index = max(0, min(len(self.analysis_blunders) - 1, index)) if self.analysis_blunders else 0
         self.analysis_blunder_attempts = 3
         self.analysis_blunder_hint_active = False
@@ -537,6 +542,7 @@ class BoardStateManager:
 
         self.game_status = "ANALYSIS"
         self.analysis_submode = "gm_relive"
+        self.analysis_has_advanced = True
         self.analysis_gm_game_id = game_id
         self.analysis_game_moves = list(game.moves)
         self.analysis_current_ply = 0
@@ -650,6 +656,7 @@ class BoardStateManager:
                 # Automatically advance to next ply!
                 next_ply = self.analysis_current_ply + 1
                 self.step_analysis(next_ply)
+                self.analysis_has_advanced = True
                 self.move_tracker.clear_in_flight_move()
                 if len(uci) >= 4:
                     to_c = ord(uci[2]) - ord('a')
@@ -672,6 +679,7 @@ class BoardStateManager:
                     self.analysis_anchor_coord = (ord(uci[0]) - ord('a'), int(uci[1]) - 1)
                 self.analysis_active_board.push(move)
                 self.analysis_branch_moves.append(uci)
+                self.analysis_has_advanced = True
                 self.move_tracker.clear_in_flight_move()
                 coach_engine.request_analysis(self.analysis_active_board)
                 if len(uci) >= 4:
@@ -1547,38 +1555,69 @@ class BoardStateManager:
                             else:
                                 self.guardrail_result = None
                         elif self.game_status == "ANALYSIS":
-                            # Auto-detect if physical board was restored to anchor position or earlier branch step
-                            if self.analysis_anchor_coord is not None:
-                                self._check_analysis_board_restoration()
+                            # Check physical starting position setup readiness
+                            setup_res = self.setup_validator.validate(self.physical_state)
+                            self.setup_result = setup_res
 
-                            # Physical Move Tracking during ANALYSIS mode
-                            class AnalysisEngineAdapter:
-                                def __init__(self, board):
-                                    self.board = board
-                                    self.my_color = "white" if board.turn == chess.WHITE else "black"
-                                    self.game_info = {}
-
-                            adapter = AnalysisEngineAdapter(self.analysis_active_board)
-                            move_result = self.move_tracker.process_physical_state(
-                                self.physical_state, adapter
-                            )
-                            if move_result:
-                                from_f, from_r, to_f, to_r, promo = move_result
-                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                uci = f"{from_sq}{to_sq}{promo or ''}"
-                                logger.info(f"Physical analysis move detected: {uci}")
-                                self.handle_analysis_move(uci)
-
-                            if getattr(self, "analysis_active_board", None):
-                                self.guardrail_result = self.setup_validator.validate_game_state(
-                                    self.physical_state,
-                                    self.analysis_active_board,
-                                    self.move_tracker,
-                                    adapter.my_color,
+                            # If analysis has been reviewed/progressed (or pieces were moved during analysis)
+                            # and the user puts all pieces back into the standard initial starting position:
+                            if (
+                                getattr(self, "analysis_has_advanced", False)
+                                and setup_res.is_setup_ready
+                                and getattr(self.move_tracker, "lifted_square", None) is None
+                                and getattr(self.move_tracker, "in_flight_move", None) is None
+                                and getattr(self.move_tracker, "pending_castling_rook", None) is None
+                            ):
+                                logger.info(
+                                    "Physical board fully reset to standard starting position after analysis. "
+                                    "Concluding analysis mode and transitioning to IDLE (ready for gestures)."
                                 )
-                            else:
+                                self.stop_analysis_mode()
+                                self.prev_setup_ready = True
+                                if hasattr(self, "gesture_engine"):
+                                    self.gesture_engine.reset()
+                                self.trigger_animation(
+                                    "BOARD_READY",
+                                    {"night_mode": bool(settings.get("night_mode", False))},
+                                )
+                                self.move_tracker.reset(self.physical_state)
                                 self.guardrail_result = None
+                            else:
+                                if not setup_res.is_setup_ready:
+                                    self.analysis_has_advanced = True
+
+                                # Auto-detect if physical board was restored to anchor position or earlier branch step
+                                if self.analysis_anchor_coord is not None:
+                                    self._check_analysis_board_restoration()
+
+                                # Physical Move Tracking during ANALYSIS mode
+                                class AnalysisEngineAdapter:
+                                    def __init__(self, board):
+                                        self.board = board
+                                        self.my_color = "white" if board.turn == chess.WHITE else "black"
+                                        self.game_info = {}
+
+                                adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                                move_result = self.move_tracker.process_physical_state(
+                                    self.physical_state, adapter
+                                )
+                                if move_result:
+                                    from_f, from_r, to_f, to_r, promo = move_result
+                                    from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                    to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                    uci = f"{from_sq}{to_sq}{promo or ''}"
+                                    logger.info(f"Physical analysis move detected: {uci}")
+                                    self.handle_analysis_move(uci)
+
+                                if getattr(self, "analysis_active_board", None):
+                                    self.guardrail_result = self.setup_validator.validate_game_state(
+                                        self.physical_state,
+                                        self.analysis_active_board,
+                                        self.move_tracker,
+                                        adapter.my_color,
+                                    )
+                                else:
+                                    self.guardrail_result = None
                         else:
                             self.move_tracker.reset(self.physical_state)
                             self.guardrail_result = None
