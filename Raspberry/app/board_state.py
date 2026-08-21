@@ -617,26 +617,51 @@ class BoardStateManager:
             return self.submit_gm_guess(uci)
 
         # 3. Game Review submode
-        # If on main game timeline and played the exact move played in the game:
+        # If on main game timeline and played the move matching current ply:
         if (
             not self.analysis_anchor_coord
             and 0 <= self.analysis_current_ply < len(self.analysis_game_moves)
-            and uci == self.analysis_game_moves[self.analysis_current_ply].lower()
         ):
-            # Automatically advance to next ply!
-            next_ply = self.analysis_current_ply + 1
-            self.step_analysis(next_ply)
-            if len(uci) >= 4:
-                to_c = ord(uci[2]) - ord('a')
-                to_r = int(uci[3]) - 1
-                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
-            logger.info(f"Analysis auto-advanced to ply {self.analysis_current_ply} on move {uci}")
-            return {
-                "action": "advance",
-                "ply": self.analysis_current_ply,
-                "uci": uci,
-                "analysis": self.get_analysis_payload(),
-            }
+            expected_str = self.analysis_game_moves[self.analysis_current_ply].strip()
+            is_match = (uci == expected_str.lower())
+            if not is_match:
+                # Handle SAN castling vs UCI castling (e.g. O-O / O-O-O vs e1g1 / e1c1 / e8g8 / e8c8)
+                norm_san = expected_str.upper().replace("0", "O")
+                if norm_san in ("O-O", "O-O-O"):
+                    turn = self.analysis_active_board.turn
+                    if norm_san == "O-O":
+                        expected_uci = "e1g1" if turn == chess.WHITE else "e8g8"
+                    else:
+                        expected_uci = "e1c1" if turn == chess.WHITE else "e8c8"
+                    is_match = (uci == expected_uci)
+                else:
+                    try:
+                        m_expected = (
+                            self.analysis_active_board.parse_san(expected_str)
+                            if not (len(expected_str) in (4, 5) and expected_str[:2].isalnum())
+                            else chess.Move.from_uci(expected_str)
+                        )
+                        m_actual = chess.Move.from_uci(uci)
+                        is_match = (m_expected == m_actual)
+                    except Exception:
+                        pass
+
+            if is_match:
+                # Automatically advance to next ply!
+                next_ply = self.analysis_current_ply + 1
+                self.step_analysis(next_ply)
+                self.move_tracker.clear_in_flight_move()
+                if len(uci) >= 4:
+                    to_c = ord(uci[2]) - ord('a')
+                    to_r = int(uci[3]) - 1
+                    self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
+                logger.info(f"Analysis auto-advanced to ply {self.analysis_current_ply} on move {uci}")
+                return {
+                    "action": "advance",
+                    "ply": self.analysis_current_ply,
+                    "uci": uci,
+                    "analysis": self.get_analysis_payload(),
+                }
 
         # If user plays an alternative legal move in the active position:
         try:
@@ -647,6 +672,7 @@ class BoardStateManager:
                     self.analysis_anchor_coord = (ord(uci[0]) - ord('a'), int(uci[1]) - 1)
                 self.analysis_active_board.push(move)
                 self.analysis_branch_moves.append(uci)
+                self.move_tracker.clear_in_flight_move()
                 coach_engine.request_analysis(self.analysis_active_board)
                 if len(uci) >= 4:
                     to_c = ord(uci[2]) - ord('a')
@@ -1079,7 +1105,15 @@ class BoardStateManager:
 
                 # 1. Sub-mode specific LED illumination
                 if self.analysis_submode == "review":
-                    if self.analysis_anchor_coord is not None:
+                    # If player is in the middle of executing a physical castling move, prompt the Rook move
+                    if getattr(self.move_tracker, "pending_castling_rook", None):
+                        r_from = self.move_tracker.pending_castling_rook["from"]
+                        r_to = self.move_tracker.pending_castling_rook["to"]
+                        set_square_leds(r_from[0], r_from[1], c_opp_from)
+                        set_square_leds(r_to[0], r_to[1], c_opp_to_quiet)
+                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                        render_move_trace(rook_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
+                    elif self.analysis_anchor_coord is not None:
                         # When diverged from main game:
                         # 1) 4 Corner rooks beacon: subtle 0.5Hz breathing glow in Royal Violet
                         beacon_pulse = math.sin(now * math.pi) * 0.5 + 0.5

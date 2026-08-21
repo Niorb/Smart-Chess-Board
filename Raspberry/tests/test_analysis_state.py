@@ -272,3 +272,106 @@ def test_analysis_review_led_divergence_beacons():
     finally:
         settings["night_mode"] = orig_nm
 
+
+def test_handle_analysis_move_castling_advances_without_diverging():
+    """Verify that playing a castling move in analysis mode cleanly advances without diverging."""
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1", "g8f6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        # Step to ply 6 (White's turn to play e1g1)
+        mgr.step_analysis(6)
+        assert mgr.analysis_current_ply == 6
+        assert mgr.analysis_anchor_coord is None
+
+        # Play White Kingside Castle (e1g1)
+        res = mgr.handle_analysis_move("e1g1")
+        assert res["action"] == "advance"
+        assert res["ply"] == 7
+        assert mgr.analysis_current_ply == 7
+        assert mgr.analysis_anchor_coord is None
+        assert mgr.analysis_anchor_ply is None
+        assert len(mgr.analysis_branch_moves) == 0
+
+    asyncio.run(_test())
+
+
+def test_handle_analysis_move_san_castling_matching():
+    """Verify that playing UCI e1g1 matches SAN O-O and advances without creating a branch."""
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "O-O", "g8f6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        mgr.step_analysis(6)
+        assert mgr.analysis_current_ply == 6
+
+        # UCI e1g1 should match O-O
+        res = mgr.handle_analysis_move("e1g1")
+        assert res["action"] == "advance"
+        assert res["ply"] == 7
+        assert mgr.analysis_current_ply == 7
+        assert mgr.analysis_anchor_coord is None
+
+    asyncio.run(_test())
+
+
+def test_physical_castling_suppresses_intermediate_rook_moves():
+    """Verify that during physical castling, lifting and placing the Rook is absorbed without rogue moves."""
+    from app.physical_tracker import PhysicalMoveTracker
+
+    tracker = PhysicalMoveTracker()
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    class MockEngine:
+        def __init__(self, b):
+            self.board = b
+            self.my_color = "white"
+            self.game_info = {}
+
+    engine = MockEngine(board)
+
+    # Initial physical state matching board (White pieces on 1-2, Black on 7-8, etc.)
+    phys_state = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        for r in range(8):
+            sq = chess.square(c, r)
+            p = board.piece_at(sq)
+            if p:
+                phys_state[c][r] = -1 if p.color == chess.WHITE else 1
+
+    tracker.reset(phys_state)
+
+    # Step 1: Player lifts King at e1 (4, 0)
+    phys_state[4][0] = 0
+    res1 = tracker.process_physical_state(phys_state, engine)
+    assert res1 is None
+    assert tracker.lifted_square == (4, 0)
+
+    # Step 2: Player places King on g1 (6, 0) -> triggers castling detection
+    phys_state[6][0] = -1
+    res2 = tracker.process_physical_state(phys_state, engine)
+    assert res2 == (5, 1, 7, 1, None)  # 1-indexed (e1 -> g1)
+    assert tracker.pending_castling_rook == {"from": (7, 0), "to": (5, 0), "start_time": tracker.pending_castling_rook["start_time"]}
+
+    # Update engine board with King move e1g1
+    board.push_uci("e1g1")
+
+    # Step 3: Player lifts Rook from h1 (7, 0) while pending_castling_rook is active
+    phys_state[7][0] = 0
+    res3 = tracker.process_physical_state(phys_state, engine)
+    # Must NOT emit a rogue move or branch move!
+    assert res3 is None
+    assert tracker.pending_castling_rook is not None
+
+    # Step 4: Player places Rook on f1 (5, 0)
+    phys_state[5][0] = -1
+    res4 = tracker.process_physical_state(phys_state, engine)
+    assert res4 is None
+    # Castling Rook placement is confirmed, pending_castling_rook is cleared
+    assert tracker.pending_castling_rook is None
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (5, 0)
+
+

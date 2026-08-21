@@ -237,9 +237,16 @@ class PhysicalMoveTracker:
                     "is_capture": False,
                 }
                 self.pending_castling_rook = None
+                self.last_physical_state = [row[:] for row in physical_state]
+                return None
             elif elapsed > 20.0:
                 logger.info("Player pending castling Rook timed out.")
                 self.pending_castling_rook = None
+            else:
+                # Castling Rook is in transit (being lifted / placed).
+                # CRITICAL: Suppress all normal piece movement detection until the Rook is placed!
+                self.last_physical_state = [row[:] for row in physical_state]
+                return None
 
         # ---------------------------------------------------------------------
         # 1. Handle In-Flight Move Lock
