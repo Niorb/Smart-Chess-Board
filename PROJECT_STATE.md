@@ -13,7 +13,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
-- [x] Fixed persistent LED activation and desync issue by adding thread-safe serial locking (`serial_lock`), ESP32 RX buffer recovery on timeout, and reliable `shown_colors` cache updates.
+- [x] Configured automatic startup on Raspberry Pi boot via systemd service (`Raspberry/smart-chess.service` installed to `/etc/systemd/system/smart-chess.service`):
+  - **Service Specification**: Runs under user `pi`, working directory `/home/pi/chess_git/Raspberry`, loads `.env` secrets, executes `/home/pi/venv/chess/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000` with `Restart=always` and `RestartSec=5s`.
+  - **Verification**: Enabled and started with `systemctl enable --now smart-chess`. Verified active status, automatic restart resilience, journalctl logging, and clean API responses on port 8000.
 - [x] Reworked LED ordering to a clean 2 LEDs/square base for Strip 1 (files a-d) and disabled Strip 2 (files e-h) completely.
 - [x] Fixed software bug causing duplicate transposed square highlighting (e.g., lighting A4 also lighting D1) in `BoardStateManager._update_leds()`.
 - [x] Configured real 18-LED column offset positions for Strip 1 (accounting for 2 skipped OFF LEDs after Rank 7 and Rank 3).
