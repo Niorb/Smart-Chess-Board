@@ -296,6 +296,69 @@ def test_event_stream_task_management():
     asyncio.run(_test())
 
 
+def test_game_start_event_ignores_uninitiated_game():
+    """gameStart for a game not initiated by this session must be ignored (no auto-resume on boot)."""
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+
+        with patch.object(engine, "stream_game", new_callable=AsyncMock):
+            joined = engine._handle_game_start_event(
+                {"id": "foreignGame1", "source": "lobby"}, mock_state_mgr
+            )
+        assert joined is False
+        assert engine.current_game_id is None
+        assert mock_state_mgr.game_status != "PLAYING"
+        assert engine._stream_task is None
+    asyncio.run(_test())
+
+
+def test_game_start_event_joins_session_initiated_game():
+    """gameStart for a session-initiated game must be joined."""
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+        engine._session_games.add("myGame1")
+
+        async def _fake_stream(game_id, state_manager):
+            pass
+
+        with patch.object(engine, "stream_game", new=_fake_stream):
+            joined = engine._handle_game_start_event({"id": "myGame1"}, mock_state_mgr)
+        assert joined is True
+        assert engine.current_game_id == "myGame1"
+        assert mock_state_mgr.game_status == "PLAYING"
+        assert engine._stream_task is not None
+        engine._stream_task.cancel()
+    asyncio.run(_test())
+
+
+def test_challenge_ai_registers_session_game():
+    """challenge_ai() must register the returned game ID as session-initiated."""
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+
+        async def _fake_start():
+            pass
+
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"id": "aiGame1"}
+
+        async def _fake_post(*args, **kwargs):
+            return response
+
+        with patch.object(engine, "start", new=_fake_start):
+            engine.is_running = True
+            with patch.object(engine, "stream_game", new=AsyncMock()):
+                with patch("httpx.AsyncClient.post", new=_fake_post):
+                    await engine.challenge_ai(mock_state_mgr, level=3, time_mins=10, inc_secs=0)
+        assert "aiGame1" in engine._session_games
+        assert engine.current_game_id == "aiGame1"
+    asyncio.run(_test())
+
+
 def test_get_game_payload_includes_last_move_is_capture():
     """
     Verify get_game_payload() includes 'last_move_is_capture'

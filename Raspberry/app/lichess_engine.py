@@ -103,6 +103,9 @@ class LichessEngine:
         self.username: str | None = None
         self.my_color: str | None = None  # 'white' | 'black' | None
         self.current_game_id: str | None = None
+        # Games explicitly initiated by this server session (seek/challenge_ai).
+        # The event stream must never auto-join anything else.
+        self._session_games: set[str] = set()
         self.board: chess.Board = chess.Board()
         self.clocks: dict[str, str] = {"white": "?", "black": "?"}
         self.raw_clocks_ms: dict[str, int | float | None] = {"white": None, "black": None}
@@ -235,23 +238,38 @@ class LichessEngine:
 
                             event_type = event.get("type")
                             if event_type == "gameStart":
-                                game_info = event.get("game", {})
-                                game_id = game_info.get("id") or game_info.get("gameId")
-                                if game_id and game_id != self.current_game_id:
-                                    logger.info(f"Lichess event stream: gameStart event received for game {game_id}")
-                                    self.current_game_id = game_id
-                                    if state_manager:
-                                        state_manager.game_status = "PLAYING"
-                                    if self._stream_task and not self._stream_task.done():
-                                        self._stream_task.cancel()
-                                    self._stream_task = asyncio.create_task(
-                                        self.stream_game(game_id, state_manager)
-                                    )
+                                self._handle_game_start_event(event.get("game", {}), state_manager)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.debug(f"Event stream reconnecting: {e}")
                 await asyncio.sleep(3)
+
+    def _handle_game_start_event(self, game_info: dict[str, Any], state_manager) -> bool:
+        """
+        Joins a game announced by the event stream ONLY if it was initiated by
+        this session (via seek()/challenge_ai()). Prevents the server from
+        auto-resuming stale/foreign games on startup.
+        """
+        game_id = game_info.get("id") or game_info.get("gameId")
+        if not game_id or game_id == self.current_game_id:
+            return False
+
+        if game_id not in self._session_games:
+            logger.info(
+                f"Lichess event stream: ignoring gameStart for game {game_id} "
+                "(not initiated by this session)."
+            )
+            return False
+
+        logger.info(f"Lichess event stream: joining session-initiated game {game_id}")
+        self.current_game_id = game_id
+        if state_manager:
+            state_manager.game_status = "PLAYING"
+        if self._stream_task and not self._stream_task.done():
+            self._stream_task.cancel()
+        self._stream_task = asyncio.create_task(self.stream_game(game_id, state_manager))
+        return True
 
     async def get_account(self) -> dict[str, Any]:
         """Queries GET /api/account to return user profile and perfs."""
@@ -514,6 +532,7 @@ class LichessEngine:
                         return False
 
                     logger.info(f"AI Match started! Game ID: {game_id}")
+                    self._session_games.add(game_id)
                     self.current_game_id = game_id
                     state_manager.game_status = "PLAYING"
                     if self._stream_task and not self._stream_task.done():
@@ -650,6 +669,7 @@ class LichessEngine:
 
                         if game_id:
                             logger.info(f"Match found! Game ID: {game_id}")
+                            self._session_games.add(game_id)
                             self.current_game_id = game_id
                             state_manager.game_status = "PLAYING"
                             if self._stream_task and not self._stream_task.done():
