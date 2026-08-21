@@ -1017,6 +1017,30 @@ class BoardStateManager:
                 self.strip.show()
                 return
 
+            # Layer 0.6: Continuous Analysis Computing Animation
+            if self.game_status == "ANALYSIS" and getattr(self, "analysis_is_loading", False):
+                render_analysis_computing(now, frame, {"night_mode": night_mode})
+                # Apply active arrival flash if active (e.g. from closing gesture)
+                if self.arrival_flash:
+                    flash_source = self.arrival_flash
+                    flash_squares = flash_source.get("squares") or [flash_source["square"]]
+                    flash_t0 = flash_source["start_time"]
+                    flash_dur = flash_source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
+                    is_capture = flash_source.get("is_capture", False)
+                    elapsed = now - flash_t0
+                    if 0 <= elapsed < flash_dur:
+                        progress = elapsed / flash_dur
+                        intensity = math.exp(-3.5 * progress) * (1.0 - progress)
+                        flash_color = COLOR_INT_CAPTURE_CONFIRM if is_capture else COLOR_INT_MOVE_CONFIRM
+                        for f_c, f_r in flash_squares:
+                            set_square_leds(f_c, f_r, scale_color(flash_color, intensity))
+                    else:
+                        self.arrival_flash = None
+                for idx, color in enumerate(frame):
+                    self.strip.setPixelColor(idx, color)
+                self.strip.show()
+                return
+
             # Layer 1: Setup / Idle Board Validation & Physical Gesture Overlay
             if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)
@@ -1198,12 +1222,9 @@ class BoardStateManager:
 
             # Layer 2.2: Analysis & Training State Highlights
             elif self.game_status == "ANALYSIS":
-                if getattr(self, "analysis_is_loading", False):
-                    render_analysis_computing(now, frame, {"night_mode": night_mode})
-                else:
-                    eval_bar_enabled = settings.get("eval_bar_enabled", True)
-                    # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
-                    if eval_bar_enabled and self.analysis_evaluations:
+                eval_bar_enabled = settings.get("eval_bar_enabled", True)
+                # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
+                if eval_bar_enabled and self.analysis_evaluations:
                         curr_eval = None
                         if self.analysis_anchor_coord:
                             curr_eval = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
@@ -1585,7 +1606,8 @@ class BoardStateManager:
                             # If analysis has been reviewed/progressed (or pieces were moved during analysis)
                             # and the user puts all pieces back into the standard initial starting position:
                             if (
-                                getattr(self, "analysis_has_advanced", False)
+                                not getattr(self, "analysis_is_loading", False)
+                                and getattr(self, "analysis_has_advanced", False)
                                 and setup_res.is_setup_ready
                                 and getattr(self.move_tracker, "lifted_square", None) is None
                                 and getattr(self.move_tracker, "in_flight_move", None) is None
@@ -1606,8 +1628,9 @@ class BoardStateManager:
                                 self.move_tracker.reset(self.physical_state)
                                 self.guardrail_result = None
                             else:
-                                if not setup_res.is_setup_ready:
-                                    self.analysis_has_advanced = True
+                                if not getattr(self, "analysis_is_loading", False):
+                                    if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
+                                        self.analysis_has_advanced = True
 
                                 # Auto-detect if physical board was restored to anchor position or earlier branch step
                                 if self.analysis_anchor_coord is not None:

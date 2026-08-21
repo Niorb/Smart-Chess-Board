@@ -868,16 +868,17 @@ def render_analysis_computing(
     - Central 2x2 Core (d4, e4, d5, e5) breathing softly in Royal Violet.
     - Orbital 12-square ring surrounding center with dual sweeping Mint Emerald / Azure
       probes rotating at ~1.35 rev/sec (180 degrees opposing phase).
-    - Power-optimized to illuminate <= 6-7 squares simultaneously (< 250mA power budget).
+    - Power-optimized to illuminate <= 8 squares simultaneously (< 250mA power budget).
     - Respects night_mode with a 0.45 power attenuation factor.
     """
     params = params or {}
     night_mode = bool(params.get("night_mode", False))
     p_scale = 0.45 if night_mode else 1.0
+    col_idle = COLOR_INT_NIGHT_MODE if night_mode else COLOR_INT_OFF
 
     # 1. Central 2x2 Core Breathing in Royal Violet (d4, e4, d5, e5)
-    core_breath = math.sin(now * 3.0) * 0.5 + 0.5
-    core_intensity = (0.20 + 0.55 * core_breath) * p_scale
+    core_breath = math.sin(now * 3.5) * 0.5 + 0.5
+    core_intensity = (0.25 + 0.60 * core_breath) * p_scale
     core_color = scale_color(COLOR_INT_ANALYSIS_CORE, core_intensity)
     for c, r in ANALYSIS_CORE_COORDS:
         set_square_in_frame(frame, c, r, core_color)
@@ -894,8 +895,8 @@ def render_analysis_computing(
         d_behind1 = (head1 - i) % n_ring
         if d_behind1 <= 0.4:
             int1 = 1.0 - 0.5 * d_behind1
-        elif d_behind1 <= 1.6:
-            int1 = 0.8 * ((1.0 - (d_behind1 - 0.4) / 1.2) ** 2)
+        elif d_behind1 <= 1.8:
+            int1 = 0.8 * ((1.0 - (d_behind1 - 0.4) / 1.4) ** 2)
         elif d_behind1 > (n_ring - 0.4):
             int1 = (n_ring - d_behind1) / 0.4 * 0.5
         else:
@@ -905,21 +906,20 @@ def render_analysis_computing(
         d_behind2 = (head2 - i) % n_ring
         if d_behind2 <= 0.4:
             int2 = 1.0 - 0.5 * d_behind2
-        elif d_behind2 <= 1.6:
-            int2 = 0.8 * ((1.0 - (d_behind2 - 0.4) / 1.2) ** 2)
+        elif d_behind2 <= 1.8:
+            int2 = 0.8 * ((1.0 - (d_behind2 - 0.4) / 1.4) ** 2)
         elif d_behind2 > (n_ring - 0.4):
             int2 = (n_ring - d_behind2) / 0.4 * 0.5
         else:
             int2 = 0.0
 
-        col = 0
+        col = col_idle
         if int1 > 0.02:
             col = add_colors(col, scale_color(COLOR_INT_ANALYSIS_PULSE, int1 * p_scale))
         if int2 > 0.02:
             col = add_colors(col, scale_color(COLOR_INT_ANALYSIS_ACCENT, int2 * p_scale))
 
-        if col != 0:
-            set_square_in_frame(frame, c, r, col)
+        set_square_in_frame(frame, c, r, col)
 
 
 # =============================================================================
