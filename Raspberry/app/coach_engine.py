@@ -257,6 +257,11 @@ class CoachEngine:
                 self._transport = transport
                 self._engine = protocol
                 self.is_heuristic_mode = False
+                try:
+                    # Optimize Stockfish for Raspberry Pi multi-core CPU & transposition table
+                    await self._engine.configure({"Threads": 3, "Hash": 64})
+                except Exception as e:
+                    logger.debug(f"Could not configure Stockfish threads/hash: {e}")
                 logger.info(f"Stockfish UCI engine started successfully ({self.stockfish_path}).")
             except Exception as e:
                 logger.warning(f"Could not launch Stockfish ({self.stockfish_path}): {e}. Using heuristic fallback.")
@@ -343,8 +348,8 @@ class CoachEngine:
         if not legal:
             return self._evaluate_heuristic(board, clean_fen)
 
-        multipv = min(len(legal), 16)
-        limit = chess.engine.Limit(time=0.15, depth=12)
+        multipv = min(len(legal), 8)
+        limit = chess.engine.Limit(time=0.10, depth=12)
 
         try:
             infos = await self._engine.analyse(board, limit, multipv=multipv)
