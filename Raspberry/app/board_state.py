@@ -14,6 +14,7 @@ import os
 import sys
 import threading
 import time
+from typing import Any
 
 import chess
 

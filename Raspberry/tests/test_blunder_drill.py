@@ -1,8 +1,8 @@
-"""
-tests/test_blunder_drill.py
+import os
+import sys
 
-Unit tests for Blunder Blitz drill and GM Relive guess-the-move features.
-"""
+# Ensure parent directory is in sys.path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
 import chess

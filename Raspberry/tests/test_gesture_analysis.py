@@ -1,10 +1,10 @@
-"""
-tests/test_gesture_analysis.py
-
-Unit tests for CenterRoyalGateGesture (e2 -> d2 piece lift combination to activate Analysis).
-"""
-
+import os
+import sys
 import time
+
+# Ensure parent directory is in sys.path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import pytest
 from app.gesture_engine import CenterRoyalGateGesture
 
