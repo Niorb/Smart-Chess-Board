@@ -1225,185 +1225,185 @@ class BoardStateManager:
                 eval_bar_enabled = settings.get("eval_bar_enabled", True)
                 # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
                 if eval_bar_enabled and self.analysis_evaluations:
-                        curr_eval = None
-                        if self.analysis_anchor_coord:
-                            curr_eval = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
-                        elif 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
-                            curr_eval = self.analysis_evaluations[self.analysis_current_ply]
+                    curr_eval = None
+                    if self.analysis_anchor_coord:
+                        curr_eval = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                    elif 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
+                        curr_eval = self.analysis_evaluations[self.analysis_current_ply]
 
-                        if curr_eval:
-                            win_chance = curr_eval.get("win_chance", 50.0) if isinstance(curr_eval, dict) else curr_eval.win_chance
-                            n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
-                            for r in range(8):
-                                eval_col = c_eval_white if r < n_white else c_eval_black
-                                set_square_leds(7, r, eval_col)
+                    if curr_eval:
+                        win_chance = curr_eval.get("win_chance", 50.0) if isinstance(curr_eval, dict) else curr_eval.win_chance
+                        n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
+                        for r in range(8):
+                            eval_col = c_eval_white if r < n_white else c_eval_black
+                            set_square_leds(7, r, eval_col)
 
-                    # 1. Sub-mode specific LED illumination
-                    if self.analysis_submode == "review":
-                        # If player is in the middle of executing a physical castling move, prompt the Rook move
-                        if getattr(self.move_tracker, "pending_castling_rook", None):
-                            r_from = self.move_tracker.pending_castling_rook["from"]
-                            r_to = self.move_tracker.pending_castling_rook["to"]
-                            set_square_leds(r_from[0], r_from[1], c_opp_from)
-                            set_square_leds(r_to[0], r_to[1], c_opp_to_quiet)
-                            rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                            render_move_trace(rook_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
-                        elif self.analysis_anchor_coord is not None:
-                            # When diverged from main game:
-                            # 1) 4 Corner rooks beacon: subtle 0.5Hz breathing glow in Royal Violet
-                            beacon_pulse = math.sin(now * math.pi) * 0.5 + 0.5
-                            beacon_color = scale_color(c_royal_violet, 0.20 + 0.40 * beacon_pulse)
-                            for corner_c, corner_r in [(0, 0), (7, 0), (0, 7), (7, 7)]:
-                                set_square_leds(corner_c, corner_r, beacon_color)
+                # 1. Sub-mode specific LED illumination
+                if self.analysis_submode == "review":
+                    # If player is in the middle of executing a physical castling move, prompt the Rook move
+                    if getattr(self.move_tracker, "pending_castling_rook", None):
+                        r_from = self.move_tracker.pending_castling_rook["from"]
+                        r_to = self.move_tracker.pending_castling_rook["to"]
+                        set_square_leds(r_from[0], r_from[1], c_opp_from)
+                        set_square_leds(r_to[0], r_to[1], c_opp_to_quiet)
+                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                        render_move_trace(rook_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
+                    elif self.analysis_anchor_coord is not None:
+                        # When diverged from main game:
+                        # 1) 4 Corner rooks beacon: subtle 0.5Hz breathing glow in Royal Violet
+                        beacon_pulse = math.sin(now * math.pi) * 0.5 + 0.5
+                        beacon_color = scale_color(c_royal_violet, 0.20 + 0.40 * beacon_pulse)
+                        for corner_c, corner_r in [(0, 0), (7, 0), (0, 7), (7, 7)]:
+                            set_square_leds(corner_c, corner_r, beacon_color)
 
-                            # 2) Anchor square illuminated in Royal Violet
-                            set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
+                        # 2) Anchor square illuminated in Royal Violet
+                        set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
 
-                            # 3) Engine best reply for diverged position if available
-                            cached_branch = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
-                            if cached_branch and cached_branch.best_move and len(cached_branch.best_move) >= 4:
-                                bm = cached_branch.best_move
-                                bm_from_c = ord(bm[0]) - ord('a')
-                                bm_from_r = int(bm[1]) - 1
-                                bm_to_c = ord(bm[2]) - ord('a')
-                                bm_to_r = int(bm[3]) - 1
-                                if 0 <= bm_from_c < 8 and 0 <= bm_from_r < 8 and 0 <= bm_to_c < 8 and 0 <= bm_to_r < 8:
-                                    bm_pulse = math.sin(now * 3.0) * 0.5 + 0.5
-                                    bm_color = scale_color(c_move_best, 0.40 + 0.60 * bm_pulse)
-                                    set_square_leds(bm_from_c, bm_from_r, bm_color)
-                                    set_square_leds(bm_to_c, bm_to_r, bm_color)
-                                    bm_path = interpolate_move_path(bm_from_c, bm_from_r, bm_to_c, bm_to_r)
-                                    render_move_trace(bm_path, now, frame, trace_color=c_move_best, blend_arrival=True)
-                        else:
-                            # On main game timeline:
-                            if 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
-                                curr_move = self.analysis_game_moves[self.analysis_current_ply]
-                                played_info = (
-                                    self.analysis_played_analyses[self.analysis_current_ply]
-                                    if self.analysis_current_ply < len(self.analysis_played_analyses)
-                                    else {}
-                                )
-                                pos_eval = (
-                                    self.analysis_evaluations[self.analysis_current_ply]
-                                    if self.analysis_current_ply < len(self.analysis_evaluations)
-                                    else None
-                                )
+                        # 3) Engine best reply for diverged position if available
+                        cached_branch = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                        if cached_branch and cached_branch.best_move and len(cached_branch.best_move) >= 4:
+                            bm = cached_branch.best_move
+                            bm_from_c = ord(bm[0]) - ord('a')
+                            bm_from_r = int(bm[1]) - 1
+                            bm_to_c = ord(bm[2]) - ord('a')
+                            bm_to_r = int(bm[3]) - 1
+                            if 0 <= bm_from_c < 8 and 0 <= bm_from_r < 8 and 0 <= bm_to_c < 8 and 0 <= bm_to_r < 8:
+                                bm_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                                bm_color = scale_color(c_move_best, 0.40 + 0.60 * bm_pulse)
+                                set_square_leds(bm_from_c, bm_from_r, bm_color)
+                                set_square_leds(bm_to_c, bm_to_r, bm_color)
+                                bm_path = interpolate_move_path(bm_from_c, bm_from_r, bm_to_c, bm_to_r)
+                                render_move_trace(bm_path, now, frame, trace_color=c_move_best, blend_arrival=True)
+                    else:
+                        # On main game timeline:
+                        if 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
+                            curr_move = self.analysis_game_moves[self.analysis_current_ply]
+                            played_info = (
+                                self.analysis_played_analyses[self.analysis_current_ply]
+                                if self.analysis_current_ply < len(self.analysis_played_analyses)
+                                else {}
+                            )
+                            pos_eval = (
+                                self.analysis_evaluations[self.analysis_current_ply]
+                                if self.analysis_current_ply < len(self.analysis_evaluations)
+                                else None
+                            )
 
-                                delta_cp = played_info.get("delta_cp", 0)
-                                classification = played_info.get("classification", "")
-                                if not classification:
-                                    if delta_cp <= 15:
-                                        classification = "best"
-                                    elif delta_cp <= 60:
-                                        classification = "good"
-                                    elif delta_cp <= 150:
-                                        classification = "inaccuracy"
+                            delta_cp = played_info.get("delta_cp", 0)
+                            classification = played_info.get("classification", "")
+                            if not classification:
+                                if delta_cp <= 15:
+                                    classification = "best"
+                                elif delta_cp <= 60:
+                                    classification = "good"
+                                elif delta_cp <= 150:
+                                    classification = "inaccuracy"
+                                else:
+                                    classification = "blunder"
+
+                            if len(curr_move) >= 4:
+                                f_c = ord(curr_move[0]) - ord('a')
+                                f_r = int(curr_move[1]) - 1
+                                t_c = ord(curr_move[2]) - ord('a')
+                                t_r = int(curr_move[3]) - 1
+
+                                castle_rook = get_castle_rook_move(f_c, f_r, t_c, t_r)
+
+                                # Rule A: delta_cp <= 60 or classification in ("best", "good")
+                                is_rule_a = (delta_cp <= 60) or (classification in ("best", "good"))
+
+                                if is_rule_a:
+                                    # Best (delta_cp <= 15 or classification == "best"): Mint Emerald
+                                    # Good (15 < delta_cp <= 60 or classification == "good"): Cyan Azure
+                                    if delta_cp <= 15 or classification == "best":
+                                        trace_col = c_mint_emerald
                                     else:
-                                        classification = "blunder"
+                                        trace_col = c_azure
 
-                                if len(curr_move) >= 4:
-                                    f_c = ord(curr_move[0]) - ord('a')
-                                    f_r = int(curr_move[1]) - 1
-                                    t_c = ord(curr_move[2]) - ord('a')
-                                    t_r = int(curr_move[3]) - 1
-
-                                    castle_rook = get_castle_rook_move(f_c, f_r, t_c, t_r)
-
-                                    # Rule A: delta_cp <= 60 or classification in ("best", "good")
-                                    is_rule_a = (delta_cp <= 60) or (classification in ("best", "good"))
-
-                                    if is_rule_a:
-                                        # Best (delta_cp <= 15 or classification == "best"): Mint Emerald
-                                        # Good (15 < delta_cp <= 60 or classification == "good"): Cyan Azure
-                                        if delta_cp <= 15 or classification == "best":
-                                            trace_col = c_mint_emerald
-                                        else:
-                                            trace_col = c_azure
-
-                                        if castle_rook:
-                                            r_from, r_to = castle_rook
-                                            set_square_leds(f_c, f_r, trace_col)
-                                            set_square_leds(t_c, t_r, trace_col)
-                                            set_square_leds(r_from[0], r_from[1], trace_col)
-                                            set_square_leds(r_to[0], r_to[1], trace_col)
-                                            king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                            rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                                            render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_col, blend_arrival=True)
-                                        else:
-                                            set_square_leds(f_c, f_r, trace_col)
-                                            set_square_leds(t_c, t_r, trace_col)
-                                            path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                            render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
-                                        # Clean board: Do NOT suggest or show any alternative moves
+                                    if castle_rook:
+                                        r_from, r_to = castle_rook
+                                        set_square_leds(f_c, f_r, trace_col)
+                                        set_square_leds(t_c, t_r, trace_col)
+                                        set_square_leds(r_from[0], r_from[1], trace_col)
+                                        set_square_leds(r_to[0], r_to[1], trace_col)
+                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_col, blend_arrival=True)
                                     else:
-                                        # Rule B: delta_cp > 60 or classification in ("inaccuracy", "blunder")
-                                        if classification == "inaccuracy" or (delta_cp <= 150 and classification != "blunder"):
-                                            mistake_col = c_move_inacc
-                                        else:
-                                            mistake_col = c_move_blunder
+                                        set_square_leds(f_c, f_r, trace_col)
+                                        set_square_leds(t_c, t_r, trace_col)
+                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                    # Clean board: Do NOT suggest or show any alternative moves
+                                else:
+                                    # Rule B: delta_cp > 60 or classification in ("inaccuracy", "blunder")
+                                    if classification == "inaccuracy" or (delta_cp <= 150 and classification != "blunder"):
+                                        mistake_col = c_move_inacc
+                                    else:
+                                        mistake_col = c_move_blunder
 
-                                        # Animate played move trajectory in mistake color
-                                        if castle_rook:
-                                            r_from, r_to = castle_rook
-                                            set_square_leds(f_c, f_r, mistake_col)
-                                            set_square_leds(t_c, t_r, mistake_col)
-                                            set_square_leds(r_from[0], r_from[1], mistake_col)
-                                            set_square_leds(r_to[0], r_to[1], mistake_col)
-                                            king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                            rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                                            render_castle_trace(king_path, rook_path, now, frame, trace_color=mistake_col, blend_arrival=True)
-                                        else:
-                                            set_square_leds(f_c, f_r, mistake_col)
-                                            set_square_leds(t_c, t_r, mistake_col)
-                                            path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                            render_move_trace(path, now, frame, trace_color=mistake_col, blend_arrival=True)
+                                    # Animate played move trajectory in mistake color
+                                    if castle_rook:
+                                        r_from, r_to = castle_rook
+                                        set_square_leds(f_c, f_r, mistake_col)
+                                        set_square_leds(t_c, t_r, mistake_col)
+                                        set_square_leds(r_from[0], r_from[1], mistake_col)
+                                        set_square_leds(r_to[0], r_to[1], mistake_col)
+                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=mistake_col, blend_arrival=True)
+                                    else:
+                                        set_square_leds(f_c, f_r, mistake_col)
+                                        set_square_leds(t_c, t_r, mistake_col)
+                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        render_move_trace(path, now, frame, trace_color=mistake_col, blend_arrival=True)
 
-                                        # ALSO suggest the engine's best move:
-                                        best_m = played_info.get("best_move")
-                                        if not best_m and pos_eval:
-                                            best_m = pos_eval.get("best_move") if isinstance(pos_eval, dict) else getattr(pos_eval, "best_move", None)
+                                    # ALSO suggest the engine's best move:
+                                    best_m = played_info.get("best_move")
+                                    if not best_m and pos_eval:
+                                        best_m = pos_eval.get("best_move") if isinstance(pos_eval, dict) else getattr(pos_eval, "best_move", None)
 
-                                        if best_m and len(best_m) >= 4 and best_m.lower() != curr_move.lower():
-                                            bm_f_c = ord(best_m[0]) - ord('a')
-                                            bm_f_r = int(best_m[1]) - 1
-                                            bm_t_c = ord(best_m[2]) - ord('a')
-                                            bm_t_r = int(best_m[3]) - 1
+                                    if best_m and len(best_m) >= 4 and best_m.lower() != curr_move.lower():
+                                        bm_f_c = ord(best_m[0]) - ord('a')
+                                        bm_f_r = int(best_m[1]) - 1
+                                        bm_t_c = ord(best_m[2]) - ord('a')
+                                        bm_t_r = int(best_m[3]) - 1
 
-                                            if 0 <= bm_f_c < 8 and 0 <= bm_f_r < 8 and 0 <= bm_t_c < 8 and 0 <= bm_t_r < 8:
-                                                # Start & arrival squares illuminated with breathing Emerald Green
-                                                breath_pulse = math.sin(now * 3.0) * 0.5 + 0.5
-                                                bm_breath_col = scale_color(c_move_best, 0.40 + 0.60 * breath_pulse)
-                                                set_square_leds(bm_f_c, bm_f_r, bm_breath_col)
-                                                set_square_leds(bm_t_c, bm_t_r, bm_breath_col)
+                                        if 0 <= bm_f_c < 8 and 0 <= bm_f_r < 8 and 0 <= bm_t_c < 8 and 0 <= bm_t_r < 8:
+                                            # Start & arrival squares illuminated with breathing Emerald Green
+                                            breath_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                                            bm_breath_col = scale_color(c_move_best, 0.40 + 0.60 * breath_pulse)
+                                            set_square_leds(bm_f_c, bm_f_r, bm_breath_col)
+                                            set_square_leds(bm_t_c, bm_t_r, bm_breath_col)
 
-                                                # Best move path animated via render_move_trace in Emerald Green
-                                                # with phase offset (half period) so user clearly sees both trajectories interleaved
-                                                bm_path = interpolate_move_path(bm_f_c, bm_f_r, bm_t_c, bm_t_r)
-                                                render_move_trace(
-                                                    bm_path,
-                                                    now + MOVE_TRACE_PERIOD_S * 0.5,
-                                                    frame,
-                                                    trace_color=c_move_best,
-                                                    blend_arrival=True,
-                                                )
+                                            # Best move path animated via render_move_trace in Emerald Green
+                                            # with phase offset (half period) so user clearly sees both trajectories interleaved
+                                            bm_path = interpolate_move_path(bm_f_c, bm_f_r, bm_t_c, bm_t_r)
+                                            render_move_trace(
+                                                bm_path,
+                                                now + MOVE_TRACE_PERIOD_S * 0.5,
+                                                frame,
+                                                trace_color=c_move_best,
+                                                blend_arrival=True,
+                                            )
 
-                    elif self.analysis_submode == "blunder_drill":
-                        if 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
-                            blunder = self.analysis_blunders[self.analysis_blunder_index]
-                            if self.analysis_blunder_hint_active:
-                                bm = blunder.get("best_move", "")
-                                if len(bm) >= 4:
-                                    bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
-                                    set_square_leds(bm_f[0], bm_f[1], c_mint_emerald)
+                elif self.analysis_submode == "blunder_drill":
+                    if 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
+                        blunder = self.analysis_blunders[self.analysis_blunder_index]
+                        if self.analysis_blunder_hint_active:
+                            bm = blunder.get("best_move", "")
+                            if len(bm) >= 4:
+                                bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
+                                set_square_leds(bm_f[0], bm_f[1], c_mint_emerald)
 
-                    elif self.analysis_submode == "gm_relive":
-                        active_turn = self.analysis_active_board.turn
-                        k_sq = self.analysis_active_board.king(active_turn)
-                        if k_sq is not None:
-                            k_c, k_r = chess.square_file(k_sq), chess.square_rank(k_sq)
-                            turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
-                            turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
-                            set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
+                elif self.analysis_submode == "gm_relive":
+                    active_turn = self.analysis_active_board.turn
+                    k_sq = self.analysis_active_board.king(active_turn)
+                    if k_sq is not None:
+                        k_c, k_r = chess.square_file(k_sq), chess.square_rank(k_sq)
+                        turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
+                        turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                        set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
