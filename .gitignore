@@ -9,6 +9,8 @@ build/
 *.png
 *.jpg
 *.jpeg
+!screenshots/
+!screenshots/**
 *__pycache__
 .gemini/
 *.gemini
