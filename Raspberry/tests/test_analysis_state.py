@@ -436,8 +436,11 @@ def test_analysis_step_by_step_branch_undo():
         mgr.handle_analysis_move("e5d4")
         assert len(mgr.analysis_branch_moves) == 2
 
-        # Step back 1: Position after 2. d4
-        board_d4 = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2")
+        # Step back 1: Position after 2. d4 (1. e4 e5 2. d4)
+        board_d4 = chess.Board()
+        board_d4.push_uci("e2e4")
+        board_d4.push_uci("e7e5")
+        board_d4.push_uci("d2d4")
         phys_d4 = [[0] * 8 for _ in range(8)]
         for c in range(8):
             for r in range(8):
@@ -454,7 +457,9 @@ def test_analysis_step_by_step_branch_undo():
         assert mgr.analysis_anchor_coord is not None
 
         # Step back 2: Position at anchor (1. e4 e5)
-        board_anchor = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+        board_anchor = chess.Board()
+        board_anchor.push_uci("e2e4")
+        board_anchor.push_uci("e7e5")
         phys_anchor = [[0] * 8 for _ in range(8)]
         for c in range(8):
             for r in range(8):
