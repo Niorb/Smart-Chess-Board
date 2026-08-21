@@ -1403,7 +1403,7 @@ class BoardStateManager:
                         if piece:
                             f = chess.square_file(sq)
                             r = chess.square_rank(sq)
-                            board_grid[f][r] = piece.symbol()
+                            board_grid[r][f] = piece.symbol()
                     self.digital_state = board_grid
                     self.clocks = {"white": "∞", "black": "∞"}
                 else:

@@ -477,7 +477,9 @@ async def get_digital_board():
 @app.post("/api/game/seek")
 async def seek_game_route(body: SeekRequest | None = None):
     """Initiates an online matchmaking seek or Stockfish AI challenge on Lichess."""
-    if state_manager.game_status not in ["IDLE", "GAME_OVER"]:
+    if state_manager.game_status == "ANALYSIS":
+        state_manager.stop_analysis_mode()
+    elif state_manager.game_status not in ["IDLE", "GAME_OVER"]:
         return {"status": "error", "message": f"Cannot seek while status is {state_manager.game_status}"}
 
     tc = body.time_control if body and body.time_control else "10+0"
@@ -518,7 +520,9 @@ async def get_last_game_params_route():
 @app.post("/api/game/restart_previous")
 async def restart_previous_game_route():
     """Restarts a game using the persisted last_game_params (or standard defaults)."""
-    if state_manager.game_status not in ["IDLE", "GAME_OVER"]:
+    if state_manager.game_status == "ANALYSIS":
+        state_manager.stop_analysis_mode()
+    elif state_manager.game_status not in ["IDLE", "GAME_OVER"]:
         return {"status": "error", "message": f"Cannot restart game while status is {state_manager.game_status}"}
 
     from board_hardware import settings

@@ -21,7 +21,8 @@ import {
   triggerAnimation,
   testMoveTrace,
   saveBoardDefaults,
-  startAnalysis
+  startAnalysis,
+  stopAnalysis
 } from './api'
 import type { LichessAccount, LastGameParams } from './api'
 import { 
@@ -1543,8 +1544,42 @@ function App() {
               </div>
             </div>
 
-            {/* Matchmaking Selection Controls (When IDLE or GAME_OVER) */}
-            {(state.status === 'IDLE' || state.status === 'GAME_OVER') && (
+            {/* Analysis Mode Active Guidance Banner (When in ANALYSIS mode) */}
+            {state.status === 'ANALYSIS' && (
+              <div className="bg-violet-950/40 border border-violet-500/40 rounded-2xl p-4 shadow-xl flex flex-col gap-3 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="text-violet-400" size={18} />
+                    <span className="text-sm font-bold text-violet-200">Analysis Mode Active</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-900/60 text-violet-300 border border-violet-500/40">
+                    Reviewing
+                  </span>
+                </div>
+                <p className="text-xs text-violet-300/80 leading-relaxed">
+                  You are currently exploring a post-game review or training drill. You can jump directly into the full Analysis Lab or start a new match below.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => setCurrentTab('analysis')}
+                    className="py-2 px-3 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles size={14} /> Open Analysis Lab
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await stopAnalysis();
+                    }}
+                    className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    Exit Analysis
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Matchmaking Selection Controls (When IDLE, GAME_OVER, or ANALYSIS) */}
+            {(state.status === 'IDLE' || state.status === 'GAME_OVER' || state.status === 'ANALYSIS') && (
               <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-4 text-left">
                 
                 {/* Lichess Board API Guidance Banner */}
