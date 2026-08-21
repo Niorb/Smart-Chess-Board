@@ -1561,7 +1561,7 @@ function App() {
                 </p>
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
-                    onClick={() => setCurrentTab('analysis')}
+                    onClick={() => setActiveTab('analysis')}
                     className="py-2 px-3 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                   >
                     <Sparkles size={14} /> Open Analysis Lab
