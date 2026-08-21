@@ -165,13 +165,13 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const getQualityBadge = (tier: string) => {
     switch (tier) {
       case 'best':
-        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">BEST</span>;
+        return <span title="Best Move (Δ ≤ 15 cp) — Animated in Mint Emerald" className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm">BEST</span>;
       case 'good':
-        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-cyan-950/80 text-cyan-400 border border-cyan-500/30">GOOD</span>;
+        return <span title="Good Move (15 < Δ ≤ 60 cp) — Animated in Cyan Azure" className="px-2 py-0.5 text-xs font-bold rounded bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 shadow-sm">GOOD</span>;
       case 'inaccuracy':
-        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-amber-950/80 text-amber-400 border border-amber-500/30">INACC</span>;
+        return <span title="Inaccuracy (60 < Δ ≤ 150 cp) — Animated in Warm Amber" className="px-2 py-0.5 text-xs font-bold rounded bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm">INACC</span>;
       case 'blunder':
-        return <span className="px-2 py-0.5 text-xs font-bold rounded bg-rose-950/80 text-rose-400 border border-rose-500/30">BLUNDER</span>;
+        return <span title="Blunder (Δ > 150 cp) — Animated in Laser Crimson" className="px-2 py-0.5 text-xs font-bold rounded bg-rose-950/90 text-rose-300 border border-rose-500/40 shadow-sm">BLUNDER</span>;
       default:
         return <span className="px-2 py-0.5 text-xs font-bold rounded bg-slate-800 text-slate-400">MOVE</span>;
     }
@@ -387,23 +387,26 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
           {/* Virtual Branch Banner */}
           {analysis?.is_branching && (
-            <div className="p-4 bg-violet-950/70 border border-violet-500/40 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg">
+            <div className="p-4 bg-violet-950/80 border border-violet-500/50 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg ring-1 ring-violet-500/30">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-violet-500/20 rounded-xl text-violet-300">
+                <div className="p-2.5 bg-violet-500/20 rounded-xl text-violet-300 border border-violet-500/30">
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-violet-200">
-                    Virtual Analysis Branch Active (Diverged at Move {Math.floor((analysis.anchor_ply || 0) / 2) + 1})
+                  <div className="text-xs font-bold text-violet-200 flex items-center gap-2">
+                    <span>⚡ Off-Game Variation Sandbox Active</span>
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/30">
+                      +{analysis.branch_moves?.length || 1} {analysis.branch_moves?.length === 1 ? 'ply' : 'plies'} diverged
+                    </span>
                   </div>
-                  <div className="text-xs text-violet-400">
-                    The deviation square is glowing in Royal Violet on the physical board. Return your pieces to snap back.
+                  <div className="text-xs text-violet-400 mt-0.5">
+                    Anchor square {analysis.anchor_coord ? `(${String.fromCharCode(97 + analysis.anchor_coord[0])}${analysis.anchor_coord[1] + 1})` : ''} & 4 corner rooks (a1, h1, a8, h8) are glowing in Royal Violet on the board.
                   </div>
                 </div>
               </div>
               <button
                 onClick={handleResetBranch}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow"
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Return to Game Timeline

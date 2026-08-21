@@ -113,6 +113,11 @@ COLOR_BOARD_READY_PRIMARY = (32, 220, 100)  # Luminous emerald for setup complet
 COLOR_BOARD_READY_SECONDARY = (200, 220, 60)  # Luminous gold-lime accent
 COLOR_BOARD_READY_AMBIENT = (14, 70, 36)  # Subtle emerald breathing glow for persistent ready state
 
+# Analysis Mode Dedicated Colors — (R, G, B) tuples
+COLOR_MINT_EMERALD = (0, 220, 140)    # Mint Emerald for Best Move in Analysis (delta <= 15 cp)
+COLOR_AZURE = (0, 160, 255)           # Cyan Azure for Good Move in Analysis (15 < delta <= 60 cp)
+COLOR_ROYAL_VIOLET = (140, 40, 240)   # Royal Violet for Analysis Divergence Anchor & Corner Beacons
+
 # =============================================================================
 # NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
 # (Engineered for crystal-clear contrast and vibrancy against moonlight blue floor)
@@ -170,6 +175,9 @@ COLOR_NIGHT_START_BLACK_SECONDARY = (130, 60, 240)  # Electric royal violet
 COLOR_NIGHT_BOARD_READY_PRIMARY = (0, 240, 160)  # Vivid neon aqua for night setup completion sweep
 COLOR_NIGHT_BOARD_READY_SECONDARY = (0, 180, 255)  # Electric cyan accent
 COLOR_NIGHT_BOARD_READY_AMBIENT = (10, 60, 60)  # Subtle starlight mint breathing glow for ready state
+COLOR_NIGHT_MINT_EMERALD = (0, 255, 160)  # Vivid neon mint emerald (Night Mode)
+COLOR_NIGHT_AZURE = (0, 210, 255)         # Vivid electric cyan azure (Night Mode)
+COLOR_NIGHT_ROYAL_VIOLET = (170, 50, 255) # Luminous royal violet (Night Mode)
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS

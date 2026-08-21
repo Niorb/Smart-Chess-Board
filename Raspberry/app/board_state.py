@@ -49,10 +49,12 @@ from app.config import (
     COLOR_NIGHT_TURN_WHITE,
     COLOR_TURN_BLACK,
     COLOR_TURN_WHITE,
+    MOVE_TRACE_PERIOD_S,
     NUM_LEDS,
     SERIAL_PORT,
 )
 from app.led_helpers import (
+    COLOR_INT_AZURE,
     COLOR_INT_BOARD_READY_AMBIENT,
     COLOR_INT_BOARD_READY_PRIMARY,
     COLOR_INT_CAPTURE_AURA_ATTACKER,
@@ -71,12 +73,14 @@ from app.led_helpers import (
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_CAPTURE,
     COLOR_INT_LEGAL_TARGET,
+    COLOR_INT_MINT_EMERALD,
     COLOR_INT_MOVE_BEST,
     COLOR_INT_MOVE_BLUNDER,
     COLOR_INT_MOVE_CONFIRM,
     COLOR_INT_MOVE_GOOD,
     COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
+    COLOR_INT_NIGHT_AZURE,
     COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
     COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
     COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER,
@@ -91,6 +95,7 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_ILLEGAL,
     COLOR_INT_NIGHT_LEGAL_CAPTURE,
     COLOR_INT_NIGHT_LEGAL_TARGET,
+    COLOR_INT_NIGHT_MINT_EMERALD,
     COLOR_INT_NIGHT_MODE,
     COLOR_INT_NIGHT_MOVE_BEST,
     COLOR_INT_NIGHT_MOVE_BLUNDER,
@@ -101,6 +106,7 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_OPPONENT_FROM,
     COLOR_INT_NIGHT_OPPONENT_TO,
     COLOR_INT_NIGHT_PIECE_LIFTED,
+    COLOR_INT_NIGHT_ROYAL_VIOLET,
     COLOR_INT_NIGHT_SETUP_MISPLACED,
     COLOR_INT_NIGHT_SETUP_MISSING,
     COLOR_INT_NIGHT_TURN_BLACK,
@@ -111,6 +117,7 @@ from app.led_helpers import (
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
     COLOR_INT_PIECE_LIFTED,
+    COLOR_INT_ROYAL_VIOLET,
     COLOR_INT_SETUP_MISPLACED,
     COLOR_INT_SETUP_MISSING,
     COLOR_INT_TURN_BLACK,
@@ -128,12 +135,9 @@ from app.led_animations import (
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
-    render_opponent_disconnected,
     scale_color,
 )
 from app.gesture_engine import (
-    COLOR_INT_MINT_EMERALD,
-    COLOR_INT_ROYAL_VIOLET,
     PhysicalGestureEngine,
 )
 from app.gm_games import get_all_gm_games, get_gm_game
@@ -839,6 +843,9 @@ class BoardStateManager:
             c_guardrail_unexp = COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED if night_mode else COLOR_INT_GUARDRAIL_UNEXPECTED
             c_capture_aura_target = COLOR_INT_NIGHT_CAPTURE_AURA_TARGET if night_mode else COLOR_INT_CAPTURE_AURA_TARGET
             c_capture_aura_attacker = COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER if night_mode else COLOR_INT_CAPTURE_AURA_ATTACKER
+            c_mint_emerald = COLOR_INT_NIGHT_MINT_EMERALD if night_mode else COLOR_INT_MINT_EMERALD
+            c_azure = COLOR_INT_NIGHT_AZURE if night_mode else COLOR_INT_AZURE
+            c_royal_violet = COLOR_INT_NIGHT_ROYAL_VIOLET if night_mode else COLOR_INT_ROYAL_VIOLET
 
             def set_square_leds(c: int, r: int, color_val: int):
                 if col_mode == "manual" and c != manual_col:
@@ -1072,42 +1079,144 @@ class BoardStateManager:
 
                 # 1. Sub-mode specific LED illumination
                 if self.analysis_submode == "review":
-                    if self.analysis_anchor_coord:
-                        # In virtual branch: Anchor square in Royal Violet
-                        set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], COLOR_INT_ROYAL_VIOLET)
-                        # Engine best reply if cached
+                    if self.analysis_anchor_coord is not None:
+                        # When diverged from main game:
+                        # 1) 4 Corner rooks beacon: subtle 0.5Hz breathing glow in Royal Violet
+                        beacon_pulse = math.sin(now * math.pi) * 0.5 + 0.5
+                        beacon_color = scale_color(c_royal_violet, 0.20 + 0.40 * beacon_pulse)
+                        for corner_c, corner_r in [(0, 0), (7, 0), (0, 7), (7, 7)]:
+                            set_square_leds(corner_c, corner_r, beacon_color)
+
+                        # 2) Anchor square illuminated in Royal Violet
+                        set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
+
+                        # 3) Engine best reply for diverged position if available
                         cached_branch = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
                         if cached_branch and cached_branch.best_move and len(cached_branch.best_move) >= 4:
                             bm = cached_branch.best_move
-                            bm_from = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
-                            bm_to = (ord(bm[2]) - ord('a'), int(bm[3]) - 1)
-                            set_square_leds(bm_from[0], bm_from[1], c_opp_from)
-                            set_square_leds(bm_to[0], bm_to[1], COLOR_INT_AZURE)
+                            bm_from_c = ord(bm[0]) - ord('a')
+                            bm_from_r = int(bm[1]) - 1
+                            bm_to_c = ord(bm[2]) - ord('a')
+                            bm_to_r = int(bm[3]) - 1
+                            if 0 <= bm_from_c < 8 and 0 <= bm_from_r < 8 and 0 <= bm_to_c < 8 and 0 <= bm_to_r < 8:
+                                bm_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                                bm_color = scale_color(c_move_best, 0.40 + 0.60 * bm_pulse)
+                                set_square_leds(bm_from_c, bm_from_r, bm_color)
+                                set_square_leds(bm_to_c, bm_to_r, bm_color)
+                                bm_path = interpolate_move_path(bm_from_c, bm_from_r, bm_to_c, bm_to_r)
+                                render_move_trace(bm_path, now, frame, trace_color=c_move_best, blend_arrival=True)
                     else:
-                        # On main game line: Highlight played move and best alternative
+                        # On main game timeline:
                         if 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
                             curr_move = self.analysis_game_moves[self.analysis_current_ply]
+                            played_info = (
+                                self.analysis_played_analyses[self.analysis_current_ply]
+                                if self.analysis_current_ply < len(self.analysis_played_analyses)
+                                else {}
+                            )
+                            pos_eval = (
+                                self.analysis_evaluations[self.analysis_current_ply]
+                                if self.analysis_current_ply < len(self.analysis_evaluations)
+                                else None
+                            )
+
+                            delta_cp = played_info.get("delta_cp", 0)
+                            classification = played_info.get("classification", "")
+                            if not classification:
+                                if delta_cp <= 15:
+                                    classification = "best"
+                                elif delta_cp <= 60:
+                                    classification = "good"
+                                elif delta_cp <= 150:
+                                    classification = "inaccuracy"
+                                else:
+                                    classification = "blunder"
+
                             if len(curr_move) >= 4:
-                                f_c, f_r = ord(curr_move[0]) - ord('a'), int(curr_move[1]) - 1
-                                t_c, t_r = ord(curr_move[2]) - ord('a'), int(curr_move[3]) - 1
-                                set_square_leds(f_c, f_r, c_piece_lifted)
+                                f_c = ord(curr_move[0]) - ord('a')
+                                f_r = int(curr_move[1]) - 1
+                                t_c = ord(curr_move[2]) - ord('a')
+                                t_r = int(curr_move[3]) - 1
 
-                                quality_col = c_move_good
-                                if self.analysis_current_ply < len(self.analysis_played_analyses):
-                                    q_str = self.analysis_played_analyses[self.analysis_current_ply].get("classification", "good")
-                                    if q_str == "best": quality_col = c_move_best
-                                    elif q_str == "good": quality_col = c_move_good
-                                    elif q_str == "inaccuracy": quality_col = c_move_inacc
-                                    else: quality_col = c_move_blunder
-                                set_square_leds(t_c, t_r, quality_col)
+                                castle_rook = get_castle_rook_move(f_c, f_r, t_c, t_r)
 
-                                # Engine suggested best move alternative (pulsing Mint Halo)
-                                pos_eval = self.analysis_evaluations[self.analysis_current_ply] if self.analysis_current_ply < len(self.analysis_evaluations) else None
-                                best_m = pos_eval.get("best_move") if isinstance(pos_eval, dict) else (pos_eval.best_move if pos_eval else None)
-                                if best_m and best_m != curr_move and len(best_m) >= 4:
-                                    bm_to = (ord(best_m[2]) - ord('a'), int(best_m[3]) - 1)
-                                    mint_pulse = math.sin(now * 6.0) * 0.5 + 0.5
-                                    set_square_leds(bm_to[0], bm_to[1], scale_color(COLOR_INT_MINT_EMERALD, 0.4 + 0.6 * mint_pulse))
+                                # Rule A: delta_cp <= 60 or classification in ("best", "good")
+                                is_rule_a = (delta_cp <= 60) or (classification in ("best", "good"))
+
+                                if is_rule_a:
+                                    # Best (delta_cp <= 15 or classification == "best"): Mint Emerald
+                                    # Good (15 < delta_cp <= 60 or classification == "good"): Cyan Azure
+                                    if delta_cp <= 15 or classification == "best":
+                                        trace_col = c_mint_emerald
+                                    else:
+                                        trace_col = c_azure
+
+                                    if castle_rook:
+                                        r_from, r_to = castle_rook
+                                        set_square_leds(f_c, f_r, trace_col)
+                                        set_square_leds(t_c, t_r, trace_col)
+                                        set_square_leds(r_from[0], r_from[1], trace_col)
+                                        set_square_leds(r_to[0], r_to[1], trace_col)
+                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                    else:
+                                        set_square_leds(f_c, f_r, trace_col)
+                                        set_square_leds(t_c, t_r, trace_col)
+                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                    # Clean board: Do NOT suggest or show any alternative moves
+                                else:
+                                    # Rule B: delta_cp > 60 or classification in ("inaccuracy", "blunder")
+                                    if classification == "inaccuracy" or (delta_cp <= 150 and classification != "blunder"):
+                                        mistake_col = c_move_inacc
+                                    else:
+                                        mistake_col = c_move_blunder
+
+                                    # Animate played move trajectory in mistake color
+                                    if castle_rook:
+                                        r_from, r_to = castle_rook
+                                        set_square_leds(f_c, f_r, mistake_col)
+                                        set_square_leds(t_c, t_r, mistake_col)
+                                        set_square_leds(r_from[0], r_from[1], mistake_col)
+                                        set_square_leds(r_to[0], r_to[1], mistake_col)
+                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=mistake_col, blend_arrival=True)
+                                    else:
+                                        set_square_leds(f_c, f_r, mistake_col)
+                                        set_square_leds(t_c, t_r, mistake_col)
+                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
+                                        render_move_trace(path, now, frame, trace_color=mistake_col, blend_arrival=True)
+
+                                    # ALSO suggest the engine's best move:
+                                    best_m = played_info.get("best_move")
+                                    if not best_m and pos_eval:
+                                        best_m = pos_eval.get("best_move") if isinstance(pos_eval, dict) else getattr(pos_eval, "best_move", None)
+
+                                    if best_m and len(best_m) >= 4 and best_m.lower() != curr_move.lower():
+                                        bm_f_c = ord(best_m[0]) - ord('a')
+                                        bm_f_r = int(best_m[1]) - 1
+                                        bm_t_c = ord(best_m[2]) - ord('a')
+                                        bm_t_r = int(best_m[3]) - 1
+
+                                        if 0 <= bm_f_c < 8 and 0 <= bm_f_r < 8 and 0 <= bm_t_c < 8 and 0 <= bm_t_r < 8:
+                                            # Start & arrival squares illuminated with breathing Emerald Green
+                                            breath_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                                            bm_breath_col = scale_color(c_move_best, 0.40 + 0.60 * breath_pulse)
+                                            set_square_leds(bm_f_c, bm_f_r, bm_breath_col)
+                                            set_square_leds(bm_t_c, bm_t_r, bm_breath_col)
+
+                                            # Best move path animated via render_move_trace in Emerald Green
+                                            # with phase offset (half period) so user clearly sees both trajectories interleaved
+                                            bm_path = interpolate_move_path(bm_f_c, bm_f_r, bm_t_c, bm_t_r)
+                                            render_move_trace(
+                                                bm_path,
+                                                now + MOVE_TRACE_PERIOD_S * 0.5,
+                                                frame,
+                                                trace_color=c_move_best,
+                                                blend_arrival=True,
+                                            )
 
                 elif self.analysis_submode == "blunder_drill":
                     if 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
@@ -1116,7 +1225,7 @@ class BoardStateManager:
                             bm = blunder.get("best_move", "")
                             if len(bm) >= 4:
                                 bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
-                                set_square_leds(bm_f[0], bm_f[1], COLOR_INT_MINT_EMERALD)
+                                set_square_leds(bm_f[0], bm_f[1], c_mint_emerald)
 
                 elif self.analysis_submode == "gm_relive":
                     active_turn = self.analysis_active_board.turn
