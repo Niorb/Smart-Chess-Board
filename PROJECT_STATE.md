@@ -13,6 +13,12 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Fixed Physical & UCI/SAN Castling in Analysis Mode (Preventing False Divergence / Branching):
+  - **Root Cause**: During physical castling (King moves `e1 -> g1`, followed by Rook `h1 -> f1`), the King move advanced the active board to the next ply (changing turn to Black). When the user subsequently lifted and placed the `h1` Rook, `PhysicalMoveTracker.process_physical_state()` was falling through to standard piece movement detection instead of returning `None` while `pending_castling_rook` was active. This caused the Rook placement (`h1f1`) to be emitted as a separate move for Black, creating an unwanted off-game virtual branch.
+  - **Physical Tracker Castling Absorption (`Raspberry/app/physical_tracker.py`)**: Updated `process_physical_state()` to suppress all other piece move evaluations while `pending_castling_rook` is in progress until the Rook reaches its target square or times out.
+  - **Flexible Move Matching in Analysis (`Raspberry/app/board_state.py`)**: Updated `handle_analysis_move()` to seamlessly match both UCI (`e1g1`, `e1c1`, `e8g8`, `e8c8`) and SAN (`O-O`, `O-O-O`, `0-0`, `0-0-0`) moves without treating castling notations as divergences.
+  - **LED Guidance for Castling Rook (`Raspberry/app/board_state.py`)**: Added visual LED prompts and animated traces for `pending_castling_rook` in Review mode so the player sees clear physical cues to complete the Rook move.
+  - **Testing & Deployment**: Added unit tests in `test_analysis_state.py` covering physical castling absorption, auto-advance on castling, and SAN/UCI matching. All 247 unit tests passing on the Raspberry Pi over SSH.
 - [x] Installed & Optimized **Stockfish 17.1** with NNUE & Multi-Core Pre-Analysis:
   - **Engine Installation**: Installed the latest official **Stockfish 17.1 (ARM64 with NNUE neural networks)** directly onto the Raspberry Pi system (`/usr/games/stockfish`).
   - **Multi-Threading & Memory Hash (`Raspberry/app/coach_engine.py`)**: Configured UCI engine options to utilize 3 CPU cores (`Threads: 3`) and 64 MB of transposition hash memory (`Hash: 64`), reaching >100,000 nodes/second evaluation speed on the Pi.
