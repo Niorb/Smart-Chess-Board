@@ -529,3 +529,78 @@ def test_auto_claim_task_cancelled_on_stop_cancel_resign_abort():
             assert t4.cancelled() or t4.done() or (hasattr(t4, "cancelling") and t4.cancelling() > 0)
     asyncio.run(_test())
 
+
+def test_get_user_recent_games_parsing():
+    """Verify that get_user_recent_games correctly parses NDJSON stream into structured game summaries."""
+    import json
+
+    async def _test():
+        engine = LichessEngine()
+        engine.username = "RobiDeli"
+
+        ndjson_data = "\n".join([
+            json.dumps({
+                "id": "game1",
+                "rated": True,
+                "speed": "blitz",
+                "status": "mate",
+                "winner": "white",
+                "createdAt": 1718000000000,
+                "players": {
+                    "white": {"user": {"name": "RobiDeli", "id": "robideli"}, "rating": 1520},
+                    "black": {"user": {"name": "Opponent1", "id": "opponent1", "title": "FM"}, "rating": 1580}
+                },
+                "opening": {"name": "Sicilian Defense: Accelerated Dragon", "eco": "B35"},
+                "clock": {"initial": 180, "increment": 2},
+                "moves": "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 g6"
+            }),
+            json.dumps({
+                "id": "game2",
+                "rated": False,
+                "speed": "rapid",
+                "status": "resign",
+                "winner": "white",
+                "createdAt": 1717900000000,
+                "players": {
+                    "white": {"name": "GrandmasterBot", "aiLevel": 5},
+                    "black": {"user": {"name": "RobiDeli", "id": "robideli"}, "rating": 1500}
+                },
+                "opening": {"name": "Queen's Gambit Declined", "eco": "D30"},
+                "clock": {"initial": 600, "increment": 0},
+                "moves": "d4 d5 c4 e6"
+            })
+        ])
+
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, text=ndjson_data)
+            games = await engine.get_user_recent_games(username="RobiDeli", max_games=10)
+
+            assert len(games) == 2
+
+            # Game 1 verification
+            g1 = games[0]
+            assert g1["id"] == "game1"
+            assert g1["user_color"] == "white"
+            assert g1["result"] == "win"
+            assert g1["opponent"]["username"] == "Opponent1"
+            assert g1["opponent"]["title"] == "FM"
+            assert g1["opponent"]["rating"] == 1580
+            assert g1["time_control"] == "3+2"
+            assert g1["opening"]["name"] == "Sicilian Defense: Accelerated Dragon"
+            assert g1["moves_uci"] == ["e2e4", "c7c5", "g1f3", "b8c6", "d2d4", "c5d4", "f3d4", "g7g6"]
+            assert g1["total_plys"] == 8
+
+            # Game 2 verification
+            g2 = games[1]
+            assert g2["id"] == "game2"
+            assert g2["user_color"] == "black"
+            assert g2["result"] == "loss"
+            assert g2["opponent"]["username"] == "AI Level 5"
+            assert g2["opponent"]["is_ai"] is True
+            assert g2["time_control"] == "10+0"
+            assert g2["moves_uci"] == ["d2d4", "d7d5", "c2c4", "e7e6"]
+            assert g2["total_plys"] == 4
+
+    asyncio.run(_test())
+
+

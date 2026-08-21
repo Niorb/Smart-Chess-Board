@@ -126,6 +126,27 @@ def test_lichess_account_route():
         assert data["authenticated"] is True
 
 
+def test_recent_lichess_games_route():
+    client = TestClient(app)
+    with patch("app.main.lichess_engine.get_user_recent_games", new_callable=AsyncMock) as mock_recent:
+        mock_recent.return_value = [
+            {
+                "id": "abc12345",
+                "result": "win",
+                "opponent": {"username": "TestOpponent", "rating": 1600},
+                "moves_uci": ["e2e4", "e7e5"],
+                "moves_count": 1,
+            }
+        ]
+        response = client.get("/api/lichess/games/recent?max_games=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert len(data["games"]) == 1
+        assert data["games"][0]["id"] == "abc12345"
+        mock_recent.assert_called_once_with(username=None, max_games=5)
+
+
 def test_game_seek_and_cancel_routes():
     client = TestClient(app)
     with patch("app.main.lichess_engine.seek", new_callable=AsyncMock) as mock_seek:

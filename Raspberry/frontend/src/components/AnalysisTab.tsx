@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Sparkles, 
   Trophy, 
@@ -7,12 +7,20 @@ import {
   CheckCircle2, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
+  ChevronUp,
   Layers, 
   Compass, 
   Lightbulb, 
   Flame, 
   TrendingUp,
-  History
+  History,
+  Globe,
+  ExternalLink,
+  Clock,
+  Calendar,
+  Swords,
+  PlayCircle
 } from 'lucide-react';
 import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
 import { 
@@ -25,7 +33,9 @@ import {
   submitGMGuess, 
   startBlunderDrill, 
   submitBlunderAttempt, 
-  toggleBlunderHint 
+  toggleBlunderHint,
+  getRecentLichessGames,
+  type LichessRecentGame
 } from '../api';
 
 interface AnalysisTabProps {
@@ -39,6 +49,31 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
+
+  // Recent Lichess Games State
+  const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);
+  const [isLoadingRecentGames, setIsLoadingRecentGames] = useState<boolean>(false);
+  const [isRecentGamesOpen, setIsRecentGamesOpen] = useState<boolean>(true);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+
+  const fetchRecentGames = useCallback(async () => {
+    setIsLoadingRecentGames(true);
+    try {
+      const res = await getRecentLichessGames(10);
+      if (res && Array.isArray(res.games)) {
+        setRecentGames(res.games);
+      }
+    } catch (err) {
+      console.error('Error fetching recent Lichess games:', err);
+    } finally {
+      setIsLoadingRecentGames(false);
+    }
+  }, []);
+
+  // Fetch recent games on mount
+  useEffect(() => {
+    fetchRecentGames();
+  }, [fetchRecentGames]);
 
   // Fetch GM games on mount
   useEffect(() => {
@@ -83,6 +118,25 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       setTimeout(() => setFeedbackMsg(null), 3000);
     } catch (err) {
       setFeedbackMsg({ text: 'Failed to start analysis.', type: 'error' });
+    }
+  };
+
+  const handleLoadRecentGame = async (game: LichessRecentGame) => {
+    setSelectedGameId(game.id);
+    setFeedbackMsg({
+      text: `Loading & analyzing match vs ${game.opponent.username} (${game.opening.name})...`,
+      type: 'info',
+    });
+    try {
+      await startAnalysis({ moves_uci: game.moves_uci });
+      setSubMode('review');
+      setFeedbackMsg({
+        text: `Analysis ready for match vs ${game.opponent.username}! (${game.moves_count} moves)`,
+        type: 'success',
+      });
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } catch (err) {
+      setFeedbackMsg({ text: 'Failed to load game for analysis.', type: 'error' });
     }
   };
 
@@ -256,6 +310,160 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       {/* SUB-VIEW 1: GAME REVIEW ("The Grandmaster's Lens") */}
       {subMode === 'review' && (
         <div className="space-y-6">
+          {/* Lichess Recent Games Selector (Last 10 Matches) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="p-4 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    Recent Lichess Matches
+                    <span className="px-2 py-0.5 text-[10px] rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      {recentGames.length} Online Games
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Select any of your last 10 online matches to load into full Stockfish review and physical board playback.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchRecentGames}
+                  disabled={isLoadingRecentGames}
+                  className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-all disabled:opacity-50"
+                  title="Refresh Lichess Games"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingRecentGames ? 'animate-spin text-blue-400' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setIsRecentGamesOpen(!isRecentGamesOpen)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-700 flex items-center gap-1.5 transition-all"
+                >
+                  {isRecentGamesOpen ? (
+                    <>
+                      <span>Hide</span>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      <span>View Games</span>
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {isRecentGamesOpen && (
+              <div className="p-4">
+                {isLoadingRecentGames && recentGames.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
+                    <span>Fetching your recent matches from Lichess...</span>
+                  </div>
+                ) : recentGames.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-400">
+                    No recent games found on this Lichess account. Play an online match or challenge the AI to analyze here!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                    {recentGames.map((game) => {
+                      const isSelected = selectedGameId === game.id;
+                      const isWin = game.result === 'win';
+                      const isLoss = game.result === 'loss';
+
+                      return (
+                        <div
+                          key={game.id}
+                          className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                            isSelected
+                              ? 'bg-violet-950/40 border-violet-500/50 shadow-md ring-1 ring-violet-500/30'
+                              : 'bg-slate-950/50 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                                    isWin
+                                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                                      : isLoss
+                                      ? 'bg-rose-950 text-rose-400 border border-rose-500/30'
+                                      : 'bg-amber-950 text-amber-400 border border-amber-500/30'
+                                  }`}
+                                >
+                                  {game.result.toUpperCase()}
+                                </span>
+                                <span className="text-xs font-bold text-white truncate">
+                                  vs {game.opponent.username}
+                                  {game.opponent.title && (
+                                    <span className="ml-1 text-[10px] px-1 py-0.2 bg-amber-500/20 text-amber-300 rounded font-mono">
+                                      {game.opponent.title}
+                                    </span>
+                                  )}
+                                  {game.opponent.rating && (
+                                    <span className="ml-1 text-xs text-slate-400 font-normal">
+                                      ({game.opponent.rating})
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-400 truncate flex items-center gap-1.5">
+                                <span>{game.opening.name}</span>
+                                {game.opening.eco && (
+                                  <span className="text-[10px] px-1 bg-slate-800 rounded text-slate-400 font-mono">
+                                    {game.opening.eco}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <a
+                              href={game.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-all shrink-0"
+                              title="Open on Lichess.org"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                            <div className="flex items-center gap-3 text-slate-400 text-[11px]">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-500" />
+                                {game.time_control}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <span className={`w-2 h-2 rounded-full ${game.user_color === 'white' ? 'bg-slate-200' : 'bg-slate-700 border border-slate-500'}`} />
+                                {game.user_color === 'white' ? 'White' : 'Black'}
+                              </span>
+                              <span>{game.moves_count} moves</span>
+                            </div>
+
+                            <button
+                              onClick={() => handleLoadRecentGame(game)}
+                              className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow transition-all hover:scale-105 active:scale-95"
+                            >
+                              <PlayCircle className="w-3.5 h-3.5" />
+                              Analyze
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Accuracy & Mistake Summary Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">

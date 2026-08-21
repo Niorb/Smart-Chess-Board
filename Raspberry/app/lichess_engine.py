@@ -305,6 +305,153 @@ class LichessEngine:
                 "error": str(e),
             }
 
+    async def get_user_recent_games(self, username: str | None = None, max_games: int = 10) -> list[dict[str, Any]]:
+        """
+        Fetches and parses the user's recent finished games from GET /api/games/user/{username}.
+        Extracts UCI moves, opponent details, result, date, opening, and speed for Analysis mode.
+        """
+        if not username:
+            if not self.username:
+                acct = await self.get_account()
+                username = acct.get("username")
+            else:
+                username = self.username
+
+        if not username or username in ("Guest", "Unauthorized", "Offline"):
+            logger.warning(f"Cannot fetch recent games: user not authenticated or username '{username}' invalid.")
+            return []
+
+        headers = self._get_headers()
+        headers["Accept"] = "application/x-ndjson"
+
+        params = {
+            "max": max(1, min(50, max_games)),
+            "moves": "true",
+            "tags": "true",
+            "opening": "true",
+            "clocks": "false",
+            "evals": "false",
+            "ongoing": "false",
+            "finished": "true",
+        }
+
+        games: list[dict[str, Any]] = []
+
+        try:
+            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=12.0) as client:
+                res = await client.get(f"/api/games/user/{username}", params=params)
+                if res.status_code != 200:
+                    logger.warning(f"Lichess recent games API returned status {res.status_code}: {res.text}")
+                    return []
+
+                # Response is NDJSON (newline-delimited JSON)
+                for line in res.text.strip().split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        raw = json.loads(line)
+                        game_id = raw.get("id", "")
+                        players = raw.get("players", {})
+                        white_info = players.get("white", {})
+                        black_info = players.get("black", {})
+
+                        white_user = (
+                            white_info.get("user", {}).get("name")
+                            or white_info.get("name")
+                            or ("AI Level " + str(white_info.get("aiLevel")) if "aiLevel" in white_info else "White")
+                        )
+                        black_user = (
+                            black_info.get("user", {}).get("name")
+                            or black_info.get("name")
+                            or ("AI Level " + str(black_info.get("aiLevel")) if "aiLevel" in black_info else "Black")
+                        )
+
+                        # Determine user's color
+                        user_is_white = bool(white_user.lower() == username.lower())
+                        user_color = "white" if user_is_white else "black"
+                        opponent_info = black_info if user_is_white else white_info
+                        opp_user = black_user if user_is_white else white_user
+
+                        # Winner and user result
+                        winner = raw.get("winner")  # "white", "black", None (draw)
+                        if winner == user_color:
+                            result = "win"
+                        elif winner is None:
+                            result = "draw"
+                        else:
+                            result = "loss"
+
+                        # Parse moves to UCI format
+                        moves_str = raw.get("moves", "")
+                        moves_uci = []
+                        if moves_str:
+                            board = chess.Board()
+                            for san_or_uci in moves_str.strip().split():
+                                try:
+                                    # Try SAN first
+                                    m = board.parse_san(san_or_uci)
+                                    moves_uci.append(m.uci())
+                                    board.push(m)
+                                except Exception:
+                                    try:
+                                        # Fallback to UCI
+                                        m = chess.Move.from_uci(san_or_uci)
+                                        if m in board.legal_moves:
+                                            moves_uci.append(m.uci())
+                                            board.push(m)
+                                    except Exception:
+                                        break
+
+                        # Opening
+                        opening_data = raw.get("opening", {})
+
+                        # Time control
+                        clock_data = raw.get("clock", {})
+                        if clock_data:
+                            init_min = clock_data.get("initial", 600) // 60
+                            inc_sec = clock_data.get("increment", 0)
+                            time_ctrl = f"{init_min}+{inc_sec}"
+                        else:
+                            time_ctrl = raw.get("speed", "standard").capitalize()
+
+                        created_at = raw.get("createdAt")
+
+                        games.append({
+                            "id": game_id,
+                            "url": f"https://lichess.org/{game_id}",
+                            "user_color": user_color,
+                            "user_rating": (white_info if user_is_white else black_info).get("rating"),
+                            "opponent": {
+                                "username": opp_user,
+                                "rating": opponent_info.get("rating"),
+                                "title": opponent_info.get("user", {}).get("title"),
+                                "is_ai": "aiLevel" in opponent_info,
+                            },
+                            "result": result,
+                            "winner": winner,
+                            "end_reason": raw.get("status", "unknown"),
+                            "created_at": created_at,
+                            "speed": raw.get("speed", "rapid"),
+                            "time_control": time_ctrl,
+                            "rated": raw.get("rated", False),
+                            "opening": {
+                                "name": opening_data.get("name", "Standard Chess"),
+                                "eco": opening_data.get("eco", ""),
+                            },
+                            "moves_count": len(moves_uci) // 2 + (len(moves_uci) % 2),
+                            "total_plys": len(moves_uci),
+                            "moves_uci": moves_uci,
+                            "moves_san": moves_str[:120] + ("..." if len(moves_str) > 120 else ""),
+                        })
+                    except Exception as parse_err:
+                        logger.warning(f"Error parsing Lichess game entry: {parse_err}")
+                        continue
+        except Exception as e:
+            logger.error(f"Error fetching recent Lichess games: {e}")
+
+        return games
+
     async def challenge_ai(
         self,
         state_manager,

@@ -14,8 +14,41 @@ export interface LichessAccount {
   error?: string;
 }
 
+export interface LichessRecentGame {
+  id: string;
+  url: string;
+  user_color: 'white' | 'black';
+  user_rating?: number;
+  opponent: {
+    username: string;
+    rating?: number | null;
+    title?: string | null;
+    is_ai: boolean;
+  };
+  result: 'win' | 'loss' | 'draw';
+  winner: 'white' | 'black' | null;
+  end_reason: string;
+  created_at?: number;
+  speed: string;
+  time_control: string;
+  rated: boolean;
+  opening: {
+    name: string;
+    eco: string;
+  };
+  moves_count: number;
+  total_plys: number;
+  moves_uci: string[];
+  moves_san: string;
+}
+
 export async function getLichessAccount(): Promise<LichessAccount> {
   const response = await fetch(`${API_BASE}/lichess/account`);
+  return response.json();
+}
+
+export async function getRecentLichessGames(maxGames: number = 10): Promise<{ status: string; games: LichessRecentGame[] }> {
+  const response = await fetch(`${API_BASE}/lichess/games/recent?max_games=${maxGames}`);
   return response.json();
 }
 

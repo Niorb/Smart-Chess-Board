@@ -226,6 +226,13 @@ async def get_lichess_account():
     return await lichess_engine.get_account()
 
 
+@app.get("/api/lichess/games/recent")
+async def get_recent_lichess_games(username: str | None = None, max_games: int = 10):
+    """Fetches and parses the user's recent finished Lichess games for Analysis mode."""
+    games = await lichess_engine.get_user_recent_games(username=username, max_games=max_games)
+    return {"status": "success", "games": games}
+
+
 @app.get("/api/board/physical")
 async def get_physical_board():
     """Returns the current sensor state of the physical board."""
