@@ -506,31 +506,29 @@ def test_analysis_board_reset_to_starting_position_transitions_to_idle():
         mgr.physical_state = phys_start
         mgr.move_tracker.reset(phys_start)
 
-        # Mock hardware read line to simulate loop cycle
-        with patch.object(mgr, "_read_hardware_line", return_value=(phys_start, 0.0)):
-            # Execute one update loop step
-            setup_res = mgr.setup_validator.validate(mgr.physical_state)
-            assert setup_res.is_setup_ready is True
+        # Validate board setup readiness
+        setup_res = mgr.setup_validator.validate(mgr.physical_state)
+        assert setup_res.is_setup_ready is True
 
-            # Trigger transition logic
-            if (
-                mgr.analysis_has_advanced
-                and setup_res.is_setup_ready
-                and mgr.move_tracker.lifted_square is None
-            ):
-                mgr.stop_analysis_mode()
-                mgr.prev_setup_ready = True
-                mgr.gesture_engine.reset()
-                mgr.trigger_animation("BOARD_READY", {"night_mode": False})
+        # Trigger transition logic
+        if (
+            mgr.analysis_has_advanced
+            and setup_res.is_setup_ready
+            and mgr.move_tracker.lifted_square is None
+        ):
+            mgr.stop_analysis_mode()
+            mgr.prev_setup_ready = True
+            mgr.gesture_engine.reset()
+            mgr.trigger_animation("BOARD_READY", {"night_mode": False})
 
-            assert mgr.game_status == "IDLE"
-            assert mgr.prev_setup_ready is True
-            assert mgr.active_animation is not None
-            assert mgr.active_animation.name == "BOARD_READY"
+        assert mgr.game_status == "IDLE"
+        assert mgr.prev_setup_ready is True
+        assert mgr.active_animation is not None
+        assert mgr.active_animation.name == "BOARD_READY"
 
-            # Gesture engine is ready to evaluate
-            mgr.gesture_engine.evaluate(mgr.physical_state, mgr.game_status)
-            assert mgr.gesture_engine is not None
+        # Gesture engine is active and ready to evaluate in IDLE state
+        mgr.gesture_engine.evaluate(mgr.physical_state, mgr.game_status)
+        assert mgr.gesture_engine is not None
 
     asyncio.run(_test())
 
