@@ -221,10 +221,9 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
   - **Concept B: Master Game Time Machine (Guess-the-Move Classics, `Raspberry/app/gm_games.py`, `board_state.py`, `frontend/src/components/AnalysisTab.tsx`)**:
     - Curated database of 6 historical masterpieces (*Kasparov's Immortal 1999*, *Tal's Hurricane Attack 1960*, *Fischer's Game of the Century 1956*, *Morphy's Opera Game 1858*, *The Immortal Game 1851*, *Carlsen's Python Squeeze 2013*).
     - Guess-the-move scoring system, move step navigation, and historical commentary annotations.
-  - **Comprehensive Web Dashboard & Documentation (`Raspberry/frontend/src/components/AnalysisTab.tsx`, `App.tsx`, `README.md`)**:
-    - Dedicated Analysis & Training Laboratory tab with interactive SVG win-chance / centipawn curve, move classification badges, candidate engine lines, blunder drill selector, and GM game library.
-    - Updated `README.md` with complete documentation of all features, LED colors, and physical gestures.
-    - Verified with all 236 passing pytest unit/integration tests and frontend production build on the physical Raspberry Pi over SSH.
+  - **Digital Board Grid Orientation & Play Tab Integration (`Raspberry/app/board_state.py`, `Raspberry/frontend/src/App.tsx`)**:
+    - Fixed 90-degree rotated piece layout during `ANALYSIS` mode by aligning `board_grid[r][f]` coordinates with `lichess_engine.get_board()`.
+    - Added dedicated **Analysis Mode Active** card in the Play tab with instant shortcuts to "Open Analysis Lab" and "Exit Analysis", while keeping matchmaking selection controls (Time controls, AI levels, Start Match) accessible during analysis mode.
 
 ## Task Backlog
 
