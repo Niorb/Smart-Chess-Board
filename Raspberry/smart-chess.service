@@ -1,0 +1,23 @@
+[Unit]
+Description=Smart Chess Board FastAPI & WebSocket Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/chess_git/Raspberry
+Environment="PYTHONPATH=/home/pi/chess_git/Raspberry"
+EnvironmentFile=-/home/pi/chess_git/Raspberry/.env
+ExecStart=/home/pi/venv/chess/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smart-chess
+
+[Install]
+WantedBy=multi-user.target

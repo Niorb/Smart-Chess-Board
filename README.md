@@ -168,11 +168,28 @@ Smart-Chess-Board/
 Open `Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino` in the Arduino IDE, install the `FastLED` or `Adafruit_NeoPixel` libraries, select your ESP32 board, and upload over USB.
 
 ### 4. Run Backend Server
+
+#### Option A: Run Interactively (Manual)
 ```bash
-cd ~/Smart-Chess-Board
+cd ~/chess_git/Raspberry
 source ~/venv/chess/bin/activate
-uvicorn Raspberry.app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+#### Option B: Automatic Startup on Pi Boot (systemd service)
+Install and enable the `smart-chess` system service to automatically launch the server whenever the Raspberry Pi boots:
+```bash
+sudo cp ~/chess_git/Raspberry/smart-chess.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now smart-chess
+```
+
+**Manage the Service:**
+- View live service logs: `sudo journalctl -u smart-chess -f`
+- Check service status: `sudo systemctl status smart-chess`
+- Restart server: `sudo systemctl restart smart-chess`
+- Stop service: `sudo systemctl stop smart-chess`
+
 Open your browser at `http://<raspberry-pi-ip>:8000` to access the web app.
 
 ---
