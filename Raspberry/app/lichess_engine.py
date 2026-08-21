@@ -660,10 +660,12 @@ class LichessEngine:
                             return
         except asyncio.CancelledError:
             logger.info("Seek task cancelled.")
-            state_manager.game_status = "IDLE"
+            if state_manager and state_manager.game_status == "SEEKING":
+                state_manager.game_status = "IDLE"
         except Exception as e:
             logger.error(f"Error during seek streaming: {e}")
-            state_manager.game_status = "IDLE"
+            if state_manager and state_manager.game_status == "SEEKING":
+                state_manager.game_status = "IDLE"
 
     async def stream_game(self, game_id: str, state_manager):
         """Streams game state events from GET /api/board/game/stream/{game_id}."""
@@ -685,7 +687,8 @@ class LichessEngine:
                 ) as response:
                     if response.status_code != 200:
                         logger.error(f"Failed to stream game {game_id}: HTTP {response.status_code}")
-                        state_manager.game_status = "IDLE"
+                        if self.current_game_id == game_id and state_manager:
+                            state_manager.game_status = "IDLE"
                         return
 
                     logger.info(f"Streaming live game {game_id}...")
@@ -725,10 +728,11 @@ class LichessEngine:
                 self._auto_claim_task.cancel()
                 self._auto_claim_task = None
             self.opponent_gone = None
-            if self.board and self.board.move_stack:
-                self._record_last_game(state_manager)
-            if state_manager and state_manager.game_status == "PLAYING":
-                state_manager.game_status = "IDLE"
+            if self.current_game_id == game_id:
+                if self.board and self.board.move_stack:
+                    self._record_last_game(state_manager)
+                if state_manager and state_manager.game_status == "PLAYING":
+                    state_manager.game_status = "IDLE"
 
     def _record_last_game(self, state_manager=None) -> None:
         """Records the moves and metadata of the most recently finished game for analysis."""
@@ -878,6 +882,8 @@ class LichessEngine:
             state_manager.game_status = "IDLE"
             self._trigger_end_animation(state_manager, state_data.get("winner"))
         else:
+            if state_manager:
+                state_manager.game_status = "PLAYING"
             if state_manager and hasattr(state_manager, "move_tracker") and state_manager.move_tracker:
                 state_manager.move_tracker.reset(getattr(state_manager, "physical_state", None))
             if state_manager and hasattr(state_manager, "trigger_animation"):
@@ -902,7 +908,7 @@ class LichessEngine:
         status = event.get("status")
         winner = event.get("winner")
 
-        if (status and status != "started") or winner or self.game_info.get("is_game_over"):
+        if (status and status != "started") or winner:
             self.game_info["is_game_over"] = True
             self.game_info["winner"] = winner
             self.game_info["end_reason"] = status
