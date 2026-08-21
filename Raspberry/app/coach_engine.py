@@ -357,7 +357,7 @@ class CoachEngine:
 
         try:
             async with self._engine_lock:
-                infos = await self._engine.analyse(board, limit, multipv=multipv)
+                infos = await asyncio.shield(self._engine.analyse(board, limit, multipv=multipv))
                 if not isinstance(infos, list):
                     infos = [infos]
         except (asyncio.CancelledError, Exception) as e:
