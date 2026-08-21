@@ -178,7 +178,7 @@ def load_settings():
                 if not is_valid_col_mux_map:
                     if "col_mux_map" in loaded:
                         logger.warning(
-                            f"Invalid col_mux_map in {source_file}. Using standard default mapping."
+                            f"Invalid col_mux_map in {filepath}. Using standard default mapping."
                         )
                     loaded["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
@@ -194,14 +194,14 @@ def load_settings():
                 )
                 if not is_valid_baselines:
                     logger.warning(
-                        f"Invalid baselines matrix shape in {source_file}. Using standard default matrix."
+                        f"Invalid baselines matrix shape in {filepath}. Using standard default matrix."
                     )
                     loaded["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
 
                 settings.update(loaded)
-                logger.info(f"Loaded board settings from {source_file}")
+                logger.info(f"Loaded board settings from {filepath}")
         except Exception as e:
-            logger.error(f"Error loading settings from {source_file}: {e}")
+            logger.error(f"Error loading settings from {filepath}: {e}")
 
     # If primary user settings file does not exist yet, save settings to initialize it
     if not os.path.exists(filepath):
