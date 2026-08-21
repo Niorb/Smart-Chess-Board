@@ -692,6 +692,89 @@ class BoardStateManager:
             logger.error(f"Error executing analysis move {uci}: {e}")
             return {"action": "error", "error": str(e)}
 
+    def _check_analysis_board_restoration(self) -> bool:
+        """
+        Checks if the physical board state has been restored to the divergence anchor position
+        or an earlier intermediate branch position.
+        If the physical board matches the divergence anchor board, automatically clears the branch
+        and snaps back to the main game timeline.
+        """
+        if (
+            self.game_status != "ANALYSIS"
+            or self.analysis_anchor_coord is None
+            or self.analysis_anchor_ply is None
+            or self.physical_state is None
+        ):
+            return False
+
+        # Don't snap back while the player is in the middle of lifting a piece or executing a move
+        if (
+            getattr(self.move_tracker, "lifted_square", None) is not None
+            or getattr(self.move_tracker, "in_flight_move", None) is not None
+            or getattr(self.move_tracker, "pending_castling_rook", None) is not None
+        ):
+            return False
+
+        # Reconstruct the anchor board from the game timeline
+        anchor_board = chess.Board()
+        target_ply = min(self.analysis_anchor_ply, len(self.analysis_game_moves))
+        for idx in range(target_ply):
+            try:
+                m_str = self.analysis_game_moves[idx].strip()
+                if len(m_str) in (4, 5) and m_str[:2].isalnum():
+                    anchor_board.push_uci(m_str)
+                else:
+                    anchor_board.push_san(m_str)
+            except Exception:
+                pass
+
+        # Validate if current physical board exactly matches the anchor board
+        res = self.setup_validator.validate_game_state(self.physical_state, anchor_board, None)
+        if res.is_synchronized:
+            logger.info(
+                f"Physical board restored to divergence anchor position at ply {self.analysis_anchor_ply}. "
+                "Automatically snapping back to game timeline."
+            )
+            restored_ply = self.analysis_anchor_ply
+            self.analysis_current_ply = restored_ply
+            self.analysis_anchor_coord = None
+            self.analysis_anchor_ply = None
+            self.analysis_branch_moves = []
+            self.analysis_active_board = anchor_board
+            self.move_tracker.reset(self.physical_state)
+
+            if 0 <= restored_ply < len(self.analysis_game_moves):
+                m_str = self.analysis_game_moves[restored_ply]
+                if len(m_str) >= 4:
+                    try:
+                        to_c = ord(m_str[2]) - ord('a')
+                        to_r = int(m_str[3]) - 1
+                        if 0 <= to_c < 8 and 0 <= to_r < 8:
+                            self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
+                    except Exception:
+                        pass
+            return True
+
+        # Check if physical board matches an earlier step in the branch (step-by-step un-playing)
+        if len(self.analysis_branch_moves) > 1:
+            for step_idx in range(len(self.analysis_branch_moves) - 1, 0, -1):
+                temp_b = anchor_board.copy()
+                for b_move in self.analysis_branch_moves[:step_idx]:
+                    try:
+                        temp_b.push_uci(b_move)
+                    except Exception:
+                        pass
+                b_res = self.setup_validator.validate_game_state(self.physical_state, temp_b, None)
+                if b_res.is_synchronized:
+                    logger.info(f"Physical board restored to branch depth {step_idx}.")
+                    self.analysis_branch_moves = self.analysis_branch_moves[:step_idx]
+                    self.analysis_active_board = temp_b
+                    self.move_tracker.reset(self.physical_state)
+                    coach_engine.request_analysis(self.analysis_active_board)
+                    return True
+
+        return False
+
     def get_analysis_payload(self) -> dict[str, Any]:
         """Constructs serialized payload for Analysis and Training modes."""
         curr_eval = None
@@ -1464,6 +1547,10 @@ class BoardStateManager:
                             else:
                                 self.guardrail_result = None
                         elif self.game_status == "ANALYSIS":
+                            # Auto-detect if physical board was restored to anchor position or earlier branch step
+                            if self.analysis_anchor_coord is not None:
+                                self._check_analysis_board_restoration()
+
                             # Physical Move Tracking during ANALYSIS mode
                             class AnalysisEngineAdapter:
                                 def __init__(self, board):

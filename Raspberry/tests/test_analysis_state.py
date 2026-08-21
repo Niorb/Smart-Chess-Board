@@ -375,3 +375,103 @@ def test_physical_castling_suppresses_intermediate_rook_moves():
     assert tracker.arrival_flash["square"] == (5, 0)
 
 
+def test_analysis_auto_snap_back_on_anchor_restoration():
+    """Verify that when the user puts back the anchor position, the board automatically snaps back to the game."""
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        # Advance to ply 2 (1. e4 e5)
+        mgr.step_analysis(2)
+        assert mgr.analysis_current_ply == 2
+
+        # User diverges by playing alternative move 2. d4 (d2d4)
+        res_branch = mgr.handle_analysis_move("d2d4")
+        assert res_branch["action"] == "branch"
+        assert mgr.analysis_anchor_ply == 2
+        assert mgr.analysis_anchor_coord == (3, 1)  # d2
+        assert mgr.analysis_branch_moves == ["d2d4"]
+
+        # Board position at ply 2 (1. e4 e5)
+        anchor_b = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+
+        # Construct physical state matching anchor_b
+        phys_state = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = anchor_b.piece_at(chess.square(c, r))
+                if p:
+                    phys_state[c][r] = -1 if p.color == chess.WHITE else 1
+
+        mgr.physical_state = phys_state
+        mgr.move_tracker.reset(phys_state)
+
+        # Execute restoration check
+        restored = mgr._check_analysis_board_restoration()
+        assert restored is True
+        assert mgr.analysis_anchor_coord is None
+        assert mgr.analysis_anchor_ply is None
+        assert mgr.analysis_branch_moves == []
+        assert mgr.analysis_current_ply == 2
+        assert mgr.analysis_active_board.fen().startswith("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -")
+
+        # Now playing the next game move (2. Nf3 / g1f3) auto-advances
+        res_adv = mgr.handle_analysis_move("g1f3")
+        assert res_adv["action"] == "advance"
+        assert mgr.analysis_current_ply == 3
+
+    asyncio.run(_test())
+
+
+def test_analysis_step_by_step_branch_undo():
+    """Verify that taking back moves along a branch step-by-step updates branch depth until snapping back."""
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+
+        mgr.step_analysis(2)
+        mgr.handle_analysis_move("d2d4")
+        mgr.handle_analysis_move("e5d4")
+        assert len(mgr.analysis_branch_moves) == 2
+
+        # Step back 1: Position after 2. d4
+        board_d4 = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2")
+        phys_d4 = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = board_d4.piece_at(chess.square(c, r))
+                if p:
+                    phys_d4[c][r] = -1 if p.color == chess.WHITE else 1
+
+        mgr.physical_state = phys_d4
+        mgr.move_tracker.reset(phys_d4)
+
+        restored_step = mgr._check_analysis_board_restoration()
+        assert restored_step is True
+        assert len(mgr.analysis_branch_moves) == 1
+        assert mgr.analysis_anchor_coord is not None
+
+        # Step back 2: Position at anchor (1. e4 e5)
+        board_anchor = chess.Board("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+        phys_anchor = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = board_anchor.piece_at(chess.square(c, r))
+                if p:
+                    phys_anchor[c][r] = -1 if p.color == chess.WHITE else 1
+
+        mgr.physical_state = phys_anchor
+        mgr.move_tracker.reset(phys_anchor)
+
+        restored_full = mgr._check_analysis_board_restoration()
+        assert restored_full is True
+        assert mgr.analysis_anchor_coord is None
+        assert mgr.analysis_branch_moves == []
+        assert mgr.analysis_current_ply == 2
+
+    asyncio.run(_test())
+
+
+
