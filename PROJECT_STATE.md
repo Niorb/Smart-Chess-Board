@@ -13,6 +13,18 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Implemented Analysis Mode Move Quality Animations, Delta-Based Color Rules, Best Move Guidance, and Off-Game Variation Indicators:
+  - **Full Move Animations in Review Mode**: Fixed the missing animation issue in Analysis mode by wiring `interpolate_move_path()`, `render_move_trace()`, and `render_castle_trace()` directly into the `BoardStateManager._update_leds()` review pipeline.
+  - **Delta-Based Move Classification & Colors**:
+    - **Rule A ($\Delta\text{cp} \le 60$ / Best or Good)**: Best moves ($\Delta \le 15\text{cp}$) animate the full piece trajectory in **Mint Emerald** (`COLOR_MINT_EMERALD = (0, 220, 140)`); Good moves ($15 < \Delta \le 60\text{cp}$) animate in **Cyan Azure** (`COLOR_AZURE = (0, 160, 255)`). Alternative move suggestions are suppressed to maintain a clean board focus.
+    - **Rule B ($\Delta\text{cp} > 60$ / Inaccuracy or Blunder)**: Inaccuracies ($60 < \Delta \le 150\text{cp}$) animate in **Warm Sun Amber** (`COLOR_MOVE_INACCURACY = (220, 160, 0)`); Blunders ($\Delta > 150\text{cp}$) animate in **Laser Crimson** (`COLOR_MOVE_BLUNDER = (220, 24, 40)`). Simultaneously suggests the engine's best refutation move by lighting origin and target in breathing Emerald Green and rendering the best move trajectory interleaved with a $180^\circ$ phase offset.
+  - **Off-Game Variation Sandbox Indicators**:
+    - When a player plays an alternative move to diverge from the main game timeline, the anchor square is solidly illuminated in **Royal Violet** (`COLOR_ROYAL_VIOLET = (140, 40, 240)`), and all 4 corner rooks (`a1`, `h1`, `a8`, `h8`) pulse with a subtle 0.5 Hz breathing Royal Violet beacon as a perimeter sandbox boundary.
+    - If cached engine evaluations exist for the diverged position, the engine's best reply is animated dynamically.
+  - **React Frontend UI Enhancements (`AnalysisTab.tsx`)**:
+    - Updated quality badges, delta thresholds, and tooltips matching Mint Emerald, Cyan Azure, Warm Amber, and Laser Crimson.
+    - Prominent Off-Game Variation Sandbox banner indicating diverged ply count, anchor coordinate, physical board LED cues, and a one-click "Return to Game Timeline" button.
+  - **Testing & Deployment**: Added unit test suite in `test_analysis_state.py` covering all LED rendering rules. Successfully built frontend (`tsc -b && vite build`), verified all 242 pytest test suites on Raspberry Pi over SSH, and restarted `smart-chess.service`.
 - [x] Configured automatic startup on Raspberry Pi boot via systemd service (`Raspberry/smart-chess.service` installed to `/etc/systemd/system/smart-chess.service`):
   - **Service Specification**: Runs under user `pi`, working directory `/home/pi/chess_git/Raspberry`, loads `.env` secrets, executes `/home/pi/venv/chess/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000` with `Restart=always` and `RestartSec=5s`.
   - **Verification**: Enabled and started with `systemctl enable --now smart-chess`. Verified active status, automatic restart resilience, journalctl logging, and clean API responses on port 8000.
