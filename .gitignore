@@ -24,8 +24,6 @@ build/
 # Board Hardware Calibration & Transient Settings
 Raspberry/board_settings.json
 board_settings.json
-Raspberry/board_settings.default.json
-board_settings.default.json
 *.tmp
 *.json.tmp
 

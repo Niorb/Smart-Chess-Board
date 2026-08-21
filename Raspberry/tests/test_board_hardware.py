@@ -602,10 +602,10 @@ def test_freeze_baseline_suppresses_drift():
     assert len(baseline_history) == 0
 
 
-def test_load_settings_fallback_to_default_json_and_creates_settings_file():
+def test_load_settings_creates_settings_file():
     """
-    Verify multi-tier fallback: when board_settings.json does not exist,
-    load_settings() loads from board_settings.default.json and creates board_settings.json.
+    Verify that when board_settings.json does not exist,
+    load_settings() initializes default settings and creates board_settings.json.
     """
     import json
     import tempfile
@@ -613,36 +613,21 @@ def test_load_settings_fallback_to_default_json_and_creates_settings_file():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         settings_path = os.path.join(tmpdir, "board_settings.json")
-        default_path = os.path.join(tmpdir, "board_settings.default.json")
         old_env = os.environ.get("BOARD_SETTINGS_PATH")
         os.environ["BOARD_SETTINGS_PATH"] = settings_path
 
         try:
-            default_data = {
-                "threshold_positive": 215,
-                "threshold_negative": 215,
-                "scan_delay": 42,
-                "mux_settle_us": 120,
-                "col_mode": "auto",
-                "pieces_mode": "auto",
-            }
-            with open(default_path, "w") as f:
-                json.dump(default_data, f)
-
             assert not os.path.exists(settings_path)
 
             load_settings()
 
-            assert settings["threshold_positive"] == 215
-            assert settings["threshold_negative"] == 215
-            assert settings["scan_delay"] == 42
-            assert settings["mux_settle_us"] == 120
+            assert settings["threshold_positive"] == 200
+            assert settings["threshold_negative"] == 200
 
             assert os.path.exists(settings_path)
             with open(settings_path) as f:
                 saved_content = json.load(f)
-            assert saved_content["threshold_positive"] == 215
-            assert saved_content["scan_delay"] == 42
+            assert saved_content["threshold_positive"] == 200
         finally:
             if old_env is not None:
                 os.environ["BOARD_SETTINGS_PATH"] = old_env
@@ -705,17 +690,9 @@ def test_baseline_not_calibrated_when_piece_lifted():
 
 
 def test_in_loop_calibration_default_setting():
-    """Verify that in_loop_calibration defaults to True in factory default settings."""
-    import json
-    import os
-    template_path = os.path.join(os.path.dirname(__file__), "..", "board_settings.default.json")
-    if os.path.exists(template_path):
-        with open(template_path, "r") as f:
-            template = json.load(f)
-            assert template.get("in_loop_calibration") is True
-    else:
-        from board_hardware import settings
-        assert settings.get("in_loop_calibration", True) is True
+    """Verify that in_loop_calibration defaults to True in settings."""
+    from board_hardware import settings
+    assert settings.get("in_loop_calibration", True) is True
 
 
 def test_scan_board_in_loop_calibration_disabled_suppresses_drift():
@@ -775,7 +752,7 @@ def test_set_square_baseline_invalid_coords_returns_negative():
 
 
 def test_save_defaults_function(tmp_path, monkeypatch):
-    """Verify that save_defaults saves to both board_settings.json and board_settings.default.json."""
+    """Verify that save_defaults saves directly to board_settings.json."""
     import json
     from board_hardware import save_defaults, settings
     user_file = str(tmp_path / "board_settings.json")
@@ -784,21 +761,14 @@ def test_save_defaults_function(tmp_path, monkeypatch):
     settings["threshold_positive"] = 350
     settings["threshold_negative"] = 450
 
-    res = save_defaults(overwrite_factory_template=True)
+    res = save_defaults()
     assert res is True
     assert os.path.exists(user_file)
-    default_file = str(tmp_path / "board_settings.default.json")
-    assert os.path.exists(default_file)
 
     with open(user_file) as f:
         data = json.load(f)
         assert data["threshold_positive"] == 350
         assert data["threshold_negative"] == 450
-
-    with open(default_file) as f:
-        data_default = json.load(f)
-        assert data_default["threshold_positive"] == 350
-        assert data_default["threshold_negative"] == 450
 
 
 def test_vacated_square_calibrates_to_own_baseline_after_piece_moves():

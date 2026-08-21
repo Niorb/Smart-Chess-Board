@@ -296,10 +296,9 @@ async def update_board_settings(body: ThresholdSettings):
 async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
     """
     Saves all current stats (baselines, thresholds, settings) to persistent storage
-    (board_settings.json and board_settings.default.json) as the defaults for future connections.
+    (board_settings.json) as the defaults for future connections.
     """
-    from board_hardware import save_defaults, settings
-    overwrite_template = True
+    from board_hardware import save_defaults, settings, get_settings_filepath
     if body is not None:
         if body.threshold_positive is not None:
             settings["threshold_positive"] = int(body.threshold_positive)
@@ -342,12 +341,14 @@ async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
             settings["night_mode"] = bool(body.night_mode)
         if body.baselines is not None and isinstance(body.baselines, list) and len(body.baselines) == 8:
             settings["baselines"] = body.baselines
-        overwrite_template = body.overwrite_template
 
-    await asyncio.to_thread(save_defaults, overwrite_factory_template=overwrite_template)
+    await asyncio.to_thread(save_defaults)
+    filepath = get_settings_filepath()
+    logger.info(f"Explicitly saved board defaults to {filepath}")
     return {
         "status": "success",
-        "message": "Current stats (baselines & thresholds) saved as persistent defaults",
+        "message": f"Successfully saved current stats (64 baselines & thresholds) to {filepath}",
+        "file": filepath,
         "settings": settings,
     }
 

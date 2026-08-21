@@ -116,25 +116,11 @@ last_sent_settle_us = None
 def load_settings():
     global settings
     filepath = get_settings_filepath()
-    source_file = None
     loaded = None
 
-    # Tier 1: Check primary user settings file
     if os.path.exists(filepath):
-        source_file = filepath
-    else:
-        # Tier 2: Check default factory template in the same directory
-        default_template_path = os.path.join(
-            os.path.dirname(filepath) if os.path.dirname(filepath) else ".",
-            "board_settings.default.json"
-        )
-        if os.path.exists(default_template_path):
-            source_file = default_template_path
-            logger.info(f"User settings {filepath} not found. Initializing from template {default_template_path}")
-
-    if source_file and os.path.exists(source_file):
         try:
-            with open(source_file) as f:
+            with open(filepath) as f:
                 loaded = json.load(f)
 
                 # Check for legacy row terminology keys and migrate them
@@ -277,37 +263,12 @@ def save_settings():
                 pass
 
 
-def save_defaults(overwrite_factory_template: bool = True) -> bool:
+def save_defaults() -> bool:
     """
     Saves current in-memory settings (including dynamic baselines, thresholds,
-    and board parameters) to persistent settings (board_settings.json) and
-    optionally updates the default factory template (board_settings.default.json).
+    and board parameters) to persistent storage (board_settings.json).
     """
     save_settings()
-    if overwrite_factory_template:
-        filepath = get_settings_filepath()
-        default_template_path = os.path.join(
-            os.path.dirname(filepath) if os.path.dirname(filepath) else ".",
-            "board_settings.default.json"
-        )
-        tmp_path = default_template_path + ".tmp"
-        try:
-            target_dir = os.path.dirname(default_template_path)
-            if target_dir:
-                os.makedirs(target_dir, exist_ok=True)
-            with open(tmp_path, "w") as f:
-                json.dump(settings, f, indent=4)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, default_template_path)
-            logger.info(f"Saved default template to {default_template_path}")
-        except Exception as e:
-            logger.error(f"Error saving default template: {e}")
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
     return True
 
 

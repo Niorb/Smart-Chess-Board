@@ -97,7 +97,7 @@ def test_save_defaults_route():
         assert data["settings"]["threshold_positive"] == 280
         assert data["settings"]["threshold_negative"] == 320
         assert data["settings"]["scan_delay"] == 50
-        assert "persistent defaults" in data["message"]
+        assert "Successfully saved" in data["message"]
 
 
 def test_clear_leds_route():

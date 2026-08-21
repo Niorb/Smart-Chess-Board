@@ -885,7 +885,8 @@ function App() {
           if (res.settings.led_intensity !== undefined) localStorage.setItem('scb_led_intensity', String(res.settings.led_intensity));
           if (res.settings.night_mode !== undefined) localStorage.setItem('scb_night_mode', String(res.settings.night_mode));
         }
-        setSaveDefaultsStatus("✓ Current baselines & thresholds saved as defaults!");
+        const nowStr = new Date().toLocaleTimeString();
+        setSaveDefaultsStatus(`✓ Successfully saved to board_settings.json at ${nowStr} (${currentBaselines ? '64 Baselines' : 'Baselines'}, +${positiveThresh}/-${negativeThresh})`);
       } else {
         setSaveDefaultsStatus("Failed to save defaults");
       }
@@ -894,7 +895,7 @@ function App() {
       setSaveDefaultsStatus("Error saving defaults");
     } finally {
       setSavingDefaults(false);
-      setTimeout(() => setSaveDefaultsStatus(null), 4000);
+      setTimeout(() => setSaveDefaultsStatus(null), 6000);
     }
   };
 
@@ -2045,14 +2046,17 @@ function App() {
                 <button
                   onClick={handleSaveDefaults}
                   disabled={savingDefaults}
-                  className="w-full bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-200 border border-indigo-500/40 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
-                  title="Saves all current stats (live baselines, thresholds, timings, and mode) to persistent settings as defaults for new connections"
+                  className="w-full bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-100 border border-indigo-500/50 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
+                  title="Saves all current stats (live baselines, thresholds, timings, and mode) directly to board_settings.json"
                 >
                   <BookmarkCheck size={14} className={savingDefaults ? 'animate-spin text-indigo-300' : 'text-indigo-400'} />
-                  <span>{savingDefaults ? 'Saving Current Stats...' : 'Save Current Stats as Defaults'}</span>
+                  <span>{savingDefaults ? 'Writing to board_settings.json...' : 'Save Current Stats as Defaults'}</span>
                 </button>
                 {saveDefaultsStatus && (
-                  <span className="text-[10px] text-indigo-300 font-mono text-center font-bold">{saveDefaultsStatus}</span>
+                  <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-2.5 flex items-center gap-2 text-left">
+                    <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
+                    <span className="text-[11px] text-emerald-200 font-mono font-medium leading-tight">{saveDefaultsStatus}</span>
+                  </div>
                 )}
 
                 <hr className="border-slate-800/80 my-1" />
