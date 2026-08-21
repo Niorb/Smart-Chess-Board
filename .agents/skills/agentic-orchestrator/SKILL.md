@@ -73,9 +73,14 @@ After making any code changes, execute the following sequence:
 2. **SSH to Raspberry Pi**:
    - Connect to the Pi (`ssh pi@pi`) and navigate to `~/chess_git`.
 3. **Pull Updates**:
-   - Pull latest code (`git pull`). Preserve hardware calibration settings in `Raspberry/board_settings.json` if needed.
-4. **Run Verification Tests**:
+   - Pull latest code (`git pull`). Note: `board_settings.json` is git-ignored and automatically preserved.
+4. **Build Frontend**:
+   - Run `npm run build` in `~/chess_git/Raspberry/frontend`.
+5. **Run Verification Tests**:
    - Activate environment (`source ~/venv/chess/bin/activate`) and run test suite (`pytest`) on the physical Pi.
+6. **Restart Backend Service**:
+   - Run `sudo systemctl restart smart-chess` on the Pi so the live server picks up new backend code and frontend assets.
+   - Inspect status/logs: `sudo systemctl status smart-chess` / `sudo journalctl -u smart-chess -f`.
 
 ---
 

@@ -16,6 +16,10 @@ You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your
 > 3. Pull the updated code (`git pull`). Note: `board_settings.json` and `board_settings.default.json` are git-ignored and automatically preserved locally without manual stashing.
 > 4. Run `npm` operations (e.g. `npm run build` in `Raspberry/frontend`) on the Pi.
 > 5. Activate the virtual environment (`source ~/venv/chess/bin/activate`) and run tests (`pytest`) on the Pi to verify.
+> 6. Restart the backend service (`sudo systemctl restart smart-chess`) on the Pi to apply new backend code and frontend builds.
+>
+> **System Service Management:**
+> The server runs on startup via systemd (`smart-chess.service`). Use `sudo systemctl status smart-chess` to inspect status and `sudo journalctl -u smart-chess -f` to view live logs.
 >
 > **Strict Settings Protection Directive:**
 > NEVER overwrite the user's active board settings (`board_settings.json`), and NEVER commit or push the user's live physical calibration values / quiescent baselines into default templates or GitHub repositories. All physical board calibration data is private to the physical board and must remain untouched.
