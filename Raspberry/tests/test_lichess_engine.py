@@ -562,7 +562,7 @@ def test_get_user_recent_games_parsing():
                 "winner": "white",
                 "createdAt": 1717900000000,
                 "players": {
-                    "white": {"name": "GrandmasterBot", "aiLevel": 5},
+                    "white": {"aiLevel": 5},
                     "black": {"user": {"name": "RobiDeli", "id": "robideli"}, "rating": 1500}
                 },
                 "opening": {"name": "Queen's Gambit Declined", "eco": "D30"},
