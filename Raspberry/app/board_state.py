@@ -946,14 +946,6 @@ class BoardStateManager:
             return
 
         try:
-            from board_hardware import settings
-            from app.led_animations import (
-                render_analysis_computing,
-                render_castle_trace,
-                render_move_trace,
-            )
-            from app.path_interpolator import get_castle_rook_move, interpolate_move_path
-
             now = time.time()
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
