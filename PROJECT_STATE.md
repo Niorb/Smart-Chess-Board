@@ -13,6 +13,16 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Implemented Post-Game Board Gesture Analysis & Real-Time Computing LED Animation:
+  - **Completed Game Move History Capture (`Raspberry/app/lichess_engine.py`)**: Added centralized `_record_last_game(state_manager)` capturing the complete UCI move stack, `game_id`, and match metadata across all game completion paths (checkmate, resignation, timeout, draw, victory claim, and abort). Automatically persists `last_game_moves` and `last_game_id` to hardware `board_settings.json` to survive application restarts.
+  - **Prioritized Last-Game Analysis Resolution (`Raspberry/app/board_state.py`)**: Updated `start_analysis_mode()` fallback hierarchy so when the player triggers analysis with no explicit arguments (e.g. via board gesture or 1-click review), it automatically prioritizes the game just played (`self.last_game_moves` -> `lichess_engine.last_game_moves` -> `move_stack` -> `settings["last_game_moves"]`), falling back to demo openings only if no game was ever played.
+  - **Procedural Low-Power Computing Animation (`Raspberry/app/led_animations.py` `render_analysis_computing`)**:
+    - **Visual Choreography**: Central 2x2 core (`d4`, `e4`, `d5`, `e5`) in soft breathing Royal Violet (`0x5000A0`), surrounded by an orbital 12-square ring with dual sweeping Mint Emerald (`0x009040`) and Cyan Azure (`0x006090`) calculation probes sweeping at ~1.35 rev/sec in opposing $180^\circ$ phase.
+    - **Power & Safety Compliance**: Strictly limited to $\le 8$ simultaneous active squares ($\le 16$ WS2812B LEDs, $< 220\text{mA}$ current draw on the 5V rail), with Night Mode power attenuation ($0.45\times$).
+    - **Glitch-Free Frame Pipeline (`Raspberry/app/board_state.py`)**: Renders dynamically while `self.analysis_is_loading == True`, smoothly transitioning into the Move 1 / Ply 0 review trace and live File 'h' evaluation bar the exact frame Stockfish batch evaluation completes.
+  - **Physical Gesture Integration (`Raspberry/app/gesture_engine.py`)**: Verified `CenterRoyalGateGesture` (e2 -> d2 -> replace both pieces to initial setup) triggers arrival confirmation flare and launches Stockfish pre-analysis for the just-completed match.
+  - **Testing & Deployment**: Added test suites across `test_lichess_engine.py`, `test_analysis_state.py`, `test_led_animations.py`, and `test_gesture_analysis.py`. All 257 pytest unit tests passing on the physical Raspberry Pi over SSH; frontend built and `smart-chess.service` running live.
+
 - [x] Implemented Automatic Conclusion of Analysis & Return to Gesture-Ready IDLE on Full Board Reset:
   - **Full Setup Recognition during Analysis (`Raspberry/app/board_state.py`)**: Added starting position setup validation (`setup_validator.validate(physical_state).is_setup_ready`) inside the Analysis mode update loop.
   - **Auto-Exit to Default State**: Once the player has reviewed/progressed through the analysis (or moved pieces during analysis) and puts all 32 physical pieces back into their standard initial starting ranks (White on rows 1-2, Black on rows 7-8, center rows empty):
