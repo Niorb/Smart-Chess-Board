@@ -87,28 +87,32 @@ def get_settings_filepath():
 
 DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7]
 
-# Default settings (with swapped terminology: columns are ranks 8..1, rows are files a..h)
-settings: dict[str, Any] = {
-    "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
-    "threshold_positive": 200,
-    "threshold_negative": 200,
-    "col_mode": "auto",
-    "manual_col": 0,
-    "scan_delay": 100,
-    "mux_settle_us": 100,
-    "debounce_threshold": 2,
-    "baseline_window_s": 2,
-    "disabled_squares": [],
-    "col_mux_map": list(DEFAULT_COL_MUX_MAP),
-    "pieces_mode": "auto",  # "auto" | "pieces" | "empty"
-    "coach_hints_enabled": True,
-    "eval_bar_enabled": True,
-    "coach_ai_only": True,
-    "in_loop_calibration": True,
-    "led_intensity": 100,
-    "night_mode": False,
-    "last_game_params": None,
-}
+def get_default_settings() -> dict[str, Any]:
+    return {
+        "baselines": [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)],
+        "threshold_positive": 200,
+        "threshold_negative": 200,
+        "col_mode": "auto",
+        "manual_col": 0,
+        "scan_delay": 100,
+        "mux_settle_us": 100,
+        "debounce_threshold": 2,
+        "baseline_window_s": 2,
+        "disabled_squares": [],
+        "col_mux_map": list(DEFAULT_COL_MUX_MAP),
+        "pieces_mode": "auto",  # "auto" | "pieces" | "empty"
+        "coach_hints_enabled": True,
+        "eval_bar_enabled": True,
+        "coach_ai_only": True,
+        "in_loop_calibration": True,
+        "led_intensity": 100,
+        "night_mode": False,
+        "last_game_params": None,
+    }
+
+
+# Default settings
+settings: dict[str, Any] = get_default_settings()
 
 last_sent_settle_us = None
 
@@ -202,9 +206,10 @@ def load_settings():
                 logger.info(f"Loaded board settings from {filepath}")
         except Exception as e:
             logger.error(f"Error loading settings from {filepath}: {e}")
-
-    # If primary user settings file does not exist yet, save settings to initialize it
-    if not os.path.exists(filepath):
+    else:
+        logger.info(f"User settings {filepath} not found. Initializing with default settings.")
+        settings.clear()
+        settings.update(get_default_settings())
         try:
             save_settings()
             logger.info(f"Initialized user settings file at {filepath}")
