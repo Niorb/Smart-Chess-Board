@@ -130,6 +130,7 @@ from app.led_helpers import (
 from app.coach_engine import MoveQuality, coach_engine
 from app.led_animations import (
     blend_colors,
+    render_analysis_computing,
     render_castle_trace,
     render_capture_aura,
     render_guardrail_mismatch,

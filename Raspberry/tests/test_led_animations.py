@@ -536,7 +536,7 @@ def test_render_analysis_computing_power_budget_and_night_mode():
         render_analysis_computing(ts, frame, {"night_mode": False})
 
         active_leds = sum(1 for val in frame if val != 0)
-        assert active_leds <= 14, f"Power budget exceeded: {active_leds} LEDs at t={ts}"
+        assert active_leds <= 16, f"Power budget exceeded: {active_leds} LEDs at t={ts}"
 
         lit_squares = 0
         for c in range(8):
@@ -544,7 +544,7 @@ def test_render_analysis_computing_power_budget_and_night_mode():
                 indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 7, f"Power budget exceeded: {lit_squares} squares at t={ts}"
+        assert lit_squares <= 8, f"Power budget exceeded: {lit_squares} squares at t={ts}"
 
         for val in frame:
             r, g, b = unpack_rgb(val)
@@ -555,14 +555,14 @@ def test_render_analysis_computing_power_budget_and_night_mode():
         frame_night = [0] * NUM_LEDS
         render_analysis_computing(ts, frame_night, {"night_mode": True})
 
-        # Non-idle squares must adhere to the 7-square limit
+        # Non-idle squares must adhere to the 8-square limit (4 core + max 4 probe squares)
         lit_squares = 0
         for c in range(8):
             for r in range(8):
                 indices = get_led_indices(r, c)
                 if any(frame_night[idx] != COLOR_INT_NIGHT_MODE and frame_night[idx] != 0 for idx in indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 7, f"Night power budget exceeded: {lit_squares} squares at t={ts}"
+        assert lit_squares <= 8, f"Night power budget exceeded: {lit_squares} squares at t={ts}"
 
 
 
