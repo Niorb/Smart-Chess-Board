@@ -13,6 +13,14 @@ Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] Implemented Automatic Conclusion of Analysis & Return to Gesture-Ready IDLE on Full Board Reset:
+  - **Full Setup Recognition during Analysis (`Raspberry/app/board_state.py`)**: Added starting position setup validation (`setup_validator.validate(physical_state).is_setup_ready`) inside the Analysis mode update loop.
+  - **Auto-Exit to Default State**: Once the player has reviewed/progressed through the analysis (or moved pieces during analysis) and puts all 32 physical pieces back into their standard initial starting ranks (White on rows 1-2, Black on rows 7-8, center rows empty):
+    - Automatically concludes Analysis mode (`stop_analysis_mode()`).
+    - Transitions `game_status` back to `"IDLE"`.
+    - Triggers the `BOARD_READY` illumination ripple animation.
+    - Re-activates the `PhysicalGestureEngine` (`gesture_engine.reset()`) to immediately begin listening for physical gestures (e.g. starter gestures, double-taps, rematch gates).
+  - **Testing & Deployment**: Added unit test `test_analysis_board_reset_to_starting_position_transitions_to_idle` in `test_analysis_state.py`. Verified all 250 unit tests passing on the Raspberry Pi over SSH.
 - [x] Implemented Automatic Snap-Back to Game Timeline upon Physical Anchor Restoration:
   - **Automatic Divergence Resolution (`Raspberry/app/board_state.py`)**: Added `_check_analysis_board_restoration()` executing on each cycle of the background state update loop during Analysis mode.
   - **Physical State Validation**: When the player is in an off-game virtual branch, once the board detects that all physical pieces have been put back into the exact configuration of the divergence anchor position (the ply where the divergence began), it automatically snaps back to the main game timeline:
