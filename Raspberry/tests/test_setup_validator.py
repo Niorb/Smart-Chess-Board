@@ -14,7 +14,7 @@ import sys
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.setup_validator import SetupValidator, SetupResult
+from app.setup_validator import SetupValidator
 
 
 def test_empty_board_setup():
@@ -159,8 +159,9 @@ def test_guardrail_detects_missing_and_unexpected_pieces():
 
 
 def test_guardrail_exempts_transient_lift_and_captures():
-    import chess
     from unittest.mock import MagicMock
+
+    import chess
     validator = SetupValidator()
     board = chess.Board()
     state = [[0] * 8 for _ in range(8)]
@@ -187,8 +188,9 @@ def test_guardrail_exempts_transient_lift_and_captures():
 
 
 def test_guardrail_exempts_capture_target_lifted_first():
-    import chess
     from unittest.mock import MagicMock
+
+    import chess
     validator = SetupValidator()
     board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     state = [[0] * 8 for _ in range(8)]

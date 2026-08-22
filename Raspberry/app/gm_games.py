@@ -6,8 +6,7 @@ Includes game metadata, move sequences, key decision plys, and educational annot
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-import chess
+from typing import Any
 
 
 @dataclass
@@ -17,18 +16,18 @@ class GMGame:
     event: str
     year: int
     white: str
-    white_elo: Optional[str]
+    white_elo: str | None
     black: str
-    black_elo: Optional[str]
+    black_elo: str | None
     result: str
     description: str
     eco: str
     opening: str
-    moves: List[str]  # UCI format e.g. ["e2e4", "e7e5", ...]
-    key_plys: List[int] = field(default_factory=list)  # Ply indices (0-based) where user is quizzed
-    annotations: Dict[int, str] = field(default_factory=dict)  # Ply index -> commentary text
+    moves: list[str]  # UCI format e.g. ["e2e4", "e7e5", ...]
+    key_plys: list[int] = field(default_factory=list)  # Ply indices (0-based) where user is quizzed
+    annotations: dict[int, str] = field(default_factory=dict)  # Ply index -> commentary text
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
@@ -48,7 +47,7 @@ class GMGame:
         }
 
 
-GM_GAMES_DATABASE: List[GMGame] = [
+GM_GAMES_DATABASE: list[GMGame] = [
     GMGame(
         id="kasparov_topalov_1999",
         title="Kasparov's Immortal",
@@ -79,7 +78,7 @@ GM_GAMES_DATABASE: List[GMGame] = [
             48: "Move 25. 25. Re7+!! A second consecutive rook sacrifice drawing the Black King into the open ocean.",
             52: "Move 27. 27. b4+! King is forced deeper into White's territory onto a4.",
             60: "Move 31. 31. Rxb7! Deflecting the Black Queen from the defense of the King.",
-            88: "44. Qxc4 - Black resigns. A majestic king hunt concluded.",
+            76: "Final move of the recorded king hunt — Topalov resigns. A majestic chase concluded.",
         },
     ),
     GMGame(
@@ -111,8 +110,7 @@ GM_GAMES_DATABASE: List[GMGame] = [
             41: "Move 21. Black shocks the chess world with 21... Nf4!! sacrificing the Knight directly into White's Kingside.",
             45: "Move 23... Be5! Refusing to recapture immediately, Tal prioritizes maximum board dynamic pressure.",
             51: "Move 26... R8xc3! An exchange sacrifice blowing open the long diagonal.",
-            85: "Black's connected passed pawns and dominant bishops seal the victory.",
-        },
+            79: "Black's connected passed pawns and dominant bishops seal the victory.",        },
     ),
     GMGame(
         id="fischer_byrne_1956",
@@ -237,12 +235,12 @@ GM_GAMES_DATABASE: List[GMGame] = [
 ]
 
 
-def get_all_gm_games() -> List[GMGame]:
+def get_all_gm_games() -> list[GMGame]:
     """Returns list of all available GM historical games."""
     return GM_GAMES_DATABASE
 
 
-def get_gm_game(game_id: str) -> Optional[GMGame]:
+def get_gm_game(game_id: str) -> GMGame | None:
     """Finds a GM game by ID."""
     for game in GM_GAMES_DATABASE:
         if game.id == game_id:

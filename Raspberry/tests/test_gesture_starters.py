@@ -1,11 +1,9 @@
 import os
 import sys
-import time
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import pytest
 from app.gesture_engine import PhysicalGestureEngine
 
 
@@ -24,7 +22,7 @@ def test_gesture_starter_indicators():
     assert (7, 1) in indicators
 
     # Verify colors are non-zero
-    for coord, color in indicators.items():
+    for _coord, color in indicators.items():
         assert color > 0
 
 

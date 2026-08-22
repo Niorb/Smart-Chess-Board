@@ -5,7 +5,6 @@ import sys
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import pytest
 import chess
 from app.board_state import BoardStateManager
 
@@ -136,8 +135,9 @@ def test_handle_analysis_move_branch():
 def test_analysis_review_led_rule_a_best():
     """Verify that Best moves (delta <= 15cp) render Mint Emerald trace with no alternatives."""
     from unittest.mock import MagicMock
-    from board_hardware import settings
+
     from app.led_helpers import COLOR_INT_MINT_EMERALD
+    from board_hardware import settings
 
     orig_nm = settings.get("night_mode", False)
     settings["night_mode"] = False
@@ -172,8 +172,9 @@ def test_analysis_review_led_rule_a_best():
 def test_analysis_review_led_rule_a_good():
     """Verify that Good moves (15 < delta <= 60cp) render Cyan Azure trace."""
     from unittest.mock import MagicMock
-    from board_hardware import settings
+
     from app.led_helpers import COLOR_INT_AZURE
+    from board_hardware import settings
 
     orig_nm = settings.get("night_mode", False)
     settings["night_mode"] = False
@@ -207,8 +208,9 @@ def test_analysis_review_led_rule_a_good():
 def test_analysis_review_led_rule_b_blunder_with_suggestion():
     """Verify that Blunder moves (delta > 150cp) render Rose Red + Emerald Green best move suggestion."""
     from unittest.mock import MagicMock
-    from board_hardware import settings
+
     from app.led_helpers import COLOR_INT_MOVE_BLUNDER
+    from board_hardware import settings
 
     orig_nm = settings.get("night_mode", False)
     settings["night_mode"] = False
@@ -243,8 +245,9 @@ def test_analysis_review_led_rule_b_blunder_with_suggestion():
 def test_analysis_review_led_divergence_beacons():
     """Verify that when diverged from main game, 4 corner rooks and anchor glow in Royal Violet."""
     from unittest.mock import MagicMock
-    from board_hardware import settings
+
     from app.led_helpers import COLOR_INT_ROYAL_VIOLET
+    from board_hardware import settings
 
     orig_nm = settings.get("night_mode", False)
     settings["night_mode"] = False
@@ -482,7 +485,7 @@ def test_analysis_step_by_step_branch_undo():
 def test_analysis_board_reset_to_starting_position_transitions_to_idle():
     """Verify that when pieces are put back into standard starting position, analysis ends and board returns to IDLE."""
     async def _test():
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
         mgr = BoardStateManager()
         mgr.strip = MagicMock()
@@ -544,9 +547,10 @@ def test_start_analysis_mode_resolution_hierarchy():
     """
     async def _test():
         from unittest.mock import AsyncMock, patch
+
+        import app.board_state as bs_module
         import chess
         from board_hardware import settings
-        import app.board_state as bs_module
 
         italian_default = [
             "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5",
@@ -623,6 +627,7 @@ def test_update_leds_analysis_loading_vs_review_transition():
     2. analysis_is_loading == False: Transitions to review mode move rendering & eval bar.
     """
     from unittest.mock import MagicMock, patch
+
     from app.led_helpers import COLOR_INT_MINT_EMERALD
 
     mgr = BoardStateManager()

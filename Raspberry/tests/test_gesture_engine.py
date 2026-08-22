@@ -5,14 +5,10 @@ Comprehensive test suite for the Physical Board Gesture Engine, Kingside Corner 
 LED overlay colors, cancellation rules, and REST restart endpoints.
 """
 
-import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 from app.gesture_engine import (
-    COLOR_INT_AZURE,
-    COLOR_INT_EMERALD,
     PhysicalGestureEngine,
     RestartPreviousGameGesture,
     ToggleNightModeGesture,

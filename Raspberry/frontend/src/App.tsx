@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { useBoardState } from './hooks/useBoardState'
 import { 
   seekGame, 
@@ -24,7 +24,7 @@ import {
   startAnalysis,
   stopAnalysis
 } from './api'
-import type { LichessAccount, LastGameParams } from './api'
+import type { LichessAccount, LastGameParams, BoardSettings } from './api'
 import { 
   Play, 
   XCircle, 
@@ -53,7 +53,7 @@ import {
   Moon,
   Compass
 } from 'lucide-react'
-import { AnalysisTab } from './components/AnalysisTab'
+const AnalysisTab = lazy(() => import('./components/AnalysisTab'))
 
 // Helper to render digital piece characters/icons
 const PIECE_ICONS_WHITE: Record<string, string> = {
@@ -121,27 +121,13 @@ function App() {
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
 
   // Disconnection & Victory Claiming State
-  const [claimCountdown, setClaimCountdown] = useState<number>(0);
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
 
   const opponentGone = state.game?.opponent_gone?.gone ?? false;
   const claimWinIn = state.game?.opponent_gone?.claim_win_in ?? 0;
 
-  useEffect(() => {
-    if (opponentGone) {
-      setClaimCountdown(claimWinIn);
-    } else {
-      setClaimCountdown(0);
-    }
-  }, [opponentGone, claimWinIn]);
-
-  useEffect(() => {
-    if (!opponentGone || claimCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setClaimCountdown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [opponentGone, claimCountdown]);
+  // Derived directly from the server-driven countdown so there is a single source of truth
+  const claimCountdown = opponentGone ? Math.max(0, Math.ceil(claimWinIn)) : 0;
 
   const handleClaimVictory = async () => {
     setIsClaiming(true);
@@ -155,37 +141,55 @@ function App() {
   };
 
   // Fetch Lichess Account & Last Game Params on mount and connection changes
-  const fetchLastParams = async () => {
-    try {
-      const res = await getLastGameParams();
-      if (res.status === 'success' && res.last_game_params) {
-        setLastGameParams(res.last_game_params);
-      }
-    } catch (err) {
-      console.warn("Could not fetch last game params:", err);
-    }
-  };
-
   useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+
     const fetchAccount = async () => {
       try {
         const data = await getLichessAccount();
-        setAccount(data);
+        if (!cancelled) setAccount(data);
       } catch (err) {
         console.warn("Could not fetch Lichess account:", err);
       }
     };
-    if (isConnected) {
-      fetchAccount();
-      fetchLastParams();
-    }
+
+    const fetchLastParams = async () => {
+      try {
+        const res = await getLastGameParams();
+        if (!cancelled && res.status === 'success' && res.last_game_params) {
+          setLastGameParams(res.last_game_params);
+        }
+      } catch (err) {
+        console.warn("Could not fetch last game params:", err);
+      }
+    };
+
+    fetchAccount();
+    fetchLastParams();
+    return () => {
+      cancelled = true;
+    };
   }, [isConnected]);
 
   useEffect(() => {
-    if (state.status === 'IDLE' || state.status === 'GAME_OVER' || state.status === 'PLAYING') {
-      fetchLastParams();
-    }
-  }, [state.status]);
+    if (!isConnected) return;
+    if (state.status !== 'IDLE' && state.status !== 'GAME_OVER' && state.status !== 'PLAYING') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getLastGameParams();
+        if (!cancelled && res.status === 'success' && res.last_game_params) {
+          setLastGameParams(res.last_game_params);
+        }
+      } catch (err) {
+        console.warn("Could not fetch last game params:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, state.status]);
 
   // Algebraic coordinate helper: col is rank index (0..7 -> 1..8), row is file index (0..7 -> a..h)
   const getChessCoord = (col: number, row: number): string => {
@@ -217,7 +221,7 @@ function App() {
       map.set(toCoord, hint.tier);
     }
     return map;
-  }, [state.coach?.enabled, state.coach?.lifted_move_hints]);
+  }, [state.coach]);
 
   // Last move squares
   const lastMoveSquares = useMemo(() => {
@@ -437,25 +441,7 @@ function App() {
   };
 
   // Hardware Debugging & Settings State
-  const [settings, setSettings] = useState<{
-    baselines: number[][];
-    threshold_positive: number;
-    threshold_negative: number;
-    col_mode?: 'auto' | 'manual';
-    manual_col?: number;
-    scan_delay?: number;
-    mux_settle_ms?: number;
-    debounce_threshold?: number;
-    baseline_window_s?: number;
-    disabled_squares?: number[][];
-    pieces_mode?: 'auto' | 'pieces' | 'empty';
-    coach_hints_enabled?: boolean;
-    eval_bar_enabled?: boolean;
-    coach_ai_only?: boolean;
-    in_loop_calibration?: boolean;
-    led_intensity?: number;
-    night_mode?: boolean;
-  } | null>(null);
+  const [settings, setSettings] = useState<BoardSettings | null>(null);
 
   const [positiveThresh, setPositiveThresh] = useState<number>(() => {
     const saved = localStorage.getItem('scb_positive_thresh');
@@ -523,6 +509,49 @@ function App() {
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Live mirror of the WS state so debounced callbacks never read stale closures
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Single source of truth for the board-settings payload sent by every save path
+  const buildSettingsPayload = (overrides?: {
+    pos?: number;
+    neg?: number;
+    mode?: 'auto' | 'manual';
+    col?: number;
+    delay?: number;
+    settle?: number;
+    debounce?: number;
+    window_s?: number;
+    pMode?: 'auto' | 'pieces' | 'empty';
+    coachHints?: boolean;
+    evalBar?: boolean;
+    aiOnly?: boolean;
+    inLoopCal?: boolean;
+    intensity?: number;
+    nMode?: boolean;
+    disabledSquares?: number[][];
+  }) => ({
+    threshold_positive: overrides?.pos ?? positiveThresh,
+    threshold_negative: overrides?.neg ?? negativeThresh,
+    col_mode: overrides?.mode ?? colMode,
+    manual_col: overrides?.col ?? manualCol,
+    scan_delay: overrides?.delay ?? scanDelay,
+    mux_settle_us: overrides?.settle ?? muxSettleMs,
+    debounce_threshold: overrides?.debounce ?? debounceThreshold,
+    baseline_window_s: overrides?.window_s ?? baselineWindowS,
+    disabled_squares: overrides?.disabledSquares ?? stateRef.current.physical.disabled_squares ?? [],
+    pieces_mode: overrides?.pMode ?? piecesMode,
+    coach_hints_enabled: overrides?.coachHints ?? coachHintsEnabled,
+    eval_bar_enabled: overrides?.evalBar ?? evalBarEnabled,
+    coach_ai_only: overrides?.aiOnly ?? coachAiOnly,
+    in_loop_calibration: overrides?.inLoopCal ?? inLoopCalibration,
+    led_intensity: overrides?.intensity ?? ledIntensity,
+    night_mode: overrides?.nMode ?? nightMode,
+  });
+
   const persistSettings = (overrides?: {
     pos?: number;
     neg?: number;
@@ -540,61 +569,29 @@ function App() {
     intensity?: number;
     nMode?: boolean;
   }) => {
-    const pos = overrides?.pos ?? positiveThresh;
-    const neg = overrides?.neg ?? negativeThresh;
-    const mode = overrides?.mode ?? colMode;
-    const col = overrides?.col ?? manualCol;
-    const delay = overrides?.delay ?? scanDelay;
-    const settle = overrides?.settle ?? muxSettleMs;
-    const debounce = overrides?.debounce ?? debounceThreshold;
-    const window_s = overrides?.window_s ?? baselineWindowS;
-    const pMode = overrides?.pMode ?? piecesMode;
-    const coachHints = overrides?.coachHints ?? coachHintsEnabled;
-    const evalBar = overrides?.evalBar ?? evalBarEnabled;
-    const aiOnly = overrides?.aiOnly ?? coachAiOnly;
-    const inLoopCal = overrides?.inLoopCal ?? inLoopCalibration;
-    const intensity = overrides?.intensity ?? ledIntensity;
-    const nMode = overrides?.nMode ?? nightMode;
+    const merged = buildSettingsPayload(overrides);
 
-    localStorage.setItem('scb_positive_thresh', String(pos));
-    localStorage.setItem('scb_negative_thresh', String(neg));
-    localStorage.setItem('scb_col_mode', mode);
-    localStorage.setItem('scb_manual_col', String(col));
-    localStorage.setItem('scb_scan_delay', String(delay));
-    localStorage.setItem('scb_mux_settle_ms', String(settle));
-    localStorage.setItem('scb_debounce_threshold', String(debounce));
-    localStorage.setItem('scb_baseline_window_s', String(window_s));
-    localStorage.setItem('scb_pieces_mode', pMode);
-    localStorage.setItem('scb_coach_hints_enabled', String(coachHints));
-    localStorage.setItem('scb_eval_bar_enabled', String(evalBar));
-    localStorage.setItem('scb_coach_ai_only', String(aiOnly));
-    localStorage.setItem('scb_in_loop_calibration', String(inLoopCal));
-    localStorage.setItem('scb_led_intensity', String(intensity));
-    localStorage.setItem('scb_night_mode', String(nMode));
+    localStorage.setItem('scb_positive_thresh', String(merged.threshold_positive));
+    localStorage.setItem('scb_negative_thresh', String(merged.threshold_negative));
+    localStorage.setItem('scb_col_mode', String(merged.col_mode));
+    localStorage.setItem('scb_manual_col', String(merged.manual_col));
+    localStorage.setItem('scb_scan_delay', String(merged.scan_delay));
+    localStorage.setItem('scb_mux_settle_ms', String(merged.mux_settle_us));
+    localStorage.setItem('scb_debounce_threshold', String(merged.debounce_threshold));
+    localStorage.setItem('scb_baseline_window_s', String(merged.baseline_window_s));
+    localStorage.setItem('scb_pieces_mode', String(merged.pieces_mode));
+    localStorage.setItem('scb_coach_hints_enabled', String(merged.coach_hints_enabled));
+    localStorage.setItem('scb_eval_bar_enabled', String(merged.eval_bar_enabled));
+    localStorage.setItem('scb_coach_ai_only', String(merged.coach_ai_only));
+    localStorage.setItem('scb_in_loop_calibration', String(merged.in_loop_calibration));
+    localStorage.setItem('scb_led_intensity', String(merged.led_intensity));
+    localStorage.setItem('scb_night_mode', String(merged.night_mode));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const currentDisabled = state.physical.disabled_squares ?? [];
-        await updateBoardSettings({
-          threshold_positive: pos,
-          threshold_negative: neg,
-          col_mode: mode,
-          manual_col: col,
-          scan_delay: delay,
-          mux_settle_us: settle,
-          mux_settle_ms: settle,
-          debounce_threshold: debounce,
-          baseline_window_s: window_s,
-          disabled_squares: currentDisabled,
-          pieces_mode: pMode,
-          coach_hints_enabled: coachHints,
-          eval_bar_enabled: evalBar,
-          coach_ai_only: aiOnly,
-          in_loop_calibration: inLoopCal,
-          led_intensity: intensity,
-          night_mode: nMode,
-        });
+        // Built inside the callback so disabled_squares reflects the freshest WS state
+        await updateBoardSettings(buildSettingsPayload(overrides));
       } catch (err) {
         console.error("Error auto-persisting settings:", err);
       }
@@ -673,11 +670,13 @@ function App() {
   }, [isConnected]);
 
   // Synchronize night mode when toggled physically on the hardware board via gesture
+  const lastHwNightRef = useRef<boolean | null>(null);
   useEffect(() => {
-    if (state.physical?.night_mode !== undefined && state.physical.night_mode !== nightMode) {
-      setNightMode(state.physical.night_mode);
-      localStorage.setItem('scb_night_mode', String(state.physical.night_mode));
-    }
+    const hwNight = state.physical?.night_mode;
+    if (hwNight === undefined || hwNight === lastHwNightRef.current) return;
+    lastHwNightRef.current = hwNight;
+    setNightMode(hwNight);
+    localStorage.setItem('scb_night_mode', String(hwNight));
   }, [state.physical?.night_mode]);
 
   const handleCalibrateSquare = async (col: number, row: number) => {
@@ -736,27 +735,9 @@ function App() {
     }
 
     try {
-      const res = await updateBoardSettings({
-        threshold_positive: positiveThresh,
-        threshold_negative: negativeThresh,
-        col_mode: colMode,
-        manual_col: manualCol,
-        scan_delay: scanDelay,
-        mux_settle_us: muxSettleMs,
-        mux_settle_ms: muxSettleMs,
-        debounce_threshold: debounceThreshold,
-        baseline_window_s: baselineWindowS,
-        disabled_squares: nextDisabled,
-        pieces_mode: piecesMode,
-        coach_hints_enabled: coachHintsEnabled,
-        eval_bar_enabled: evalBarEnabled,
-        coach_ai_only: coachAiOnly,
-        in_loop_calibration: inLoopCalibration,
-        led_intensity: ledIntensity,
-        night_mode: nightMode,
-      });
+      const res = await updateBoardSettings(buildSettingsPayload({ disabledSquares: nextDisabled }));
       if (res.status === 'success') {
-        setSettings(res.settings);
+        if (res.settings) setSettings(res.settings);
       }
     } catch (err) {
       console.error("Error updating disabled squares:", err);
@@ -769,7 +750,7 @@ function App() {
     try {
       const res = await calibrateBoard();
       if (res.status === 'success') {
-        setSettings(res.settings);
+        if (res.settings) setSettings(res.settings);
         setCalibrationStatus("Success: Baselines updated!");
       } else {
         setCalibrationStatus("Failed: " + res.message);
@@ -789,7 +770,7 @@ function App() {
     try {
       const res = await calibrateBoardWithPieces();
       if (res.status === 'success') {
-        setSettings(res.settings);
+        if (res.settings) setSettings(res.settings);
         setCalibrationStatus("Success: Baselines mapped from middle ranks!");
       } else {
         setCalibrationStatus("Failed: " + res.message);
@@ -805,29 +786,10 @@ function App() {
 
   const handleSaveThresholds = async () => {
     setSettingsStatus("Saving thresholds...");
-    const currentDisabled = state.physical.disabled_squares ?? [];
     try {
-      const res = await updateBoardSettings({
-        threshold_positive: positiveThresh,
-        threshold_negative: negativeThresh,
-        col_mode: colMode,
-        manual_col: manualCol,
-        scan_delay: scanDelay,
-        mux_settle_us: muxSettleMs,
-        mux_settle_ms: muxSettleMs,
-        debounce_threshold: debounceThreshold,
-        baseline_window_s: baselineWindowS,
-        disabled_squares: currentDisabled,
-        pieces_mode: piecesMode,
-        coach_hints_enabled: coachHintsEnabled,
-        eval_bar_enabled: evalBarEnabled,
-        coach_ai_only: coachAiOnly,
-        in_loop_calibration: inLoopCalibration,
-        led_intensity: ledIntensity,
-        night_mode: nightMode,
-      });
+      const res = await updateBoardSettings(buildSettingsPayload());
       if (res.status === 'success') {
-        setSettings(res.settings);
+        if (res.settings) setSettings(res.settings);
         setSettingsStatus("Success: Thresholds saved!");
       } else {
         setSettingsStatus("Failed to save");
@@ -847,26 +809,11 @@ function App() {
       const currentDisabled = state.physical.disabled_squares ?? [];
       const currentBaselines = state.physical.baselines ?? settings?.baselines;
       const res = await saveBoardDefaults({
-        positive: positiveThresh,
-        negative: negativeThresh,
-        colMode,
-        manualCol,
-        scanDelay,
-        muxSettleMs,
-        debounceThreshold,
-        baselineWindowS,
-        disabledSquares: currentDisabled,
-        piecesMode,
-        coachHintsEnabled,
-        evalBarEnabled,
-        coachAiOnly,
-        inLoopCalibration,
-        ledIntensity,
-        nightMode,
+        ...buildSettingsPayload({ disabledSquares: currentDisabled }),
         baselines: currentBaselines,
       });
       if (res.status === 'success') {
-        setSettings(res.settings);
+        if (res.settings) setSettings(res.settings);
         if (res.settings) {
           if (res.settings.threshold_positive !== undefined) localStorage.setItem('scb_positive_thresh', String(res.settings.threshold_positive));
           if (res.settings.threshold_negative !== undefined) localStorage.setItem('scb_negative_thresh', String(res.settings.threshold_negative));
@@ -1894,7 +1841,9 @@ function App() {
       ) : activeTab === 'analysis' ? (
         /* Analysis & Training Laboratory Tab */
         <main className="flex-grow p-4 md:p-8 max-w-6xl mx-auto w-full">
-          <AnalysisTab boardState={state} />
+          <Suspense fallback={<div className="p-6 text-slate-400">Loading analysis...</div>}>
+            <AnalysisTab boardState={state} />
+          </Suspense>
         </main>
       ) : (
         /* Debug / Hardware Diagnostics Tab */

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export interface SetupStatus {
+interface SetupStatus {
   is_setup_ready: boolean;
   missing_white: [number, number][];
   missing_black: [number, number][];
@@ -9,7 +9,7 @@ export interface SetupStatus {
   black_count?: number;
 }
 
-export interface GuardrailStatus {
+interface GuardrailStatus {
   is_synchronized: boolean;
   missing_pieces: [number, number][];
   unexpected_pieces: [number, number][];
@@ -17,14 +17,14 @@ export interface GuardrailStatus {
   candidate_attackers?: [number, number][];
 }
 
-export interface MoveHint {
+interface MoveHint {
   target_square: [number, number];
   uci: string;
   tier: 'best' | 'good' | 'inaccuracy' | 'blunder';
   delta_cp: number;
 }
 
-export interface AnalysisMoveItem {
+interface AnalysisMoveItem {
   ply: number;
   turn: 'white' | 'black';
   uci: string;
@@ -36,7 +36,7 @@ export interface AnalysisMoveItem {
   best_move?: string | null;
 }
 
-export interface BlunderChallenge {
+interface BlunderChallenge {
   ply_index: number;
   fen_before: string;
   played_move: string;
@@ -45,7 +45,12 @@ export interface BlunderChallenge {
   best_move: string;
   best_score_cp?: number | null;
   description: string;
-  top_moves?: any[];
+  top_moves?: Array<{
+    uci: string;
+    score_cp?: number | null;
+    mate?: number | null;
+    win_chance?: number;
+  }>;
 }
 
 export interface GMGameSummary {
@@ -66,14 +71,19 @@ export interface GMGameSummary {
   annotations?: Record<number, string>;
 }
 
-export interface AnalysisState {
+interface AnalysisState {
   active: boolean;
   submode: 'review' | 'blunder_drill' | 'gm_relive';
   is_loading: boolean;
   current_ply: number;
   total_plys: number;
   game_moves: string[];
-  evaluations: any[];
+  evaluations: Array<{
+    win_chance?: number;
+    score_cp?: number | null;
+    mate?: number | null;
+    best_move?: string | null;
+  }>;
   played_analyses: AnalysisMoveItem[];
   accuracy: {
     white: number;
@@ -83,7 +93,13 @@ export interface AnalysisState {
     white?: Record<string, number>;
     black?: Record<string, number>;
   };
-  current_eval?: any;
+  current_eval?: {
+    win_chance?: number;
+    score_cp?: number | null;
+    mate?: number | null;
+    best_move?: string | null;
+    top_moves?: Array<{ uci: string; score_cp?: number | null; mate?: number | null }>;
+  } | null;
   branch_moves: string[];
   is_branching: boolean;
   anchor_ply?: number | null;
@@ -94,11 +110,17 @@ export interface AnalysisState {
   blunder_hint_active: boolean;
   gm_game?: GMGameSummary | null;
   gm_score: number;
-  gm_guesses: any[];
+  gm_guesses: Array<{
+    ply: number;
+    guess: string;
+    gm_move: string;
+    match: string;
+    points: number;
+  }>;
   fen: string;
 }
 
-export interface GestureItem {
+interface GestureItem {
   name: string;
   description: string;
   is_active: boolean;
@@ -108,7 +130,7 @@ export interface GestureItem {
   starter_coord?: [number, number] | null;
 }
 
-export interface GestureState {
+interface GestureState {
   is_active: boolean;
   active_gesture?: string | null;
   step: number;
@@ -117,7 +139,7 @@ export interface GestureState {
   gestures?: GestureItem[];
 }
 
-export interface CoachPayload {
+interface CoachPayload {
   enabled: boolean;
   eval_bar_enabled: boolean;
   coach_hints_enabled: boolean;
@@ -143,7 +165,6 @@ export interface BoardState {
     grid: number[][];
     adc?: number[][];
     baselines?: number[][];
-    highlighted_square?: [number, number] | null;
     led_test_active?: boolean;
     testing_led_index?: number;
     disabled_squares?: number[][];
@@ -249,20 +270,23 @@ export function useBoardState() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const connectRef = useRef<() => void>(() => {});
+  const disposedRef = useRef(false);
+  const lastPayloadRef = useRef<string | null>(null);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
     const host = window.location.hostname || 'localhost';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const port = window.location.port === '5173' || !window.location.port ? '8000' : window.location.port;
     const wsUrl = `${protocol}//${host}:${port}/ws/state`;
 
-    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    if (import.meta.env.DEV) console.log(`Connecting to WebSocket: ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('WebSocket Connected');
+      if (import.meta.env.DEV) console.log('WebSocket Connected');
       setIsConnected(true);
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -271,8 +295,12 @@ export function useBoardState() {
     };
 
     ws.onmessage = (event) => {
+      // Skip identical consecutive payloads entirely (server heartbeat + JSON
+      // string compare is far cheaper than a React re-render of the whole tree)
+      if (event.data === lastPayloadRef.current) return;
       try {
         const data = JSON.parse(event.data);
+        lastPayloadRef.current = event.data;
         setState((prev) => ({
           ...prev,
           ...data,
@@ -287,7 +315,7 @@ export function useBoardState() {
     };
 
     ws.onclose = () => {
-      console.log('WebSocket Disconnected. Reconnecting in 1s...');
+      if (disposedRef.current) return;
       setIsConnected(false);
       if (!reconnectTimeoutRef.current) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -297,11 +325,12 @@ export function useBoardState() {
       }
     };
 
-    ws.onerror = (err) => {
-      console.error('WebSocket Error', err);
+    ws.onerror = () => {
       try {
         ws.close();
-      } catch (_) {}
+      } catch {
+        // already closed
+      }
     };
 
     wsRef.current = ws;
@@ -312,10 +341,25 @@ export function useBoardState() {
   }, [connect]);
 
   useEffect(() => {
+    disposedRef.current = false;
+    lastPayloadRef.current = null;
     connect();
     return () => {
-      if (wsRef.current) wsRef.current.close();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      disposedRef.current = true;
+      const ws = wsRef.current;
+      if (ws) {
+        // Detach handlers first so the async close event cannot schedule a reconnect
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+        wsRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
   }, [connect]);
 

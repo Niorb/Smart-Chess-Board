@@ -3,8 +3,6 @@ import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -227,7 +225,7 @@ def test_seek_routing_over_8_mins_to_human():
         mock_state_mgr = MagicMock()
 
         with patch.object(engine, "challenge_ai", new_callable=AsyncMock) as mock_challenge, \
-             patch.object(engine, "_seek_and_stream", new_callable=AsyncMock) as mock_seek_stream:
+             patch.object(engine, "_seek_and_stream", new_callable=AsyncMock):
 
             # 10+0 = 600s (>= 480s) -> routes to live human seek
             await engine.seek(mock_state_mgr, time_control="10+0", opponent="auto")
@@ -286,7 +284,7 @@ def test_event_stream_task_management():
 
         with patch.object(engine, "get_account", new_callable=AsyncMock) as mock_get_acct:
             mock_get_acct.return_value = {"authenticated": True, "username": "TestPlayer", "rating": 1500}
-            with patch.object(engine, "_listen_event_stream", new_callable=AsyncMock) as mock_listen:
+            with patch.object(engine, "_listen_event_stream", new_callable=AsyncMock):
                 await engine.start(state_manager=mock_state_mgr)
                 assert engine.is_running is True
                 assert engine._event_stream_task is not None
@@ -349,11 +347,11 @@ def test_challenge_ai_registers_session_game():
         async def _fake_post(*args, **kwargs):
             return response
 
-        with patch.object(engine, "start", new=_fake_start):
+        with patch.object(engine, "start", new=_fake_start), patch.object(
+            engine, "stream_game", new=AsyncMock()
+        ), patch("httpx.AsyncClient.post", new=_fake_post):
             engine.is_running = True
-            with patch.object(engine, "stream_game", new=AsyncMock()):
-                with patch("httpx.AsyncClient.post", new=_fake_post):
-                    await engine.challenge_ai(mock_state_mgr, level=3, time_mins=10, inc_secs=0)
+            await engine.challenge_ai(mock_state_mgr, level=3, time_mins=10, inc_secs=0)
         assert "aiGame1" in engine._session_games
         assert engine.current_game_id == "aiGame1"
     asyncio.run(_test())
@@ -494,7 +492,8 @@ def test_claim_victory_http_success_and_state_updates():
             result = await engine.claim_victory(mock_state_mgr)
 
             assert result is True
-            mock_post.assert_called_once_with("/api/board/game/claimGame123/claim-victory")
+            mock_post.assert_called_once()
+            assert mock_post.call_args.args[0] == "/api/board/game/claimGame123/claim-victory"
             assert engine.game_info["is_game_over"] is True
             assert engine.game_info["winner"] == "white"
             assert mock_state_mgr.game_status == "IDLE"
@@ -675,8 +674,9 @@ def test_record_last_game_records_moves_id_and_persists_settings():
     - Synchronizes last_game_moves and last_game_id to state_manager.
     - Persists last_game_moves and last_game_id into hardware settings.
     """
-    from board_hardware import settings
     from unittest.mock import MagicMock
+
+    from board_hardware import settings
 
     engine = LichessEngine()
     engine.current_game_id = "recGame_123"
@@ -705,7 +705,6 @@ def test_record_last_game_records_moves_id_and_persists_settings():
 
 def test_record_last_game_empty_board_fallback():
     """Verify _record_last_game handles an aborted or empty game (0 moves) gracefully."""
-    from board_hardware import settings
     from unittest.mock import MagicMock
 
     engine = LichessEngine()

@@ -1,4 +1,60 @@
-const API_BASE = `http://${window.location.hostname || 'localhost'}:8000/api`;
+const API_BASE = '/api';
+
+class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+const DEFAULT_TIMEOUT_MS = 8000;
+
+async function request<T = Record<string, unknown>>(
+  path: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchInit } = init ?? {};
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...fetchInit,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new ApiError(0, `Request to ${path} timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  }
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      if (body?.message) detail = String(body.message);
+      else if (body?.detail) detail = String(body.detail);
+    } catch {
+      // non-JSON error body
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return response.json() as Promise<T>;
+}
+
+function jsonPost<T = Record<string, unknown>>(
+  path: string,
+  body?: unknown,
+  timeoutMs?: number,
+): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    timeoutMs,
+  });
+}
 
 export interface LichessAccount {
   username: string;
@@ -43,13 +99,13 @@ export interface LichessRecentGame {
 }
 
 export async function getLichessAccount(): Promise<LichessAccount> {
-  const response = await fetch(`${API_BASE}/lichess/account`);
-  return response.json();
+  return request<LichessAccount>('/lichess/account');
 }
 
-export async function getRecentLichessGames(maxGames: number = 10): Promise<{ status: string; games: LichessRecentGame[] }> {
-  const response = await fetch(`${API_BASE}/lichess/games/recent?max_games=${maxGames}`);
-  return response.json();
+export async function getRecentLichessGames(
+  maxGames: number = 10,
+): Promise<{ status: string; games: LichessRecentGame[] }> {
+  return request(`/lichess/games/recent?max_games=${maxGames}`);
 }
 
 export async function seekGame(options?: {
@@ -61,80 +117,47 @@ export async function seekGame(options?: {
   aiLevel?: number;
   ratingRange?: string;
 }) {
-  const response = await fetch(`${API_BASE}/game/seek`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      time_control: options?.timeControl ?? '10+0',
-      increment: options?.increment ?? 0,
-      rated: options?.rated ?? false,
-      color: options?.color ?? 'random',
-      opponent: options?.opponent ?? 'auto',
-      ai_level: options?.aiLevel ?? 3,
-      rating_range: options?.ratingRange,
-    }),
+  return jsonPost('/game/seek', {
+    time_control: options?.timeControl ?? '10+0',
+    increment: options?.increment ?? 0,
+    rated: options?.rated ?? false,
+    color: options?.color ?? 'random',
+    opponent: options?.opponent ?? 'auto',
+    ai_level: options?.aiLevel ?? 3,
+    rating_range: options?.ratingRange,
   });
-  return response.json();
 }
 
 export async function cancelGame() {
-  const response = await fetch(`${API_BASE}/game/cancel`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/game/cancel');
 }
 
 export async function resignGame() {
-  const response = await fetch(`${API_BASE}/game/resign`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/game/resign');
 }
 
 export async function claimVictory() {
-  const response = await fetch(`${API_BASE}/lichess/claim-victory`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/lichess/claim-victory');
 }
 
 export async function offerDraw(accept: boolean = true) {
-  const response = await fetch(`${API_BASE}/game/draw`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accept }),
-  });
-  return response.json();
+  return jsonPost('/game/draw', { accept });
 }
 
 export async function makeMove(fromSquare: string, toSquare: string, promotion?: string) {
-  const response = await fetch(`${API_BASE}/game/move`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from_square: fromSquare,
-      to_square: toSquare,
-      promotion: promotion ?? null,
-    }),
+  return jsonPost('/game/move', {
+    from_square: fromSquare,
+    to_square: toSquare,
+    promotion: promotion ?? null,
   });
-  return response.json();
 }
 
 export async function setGameMode(virtualOnly: boolean) {
-  const response = await fetch(`${API_BASE}/game/mode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ virtual_only: virtualOnly }),
-  });
-  return response.json();
+  return jsonPost('/game/mode', { virtual_only: virtualOnly });
 }
 
-export async function getBoardSettings() {
-  const response = await fetch(`${API_BASE}/board/settings`);
-  return response.json();
+export async function getBoardSettings(): Promise<BoardSettings> {
+  return request('/board/settings', { timeoutMs: 15000 });
 }
 
 export interface BoardSettingsOptions {
@@ -158,155 +181,44 @@ export interface BoardSettingsOptions {
   baselines?: number[][];
 }
 
-export async function updateBoardSettings(
-  positiveOrOptions?: number | BoardSettingsOptions | null,
-  negative?: number | null,
-  colMode?: 'auto' | 'manual',
-  manualCol?: number,
-  scanDelay?: number,
-  muxSettleMs?: number,
-  debounceThreshold?: number,
-  baselineWindowS?: number,
-  disabledSquares?: number[][],
-  piecesMode?: 'auto' | 'pieces' | 'empty',
-  coachHintsEnabled?: boolean,
-  evalBarEnabled?: boolean,
-  coachAiOnly?: boolean,
-  inLoopCalibration?: boolean,
-  ledIntensity?: number,
-  nightMode?: boolean
-) {
-  let body: Record<string, unknown> = {};
-  if (positiveOrOptions && typeof positiveOrOptions === 'object') {
-    body = { ...positiveOrOptions };
-  } else {
-    if (positiveOrOptions !== undefined && positiveOrOptions !== null && !isNaN(positiveOrOptions)) body.threshold_positive = positiveOrOptions;
-    if (negative !== undefined && negative !== null && !isNaN(negative)) body.threshold_negative = negative;
-    if (colMode !== undefined && colMode !== null) body.col_mode = colMode;
-    if (manualCol !== undefined && manualCol !== null) body.manual_col = manualCol;
-    if (scanDelay !== undefined && scanDelay !== null) body.scan_delay = scanDelay;
-    if (muxSettleMs !== undefined && muxSettleMs !== null) {
-      body.mux_settle_ms = muxSettleMs;
-      body.mux_settle_us = muxSettleMs > 50 ? muxSettleMs : muxSettleMs * 1000;
-    }
-    if (debounceThreshold !== undefined && debounceThreshold !== null) body.debounce_threshold = debounceThreshold;
-    if (baselineWindowS !== undefined && baselineWindowS !== null) body.baseline_window_s = baselineWindowS;
-    if (disabledSquares !== undefined && disabledSquares !== null) body.disabled_squares = disabledSquares;
-    if (piecesMode !== undefined && piecesMode !== null) body.pieces_mode = piecesMode;
-    if (coachHintsEnabled !== undefined) body.coach_hints_enabled = coachHintsEnabled;
-    if (evalBarEnabled !== undefined) body.eval_bar_enabled = evalBarEnabled;
-    if (coachAiOnly !== undefined) body.coach_ai_only = coachAiOnly;
-    if (inLoopCalibration !== undefined) body.in_loop_calibration = inLoopCalibration;
-    if (ledIntensity !== undefined && ledIntensity !== null && !isNaN(ledIntensity)) body.led_intensity = ledIntensity;
-    if (nightMode !== undefined) body.night_mode = nightMode;
-  }
-
-  const response = await fetch(`${API_BASE}/board/settings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return response.json();
+export async function updateBoardSettings(options: BoardSettingsOptions = {}): Promise<SettingsResponse> {
+  return jsonPost<SettingsResponse>('/board/settings', options);
 }
 
-export async function saveBoardDefaults(options?: {
-  positive?: number | null;
-  negative?: number | null;
-  colMode?: 'auto' | 'manual';
-  manualCol?: number;
-  scanDelay?: number;
-  muxSettleMs?: number;
-  debounceThreshold?: number;
-  baselineWindowS?: number;
-  disabledSquares?: number[][];
-  piecesMode?: 'auto' | 'pieces' | 'empty';
-  coachHintsEnabled?: boolean;
-  evalBarEnabled?: boolean;
-  coachAiOnly?: boolean;
-  inLoopCalibration?: boolean;
-  ledIntensity?: number;
-  nightMode?: boolean;
-  baselines?: number[][];
-}) {
-  const body: Record<string, unknown> = {};
-  if (options?.positive !== undefined && options?.positive !== null && !isNaN(options.positive)) body.threshold_positive = options.positive;
-  if (options?.negative !== undefined && options?.negative !== null && !isNaN(options.negative)) body.threshold_negative = options.negative;
-  if (options?.colMode !== undefined && options?.colMode !== null) body.col_mode = options.colMode;
-  if (options?.manualCol !== undefined && options?.manualCol !== null) body.manual_col = options.manualCol;
-  if (options?.scanDelay !== undefined && options?.scanDelay !== null) body.scan_delay = options.scanDelay;
-  if (options?.muxSettleMs !== undefined && options?.muxSettleMs !== null) body.mux_settle_ms = options.muxSettleMs;
-  if (options?.debounceThreshold !== undefined && options?.debounceThreshold !== null) body.debounce_threshold = options.debounceThreshold;
-  if (options?.baselineWindowS !== undefined && options?.baselineWindowS !== null) body.baseline_window_s = options.baselineWindowS;
-  if (options?.disabledSquares !== undefined && options?.disabledSquares !== null) body.disabled_squares = options.disabledSquares;
-  if (options?.piecesMode !== undefined && options?.piecesMode !== null) body.pieces_mode = options.piecesMode;
-  if (options?.coachHintsEnabled !== undefined) body.coach_hints_enabled = options.coachHintsEnabled;
-  if (options?.evalBarEnabled !== undefined) body.eval_bar_enabled = options.evalBarEnabled;
-  if (options?.coachAiOnly !== undefined) body.coach_ai_only = options.coachAiOnly;
-  if (options?.inLoopCalibration !== undefined) body.in_loop_calibration = options.inLoopCalibration;
-  if (options?.ledIntensity !== undefined && options?.ledIntensity !== null && !isNaN(options.ledIntensity)) body.led_intensity = options.ledIntensity;
-  if (options?.nightMode !== undefined) body.night_mode = options.nightMode;
-  if (options?.baselines !== undefined && options?.baselines !== null) body.baselines = options.baselines;
-
-  const response = await fetch(`${API_BASE}/board/save_defaults`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return response.json();
+export async function saveBoardDefaults(options: BoardSettingsOptions = {}): Promise<SettingsResponse> {
+  return jsonPost<SettingsResponse>('/board/save_defaults', options, 15000);
 }
 
-export async function calibrateBoard() {
-  const response = await fetch(`${API_BASE}/board/calibrate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+export async function calibrateBoard(): Promise<SettingsResponse> {
+  return jsonPost<SettingsResponse>('/board/calibrate', undefined, 30000);
 }
 
-export async function calibrateBoardWithPieces() {
-  const response = await fetch(`${API_BASE}/board/calibrate_with_pieces`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+export async function calibrateBoardWithPieces(): Promise<SettingsResponse> {
+  return jsonPost<SettingsResponse>('/board/calibrate_with_pieces', undefined, 30000);
 }
 
-export async function calibrateSquare(col: number, row: number, value?: number) {
+export async function calibrateSquare(
+  col: number,
+  row: number,
+  value?: number,
+): Promise<SettingsResponse & { col?: number; row?: number; baseline?: number }> {
   const body: { col: number; row: number; value?: number } = { col, row };
   if (value !== undefined && value !== null) {
     body.value = value;
   }
-  const response = await fetch(`${API_BASE}/board/calibrate_square`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return response.json();
+  return jsonPost<SettingsResponse & { col?: number; row?: number; baseline?: number }>('/board/calibrate_square', body);
 }
 
 export async function testLeds() {
-  const response = await fetch(`${API_BASE}/board/test_leds`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/board/test_leds');
 }
 
 export async function clearAllLeds() {
-  const response = await fetch(`${API_BASE}/board/clear_leds`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/board/clear_leds');
 }
 
 export async function triggerAnimation(name: string, params?: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE}/leds/trigger_animation`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, params }),
-  });
-  return response.json();
+  return jsonPost('/leds/trigger_animation', { name, params });
 }
 
 export async function testMoveTrace(options: {
@@ -316,12 +228,7 @@ export async function testMoveTrace(options: {
   is_capture?: boolean;
   clear?: boolean;
 }) {
-  const response = await fetch(`${API_BASE}/leds/test_trace`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options),
-  });
-  return response.json();
+  return jsonPost('/leds/test_trace', options);
 }
 
 export interface LastGameParams {
@@ -334,115 +241,85 @@ export interface LastGameParams {
   rating_range?: string | null;
 }
 
+export interface BoardSettings {
+  baselines: number[][];
+  threshold_positive: number;
+  threshold_negative: number;
+  col_mode?: 'auto' | 'manual';
+  manual_col?: number;
+  scan_delay?: number;
+  mux_settle_ms?: number;
+  mux_settle_us?: number;
+  debounce_threshold?: number;
+  baseline_window_s?: number;
+  disabled_squares?: number[][];
+  pieces_mode?: 'auto' | 'pieces' | 'empty';
+  coach_hints_enabled?: boolean;
+  eval_bar_enabled?: boolean;
+  coach_ai_only?: boolean;
+  in_loop_calibration?: boolean;
+  led_intensity?: number;
+  night_mode?: boolean;
+  col_mux_map?: number[];
+  last_game_params?: LastGameParams | null;
+  last_game_moves?: string[];
+  last_game_id?: string | null;
+  last_game_my_color?: 'white' | 'black' | null;
+}
+
+export interface SettingsResponse {
+  status: string;
+  message?: string;
+  file?: string;
+  settings?: BoardSettings;
+}
+
 export async function getLastGameParams(): Promise<{ status: string; last_game_params: LastGameParams | null }> {
-  const response = await fetch(`${API_BASE}/game/last_params`);
-  return response.json();
+  return request('/game/last_params');
 }
 
 export async function restartPreviousGame() {
-  const response = await fetch(`${API_BASE}/game/restart_previous`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/game/restart_previous');
 }
 
 // --- Post-Game Analysis & Training API ---
 
 export async function startAnalysis(options?: { moves_uci?: string[]; game_id?: string }) {
-  const response = await fetch(`${API_BASE}/analysis/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options || {}),
-  });
-  return response.json();
+  return jsonPost('/analysis/start', options || {}, 120000);
 }
 
 export async function stepAnalysis(ply: number) {
-  const response = await fetch(`${API_BASE}/analysis/step`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ply }),
-  });
-  return response.json();
+  return jsonPost('/analysis/step', { ply });
 }
 
 export async function resetAnalysisBranch() {
-  const response = await fetch(`${API_BASE}/analysis/branch_reset`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/analysis/branch_reset');
 }
 
 export async function stopAnalysis() {
-  const response = await fetch(`${API_BASE}/analysis/stop`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
-}
-
-export async function getAnalysisState() {
-  const response = await fetch(`${API_BASE}/analysis/state`);
-  return response.json();
+  return jsonPost('/analysis/stop');
 }
 
 export async function getGMGames() {
-  const response = await fetch(`${API_BASE}/analysis/gm/games`);
-  return response.json();
+  return request('/analysis/gm/games');
 }
 
 export async function startGMGame(gameId: string) {
-  const response = await fetch(`${API_BASE}/analysis/gm/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ game_id: gameId }),
-  });
-  return response.json();
+  return jsonPost('/analysis/gm/start', { game_id: gameId });
 }
 
 export async function submitGMGuess(uci: string) {
-  const response = await fetch(`${API_BASE}/analysis/gm/guess`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uci }),
-  });
-  return response.json();
+  return jsonPost('/analysis/gm/guess', { uci });
 }
 
 export async function startBlunderDrill(index: number = 0) {
-  const response = await fetch(`${API_BASE}/analysis/blunder_drill/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ index }),
-  });
-  return response.json();
+  return jsonPost('/analysis/blunder_drill/start', { index });
 }
 
 export async function submitBlunderAttempt(uci: string) {
-  const response = await fetch(`${API_BASE}/analysis/blunder_drill/attempt`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uci }),
-  });
-  return response.json();
+  return jsonPost('/analysis/blunder_drill/attempt', { uci });
 }
 
 export async function toggleBlunderHint() {
-  const response = await fetch(`${API_BASE}/analysis/blunder_drill/hint`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  return response.json();
+  return jsonPost('/analysis/blunder_drill/hint');
 }
-
-export async function sendAnalysisMove(uci: string) {
-  const response = await fetch(`${API_BASE}/analysis/move`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uci }),
-  });
-  return response.json();
-}
-

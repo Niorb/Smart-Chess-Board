@@ -188,6 +188,7 @@ def test_scan_board_custom_col_mux_map_override():
 def test_settle_us_auto_migration_and_atomic_save(tmp_path=None):
     import json
     import tempfile
+
     from board_hardware import DEFAULT_COL_MUX_MAP, load_settings, save_settings, settings
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -239,6 +240,7 @@ def test_scan_board_dynamic_drift_middle_ranks():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -280,6 +282,7 @@ def test_scan_board_starting_ranks_do_not_average_their_own_pieces():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -298,7 +301,7 @@ def test_scan_board_starting_ranks_do_not_average_their_own_pieces():
     for mux_ch in range(8):
         c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
         for r_phys in range(8):
-            c_chess = 7 - r_phys
+            7 - r_phys
             r_chess = c_phys
             if r_chess in (0, 1):
                 val = 1200
@@ -337,6 +340,7 @@ def test_scan_board_drift_suppressed_when_middle_square_occupied():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -356,9 +360,7 @@ def test_scan_board_drift_suppressed_when_middle_square_occupied():
         for r_phys in range(8):
             c_chess = 7 - r_phys
             r_chess = c_phys
-            if c_chess == 3 and r_chess == 3:
-                raw_vals[mux_ch * 8 + r_phys] = 1800
-            elif c_chess == 2 and r_chess == 2:
+            if c_chess == 3 and r_chess == 3 or c_chess == 2 and r_chess == 2:
                 raw_vals[mux_ch * 8 + r_phys] = 1800
             else:
                 raw_vals[mux_ch * 8 + r_phys] = 1550
@@ -391,6 +393,7 @@ def test_starting_position_piece_detection_after_piece_calibration():
     """Verify piece calibration, detection on starting ranks, and SetupValidator readiness."""
     import struct
     from unittest.mock import MagicMock, patch
+
     from app.setup_validator import SetupValidator
     from board_hardware import (
         DEFAULT_COL_MUX_MAP,
@@ -484,6 +487,7 @@ def test_smart_pieces_detection_auto_and_manual_modes():
     """Verify smart pieces detection against ranks 3 & 6 and manual mode overrides."""
     import struct
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, scan_board, settings
 
     settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
@@ -497,7 +501,7 @@ def test_smart_pieces_detection_auto_and_manual_modes():
     for mux_ch in range(8):
         c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
         for r_phys in range(8):
-            c_chess = 7 - r_phys
+            7 - r_phys
             r_chess = c_phys
             if r_chess in (0, 1):
                 raw_vals[mux_ch * 8 + r_phys] = 1200  # White pieces (< 1550 - 100)
@@ -505,7 +509,7 @@ def test_smart_pieces_detection_auto_and_manual_modes():
                 raw_vals[mux_ch * 8 + r_phys] = 1900  # Black pieces (> 1550 + 100)
             else:
                 raw_vals[mux_ch * 8 + r_phys] = 1550  # Empty middle ranks
-    
+
     mock_ser = MagicMock()
     mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
 
@@ -547,6 +551,7 @@ def test_empty_board_mode_calibrates_all_64_squares_directly():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -581,8 +586,8 @@ def test_empty_board_mode_calibrates_all_64_squares_directly():
 def test_freeze_baseline_suppresses_drift():
     """Verify that when freeze_baseline is True, baselines and history are not mutated."""
     import struct
-    import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -613,6 +618,7 @@ def test_load_settings_creates_settings_file():
     """
     import json
     import tempfile
+
     from board_hardware import load_settings, settings
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -647,6 +653,7 @@ def test_baseline_not_calibrated_when_piece_lifted():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -704,6 +711,7 @@ def test_scan_board_in_loop_calibration_disabled_suppresses_drift():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -758,6 +766,7 @@ def test_set_square_baseline_invalid_coords_returns_negative():
 def test_save_defaults_function(tmp_path, monkeypatch):
     """Verify that save_defaults saves directly to board_settings.json."""
     import json
+
     from board_hardware import save_defaults, settings
     user_file = str(tmp_path / "board_settings.json")
     monkeypatch.setenv("BOARD_SETTINGS_PATH", user_file)
@@ -780,6 +789,7 @@ def test_vacated_square_calibrates_to_own_baseline_after_piece_moves():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -832,6 +842,7 @@ def test_occupied_square_on_rank3_does_not_block_other_column_squares():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -890,6 +901,7 @@ def test_independent_sensor_offsets_preserved():
     import struct
     import time
     from unittest.mock import MagicMock
+
     from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
 
     baseline_history.clear()
@@ -944,6 +956,7 @@ def test_read_adc_packet_with_noisy_preamble():
     """Verify _read_adc_packet recovers from noisy/boot preamble and captures 128B payload."""
     import struct
     from unittest.mock import MagicMock
+
     from board_hardware import _read_adc_packet
 
     raw_vals = [1550] * 64

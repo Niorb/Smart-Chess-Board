@@ -6,10 +6,9 @@ Computes ordered sequences of board coordinates (file, rank) from origin to dest
 for horizontal, vertical, diagonal, Knight (L-shape), and general moves.
 """
 
-from typing import List, Tuple
 
 
-def bresenham_line(x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
+def bresenham_line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
     """
     Computes an 8-connected discrete line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
 
@@ -22,7 +21,7 @@ def bresenham_line(x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
     Returns:
         List of (x, y) tuples from start to end inclusive.
     """
-    points: List[Tuple[int, int]] = []
+    points: list[tuple[int, int]] = []
     dx = abs(x1 - x0)
     dy = -abs(y1 - y0)
     sx = 1 if x0 < x1 else -1
@@ -47,7 +46,7 @@ def bresenham_line(x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
 
 def interpolate_move_path(
     from_c: int, from_r: int, to_c: int, to_r: int
-) -> List[Tuple[int, int]]:
+) -> list[tuple[int, int]]:
     """
     Interpolates an ordered square path representing the movement trajectory between two squares.
 
@@ -125,7 +124,7 @@ def interpolate_move_path(
     return bresenham_line(from_c, from_r, to_c, to_r)
 
 
-def interpolate_uci_move(uci: str) -> List[Tuple[int, int]]:
+def interpolate_uci_move(uci: str) -> list[tuple[int, int]]:
     """
     Parses a UCI move string (e.g. 'e2e4', 'g1f3') and computes the interpolated path.
 
@@ -154,7 +153,7 @@ def interpolate_uci_move(uci: str) -> List[Tuple[int, int]]:
 
 def get_castle_rook_move(
     king_from_c: int, king_from_r: int, king_to_c: int, king_to_r: int
-) -> Tuple[Tuple[int, int], Tuple[int, int]] | None:
+) -> tuple[tuple[int, int], tuple[int, int]] | None:
     """
     Returns the (rook_from, rook_to) coordinates for standard castling moves,
     or None if the move is not a castling move.

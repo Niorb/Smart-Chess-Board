@@ -59,11 +59,11 @@ class GameGuardrailResult:
 class SetupValidator:
     """
     Validates physical chessboard setup against standard chess starting position.
-    
+
     Coordinate convention:
       - c (column / file): 0..7 representing files a..h
       - r (row / rank): 0..7 representing ranks 1..8
-    
+
     Polarity convention:
       - White pieces: -1 (South magnetic pole) on Ranks 1 and 2 (r in 0, 1)
       - Black pieces: +1 (North magnetic pole) on Ranks 7 and 8 (r in 6, 7)
@@ -77,10 +77,10 @@ class SetupValidator:
     def validate(self, physical_state: list[list[int]]) -> SetupResult:
         """
         Validates the 8x8 physical sensor grid.
-        
+
         Args:
             physical_state: 2D list [cols][rows] containing sensor states (-1, 0, 1).
-            
+
         Returns:
             SetupResult with missing/misplaced pieces and readiness status.
         """
@@ -142,18 +142,16 @@ class SetupValidator:
         physical_state: list[list[int]],
         board: Any,
         tracker: Any | None = None,
-        my_color: str | None = None,
     ) -> GameGuardrailResult:
         """
         Validates the physical 8x8 sensor matrix against the active chess.Board,
         intelligently ignoring valid transient move, capture, castling, and opponent mirror states.
-        
+
         Args:
             physical_state: 2D list [cols][rows] of sensor readings (-1, 0, 1).
             board: Active chess.Board object.
             tracker: Optional PhysicalMoveTracker instance containing transient move locks.
-            my_color: "white" or "black" or None.
-            
+
         Returns:
             GameGuardrailResult indicating synchronization status and any anomalous squares.
         """

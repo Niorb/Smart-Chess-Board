@@ -8,13 +8,13 @@ Includes graceful heuristic fallback when Stockfish binary is absent.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from enum import Enum
 import logging
 import math
 import os
 import shutil
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 import chess
 import chess.engine
@@ -45,7 +45,7 @@ TIER_INACCURACY_MAX_LOSS = 150 # 50 < delta <= 150 cp -> INACCURACY
                                # delta > 150 cp -> BLUNDER
 
 
-def calculate_win_chance(score_cp: Optional[int], mate: Optional[int]) -> float:
+def calculate_win_chance(score_cp: int | None, mate: int | None) -> float:
     """
     Calculates non-linear win probability (0.0 to 100.0%) from White's perspective.
     Uses standard Lichess logistic winning probability formula.
@@ -83,10 +83,10 @@ class MoveAnalysis:
     to_sq: str
     classification: MoveQuality
     delta_cp: int
-    score_cp: Optional[int] = None
-    mate: Optional[int] = None
+    score_cp: int | None = None
+    mate: int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "uci": self.uci,
             "from": self.from_sq,
@@ -106,11 +106,11 @@ class BlunderChallenge:
     classification: str
     delta_cp: int
     best_move: str
-    best_score_cp: Optional[int]
+    best_score_cp: int | None
     description: str
-    top_moves: List[Dict[str, Any]] = field(default_factory=list)
+    top_moves: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "ply_index": self.ply_index,
             "fen_before": self.fen_before,
@@ -127,14 +127,14 @@ class BlunderChallenge:
 @dataclass
 class PositionEvaluation:
     fen: str
-    score_cp: Optional[int]
-    mate: Optional[int]
+    score_cp: int | None
+    mate: int | None
     win_chance: float           # 0.0 to 100.0%
-    best_move: Optional[str]    # UCI e.g. "e2e4"
-    top_moves: List[MoveAnalysis] = field(default_factory=list)
-    moves_map: Dict[str, MoveAnalysis] = field(default_factory=dict)
+    best_move: str | None    # UCI e.g. "e2e4"
+    top_moves: list[MoveAnalysis] = field(default_factory=list)
+    moves_map: dict[str, MoveAnalysis] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "fen": self.fen,
             "score_cp": self.score_cp,
@@ -183,8 +183,8 @@ class HeuristicEvaluator:
 
         return score
 
-    def get_top_moves(self, board: chess.Board, top_k: int = 5) -> List[MoveAnalysis]:
-        """Generates ranked moves with heuristic scores and quality classifications."""
+    def get_top_moves(self, board: chess.Board, top_k: int = 5) -> list[MoveAnalysis]:
+        """Generates up to top_k ranked moves with heuristic scores and quality classifications."""
         legal = list(board.legal_moves)
         if not legal:
             return []
@@ -226,19 +226,18 @@ class CoachEngine:
     Caches position results and cancels stale analysis on position changes.
     """
 
-    def __init__(self, stockfish_path: Optional[str] = None):
+    def __init__(self, stockfish_path: str | None = None):
         self.stockfish_path = stockfish_path or self._discover_stockfish()
-        self._engine: Optional[chess.engine.UciProtocol] = None
-        self._transport = None
-        self._analysis_task: Optional[asyncio.Task] = None
-        self._engine_lock: Optional[asyncio.Lock] = None
-        self._cache: Dict[str, PositionEvaluation] = {}
+        self._engine: chess.engine.UciProtocol | None = None
+        self._analysis_task: asyncio.Task | None = None
+        self._engine_lock: asyncio.Lock | None = None
+        self._cache: dict[str, PositionEvaluation] = {}
         self._max_cache_entries: int = 128
         self._is_running: bool = False
         self.is_heuristic_mode: bool = self.stockfish_path is None
         self.evaluator = HeuristicEvaluator()
 
-    def _discover_stockfish(self) -> Optional[str]:
+    def _discover_stockfish(self) -> str | None:
         for candidate in STOCKFISH_CANDIDATE_PATHS:
             if candidate and os.path.exists(candidate) and os.path.isfile(candidate):
                 logger.info(f"Found Stockfish binary at: {candidate}")
@@ -254,8 +253,7 @@ class CoachEngine:
 
         if self.stockfish_path and not self._engine:
             try:
-                transport, protocol = await chess.engine.popen_uci(self.stockfish_path)
-                self._transport = transport
+                _transport, protocol = await chess.engine.popen_uci(self.stockfish_path)
                 self._engine = protocol
                 self.is_heuristic_mode = False
                 try:
@@ -287,10 +285,9 @@ class CoachEngine:
             except Exception as e:
                 logger.debug(f"Error quitting Stockfish: {e}")
             self._engine = None
-            self._transport = None
         logger.info("CoachEngine stopped.")
 
-    def get_cached_evaluation(self, fen: str) -> Optional[PositionEvaluation]:
+    def get_cached_evaluation(self, fen: str) -> PositionEvaluation | None:
         """Returns cached position evaluation for the given FEN if present."""
         clean_fen = " ".join(fen.split()[:4])
         return self._cache.get(clean_fen)
@@ -329,8 +326,9 @@ class CoachEngine:
         """Evaluates position using static heuristic."""
         score_cp = self.evaluator.evaluate(board)
         win_chance = calculate_win_chance(score_cp, mate=None)
-        top_moves = self.evaluator.get_top_moves(board, top_k=8)
-        moves_map = {m.uci: m for m in top_moves}
+        ranked_moves = self.evaluator.get_top_moves(board)
+        top_moves = ranked_moves[:8]
+        moves_map = {m.uci: m for m in ranked_moves}
         best_move = top_moves[0].uci if top_moves else None
 
         return PositionEvaluation(
@@ -352,7 +350,7 @@ class CoachEngine:
         multipv = min(len(legal), 8)
         limit = chess.engine.Limit(time=0.10, depth=12)
 
-        if not hasattr(self, "_engine_lock") or self._engine_lock is None:
+        if self._engine_lock is None:
             self._engine_lock = asyncio.Lock()
 
         try:
@@ -360,7 +358,9 @@ class CoachEngine:
                 infos = await asyncio.shield(self._engine.analyse(board, limit, multipv=multipv))
                 if not isinstance(infos, list):
                     infos = [infos]
-        except (asyncio.CancelledError, Exception) as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
             logger.warning(f"Stockfish analysis interrupted: {e}. Falling back to heuristic.")
             return self._evaluate_heuristic(board, clean_fen)
 
@@ -443,22 +443,22 @@ class CoachEngine:
             moves_map=moves_map,
         )
 
-    async def batch_evaluate_game(self, moves_uci: List[str]) -> Dict[str, Any]:
+    async def batch_evaluate_game(self, moves_uci: list[str]) -> dict[str, Any]:
         """
         Evaluates an entire sequence of game moves starting from standard FEN.
         Returns positions evaluations, played move classifications, accuracy scores, and mistake summaries.
         """
         board = chess.Board()
-        evaluations: List[Dict[str, Any]] = []
-        played_analyses: List[Dict[str, Any]] = []
+        evaluations: list[dict[str, Any]] = []
+        played_analyses: list[dict[str, Any]] = []
 
         # Evaluate initial starting position
         initial_eval = await self.evaluate_position(board.fen())
         evaluations.append(initial_eval.to_dict())
 
-        white_accuracies: List[float] = []
-        black_accuracies: List[float] = []
-        counts: Dict[str, Dict[str, int]] = {
+        white_accuracies: list[float] = []
+        black_accuracies: list[float] = []
+        counts: dict[str, dict[str, int]] = {
             "white": {"best": 0, "good": 0, "inaccuracy": 0, "blunder": 0},
             "black": {"best": 0, "good": 0, "inaccuracy": 0, "blunder": 0},
         }
@@ -541,12 +541,12 @@ class CoachEngine:
 
     def extract_blunders(
         self,
-        played_analyses: List[Dict[str, Any]],
-        evaluations: List[Dict[str, Any]],
+        played_analyses: list[dict[str, Any]],
+        evaluations: list[dict[str, Any]],
         min_delta: int = 100,
-    ) -> List[BlunderChallenge]:
+    ) -> list[BlunderChallenge]:
         """Extracts critical mistakes from played moves to form training puzzles."""
-        challenges: List[BlunderChallenge] = []
+        challenges: list[BlunderChallenge] = []
         for played in played_analyses:
             ply = played["ply"]
             delta = played.get("delta_cp", 0)

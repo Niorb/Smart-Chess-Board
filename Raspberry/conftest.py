@@ -9,6 +9,7 @@ BOARD_SETTINGS_PATH in a temporary directory for all test runs.
 import copy
 import os
 import tempfile
+
 import pytest
 
 

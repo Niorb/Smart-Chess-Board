@@ -7,22 +7,23 @@ Lichess Board API proxying, move execution, and frontend static asset delivery.
 """
 
 import asyncio
-from contextlib import asynccontextmanager
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from board_hardware import settings
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .board_state import state_manager
 from .coach_engine import coach_engine
-from .gm_games import get_all_gm_games, get_gm_game
+from .gm_games import get_all_gm_games
 from .lichess_engine import lichess_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -34,7 +35,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting background state manager loop, Lichess engine, and Coach engine...")
     await lichess_engine.start(state_manager)
     await coach_engine.start()
-    task = asyncio.create_task(state_manager.update_loop(manager.broadcast))
+    task = asyncio.create_task(
+        state_manager.update_loop(manager.broadcast, manager.client_count)
+    )
     yield
     logger.info("Stopping background loop, Lichess engine, and Coach engine...")
     task.cancel()
@@ -48,11 +51,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart Chess Board API", lifespan=lifespan)
 
-# Allow CORS for mobile app, PWA, and external browsers
+# Allow CORS for mobile app, PWA, and external browsers (same-origin appliance; no credentials)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -60,27 +62,52 @@ app.add_middleware(
 
 # --- WebSocket Connection Manager ---
 class ConnectionManager:
+    """Tracks WebSocket clients with per-connection outgoing queues so a slow or
+    stalled client can never block the hardware update loop or other clients."""
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
+        self._queues: dict[WebSocket, asyncio.Queue] = {}
+        self._sender_tasks: dict[WebSocket, asyncio.Task] = {}
+
+    def client_count(self) -> int:
+        return len(self.active_connections)
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=64)
+        self._queues[websocket] = queue
+        self._sender_tasks[websocket] = asyncio.create_task(self._sender(websocket, queue))
+
+    async def _sender(self, websocket: WebSocket, queue: asyncio.Queue):
+        try:
+            while True:
+                message = await queue.get()
+                await websocket.send_json(message)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.debug(f"WebSocket sender terminated: {e}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        self._queues.pop(websocket, None)
+        task = self._sender_tasks.pop(websocket, None)
+        if task and not task.done():
+            task.cancel()
 
     async def broadcast(self, message: dict):
-        stale_connections = []
         for connection in list(self.active_connections):
+            queue = self._queues.get(connection)
+            if queue is None:
+                continue
             try:
-                await connection.send_json(message)
-            except Exception:
-                stale_connections.append(connection)
-        for dead in stale_connections:
-            if dead in self.active_connections:
-                self.active_connections.remove(dead)
+                queue.put_nowait(message)
+            except asyncio.QueueFull:
+                logger.debug("Dropping slow WebSocket client (queue full).")
+                self.disconnect(connection)
 
 
 manager = ConnectionManager()
@@ -107,24 +134,7 @@ class ThresholdSettings(BaseModel):
     night_mode: bool | None = None
 
 
-class SaveDefaultsRequest(BaseModel):
-    threshold_positive: int | float | None = None
-    threshold_negative: int | float | None = None
-    col_mode: str | None = None
-    manual_col: int | float | None = None
-    scan_delay: int | float | None = None
-    mux_settle_ms: int | float | None = None
-    mux_settle_us: int | float | None = None
-    debounce_threshold: int | float | None = None
-    baseline_window_s: int | float | None = None
-    disabled_squares: list[list[int]] | None = None
-    pieces_mode: str | None = None
-    coach_hints_enabled: bool | None = None
-    eval_bar_enabled: bool | None = None
-    coach_ai_only: bool | None = None
-    in_loop_calibration: bool | None = None
-    led_intensity: int | float | None = None
-    night_mode: bool | None = None
+class SaveDefaultsRequest(ThresholdSettings):
     baselines: list[list[int]] | None = None
     overwrite_template: bool = True
 
@@ -213,6 +223,49 @@ def parse_sq(sq: str) -> tuple[int, int] | None:
     return ord(file_ch) - ord("a") + 1, int(rank_ch)
 
 
+def apply_settings(body: ThresholdSettings) -> None:
+    """Applies non-None fields of a settings request onto the shared settings dict."""
+    if body.threshold_positive is not None:
+        settings["threshold_positive"] = int(body.threshold_positive)
+    if body.threshold_negative is not None:
+        settings["threshold_negative"] = int(body.threshold_negative)
+    if body.col_mode is not None:
+        settings["col_mode"] = body.col_mode
+    if body.manual_col is not None:
+        settings["manual_col"] = int(body.manual_col)
+    if body.scan_delay is not None:
+        settings["scan_delay"] = int(body.scan_delay)
+    if body.mux_settle_us is not None:
+        settle_us = min(255, max(0, int(body.mux_settle_us)))
+        settings["mux_settle_us"] = settle_us
+        settings["mux_settle_ms"] = settle_us / 1000
+    elif body.mux_settle_ms is not None:
+        raw_val = int(body.mux_settle_ms)
+        settle_us = min(255, max(0, raw_val if raw_val > 50 else raw_val * 1000))
+        settings["mux_settle_us"] = settle_us
+        settings["mux_settle_ms"] = raw_val
+    if body.debounce_threshold is not None:
+        settings["debounce_threshold"] = int(body.debounce_threshold)
+    if body.baseline_window_s is not None:
+        settings["baseline_window_s"] = int(body.baseline_window_s)
+    if body.disabled_squares is not None:
+        settings["disabled_squares"] = body.disabled_squares
+    if body.pieces_mode is not None:
+        settings["pieces_mode"] = body.pieces_mode
+    if body.coach_hints_enabled is not None:
+        settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
+    if body.eval_bar_enabled is not None:
+        settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
+    if body.coach_ai_only is not None:
+        settings["coach_ai_only"] = bool(body.coach_ai_only)
+    if body.in_loop_calibration is not None:
+        settings["in_loop_calibration"] = bool(body.in_loop_calibration)
+    if body.led_intensity is not None:
+        settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
+    if body.night_mode is not None:
+        settings["night_mode"] = bool(body.night_mode)
+
+
 # --- REST API Endpoints ---
 
 @app.get("/api")
@@ -248,53 +301,14 @@ async def get_board_health():
 @app.get("/api/board/settings")
 async def get_board_settings():
     """Returns current calibration settings."""
-    from board_hardware import settings
     return settings
 
 
 @app.post("/api/board/settings")
 async def update_board_settings(body: ThresholdSettings):
     """Updates analog thresholds, scan timings, and active column configurations."""
-    from board_hardware import save_settings, settings
-    if body.threshold_positive is not None:
-        settings["threshold_positive"] = int(body.threshold_positive)
-    if body.threshold_negative is not None:
-        settings["threshold_negative"] = int(body.threshold_negative)
-    if body.col_mode is not None:
-        settings["col_mode"] = body.col_mode
-    if body.manual_col is not None:
-        settings["manual_col"] = int(body.manual_col)
-    if body.scan_delay is not None:
-        settings["scan_delay"] = int(body.scan_delay)
-    if body.mux_settle_us is not None:
-        settle_us = min(255, max(0, int(body.mux_settle_us)))
-        settings["mux_settle_us"] = settle_us
-        settings["mux_settle_ms"] = settle_us
-    elif body.mux_settle_ms is not None:
-        raw_val = int(body.mux_settle_ms)
-        settle_us = min(255, max(0, raw_val if raw_val > 50 else raw_val * 1000))
-        settings["mux_settle_us"] = settle_us
-        settings["mux_settle_ms"] = raw_val
-    if body.debounce_threshold is not None:
-        settings["debounce_threshold"] = int(body.debounce_threshold)
-    if body.baseline_window_s is not None:
-        settings["baseline_window_s"] = int(body.baseline_window_s)
-    if body.disabled_squares is not None:
-        settings["disabled_squares"] = body.disabled_squares
-    if body.pieces_mode is not None:
-        settings["pieces_mode"] = body.pieces_mode
-    if body.coach_hints_enabled is not None:
-        settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
-    if body.eval_bar_enabled is not None:
-        settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
-    if body.coach_ai_only is not None:
-        settings["coach_ai_only"] = bool(body.coach_ai_only)
-    if body.in_loop_calibration is not None:
-        settings["in_loop_calibration"] = bool(body.in_loop_calibration)
-    if body.led_intensity is not None:
-        settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
-    if body.night_mode is not None:
-        settings["night_mode"] = bool(body.night_mode)
+    from board_hardware import save_settings
+    apply_settings(body)
     await asyncio.to_thread(save_settings)
     return {"status": "success", "settings": settings}
 
@@ -305,47 +319,9 @@ async def save_board_defaults_route(body: SaveDefaultsRequest | None = None):
     Saves all current stats (baselines, thresholds, settings) to persistent storage
     (board_settings.json) as the defaults for future connections.
     """
-    from board_hardware import save_defaults, settings, get_settings_filepath
+    from board_hardware import get_settings_filepath, save_defaults
     if body is not None:
-        if body.threshold_positive is not None:
-            settings["threshold_positive"] = int(body.threshold_positive)
-        if body.threshold_negative is not None:
-            settings["threshold_negative"] = int(body.threshold_negative)
-        if body.col_mode is not None:
-            settings["col_mode"] = body.col_mode
-        if body.manual_col is not None:
-            settings["manual_col"] = int(body.manual_col)
-        if body.scan_delay is not None:
-            settings["scan_delay"] = int(body.scan_delay)
-        if body.mux_settle_us is not None:
-            settle_us = min(255, max(0, int(body.mux_settle_us)))
-            settings["mux_settle_us"] = settle_us
-            settings["mux_settle_ms"] = settle_us
-        elif body.mux_settle_ms is not None:
-            raw_val = int(body.mux_settle_ms)
-            settle_us = min(255, max(0, raw_val if raw_val > 50 else raw_val * 1000))
-            settings["mux_settle_us"] = settle_us
-            settings["mux_settle_ms"] = raw_val
-        if body.debounce_threshold is not None:
-            settings["debounce_threshold"] = int(body.debounce_threshold)
-        if body.baseline_window_s is not None:
-            settings["baseline_window_s"] = int(body.baseline_window_s)
-        if body.disabled_squares is not None:
-            settings["disabled_squares"] = body.disabled_squares
-        if body.pieces_mode is not None:
-            settings["pieces_mode"] = body.pieces_mode
-        if body.coach_hints_enabled is not None:
-            settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
-        if body.eval_bar_enabled is not None:
-            settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
-        if body.coach_ai_only is not None:
-            settings["coach_ai_only"] = bool(body.coach_ai_only)
-        if body.in_loop_calibration is not None:
-            settings["in_loop_calibration"] = bool(body.in_loop_calibration)
-        if body.led_intensity is not None:
-            settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
-        if body.night_mode is not None:
-            settings["night_mode"] = bool(body.night_mode)
+        apply_settings(body)
         if body.baselines is not None and isinstance(body.baselines, list) and len(body.baselines) == 8:
             settings["baselines"] = body.baselines
 
@@ -365,7 +341,6 @@ async def calibrate_board_route():
     """Triggers sensor matrix baseline recalibration."""
     success = await asyncio.to_thread(state_manager._safe_calibrate)
     if success:
-        from board_hardware import settings
         return {"status": "success", "message": "Calibration completed", "settings": settings}
     else:
         return {"status": "error", "message": "Calibration failed"}
@@ -376,7 +351,6 @@ async def calibrate_board_with_pieces_route():
     """Triggers baseline calibration using empty middle ranks mapped to starting ranks."""
     success = await asyncio.to_thread(state_manager._safe_calibrate_with_pieces)
     if success:
-        from board_hardware import settings
         return {"status": "success", "message": "Calibration with pieces completed", "settings": settings}
     else:
         return {"status": "error", "message": "Calibration failed"}
@@ -385,7 +359,7 @@ async def calibrate_board_with_pieces_route():
 @app.post("/api/board/calibrate_square")
 async def calibrate_square_route(body: CalibrateSquareRequest):
     """Sets the baseline value of a specific square to its current raw analog reading (or given value)."""
-    from board_hardware import BOARD_COLS, BOARD_ROWS, save_settings, set_square_baseline, settings
+    from board_hardware import BOARD_COLS, BOARD_ROWS, save_settings, set_square_baseline
     if 0 <= body.col < BOARD_COLS and 0 <= body.row < BOARD_ROWS:
         if body.value is not None:
             new_baseline = int(body.value)
@@ -408,14 +382,14 @@ async def calibrate_square_route(body: CalibrateSquareRequest):
 @app.post("/api/board/test_leds")
 async def test_leds_route():
     """Runs a sequential animation testing all WS2812B LEDs."""
-    asyncio.create_task(state_manager.run_led_test())
+    state_manager._spawn_task(state_manager.run_led_test())
     return {"status": "success", "message": "LED test initiated"}
 
 
 @app.post("/api/board/clear_leds")
 async def clear_leds_route():
     """Turns off all physical LEDs."""
-    success = state_manager.clear_all_leds()
+    success = await asyncio.to_thread(state_manager.clear_all_leds)
     if success:
         return {"status": "success", "message": "All LEDs turned off"}
     else:
@@ -520,7 +494,6 @@ async def seek_game_route(body: SeekRequest | None = None):
 @app.get("/api/game/last_params")
 async def get_last_game_params_route():
     """Returns the stored last game matchmaking parameters from board settings."""
-    from board_hardware import settings
     last_params = settings.get("last_game_params")
     return {"status": "success", "last_game_params": last_params}
 
@@ -533,35 +506,14 @@ async def restart_previous_game_route():
     elif state_manager.game_status not in ["IDLE", "GAME_OVER"]:
         return {"status": "error", "message": f"Cannot restart game while status is {state_manager.game_status}"}
 
-    from board_hardware import settings
-    params = settings.get("last_game_params") or {}
-    tc = params.get("time_control", "10+0")
-    rated = bool(params.get("rated", False))
-    color = params.get("color", "random")
-    opponent = params.get("opponent", "auto")
-    ai_level = params.get("ai_level", 3)
-    rating_range = params.get("rating_range", None)
+    from board_hardware import get_last_game_params
+    params = get_last_game_params()
 
-    await lichess_engine.seek(
-        state_manager,
-        time_control=tc,
-        rated=rated,
-        color=color,
-        opponent=opponent,
-        ai_level=ai_level,
-        rating_range=rating_range,
-    )
+    await lichess_engine.seek(state_manager, **params)
     return {
         "status": "seeking_initiated",
         "restarted": True,
-        "params": {
-            "time_control": tc,
-            "rated": rated,
-            "color": color,
-            "opponent": opponent,
-            "ai_level": ai_level,
-            "rating_range": rating_range,
-        },
+        "params": params,
     }
 
 
@@ -729,13 +681,19 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         initial_payload = state_manager.get_full_state()
-        await websocket.send_json(initial_payload)
+        queue = manager._queues.get(websocket)
+        if queue is not None:
+            queue.put_nowait(initial_payload)
     except Exception as e:
-        logger.debug(f"Error sending initial state snapshot on websocket connect: {e}")
+        logger.debug(f"Error queueing initial state snapshot on websocket connect: {e}")
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.debug(f"WebSocket receive loop terminated: {e}")
+    finally:
         manager.disconnect(websocket)
 
 
@@ -744,13 +702,15 @@ async def websocket_endpoint(websocket: WebSocket):
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 if os.path.exists(frontend_path):
+    _frontend_real_path = os.path.realpath(frontend_path)
+
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         if full_path.startswith("api") or full_path.startswith("ws"):
-            return None
+            raise HTTPException(status_code=404)
 
-        file_path = os.path.join(frontend_path, full_path)
-        if full_path and os.path.isfile(file_path):
+        file_path = os.path.realpath(os.path.join(frontend_path, full_path))
+        if full_path and os.path.isfile(file_path) and file_path.startswith(_frontend_real_path + os.sep):
             return FileResponse(file_path)
 
         return FileResponse(os.path.join(frontend_path, "index.html"))

@@ -4,7 +4,6 @@ import sys
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import pytest
 import chess
 from app.gm_games import get_all_gm_games, get_gm_game
 
@@ -29,6 +28,17 @@ def test_get_gm_game_valid():
     assert game.year == 1999
     assert len(game.moves) > 40
     assert len(game.key_plys) > 0
+
+
+def test_gm_games_annotation_plys_in_bounds():
+    """Every annotation ply index must reference an existing move in the game."""
+    from app.gm_games import GM_GAMES_DATABASE
+
+    for game in GM_GAMES_DATABASE:
+        for ply in game.annotations:
+            assert 0 <= ply < len(game.moves), (
+                f"{game.id}: annotation ply {ply} out of range ({len(game.moves)} plies)"
+            )
 
 
 def test_get_gm_game_invalid():

@@ -3,13 +3,11 @@ import sys
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.board_state import BoardStateManager
-from app.led_helpers import Color, DualPixelStrip
+from app.led_helpers import DualPixelStrip
 
 
 def test_board_state_manager_init():
@@ -30,7 +28,6 @@ def test_physical_payload_structure():
     assert "grid" in payload
     assert "adc" in payload
     assert "baselines" in payload
-    assert "highlighted_square" in payload
     assert "disabled_squares" in payload
     assert "virtual_only" in payload
     assert "in_flight_move" in payload
@@ -140,6 +137,7 @@ def test_baseline_freezing_and_restoration_during_animation():
 
 def test_baseline_freezing_during_led_test():
     import asyncio
+
     from board_hardware import settings
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -248,7 +246,12 @@ def test_clear_all_leds_clears_arrival_flash():
 
 def test_legal_target_and_capture_dots_colors():
     """Verify that _update_leds colors quiet target squares with COLOR_INT_LEGAL_TARGET and capture squares with COLOR_INT_LEGAL_CAPTURE."""
-    from app.led_helpers import COLOR_INT_LEGAL_CAPTURE, COLOR_INT_LEGAL_TARGET, COLOR_INT_PIECE_LIFTED, get_led_indices
+    from app.led_helpers import (
+        COLOR_INT_LEGAL_CAPTURE,
+        COLOR_INT_LEGAL_TARGET,
+        COLOR_INT_PIECE_LIFTED,
+        get_led_indices,
+    )
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
     bsm.game_status = "PLAYING"
@@ -261,10 +264,10 @@ def test_legal_target_and_capture_dots_colors():
     bsm._update_leds()
 
     # Verify setPixelColor calls for quiet target (4, 4) vs capture target (3, 4)
-    e5_indices = get_led_indices(4, 4)
-    d5_indices = get_led_indices(4, 3)  # lifted e4 is (c=4, r=3)
-    cap_d5_indices = get_led_indices(4, 3) # capture square (c=3, r=4) -> get_led_indices(r=4, c=3)
-    d5_cap_indices = get_led_indices(4, 3)
+    get_led_indices(4, 4)
+    get_led_indices(4, 3)  # lifted e4 is (c=4, r=3)
+    get_led_indices(4, 3) # capture square (c=3, r=4) -> get_led_indices(r=4, c=3)
+    get_led_indices(4, 3)
 
     # Check that setPixelColor was called with COLOR_INT_LEGAL_TARGET and COLOR_INT_LEGAL_CAPTURE
     call_args = [call[0] for call in bsm.strip.setPixelColor.call_args_list]
@@ -402,12 +405,12 @@ def test_board_state_opponent_disconnected_led_render():
 
 def test_night_mode_legal_target_and_capture_dots_colors():
     """Verify that _update_leds uses high-contrast Night Mode colors when night_mode is True."""
-    from board_hardware import settings
     from app.led_helpers import (
-        COLOR_INT_NIGHT_PIECE_LIFTED,
-        COLOR_INT_NIGHT_LEGAL_TARGET,
         COLOR_INT_NIGHT_LEGAL_CAPTURE,
+        COLOR_INT_NIGHT_LEGAL_TARGET,
+        COLOR_INT_NIGHT_PIECE_LIFTED,
     )
+    from board_hardware import settings
     settings["night_mode"] = True
     try:
         bsm = BoardStateManager()
@@ -432,8 +435,8 @@ def test_night_mode_legal_target_and_capture_dots_colors():
 def test_night_mode_turn_indicator_led_render():
     """Verify that _update_leds renders amethyst purple for Black King in Night Mode."""
     import chess
-    from board_hardware import settings
     from app.lichess_engine import lichess_engine
+    from board_hardware import settings
     settings["night_mode"] = True
     try:
         bsm = BoardStateManager()

@@ -6,8 +6,8 @@ Executes static analysis tools (Ruff, Vulture, Mypy, Knip, TSC, ESLint) and outp
 
 import shutil
 import subprocess
-import sys
 from pathlib import Path
+
 
 def run_command(cmd, cwd=None, allow_failure=True):
     print(f"\n[AUDIT] Running: {' '.join(cmd)}")
@@ -70,7 +70,7 @@ def audit_typescript(frontend_path: Path):
 def main():
     root = Path(__file__).resolve().parents[4]
     print(f"Starting codebase optimization audit for root: {root}")
-    
+
     audit_python(root / "Raspberry")
     audit_typescript(root / "Raspberry" / "frontend")
 

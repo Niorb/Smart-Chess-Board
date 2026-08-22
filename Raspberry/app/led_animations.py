@@ -6,10 +6,10 @@ Provides lifecycle animations (GAME_STARTED, GAME_WON, GAME_LOST, GAME_DRAWN)
 and dynamic comet move-trace interpolation.
 """
 
-from dataclasses import dataclass, field
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any
 
 try:
     from app.config import (
@@ -23,7 +23,6 @@ try:
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         MOVE_TRACE_PERIOD_S,
-        NUM_LEDS,
     )
     from app.led_helpers import (
         COLOR_INT_BOARD_READY_AMBIENT,
@@ -31,7 +30,6 @@ try:
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
-        COLOR_INT_DEFEAT_RED,
         COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_WHITE,
         COLOR_INT_GUARDRAIL_MISSING,
@@ -49,7 +47,6 @@ try:
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
-        COLOR_INT_OPPONENT_FROM,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
@@ -57,8 +54,6 @@ try:
         COLOR_INT_START_BLACK_SECONDARY,
         COLOR_INT_START_WHITE_PRIMARY,
         COLOR_INT_START_WHITE_SECONDARY,
-        COLOR_INT_TURN_BLACK,
-        COLOR_INT_TURN_WHITE,
         COLOR_INT_VICTORY_GOLD,
         COLOR_INT_VICTORY_GREEN,
         get_led_indices,
@@ -75,16 +70,14 @@ except ImportError:
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         MOVE_TRACE_PERIOD_S,
-        NUM_LEDS,
-    )
+        )
     from .led_helpers import (
         COLOR_INT_BOARD_READY_AMBIENT,
         COLOR_INT_BOARD_READY_PRIMARY,
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
-        COLOR_INT_DEFEAT_RED,
-        COLOR_INT_DRAW_BLUE,
+            COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_WHITE,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
@@ -101,17 +94,14 @@ except ImportError:
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
-        COLOR_INT_OPPONENT_FROM,
-        COLOR_INT_SEEKING_BODY,
+            COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
         COLOR_INT_START_BLACK_PRIMARY,
         COLOR_INT_START_BLACK_SECONDARY,
         COLOR_INT_START_WHITE_PRIMARY,
         COLOR_INT_START_WHITE_SECONDARY,
-        COLOR_INT_TURN_BLACK,
-        COLOR_INT_TURN_WHITE,
-        COLOR_INT_VICTORY_GOLD,
+                COLOR_INT_VICTORY_GOLD,
         COLOR_INT_VICTORY_GREEN,
         get_led_indices,
     )
@@ -130,7 +120,7 @@ def color_rgb(r: int, g: int, b: int) -> int:
     return (max(0, min(255, int(r))) << 16) | (max(0, min(255, int(g))) << 8) | max(0, min(255, int(b)))
 
 
-def unpack_rgb(color_int: int) -> Tuple[int, int, int]:
+def unpack_rgb(color_int: int) -> tuple[int, int, int]:
     """Unpacks a 24-bit integer color into (R, G, B) tuple."""
     return (color_int >> 16) & 0xFF, (color_int >> 8) & 0xFF, color_int & 0xFF
 
@@ -191,7 +181,7 @@ def add_colors(c1: int, c2: int) -> int:
     return color_rgb(min(255, r1 + r2), min(255, g1 + g2), min(255, b1 + b2))
 
 
-def set_square_in_frame(frame: List[int], c: int, r: int, color_val: int) -> None:
+def set_square_in_frame(frame: list[int], c: int, r: int, color_val: int) -> None:
     """Sets all physical LEDs belonging to square (c, r) in the frame buffer."""
     if 0 <= c < 8 and 0 <= r < 8:
         for idx in get_led_indices(r, c):
@@ -199,7 +189,7 @@ def set_square_in_frame(frame: List[int], c: int, r: int, color_val: int) -> Non
                 frame[idx] = color_val
 
 
-def blend_square_in_frame(frame: List[int], c: int, r: int, color_val: int, alpha: float) -> None:
+def blend_square_in_frame(frame: list[int], c: int, r: int, color_val: int, alpha: float) -> None:
     """Blends color_val into existing square LEDs in the frame buffer with opacity alpha."""
     if 0 <= c < 8 and 0 <= r < 8 and alpha > 0.0:
         for idx in get_led_indices(r, c):
@@ -213,9 +203,9 @@ def blend_square_in_frame(frame: List[int], c: int, r: int, color_val: int, alph
 # =============================================================================
 
 def _render_sub_trace(
-    path: List[Tuple[int, int]],
+    path: list[tuple[int, int]],
     sub_tau: float,
-    frame: List[int],
+    frame: list[int],
     trace_color: int,
     blend_arrival: bool,
 ) -> None:
@@ -255,9 +245,9 @@ def _render_sub_trace(
 
 
 def render_move_trace(
-    path: List[Tuple[int, int]],
+    path: list[tuple[int, int]],
     now: float,
-    frame: List[int],
+    frame: list[int],
     trace_color: int = COLOR_INT_MOVE_TRACE,
     period: float = MOVE_TRACE_PERIOD_S,
     blend_arrival: bool = True,
@@ -270,10 +260,10 @@ def render_move_trace(
 
 
 def render_castle_trace(
-    king_path: List[Tuple[int, int]],
-    rook_path: List[Tuple[int, int]],
+    king_path: list[tuple[int, int]],
+    rook_path: list[tuple[int, int]],
     now: float,
-    frame: List[int],
+    frame: list[int],
     trace_color: int = COLOR_INT_MOVE_TRACE,
     period: float = ANIM_CASTLE_PERIOD_S,
     blend_arrival: bool = True,
@@ -296,7 +286,7 @@ def render_castle_trace(
 # PROCEDURAL LIFECYCLE RENDERERS
 # =============================================================================
 
-def render_game_started(progress: float, frame: List[int], params: Dict[str, Any]) -> None:
+def render_game_started(progress: float, frame: list[int], params: dict[str, Any]) -> None:
     """
     GAME_STARTED animation:
     Choreographed, low-power color announcement and army ignition sequence.
@@ -362,7 +352,7 @@ def render_game_started(progress: float, frame: List[int], params: Dict[str, Any
     # Phase 3 (progress 0.70 -> 1.0): Battle Line Center Ignition
     if progress >= 0.70:
         p_center = (progress - 0.70) / 0.30
-        for (from_c, from_r), (to_c, to_r) in center_clash:
+        for (from_c, from_r), (_to_c, to_r) in center_clash:
             curr_r = from_r + (to_r - from_r) * min(1.0, p_center * 1.4)
             for r_cand in range(min(from_r, to_r), max(from_r, to_r) + 1):
                 dist = abs(r_cand - curr_r)
@@ -373,7 +363,7 @@ def render_game_started(progress: float, frame: List[int], params: Dict[str, Any
 
 
 def render_game_won(
-    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+    progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
     GAME_WON animation:
@@ -492,7 +482,7 @@ COLOR_INT_CHARRED_ASH = color_rgb(24, 2, 2)  # Fading charcoal ash
 
 
 def render_game_lost(
-    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+    progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
     GAME_LOST animation: "The Royal Cataclysm (Requiem for a Fallen Sovereign)"
@@ -654,7 +644,7 @@ def render_game_lost(
 
 
 def render_game_drawn(
-    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+    progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
     GAME_DRAWN animation:
@@ -682,7 +672,7 @@ def render_game_drawn(
 
 
 def render_board_ready(
-    progress: float, frame: List[int], params: Dict[str, Any], now: float = 0.0
+    progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
     BOARD_READY / SETUP_COMPLETE animation ("The Emerald Resonance Sweep"):
@@ -780,7 +770,7 @@ def render_board_ready(
 # File h: (7,1) -> (7,7)
 # Rank 8: (6,7) -> (0,7)
 # File a: (0,6) -> (0,1)
-PERIMETER_COORDS: List[Tuple[int, int]] = (
+PERIMETER_COORDS: list[tuple[int, int]] = (
     [(c, 0) for c in range(8)]
     + [(7, r) for r in range(1, 8)]
     + [(c, 7) for c in range(6, -1, -1)]
@@ -790,8 +780,8 @@ PERIMETER_COORDS: List[Tuple[int, int]] = (
 
 def render_seeking(
     now: float,
-    frame: List[int],
-    params: Dict[str, Any],
+    frame: list[int],
+    params: dict[str, Any],
     period: float = ANIM_SEEKING_PERIOD_S,
 ) -> None:
     """
@@ -846,11 +836,11 @@ COLOR_INT_ANALYSIS_CORE = 0x5000A0   # Royal Violet power-scaled
 COLOR_INT_ANALYSIS_PULSE = 0x009040  # Mint Emerald power-scaled
 COLOR_INT_ANALYSIS_ACCENT = 0x006090 # Cyan Azure power-scaled
 
-ANALYSIS_CORE_COORDS: List[Tuple[int, int]] = [
+ANALYSIS_CORE_COORDS: list[tuple[int, int]] = [
     (3, 3), (4, 3), (3, 4), (4, 4)
 ]
 
-ANALYSIS_ORBITAL_RING: List[Tuple[int, int]] = [
+ANALYSIS_ORBITAL_RING: list[tuple[int, int]] = [
     (2, 2), (3, 2), (4, 2), (5, 2),
     (5, 3), (5, 4), (5, 5),
     (4, 5), (3, 5), (2, 5),
@@ -860,8 +850,8 @@ ANALYSIS_ORBITAL_RING: List[Tuple[int, int]] = [
 
 def render_analysis_computing(
     now: float,
-    frame: List[int],
-    params: Optional[Dict[str, Any]] = None,
+    frame: list[int],
+    params: dict[str, Any] | None = None,
 ) -> None:
     """
     Renders the Analysis Computing Animation on the board during Stockfish evaluation:
@@ -932,15 +922,15 @@ class LifecycleAnimation:
     name: str
     duration: float
     start_time: float = field(default_factory=time.time)
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
 
-    def is_active(self, now: Optional[float] = None) -> bool:
+    def is_active(self, now: float | None = None) -> bool:
         """Returns True if the animation is currently running within its duration."""
         if now is None:
             now = time.time()
         return (now - self.start_time) < self.duration
 
-    def get_progress(self, now: Optional[float] = None) -> float:
+    def get_progress(self, now: float | None = None) -> float:
         """Returns progress fraction clamped between 0.0 and 1.0."""
         if now is None:
             now = time.time()
@@ -948,7 +938,7 @@ class LifecycleAnimation:
             return 1.0
         return max(0.0, min(1.0, (now - self.start_time) / self.duration))
 
-    def render(self, now: float, frame: List[int]) -> None:
+    def render(self, now: float, frame: list[int]) -> None:
         """Renders the current animation frame into the LED frame buffer."""
         progress = self.get_progress(now)
         anim_name = self.name.upper()
@@ -970,7 +960,7 @@ class LifecycleAnimation:
 
 
 def create_animation(
-    name: str, params: Optional[Dict[str, Any]] = None
+    name: str, params: dict[str, Any] | None = None
 ) -> LifecycleAnimation:
     """
     Animation factory creating configured LifecycleAnimation instances.
@@ -1006,10 +996,10 @@ def create_animation(
 
 
 def render_capture_aura(
-    target_sq: Tuple[int, int],
-    candidate_attackers: List[Tuple[int, int]],
+    target_sq: tuple[int, int],
+    candidate_attackers: list[tuple[int, int]],
     now: float,
-    frame: List[int],
+    frame: list[int],
     target_color: int = COLOR_INT_CAPTURE_AURA_TARGET,
     attacker_color: int = COLOR_INT_CAPTURE_AURA_ATTACKER,
 ) -> None:
@@ -1036,10 +1026,10 @@ def render_capture_aura(
 
 
 def render_guardrail_mismatch(
-    missing_pieces: List[Tuple[int, int]],
-    unexpected_pieces: List[Tuple[int, int]],
+    missing_pieces: list[tuple[int, int]],
+    unexpected_pieces: list[tuple[int, int]],
     now: float,
-    frame: List[int],
+    frame: list[int],
     missing_color: int = COLOR_INT_GUARDRAIL_MISSING,
     unexpected_color: int = COLOR_INT_GUARDRAIL_UNEXPECTED,
 ) -> None:
@@ -1067,10 +1057,10 @@ def render_guardrail_mismatch(
 
 def render_opponent_disconnected(
     now: float,
-    frame: List[int],
-    opponent_gone_info: Dict[str, Any],
+    frame: list[int],
+    opponent_gone_info: dict[str, Any],
     my_color: str,
-    opponent_king_sq: Optional[Tuple[int, int]] = None,
+    opponent_king_sq: tuple[int, int] | None = None,
 ) -> None:
     """
     Renders visual alerts on the physical board when the opponent disconnects:

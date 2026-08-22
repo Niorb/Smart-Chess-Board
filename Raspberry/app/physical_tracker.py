@@ -18,10 +18,15 @@ from app.path_interpolator import get_castle_rook_move, is_castle_uci
 logger = logging.getLogger("smart-chess-app.tracker")
 
 
+def _sensor_polarity(color: int) -> int:
+    """Returns the expected sensor polarity for a piece color (White=-1, Black=+1)."""
+    return -1 if color == chess.WHITE else 1
+
+
 class PhysicalMoveTracker:
     """
     State tracker for physical chess piece manipulations.
-    
+
     Coordinates:
       - from_c, to_c: File index 0..7 (a=0 .. h=7)
       - from_r, to_r: Rank index 0..7 (Rank 1=0 .. Rank 8=7)
@@ -77,7 +82,7 @@ class PhysicalMoveTracker:
         """
         Detects when opponent makes a move online and sets pending_opponent_move.
         Also clears in-flight moves once reflected in engine.
-        
+
         Args:
             engine: LichessEngine or chess engine instance containing .game_info, .my_color, .board.
         """
@@ -156,11 +161,11 @@ class PhysicalMoveTracker:
     ) -> tuple[int, int, int, int, str | None] | None:
         """
         Evaluates physical board state transitions against the active chess engine position.
-        
+
         Args:
             physical_state: 2D list [cols][rows] of current magnetic sensor states (-1, 0, 1).
             engine: Active chess engine containing .board and .my_color.
-            
+
         Returns:
             Tuple (from_file, from_rank, to_file, to_rank, promotion) in 1-indexed format (1..8)
             if a valid move was executed, or None otherwise.
@@ -275,7 +280,6 @@ class PhysicalMoveTracker:
                 return None
 
         turn_color = board.turn  # chess.WHITE (True) or chess.BLACK (False)
-        expected_polarity = -1 if turn_color == chess.WHITE else 1
 
         # Case A: No piece currently lifted -> Detect lift
         if self.lifted_square is None:
@@ -444,8 +448,10 @@ class PhysicalMoveTracker:
                 if existing_piece is None or (t_c, t_r) == self.pending_capture_target:
                     is_placed = (target_val != 0)
                 else:
-                    # Capture square where opponent piece was not pre-lifted
-                    is_placed = (target_val == expected_polarity or (target_val != 0 and target_val != (-1 if existing_piece.color == chess.WHITE else 1)))
+                    # Capture square where opponent piece was not pre-lifted:
+                    # occupied by anything except the opponent piece's own polarity
+                    opponent_polarity = _sensor_polarity(existing_piece.color)
+                    is_placed = (target_val != 0 and target_val != opponent_polarity)
 
                 if is_placed:
                     is_capture = (existing_piece is not None or (t_c, t_r) == self.pending_capture_target)
@@ -457,22 +463,17 @@ class PhysicalMoveTracker:
                     }
 
                     # Check for castling move to prompt the corresponding Rook movement
+                    # (geometric check only: a King moving two files horizontally is castling in standard chess)
                     castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
-                    if castle_rook is not None or any(
-                        m.from_square == sq_from and m.to_square == sq_to and board.is_castling(m)
-                        for m in board.legal_moves
-                    ):
-                        if castle_rook is None:
-                            castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
-                        if castle_rook:
-                            self.pending_castling_rook = {
-                                "from": castle_rook[0],
-                                "to": castle_rook[1],
-                                "start_time": time.time(),
-                            }
-                            logger.info(
-                                f"Player executed King castling move. Prompting Rook movement: {castle_rook[0]} -> {castle_rook[1]}"
-                            )
+                    if castle_rook is not None:
+                        self.pending_castling_rook = {
+                            "from": castle_rook[0],
+                            "to": castle_rook[1],
+                            "start_time": time.time(),
+                        }
+                        logger.info(
+                            f"Player executed King castling move. Prompting Rook movement: {castle_rook[0]} -> {castle_rook[1]}"
+                        )
 
                     # Check for pawn promotion
                     promo_moves = [
@@ -505,7 +506,7 @@ class PhysicalMoveTracker:
 
                     sq = chess.square(c, r)
                     piece = board.piece_at(sq)
-                    
+
                     # If previously empty square is now occupied
                     if piece is None and physical_state[c][r] != 0:
                         self.invalid_placement = (c, r)

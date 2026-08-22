@@ -20,7 +20,6 @@ from app.config import (
 )
 from app.led_animations import (
     PERIMETER_COORDS,
-    LifecycleAnimation,
     add_colors,
     blend_colors,
     color_rgb,
@@ -39,11 +38,7 @@ from app.led_animations import (
 from app.led_helpers import (
     COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_MOVE_TRACE,
-    COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
-    COLOR_INT_SEEKING_BODY,
-    COLOR_INT_SEEKING_HEAD,
-    COLOR_INT_SEEKING_TAIL,
     get_led_indices,
 )
 
@@ -416,12 +411,11 @@ def test_scale_color_gamma():
 def test_night_mode_color_palette_distinctness():
     """Verify Night Mode colors are bright and distinct from deep moonlight sapphire floor."""
     from app.config import (
-        COLOR_NIGHT_MODE,
-        COLOR_NIGHT_LEGAL_TARGET,
         COLOR_NIGHT_LEGAL_CAPTURE,
+        COLOR_NIGHT_LEGAL_TARGET,
+        COLOR_NIGHT_MODE,
         COLOR_NIGHT_TURN_BLACK,
         COLOR_NIGHT_TURN_WHITE,
-        COLOR_NIGHT_OPPONENT_TO,
     )
     # Legal target in Night mode must have high green/emerald component to contrast with blue
     r, g, b = COLOR_NIGHT_LEGAL_TARGET
@@ -445,7 +439,7 @@ def test_night_mode_color_palette_distinctness():
 
 def test_night_mode_seeking_and_animations():
     """Verify procedural animations correctly adapt to Night Mode parameter."""
-    from app.led_animations import render_seeking, render_game_drawn, render_game_started
+    from app.led_animations import render_game_drawn, render_game_started, render_seeking
     from app.led_helpers import COLOR_INT_NIGHT_MODE
 
     # Seeking in night mode

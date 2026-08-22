@@ -1,11 +1,9 @@
 import os
 import sys
-import time
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import pytest
 from app.gesture_engine import CenterRoyalGateGesture
 
 
@@ -121,8 +119,8 @@ def test_center_royal_gate_triggers_start_analysis_mode_async():
     - execute_completion triggers arrival flash on e2 & d2.
     - Dispatches start_analysis_mode() on state_manager.
     """
-    from unittest.mock import AsyncMock
     import asyncio
+    from unittest.mock import AsyncMock
 
     async def _test():
         mock_mgr = MockStateManager()

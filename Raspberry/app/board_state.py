@@ -42,34 +42,55 @@ try:
 except ImportError:
     serial = None
 
+from board_hardware import (
+    BOARD_COLS,
+    BOARD_ROWS,
+    apply_debounce,
+    clear_baseline_history,
+    get_latest_detection_state,
+    init_mux_pins,
+    scan_board,
+    settings,
+)
+
+from app.coach_engine import (
+    TIER_BEST_MAX_LOSS,
+    TIER_GOOD_MAX_LOSS,
+    TIER_INACCURACY_MAX_LOSS,
+    MoveQuality,
+    coach_engine,
+)
 from app.config import (
     ANIM_MOVE_CONFIRM_DURATION_S,
     BAUD_RATE,
-    COLOR_NIGHT_TURN_BLACK,
-    COLOR_NIGHT_TURN_WHITE,
-    COLOR_TURN_BLACK,
-    COLOR_TURN_WHITE,
     MOVE_TRACE_PERIOD_S,
     NUM_LEDS,
     SERIAL_PORT,
 )
+from app.gesture_engine import (
+    PhysicalGestureEngine,
+)
+from app.gm_games import get_gm_game
+from app.led_animations import (
+    render_analysis_computing,
+    render_capture_aura,
+    render_castle_trace,
+    render_guardrail_mismatch,
+    render_move_trace,
+    render_opponent_disconnected,
+    scale_color,
+)
 from app.led_helpers import (
     COLOR_INT_AZURE,
-    COLOR_INT_BOARD_READY_AMBIENT,
-    COLOR_INT_BOARD_READY_PRIMARY,
     COLOR_INT_CAPTURE_AURA_ATTACKER,
     COLOR_INT_CAPTURE_AURA_TARGET,
     COLOR_INT_CAPTURE_CONFIRM,
     COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_CHECK,
-    COLOR_INT_DRAW_BLUE,
-    COLOR_INT_DRAW_WHITE,
     COLOR_INT_EVAL_BLACK,
-    COLOR_INT_EVAL_NEUTRAL,
     COLOR_INT_EVAL_WHITE,
     COLOR_INT_GUARDRAIL_MISSING,
     COLOR_INT_GUARDRAIL_UNEXPECTED,
-    COLOR_INT_HIGHLIGHT,
     COLOR_INT_ILLEGAL,
     COLOR_INT_LEGAL_CAPTURE,
     COLOR_INT_LEGAL_TARGET,
@@ -81,14 +102,11 @@ from app.led_helpers import (
     COLOR_INT_MOVE_INACCURACY,
     COLOR_INT_MOVE_TRACE,
     COLOR_INT_NIGHT_AZURE,
-    COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
-    COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
     COLOR_INT_NIGHT_CAPTURE_AURA_ATTACKER,
     COLOR_INT_NIGHT_CAPTURE_AURA_TARGET,
     COLOR_INT_NIGHT_CAPTURE_TRACE,
     COLOR_INT_NIGHT_CHECK,
     COLOR_INT_NIGHT_EVAL_BLACK,
-    COLOR_INT_NIGHT_EVAL_NEUTRAL,
     COLOR_INT_NIGHT_EVAL_WHITE,
     COLOR_INT_NIGHT_GUARDRAIL_MISSING,
     COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED,
@@ -113,7 +131,6 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_TURN_WHITE,
     COLOR_INT_OFF,
     COLOR_INT_OPPONENT_CAPTURE,
-    COLOR_INT_OPPONENT_DISCONNECTED,
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
     COLOR_INT_PIECE_LIFTED,
@@ -127,35 +144,29 @@ from app.led_helpers import (
     get_led_indices,
     init_strip,
 )
-from app.coach_engine import MoveQuality, coach_engine
-from app.led_animations import (
-    blend_colors,
-    render_analysis_computing,
-    render_castle_trace,
-    render_capture_aura,
-    render_guardrail_mismatch,
-    render_move_trace,
-    render_opponent_disconnected,
-    scale_color,
-)
-from app.gesture_engine import (
-    PhysicalGestureEngine,
-)
-from app.gm_games import get_all_gm_games, get_gm_game
 from app.lichess_engine import lichess_engine
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import GameGuardrailResult, SetupResult, SetupValidator
-from board_hardware import (
-    BOARD_COLS,
-    BOARD_ROWS,
-    apply_debounce,
-    init_mux_pins,
-    scan_board,
-    settings,
-)
 
 logger = logging.getLogger("smart-chess-app.state")
+
+
+class AnalysisEngineAdapter:
+    """Adapts an arbitrary chess.Board to the engine interface expected by PhysicalMoveTracker."""
+
+    def __init__(self, board: chess.Board):
+        self.board = board
+        self.my_color = "white" if board.turn == chess.WHITE else "black"
+        self.game_info = {}
+
+
+# Shared immutable-ish sync targets (identity-stable so broadcast digests can detect change)
+EMPTY_DIGITAL_GRID = [["." for _ in range(8)] for _ in range(8)]
+ANALYSIS_CLOCKS = {"white": "∞", "black": "∞"}
+IDLE_CLOCKS = {"white": "?", "black": "?"}
+
+BROADCAST_HEARTBEAT_S = 0.25
 
 
 class BoardStateManager:
@@ -163,11 +174,10 @@ class BoardStateManager:
         self.serial_lock = threading.RLock()
         self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         self.raw_analog_values = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-        self.digital_state = [["." for _ in range(8)] for _ in range(8)]
+        self.digital_state = [["." for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)]
         self.game_status = "IDLE"  # IDLE, SEEKING, PLAYING, GAME_OVER, SETUP, ANALYSIS
         self.virtual_only: bool = False
         self.clocks = {"white": "?", "black": "?"}
-        self.highlighted_square = None
         self.led_test_active = False
         self.testing_led_index = -1
         self.is_calibrating: bool = False
@@ -177,6 +187,16 @@ class BoardStateManager:
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
         self.arrival_flash: dict | None = None
         self.guardrail_result: GameGuardrailResult | None = None
+
+        # Background asyncio tasks (strong references prevent mid-flight GC)
+        self._bg_tasks: set[asyncio.Task] = set()
+        # Update-loop bookkeeping
+        self._calibration_reset_pending = False
+        self._prev_gesture_status = "IDLE"
+        self._last_restoration_sig = None
+        self._cached_anchor_key = None
+        self._cached_anchor_board = None
+        self._analysis_grid_fen = None
 
         # Analysis & Training Mode State
         self.analysis_submode: str = "review"  # "review" | "blunder_drill" | "gm_relive"
@@ -238,6 +258,13 @@ class BoardStateManager:
             logger.error(f"LED strip init failed in BoardStateManager: {e}")
             self.strip = None
 
+    def _spawn_task(self, coro) -> asyncio.Task:
+        """Schedules a background task keeping a strong reference until it completes."""
+        task = asyncio.get_running_loop().create_task(coro)
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+        return task
+
     def trigger_arrival_flash(
         self,
         c: int,
@@ -266,7 +293,6 @@ class BoardStateManager:
         """
         try:
             from app.led_animations import create_animation
-            from board_hardware import settings
             if self.frozen_baselines is None and "baselines" in settings:
                 self.frozen_baselines = [list(col) for col in settings["baselines"]]
                 logger.info("Snapshotted and froze sensor baselines prior to lifecycle animation.")
@@ -299,6 +325,8 @@ class BoardStateManager:
                 if res:
                     self.physical_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
                     self.move_tracker.reset()
+                    # Signal the update loop to rebuild its debounce buffers (thread-safe handoff)
+                    self._calibration_reset_pending = True
                 return res
             finally:
                 self.is_calibrating = False
@@ -321,6 +349,7 @@ class BoardStateManager:
                 res = calibrate_board_with_pieces(self.h, self.ser)
                 if res:
                     self.move_tracker.reset()
+                    self._calibration_reset_pending = True
                 return res
             finally:
                 self.is_calibrating = False
@@ -331,66 +360,44 @@ class BoardStateManager:
                         logger.error(f"Error turning off LEDs after calibration with pieces: {e}")
 
     def get_physical_payload(self):
-        from board_hardware import get_latest_detection_state, settings
-        setup_data = (
-            self.setup_result.to_dict()
-            if hasattr(self, "setup_result") and self.setup_result
-            else self.setup_validator.validate(self.physical_state).to_dict()
-        )
         detection = get_latest_detection_state()
+        tracker_data = self.move_tracker.to_dict()
+        if self.arrival_flash:
+            tracker_data["arrival_flash"] = {
+                "square": list(self.arrival_flash["square"]),
+                "start_time": self.arrival_flash["start_time"],
+                "duration": self.arrival_flash["duration"],
+                "is_capture": self.arrival_flash["is_capture"],
+            }
         return {
             "rows": BOARD_ROWS,
             "cols": BOARD_COLS,
             "grid": self.physical_state,
             "adc": self.raw_analog_values,
             "baselines": settings.get("baselines"),
-            "highlighted_square": self.highlighted_square,
             "led_test_active": self.led_test_active,
             "testing_led_index": self.testing_led_index,
             "disabled_squares": settings.get("disabled_squares", []),
             "virtual_only": self.virtual_only,
-            "setup": setup_data,
+            "setup": (
+                self.setup_result.to_dict()
+                if hasattr(self, "setup_result") and self.setup_result
+                else self.setup_validator.validate(self.physical_state).to_dict()
+            ),
             "pieces_detected": detection.get("pieces_detected", False),
             "detected_starting_count": detection.get("detected_starting_count", 0),
             "pieces_mode": settings.get("pieces_mode", "auto"),
             "effective_pieces_mode": detection.get("effective_pieces_mode", False),
             "led_intensity": settings.get("led_intensity", 100),
             "night_mode": settings.get("night_mode", False),
-            "lifted_square": list(self.move_tracker.lifted_square) if self.move_tracker.lifted_square else None,
-            "legal_targets": [list(sq) for sq in self.move_tracker.legal_targets],
-            "legal_captures": [list(sq) for sq in self.move_tracker.legal_captures],
-            "pending_capture_target": list(self.move_tracker.pending_capture_target) if self.move_tracker.pending_capture_target else None,
-            "capture_candidate_attackers": [list(sq) for sq in self.move_tracker.capture_candidate_attackers],
+            **tracker_data,
             "guardrail": (
                 self.guardrail_result.to_dict()
                 if self.guardrail_result is not None
                 else None
             ),
-            "invalid_placement": list(self.move_tracker.invalid_placement) if self.move_tracker.invalid_placement else None,
-            "pending_opponent_move": self.move_tracker.pending_opponent_move,
-            "pending_castling_rook": self.move_tracker.pending_castling_rook,
-            "arrival_flash": (
-                {
-                    "square": list(self.arrival_flash["square"] if self.arrival_flash else self.move_tracker.arrival_flash["square"]),
-                    "start_time": (self.arrival_flash or self.move_tracker.arrival_flash)["start_time"],
-                    "duration": (self.arrival_flash or self.move_tracker.arrival_flash)["duration"],
-                    "is_capture": (self.arrival_flash or self.move_tracker.arrival_flash)["is_capture"],
-                }
-                if (self.arrival_flash or (hasattr(self, "move_tracker") and self.move_tracker and self.move_tracker.arrival_flash))
-                else None
-            ),
             "active_animation": self.active_animation.name if (self.active_animation and self.active_animation.is_active()) else None,
             "custom_trace_path": [list(sq) for sq in self.custom_trace_path] if self.custom_trace_path else None,
-            "in_flight_move": (
-                {
-                    "from": list(self.move_tracker.in_flight_move["from"]),
-                    "to": list(self.move_tracker.in_flight_move["to"]),
-                    "uci": self.move_tracker.in_flight_move["uci"],
-                    "timestamp": self.move_tracker.in_flight_move.get("timestamp", 0.0),
-                }
-                if self.move_tracker.in_flight_move
-                else None
-            ),
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
         }
 
@@ -407,6 +414,7 @@ class BoardStateManager:
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
+        self._analysis_grid_fen = None
         self.analysis_active_board = chess.Board()
 
         if moves_uci is not None and len(moves_uci) > 0:
@@ -430,10 +438,6 @@ class BoardStateManager:
         else:
             settings_moves = []
             try:
-                try:
-                    from app.board_hardware import settings
-                except ImportError:
-                    from board_hardware import settings
                 settings_moves = settings.get("last_game_moves", [])
             except Exception:
                 settings_moves = []
@@ -482,6 +486,7 @@ class BoardStateManager:
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
+        self._last_restoration_sig = None
 
         # Reconstruct active board position
         self.analysis_active_board = chess.Board()
@@ -508,6 +513,7 @@ class BoardStateManager:
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
+        self._last_restoration_sig = None
         return self.get_analysis_payload()
 
     def start_blunder_drill(self, index: int = 0) -> dict[str, Any]:
@@ -586,7 +592,10 @@ class BoardStateManager:
 
         if uci.lower() == gm_move.lower():
             points = 100
-            commentary = game.annotations.get(ply) if game else "Matched Grandmaster move!"
+            commentary = (
+                (game.annotations.get(ply) if game else None)
+                or "Matched Grandmaster move!"
+            )
             self.analysis_gm_score += points
             self.analysis_gm_guesses.append({
                 "ply": ply,
@@ -704,6 +713,7 @@ class BoardStateManager:
                 self.analysis_branch_moves.append(uci)
                 self.analysis_has_advanced = True
                 self.move_tracker.clear_in_flight_move()
+                self._last_restoration_sig = None
                 coach_engine.request_analysis(self.analysis_active_board)
                 if len(uci) >= 4:
                     to_c = ord(uci[2]) - ord('a')
@@ -722,6 +732,28 @@ class BoardStateManager:
         except Exception as e:
             logger.error(f"Error executing analysis move {uci}: {e}")
             return {"action": "error", "error": str(e)}
+
+    def _get_anchor_board(self) -> chess.Board:
+        """Reconstructs (with caching) the board position at the analysis divergence anchor ply."""
+        target_ply = min(self.analysis_anchor_ply, len(self.analysis_game_moves))
+        key = (target_ply, tuple(self.analysis_game_moves))
+        if self._cached_anchor_key == key and self._cached_anchor_board is not None:
+            return self._cached_anchor_board.copy()
+
+        anchor_board = chess.Board()
+        for idx in range(target_ply):
+            try:
+                m_str = self.analysis_game_moves[idx].strip()
+                if len(m_str) in (4, 5) and m_str[:2].isalnum():
+                    anchor_board.push_uci(m_str)
+                else:
+                    anchor_board.push_san(m_str)
+            except Exception:
+                pass
+
+        self._cached_anchor_key = key
+        self._cached_anchor_board = anchor_board
+        return anchor_board.copy()
 
     def _check_analysis_board_restoration(self) -> bool:
         """
@@ -746,18 +778,14 @@ class BoardStateManager:
         ):
             return False
 
-        # Reconstruct the anchor board from the game timeline
-        anchor_board = chess.Board()
-        target_ply = min(self.analysis_anchor_ply, len(self.analysis_game_moves))
-        for idx in range(target_ply):
-            try:
-                m_str = self.analysis_game_moves[idx].strip()
-                if len(m_str) in (4, 5) and m_str[:2].isalnum():
-                    anchor_board.push_uci(m_str)
-                else:
-                    anchor_board.push_san(m_str)
-            except Exception:
-                pass
+        # Skip re-evaluation entirely while the physical matrix is unchanged since the last check
+        state_sig = tuple(map(tuple, self.physical_state))
+        if state_sig == self._last_restoration_sig:
+            return False
+        self._last_restoration_sig = state_sig
+
+        # Reconstruct the anchor board from the game timeline (cached)
+        anchor_board = self._get_anchor_board()
 
         # Validate if current physical board exactly matches the anchor board
         res = self.setup_validator.validate_game_state(self.physical_state, anchor_board, None)
@@ -840,16 +868,14 @@ class BoardStateManager:
             "fen": self.analysis_active_board.fen(),
         }
 
-    def get_full_state(self, diag_info=None):
-        """Constructs a complete serialized snapshot of the full system state."""
-        from board_hardware import settings
+    def _build_coach_payload(self) -> dict[str, Any]:
         is_ai = getattr(lichess_engine, "is_ai_game", False)
         coach_ai_only = settings.get("coach_ai_only", True)
         fair_play_active = coach_ai_only and not is_ai
         coach_hints_enabled = settings.get("coach_hints_enabled", True)
         eval_bar_enabled = settings.get("eval_bar_enabled", True)
 
-        coach_payload = {
+        return {
             "enabled": bool((coach_hints_enabled or eval_bar_enabled) and not fair_play_active),
             "eval_bar_enabled": bool(eval_bar_enabled and not fair_play_active),
             "coach_hints_enabled": bool(coach_hints_enabled and not fair_play_active),
@@ -858,14 +884,9 @@ class BoardStateManager:
             "evaluation": None,
             "lifted_move_hints": [],
         }
-        if diag_info is None:
-            diag_info = {
-                "status": "OK" if (self.ser or self.virtual_only) else "DISCONNECTED",
-                "last_raw_line": "",
-                "timeouts": 0,
-                "errors": 0,
-            }
 
+    def _build_broadcast_payload(self, diag_info) -> dict[str, Any]:
+        """Constructs the unified WebSocket broadcast payload."""
         return {
             "status": self.game_status,
             "virtual_only": self.virtual_only,
@@ -874,15 +895,25 @@ class BoardStateManager:
             "clocks": self.clocks,
             "my_color": lichess_engine.my_color,
             "game": lichess_engine.get_game_payload(),
-            "coach": coach_payload,
+            "coach": self._build_coach_payload(),
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
             "analysis": self.get_analysis_payload(),
             "diagnostics": diag_info,
         }
 
-    def get_health_status(self):
-        from board_hardware import settings
+    def get_full_state(self, diag_info=None):
+        """Constructs a complete serialized snapshot of the full system state."""
+        if diag_info is None:
+            diag_info = {
+                "status": "OK" if (self.ser or self.virtual_only) else "DISCONNECTED",
+                "last_raw_line": "",
+                "timeouts": 0,
+                "errors": 0,
+            }
 
+        return self._build_broadcast_payload(diag_info)
+
+    def get_health_status(self):
         serial_status = "CONNECTED" if (self.ser is not None and getattr(self.ser, "is_open", True)) else "DISCONNECTED"
         gpio_status = "CONNECTED" if self.h is not None else "DISCONNECTED"
         led_status = "CONNECTED" if self.strip is not None else "DISCONNECTED"
@@ -935,7 +966,6 @@ class BoardStateManager:
         1. Base Layer (IDLE/SETUP): Starting squares missing pieces / misplaced pieces.
         2. Game Layer (PLAYING): King check, pending opponent move (with animated comet trace), lifted piece & legal target dots.
         3. Custom Trace Diagnostic: custom_trace_path override.
-        4. Diagnostic Override: highlighted_square.
         """
         if (
             self.virtual_only
@@ -946,7 +976,6 @@ class BoardStateManager:
             return
 
         try:
-            from board_hardware import settings
             now = time.time()
             col_mode = settings.get("col_mode", "auto")
             manual_col = settings.get("manual_col", 0)
@@ -991,18 +1020,59 @@ class BoardStateManager:
                     if 0 <= idx < NUM_LEDS:
                         frame[idx] = color_val
 
+            def flush_frame():
+                for idx, color in enumerate(frame):
+                    self.strip.setPixelColor(idx, color)
+                self.strip.show()
+
+            def apply_arrival_flash(source: dict) -> bool:
+                """Renders an exponential-decay confirmation flash. Returns False when expired."""
+                flash_squares = source.get("squares") or [source["square"]]
+                elapsed = now - source["start_time"]
+                dur = source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
+                if not (0 <= elapsed < dur):
+                    return False
+                progress = elapsed / dur
+                intensity = math.exp(-3.5 * progress) * (1.0 - progress)
+                flash_color = (
+                    COLOR_INT_CAPTURE_CONFIRM if source.get("is_capture", False) else COLOR_INT_MOVE_CONFIRM
+                )
+                for f_c, f_r in flash_squares:
+                    set_square_leds(f_c, f_r, scale_color(flash_color, intensity))
+                return True
+
+            def render_eval_bar(win_chance: float):
+                n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
+                for r in range(BOARD_ROWS):
+                    set_square_leds(7, r, c_eval_white if r < n_white else c_eval_black)
+
+            def render_trace(from_c, from_r, to_c, to_r, square_color, trace_color_val):
+                """Renders from/to highlights plus comet trace, handling castling rook paths."""
+                castle_rook = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                if castle_rook:
+                    r_from, r_to = castle_rook
+                    set_square_leds(from_c, from_r, square_color)
+                    set_square_leds(to_c, to_r, square_color)
+                    set_square_leds(r_from[0], r_from[1], square_color)
+                    set_square_leds(r_to[0], r_to[1], square_color)
+                    king_path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                    rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                    render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_color_val, blend_arrival=True)
+                else:
+                    set_square_leds(from_c, from_r, square_color)
+                    set_square_leds(to_c, to_r, square_color)
+                    path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                    render_move_trace(path, now, frame, trace_color=trace_color_val, blend_arrival=True)
+
             # Layer 0: Lifecycle Animation Override (High priority full-board)
             if self.active_animation is not None:
                 if self.active_animation.is_active(now):
                     self.active_animation.render(now, frame)
-                    for idx, color in enumerate(frame):
-                        self.strip.setPixelColor(idx, color)
-                    self.strip.show()
+                    flush_frame()
                     return
                 else:
                     self.active_animation = None
                     if self.frozen_baselines is not None:
-                        from board_hardware import clear_baseline_history
                         settings["baselines"] = [list(col) for col in self.frozen_baselines]
                         clear_baseline_history()
                         self.frozen_baselines = None
@@ -1012,44 +1082,28 @@ class BoardStateManager:
             if self.game_status == "SEEKING":
                 from app.led_animations import render_seeking
                 render_seeking(now, frame, {"night_mode": night_mode})
-                for idx, color in enumerate(frame):
-                    self.strip.setPixelColor(idx, color)
-                self.strip.show()
+                flush_frame()
                 return
 
             # Layer 0.6: Continuous Analysis Computing Animation
             if self.game_status == "ANALYSIS" and getattr(self, "analysis_is_loading", False):
                 render_analysis_computing(now, frame, {"night_mode": night_mode})
                 # Apply active arrival flash if active (e.g. from closing gesture)
-                if self.arrival_flash:
-                    flash_source = self.arrival_flash
-                    flash_squares = flash_source.get("squares") or [flash_source["square"]]
-                    flash_t0 = flash_source["start_time"]
-                    flash_dur = flash_source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
-                    is_capture = flash_source.get("is_capture", False)
-                    elapsed = now - flash_t0
-                    if 0 <= elapsed < flash_dur:
-                        progress = elapsed / flash_dur
-                        intensity = math.exp(-3.5 * progress) * (1.0 - progress)
-                        flash_color = COLOR_INT_CAPTURE_CONFIRM if is_capture else COLOR_INT_MOVE_CONFIRM
-                        for f_c, f_r in flash_squares:
-                            set_square_leds(f_c, f_r, scale_color(flash_color, intensity))
-                    else:
-                        self.arrival_flash = None
-                for idx, color in enumerate(frame):
-                    self.strip.setPixelColor(idx, color)
-                self.strip.show()
+                if self.arrival_flash and not apply_arrival_flash(self.arrival_flash):
+                    self.arrival_flash = None
+                flush_frame()
                 return
 
             # Layer 1: Setup / Idle Board Validation & Physical Gesture Overlay
             if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)
-                if not self.setup_result.is_setup_ready:
+                setup_result = self.setup_result
+                if not setup_result.is_setup_ready:
                     # Missing starting pieces
-                    for c, r in self.setup_result.missing_white + self.setup_result.missing_black:
+                    for c, r in setup_result.missing_white + setup_result.missing_black:
                         set_square_leds(c, r, c_setup_missing)
                     # Misplaced pieces
-                    for c, r in self.setup_result.misplaced_pieces:
+                    for c, r in setup_result.misplaced_pieces:
                         set_square_leds(c, r, c_setup_misplaced)
                 elif self.active_animation is None:
                     # Dynamic Gesture Starter Pawns Indication:
@@ -1077,11 +1131,8 @@ class BoardStateManager:
                     fen = lichess_engine.board.fen()
                     cached_eval = coach_engine.get_cached_evaluation(fen)
                     win_chance = cached_eval.win_chance if cached_eval else 50.0
-                    n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
                     # File h corresponds to column/file index 7 (Strip 2, row 7)
-                    for r in range(8):
-                        eval_col = c_eval_white if r < n_white else c_eval_black
-                        set_square_leds(7, r, eval_col)
+                    render_eval_bar(win_chance)
 
                 # 1. Opponent Move Indication & Animated Trace
                 if self.move_tracker.pending_opponent_move:
@@ -1233,10 +1284,7 @@ class BoardStateManager:
 
                     if curr_eval:
                         win_chance = curr_eval.get("win_chance", 50.0) if isinstance(curr_eval, dict) else curr_eval.win_chance
-                        n_white = min(8, max(0, round((win_chance / 100.0) * 8)))
-                        for r in range(8):
-                            eval_col = c_eval_white if r < n_white else c_eval_black
-                            set_square_leds(7, r, eval_col)
+                        render_eval_bar(win_chance)
 
                 # 1. Sub-mode specific LED illumination
                 if self.analysis_submode == "review":
@@ -1292,11 +1340,11 @@ class BoardStateManager:
                             delta_cp = played_info.get("delta_cp", 0)
                             classification = played_info.get("classification", "")
                             if not classification:
-                                if delta_cp <= 15:
+                                if delta_cp <= TIER_BEST_MAX_LOSS:
                                     classification = "best"
-                                elif delta_cp <= 60:
+                                elif delta_cp <= TIER_GOOD_MAX_LOSS:
                                     classification = "good"
-                                elif delta_cp <= 150:
+                                elif delta_cp <= TIER_INACCURACY_MAX_LOSS:
                                     classification = "inaccuracy"
                                 else:
                                     classification = "blunder"
@@ -1307,56 +1355,29 @@ class BoardStateManager:
                                 t_c = ord(curr_move[2]) - ord('a')
                                 t_r = int(curr_move[3]) - 1
 
-                                castle_rook = get_castle_rook_move(f_c, f_r, t_c, t_r)
-
-                                # Rule A: delta_cp <= 60 or classification in ("best", "good")
-                                is_rule_a = (delta_cp <= 60) or (classification in ("best", "good"))
+                                # Rule A: within GOOD tier or classification in ("best", "good")
+                                is_rule_a = (delta_cp <= TIER_GOOD_MAX_LOSS) or (classification in ("best", "good"))
 
                                 if is_rule_a:
-                                    # Best (delta_cp <= 15 or classification == "best"): Mint Emerald
-                                    # Good (15 < delta_cp <= 60 or classification == "good"): Cyan Azure
-                                    if delta_cp <= 15 or classification == "best":
+                                    # Best (within BEST tier or classification == "best"): Mint Emerald
+                                    # Good (BEST < delta <= GOOD tier or classification == "good"): Cyan Azure
+                                    if delta_cp <= TIER_BEST_MAX_LOSS or classification == "best":
                                         trace_col = c_mint_emerald
                                     else:
                                         trace_col = c_azure
-
-                                    if castle_rook:
-                                        r_from, r_to = castle_rook
-                                        set_square_leds(f_c, f_r, trace_col)
-                                        set_square_leds(t_c, t_r, trace_col)
-                                        set_square_leds(r_from[0], r_from[1], trace_col)
-                                        set_square_leds(r_to[0], r_to[1], trace_col)
-                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_col, blend_arrival=True)
-                                    else:
-                                        set_square_leds(f_c, f_r, trace_col)
-                                        set_square_leds(t_c, t_r, trace_col)
-                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                        render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                    render_trace(f_c, f_r, t_c, t_r, trace_col, trace_col)
                                     # Clean board: Do NOT suggest or show any alternative moves
                                 else:
                                     # Rule B: delta_cp > 60 or classification in ("inaccuracy", "blunder")
-                                    if classification == "inaccuracy" or (delta_cp <= 150 and classification != "blunder"):
+                                    if classification == "inaccuracy" or (
+                                        delta_cp <= TIER_INACCURACY_MAX_LOSS and classification != "blunder"
+                                    ):
                                         mistake_col = c_move_inacc
                                     else:
                                         mistake_col = c_move_blunder
 
                                     # Animate played move trajectory in mistake color
-                                    if castle_rook:
-                                        r_from, r_to = castle_rook
-                                        set_square_leds(f_c, f_r, mistake_col)
-                                        set_square_leds(t_c, t_r, mistake_col)
-                                        set_square_leds(r_from[0], r_from[1], mistake_col)
-                                        set_square_leds(r_to[0], r_to[1], mistake_col)
-                                        king_path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                        rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
-                                        render_castle_trace(king_path, rook_path, now, frame, trace_color=mistake_col, blend_arrival=True)
-                                    else:
-                                        set_square_leds(f_c, f_r, mistake_col)
-                                        set_square_leds(t_c, t_r, mistake_col)
-                                        path = interpolate_move_path(f_c, f_r, t_c, t_r)
-                                        render_move_trace(path, now, frame, trace_color=mistake_col, blend_arrival=True)
+                                    render_trace(f_c, f_r, t_c, t_r, mistake_col, mistake_col)
 
                                     # ALSO suggest the engine's best move:
                                     best_m = played_info.get("best_move")
@@ -1408,18 +1429,7 @@ class BoardStateManager:
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
                 if flash_source:
-                    flash_squares = flash_source.get("squares") or [flash_source["square"]]
-                    flash_t0 = flash_source["start_time"]
-                    flash_dur = flash_source.get("duration", ANIM_MOVE_CONFIRM_DURATION_S)
-                    is_capture = flash_source.get("is_capture", False)
-                    elapsed = now - flash_t0
-                    if 0 <= elapsed < flash_dur:
-                        progress = elapsed / flash_dur
-                        intensity = math.exp(-3.5 * progress) * (1.0 - progress)
-                        flash_color = COLOR_INT_CAPTURE_CONFIRM if is_capture else COLOR_INT_MOVE_CONFIRM
-                        for f_c, f_r in flash_squares:
-                            set_square_leds(f_c, f_r, scale_color(flash_color, intensity))
-                    else:
+                    if not apply_arrival_flash(flash_source):
                         if self.arrival_flash is flash_source:
                             self.arrival_flash = None
                         if hasattr(self, "move_tracker") and self.move_tracker.arrival_flash is flash_source:
@@ -1446,9 +1456,7 @@ class BoardStateManager:
                     set_square_leds(t_to_c, t_to_r, target_color)
                     render_move_trace(self.custom_trace_path, now, frame, trace_color=trace_color, blend_arrival=True)
 
-            for idx, color in enumerate(frame):
-                self.strip.setPixelColor(idx, color)
-            self.strip.show()
+            flush_frame()
         except Exception as e:
             logger.error(f"Error in physical LED update: {e}")
 
@@ -1457,7 +1465,6 @@ class BoardStateManager:
             return
 
         self.led_test_active = True
-        from board_hardware import settings, clear_baseline_history
         if self.frozen_baselines is None and "baselines" in settings:
             self.frozen_baselines = [list(col) for col in settings["baselines"]]
         logger.info("Starting sequential LED strip test (baselines frozen)...")
@@ -1488,14 +1495,12 @@ class BoardStateManager:
             logger.info("Sequential LED strip test completed.")
 
     def clear_all_leds(self):
-        """Forces all physical LEDs off and clears any highlighted square, active animation, custom trace, or arrival flash."""
-        self.highlighted_square = None
+        """Forces all physical LEDs off and clears any active animation, custom trace, or arrival flash."""
         self.arrival_flash = None
         if hasattr(self, "move_tracker") and self.move_tracker:
             self.move_tracker.arrival_flash = None
             self.move_tracker.pending_castling_rook = None
         if self.active_animation is not None and self.frozen_baselines is not None:
-            from board_hardware import settings, clear_baseline_history
             settings["baselines"] = [list(col) for col in self.frozen_baselines]
             clear_baseline_history()
             self.frozen_baselines = None
@@ -1512,280 +1517,346 @@ class BoardStateManager:
                 return False
         return True
 
-    async def update_loop(self, broadcast_callback):
-        """Background task to poll hardware/digital board and broadcast state."""
+    def _broadcast_digest(self, diag_info):
+        """Cheap change signature of everything the WebSocket payload exposes."""
+        mt = self.move_tracker
+        opp_gone = getattr(lichess_engine, "opponent_gone", None) or {}
+        eval_res = (
+            coach_engine.get_cached_evaluation(lichess_engine.board.fen())
+            if (self.game_status == "PLAYING" and getattr(lichess_engine, "board", None))
+            else None
+        )
+        return (
+            self.game_status,
+            self.virtual_only,
+            tuple(map(tuple, self.physical_state)),
+            id(self.digital_state),
+            str(self.clocks.get("white")),
+            str(self.clocks.get("black")),
+            lichess_engine.my_color,
+            getattr(lichess_engine, "is_ai_game", False),
+            getattr(lichess_engine, "game_status", None),
+            diag_info["status"],
+            diag_info["timeouts"],
+            mt.lifted_square,
+            len(mt.legal_targets),
+            bool(mt.pending_opponent_move),
+            bool(mt.pending_castling_rook),
+            bool(mt.pending_capture_target),
+            bool(mt.invalid_placement),
+            bool(mt.in_flight_move),
+            None if mt.arrival_flash is None else mt.arrival_flash["start_time"],
+            None if self.arrival_flash is None else self.arrival_flash["start_time"],
+            id(self.active_animation) if self.active_animation is not None else None,
+            self.analysis_current_ply if self.game_status == "ANALYSIS" else 0,
+            self.analysis_is_loading if self.game_status == "ANALYSIS" else False,
+            len(self.analysis_branch_moves),
+            self.analysis_submode if self.game_status == "ANALYSIS" else "",
+            opp_gone.get("gone", False),
+            opp_gone.get("claim_win_in", 0),
+            None if eval_res is None else (eval_res.score_cp, eval_res.mate, eval_res.win_chance),
+            getattr(self.gesture_engine, "is_active", False) if hasattr(self, "gesture_engine") else False,
+        )
+
+    async def update_loop(self, broadcast_callback, clients_provider=None):
+        """Background task to poll hardware/digital board and broadcast state.
+
+        broadcasts are event-driven: the full payload is sent whenever anything in
+        _broadcast_digest changes, plus a heartbeat at most every BROADCAST_HEARTBEAT_S.
+        Payload construction is skipped entirely when no WebSocket clients exist.
+        """
         raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         stable_count = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
         diag_info = {"status": "NO_HARDWARE", "last_raw_line": "", "timeouts": 0, "errors": 0}
+
+        last_digest = None
+        last_broadcast_mono = 0.0
 
         logger.info("Starting background state update loop.")
 
         try:
             while True:
-                # 1. Physical Hardware Scan (skip if in virtual-only mode)
-                if self.virtual_only:
-                    diag_info = {
-                        "status": "VIRTUAL_ONLY",
-                        "last_raw_line": "VIRTUAL_ONLY",
-                        "timeouts": 0,
-                        "errors": 0,
-                    }
-                elif self.ser and self.h:
-                    now_ts = time.time()
-                    is_animating = bool(
-                        (self.active_animation is not None and self.active_animation.is_active(now_ts))
-                        or self.led_test_active
-                    )
-                    is_piece_moving = bool(
-                        self.move_tracker.lifted_square is not None
-                        or self.move_tracker.in_flight_move is not None
-                    )
-                    freeze_baseline = is_animating or is_piece_moving
-                    raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, freeze_baseline)
-                    self.raw_analog_values = raw_matrix
-                    diag_info = scan_diag
-                    col_mode = settings.get("col_mode", "auto")
-                    manual_col = settings.get("manual_col", 0)
-
-                    # Instantly clear raw state, physical state, and stable counts for inactive columns
-                    for c in range(BOARD_COLS):
-                        if col_mode == "manual" and c != manual_col:
+                try:
+                    # Rebuild debounce buffers after a calibration reset them from another thread
+                    if self._calibration_reset_pending:
+                        self._calibration_reset_pending = False
+                        for c in range(BOARD_COLS):
                             for r in range(BOARD_ROWS):
                                 raw_state[c][r] = 0
-                                self.physical_state[c][r] = 0
                                 stable_count[c][r] = 0
 
-                    # During animations, suppress reading processing to prevent false lifts from voltage transients
-                    if not is_animating:
-                        debounce_thresh = settings.get("debounce_threshold", 2)
-                        apply_debounce(
-                            raw_state, self.physical_state, stable_count, debounce_thresh
+                    # 1. Physical Hardware Scan (skip if in virtual-only mode)
+                    if self.virtual_only:
+                        diag_info = {
+                            "status": "VIRTUAL_ONLY",
+                            "last_raw_line": "VIRTUAL_ONLY",
+                            "timeouts": 0,
+                            "errors": 0,
+                        }
+                    elif self.ser and self.h:
+                        now_ts = time.time()
+                        is_animating = bool(
+                            (self.active_animation is not None and self.active_animation.is_active(now_ts))
+                            or self.led_test_active
                         )
+                        is_piece_moving = bool(
+                            self.move_tracker.lifted_square is not None
+                            or self.move_tracker.in_flight_move is not None
+                        )
+                        freeze_baseline = is_animating or is_piece_moving
+                        raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, freeze_baseline)
+                        self.raw_analog_values = raw_matrix
+                        diag_info = scan_diag
+                        col_mode = settings.get("col_mode", "auto")
+                        manual_col = settings.get("manual_col", 0)
 
-                        # Physical Move Tracking during PLAYING state
-                        if self.game_status == "PLAYING":
-                            self.move_tracker.sync_game(lichess_engine)
-                            move_result = self.move_tracker.process_physical_state(
-                                self.physical_state, lichess_engine
+                        # Instantly clear raw state, physical state, and stable counts for inactive columns
+                        for c in range(BOARD_COLS):
+                            if col_mode == "manual" and c != manual_col:
+                                for r in range(BOARD_ROWS):
+                                    raw_state[c][r] = 0
+                                    self.physical_state[c][r] = 0
+                                    stable_count[c][r] = 0
+
+                        # During animations, suppress reading processing to prevent false lifts from voltage transients
+                        if not is_animating:
+                            debounce_thresh = settings.get("debounce_threshold", 2)
+                            apply_debounce(
+                                raw_state, self.physical_state, stable_count, debounce_thresh
                             )
-                            if move_result:
-                                from_f, from_r, to_f, to_r, promo = move_result
-                                logger.info(
-                                    f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
-                                )
 
-                                async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
-                                    try:
-                                        success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
-                                        if not success:
-                                            logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
-                                            self.move_tracker.clear_in_flight_move()
-                                    except Exception as err:
-                                        logger.error(f"Unexpected error dispatching move: {err}")
-                                        self.move_tracker.clear_in_flight_move()
-
-                                asyncio.create_task(
-                                    _dispatch_move_task(from_f, from_r, to_f, to_r, promo)
-                                )
-
-                            # Compute live guardrail synchronization status
-                            if getattr(lichess_engine, "board", None):
-                                self.guardrail_result = self.setup_validator.validate_game_state(
-                                    self.physical_state,
-                                    lichess_engine.board,
-                                    self.move_tracker,
-                                    lichess_engine.my_color,
-                                )
-                            else:
-                                self.guardrail_result = None
-                        elif self.game_status == "ANALYSIS":
-                            # Check physical starting position setup readiness
-                            setup_res = self.setup_validator.validate(self.physical_state)
-                            self.setup_result = setup_res
-
-                            # If analysis has been reviewed/progressed (or pieces were moved during analysis)
-                            # and the user puts all pieces back into the standard initial starting position:
-                            if (
-                                not getattr(self, "analysis_is_loading", False)
-                                and getattr(self, "analysis_has_advanced", False)
-                                and setup_res.is_setup_ready
-                                and getattr(self.move_tracker, "lifted_square", None) is None
-                                and getattr(self.move_tracker, "in_flight_move", None) is None
-                                and getattr(self.move_tracker, "pending_castling_rook", None) is None
-                            ):
-                                logger.info(
-                                    "Physical board fully reset to standard starting position after analysis. "
-                                    "Concluding analysis mode and transitioning to IDLE (ready for gestures)."
-                                )
-                                self.stop_analysis_mode()
-                                self.prev_setup_ready = True
-                                if hasattr(self, "gesture_engine"):
-                                    self.gesture_engine.reset()
-                                self.trigger_animation(
-                                    "BOARD_READY",
-                                    {"night_mode": bool(settings.get("night_mode", False))},
-                                )
-                                self.move_tracker.reset(self.physical_state)
-                                self.guardrail_result = None
-                            else:
-                                if not getattr(self, "analysis_is_loading", False):
-                                    if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
-                                        self.analysis_has_advanced = True
-
-                                # Auto-detect if physical board was restored to anchor position or earlier branch step
-                                if self.analysis_anchor_coord is not None:
-                                    self._check_analysis_board_restoration()
-
-                                # Physical Move Tracking during ANALYSIS mode
-                                class AnalysisEngineAdapter:
-                                    def __init__(self, board):
-                                        self.board = board
-                                        self.my_color = "white" if board.turn == chess.WHITE else "black"
-                                        self.game_info = {}
-
-                                adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                            # Physical Move Tracking during PLAYING state
+                            if self.game_status == "PLAYING":
+                                self.move_tracker.sync_game(lichess_engine)
                                 move_result = self.move_tracker.process_physical_state(
-                                    self.physical_state, adapter
+                                    self.physical_state, lichess_engine
                                 )
                                 if move_result:
                                     from_f, from_r, to_f, to_r, promo = move_result
-                                    from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                    to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                    uci = f"{from_sq}{to_sq}{promo or ''}"
-                                    logger.info(f"Physical analysis move detected: {uci}")
-                                    self.handle_analysis_move(uci)
+                                    logger.info(
+                                        f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                                    )
 
-                                if getattr(self, "analysis_active_board", None):
+                                    async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
+                                        try:
+                                            success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                                            if not success:
+                                                logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                                self.move_tracker.clear_in_flight_move()
+                                        except Exception as err:
+                                            logger.error(f"Unexpected error dispatching move: {err}")
+                                            self.move_tracker.clear_in_flight_move()
+
+                                    self._spawn_task(_dispatch_move_task(from_f, from_r, to_f, to_r, promo))
+
+                                # Compute live guardrail synchronization status
+                                if getattr(lichess_engine, "board", None):
                                     self.guardrail_result = self.setup_validator.validate_game_state(
                                         self.physical_state,
-                                        self.analysis_active_board,
+                                        lichess_engine.board,
                                         self.move_tracker,
-                                        adapter.my_color,
                                     )
                                 else:
                                     self.guardrail_result = None
-                        else:
-                            self.move_tracker.reset(self.physical_state)
-                            self.guardrail_result = None
-                            # Physical gesture evaluation during IDLE / GAME_OVER
-                            if hasattr(self, "gesture_engine"):
-                                self.gesture_engine.evaluate(self.physical_state, self.game_status)
+                            elif self.game_status == "ANALYSIS":
+                                # Check physical starting position setup readiness
+                                setup_res = self.setup_validator.validate(self.physical_state)
+                                self.setup_result = setup_res
 
-                            # Setup Ready Edge Detection & Animation Triggering
-                            if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
-                                self.setup_result = self.setup_validator.validate(self.physical_state)
-                                is_ready = self.setup_result.is_setup_ready
-
-                                if is_ready and not self.prev_setup_ready:
-                                    if not (hasattr(self, "gesture_engine") and self.gesture_engine.is_active):
-                                        self.trigger_animation(
-                                            "BOARD_READY",
-                                            {"night_mode": bool(settings.get("night_mode", False))},
-                                        )
+                                # If analysis has been reviewed/progressed (or pieces were moved during analysis)
+                                # and the user puts all pieces back into the standard initial starting position:
+                                if (
+                                    not getattr(self, "analysis_is_loading", False)
+                                    and getattr(self, "analysis_has_advanced", False)
+                                    and setup_res.is_setup_ready
+                                    and getattr(self.move_tracker, "lifted_square", None) is None
+                                    and getattr(self.move_tracker, "in_flight_move", None) is None
+                                    and getattr(self.move_tracker, "pending_castling_rook", None) is None
+                                ):
+                                    logger.info(
+                                        "Physical board fully reset to standard starting position after analysis. "
+                                        "Concluding analysis mode and transitioning to IDLE (ready for gestures)."
+                                    )
+                                    self.stop_analysis_mode()
                                     self.prev_setup_ready = True
-                                elif not is_ready and self.prev_setup_ready:
-                                    self.prev_setup_ready = False
-                                    if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
-                                        self.active_animation = None
-                                        if self.frozen_baselines is not None:
-                                            from board_hardware import clear_baseline_history
-                                            settings["baselines"] = [list(col) for col in self.frozen_baselines]
-                                            clear_baseline_history()
-                                            self.frozen_baselines = None
+                                    if hasattr(self, "gesture_engine"):
+                                        self.gesture_engine.reset()
+                                    self.trigger_animation(
+                                        "BOARD_READY",
+                                        {"night_mode": bool(settings.get("night_mode", False))},
+                                    )
+                                    self.move_tracker.reset(self.physical_state)
+                                    self.guardrail_result = None
+                                else:
+                                    if not getattr(self, "analysis_is_loading", False):
+                                        if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
+                                            self.analysis_has_advanced = True
+
+                                    # Auto-detect if physical board was restored to anchor position or earlier branch step
+                                    if self.analysis_anchor_coord is not None:
+                                        self._check_analysis_board_restoration()
+
+                                    # Physical Move Tracking during ANALYSIS mode
+                                    adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                                    move_result = self.move_tracker.process_physical_state(
+                                        self.physical_state, adapter
+                                    )
+                                    if move_result:
+                                        from_f, from_r, to_f, to_r, promo = move_result
+                                        from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                        to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                        uci = f"{from_sq}{to_sq}{promo or ''}"
+                                        logger.info(f"Physical analysis move detected: {uci}")
+                                        self.handle_analysis_move(uci)
+
+                                    if getattr(self, "analysis_active_board", None):
+                                        self.guardrail_result = self.setup_validator.validate_game_state(
+                                            self.physical_state,
+                                            self.analysis_active_board,
+                                            self.move_tracker,
+                                        )
+                                    else:
+                                        self.guardrail_result = None
                             else:
-                                self.prev_setup_ready = False
+                                mt = self.move_tracker
+                                has_transient = bool(
+                                    mt.lifted_square
+                                    or mt.in_flight_move
+                                    or mt.pending_opponent_move
+                                    or mt.pending_castling_rook
+                                    or mt.pending_capture_target
+                                    or mt.capture_candidate_attackers
+                                    or mt.invalid_placement
+                                    or mt.arrival_flash
+                                    or mt.legal_targets
+                                    or mt.legal_captures
+                                )
+                                if has_transient:
+                                    mt.reset(self.physical_state)
+                                elif mt.last_physical_state != self.physical_state:
+                                    mt.last_physical_state = [row[:] for row in self.physical_state]
+                                self.guardrail_result = None
 
-                        if self.game_status not in ["IDLE", "GAME_OVER"] and hasattr(self, "gesture_engine"):
-                            self.gesture_engine.reset()
+                                # Physical gesture evaluation during IDLE / GAME_OVER
+                                if hasattr(self, "gesture_engine"):
+                                    self.gesture_engine.evaluate(self.physical_state, self.game_status)
 
-                    self._update_leds()
-                else:
-                    diag_info = {
-                        "status": "DISCONNECTED" if not self.ser else "NO_GPIO",
-                        "last_raw_line": "",
-                        "timeouts": 16,
-                        "errors": 0,
-                    }
+                                # Setup Ready Edge Detection & Animation Triggering
+                                if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
+                                    self.setup_result = self.setup_validator.validate(self.physical_state)
+                                    is_ready = self.setup_result.is_setup_ready
 
-                # 2. Digital Board Sync with Lichess Engine or Analysis Board
-                if self.game_status == "PLAYING":
-                    self.digital_state = lichess_engine.get_board()
-                    self.clocks = lichess_engine.clocks
-                elif self.game_status == "ANALYSIS":
-                    board_grid = [["." for _ in range(8)] for _ in range(8)]
-                    for sq in chess.SQUARES:
-                        piece = self.analysis_active_board.piece_at(sq)
-                        if piece:
-                            f = chess.square_file(sq)
-                            r = chess.square_rank(sq)
-                            board_grid[r][f] = piece.symbol()
-                    self.digital_state = board_grid
-                    self.clocks = {"white": "∞", "black": "∞"}
-                else:
-                    self.digital_state = [["." for _ in range(8)] for _ in range(8)]
-                    self.clocks = {"white": "?", "black": "?"}
+                                    if is_ready and not self.prev_setup_ready:
+                                        if not (hasattr(self, "gesture_engine") and self.gesture_engine.is_active):
+                                            self.trigger_animation(
+                                                "BOARD_READY",
+                                                {"night_mode": bool(settings.get("night_mode", False))},
+                                            )
+                                        self.prev_setup_ready = True
+                                    elif not is_ready and self.prev_setup_ready:
+                                        self.prev_setup_ready = False
+                                        if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
+                                            self.active_animation = None
+                                            if self.frozen_baselines is not None:
+                                                settings["baselines"] = [list(col) for col in self.frozen_baselines]
+                                                clear_baseline_history()
+                                                self.frozen_baselines = None
+                                else:
+                                    self.prev_setup_ready = False
 
-                # 3. Coach Analysis & Payload
-                is_ai = getattr(lichess_engine, "is_ai_game", False)
-                coach_ai_only = settings.get("coach_ai_only", True)
-                fair_play_active = coach_ai_only and not is_ai
-                coach_hints_enabled = settings.get("coach_hints_enabled", True)
-                eval_bar_enabled = settings.get("eval_bar_enabled", True)
+                            if hasattr(self, "gesture_engine"):
+                                if self.game_status not in ["IDLE", "GAME_OVER"]:
+                                    if self._prev_gesture_status in ["IDLE", "GAME_OVER"]:
+                                        self.gesture_engine.reset()
+                                self._prev_gesture_status = self.game_status
 
-                coach_payload = {
-                    "enabled": bool((coach_hints_enabled or eval_bar_enabled) and not fair_play_active),
-                    "eval_bar_enabled": bool(eval_bar_enabled and not fair_play_active),
-                    "coach_hints_enabled": bool(coach_hints_enabled and not fair_play_active),
-                    "is_ai_game": bool(is_ai),
-                    "fair_play_active": bool(fair_play_active),
-                    "evaluation": None,
-                    "lifted_move_hints": [],
-                }
-
-                if not fair_play_active and getattr(lichess_engine, "board", None) and self.game_status == "PLAYING":
-                    coach_engine.request_analysis(lichess_engine.board)
-                    eval_res = coach_engine.get_cached_evaluation(lichess_engine.board.fen())
-                    if eval_res:
-                        coach_payload["evaluation"] = {
-                            "score_cp": eval_res.score_cp,
-                            "mate": eval_res.mate,
-                            "win_chance": eval_res.win_chance,
-                            "best_move": eval_res.best_move,
+                        self._update_leds()
+                    else:
+                        diag_info = {
+                            "status": "DISCONNECTED" if not self.ser else "NO_GPIO",
+                            "last_raw_line": "",
+                            "timeouts": 16,
+                            "errors": 0,
                         }
-                        if self.move_tracker.lifted_square and coach_hints_enabled:
-                            l_c, l_r = self.move_tracker.lifted_square
-                            from_sq = chess.square_name(chess.square(l_c, l_r))
-                            hints = []
-                            for t_c, t_r in self.move_tracker.legal_targets:
-                                to_sq = chess.square_name(chess.square(t_c, t_r))
-                                uci = f"{from_sq}{to_sq}"
-                                m_analysis = eval_res.moves_map.get(uci) or eval_res.moves_map.get(f"{uci}q")
-                                if m_analysis:
-                                    hints.append({
-                                        "target_square": [t_c, t_r],
-                                        "uci": uci,
-                                        "tier": m_analysis.classification.value,
-                                        "delta_cp": m_analysis.delta_cp,
-                                    })
-                            coach_payload["lifted_move_hints"] = hints
 
-                # 4. Construct unified broadcast payload
-                payload = {
-                    "status": self.game_status,
-                    "virtual_only": self.virtual_only,
-                    "physical": self.get_physical_payload(),
-                    "digital": self.digital_state,
-                    "clocks": self.clocks,
-                    "my_color": lichess_engine.my_color,
-                    "game": lichess_engine.get_game_payload(),
-                    "coach": coach_payload,
-                    "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
-                    "analysis": self.get_analysis_payload(),
-                    "diagnostics": diag_info,
-                }
+                    # 2. Digital Board Sync with Lichess Engine or Analysis Board
+                    if self.game_status == "PLAYING":
+                        new_grid = lichess_engine.get_board()
+                        if new_grid != self.digital_state:
+                            self.digital_state = new_grid
+                        self.clocks = lichess_engine.clocks
+                    elif self.game_status == "ANALYSIS":
+                        fen = self.analysis_active_board.fen()
+                        if fen != self._analysis_grid_fen:
+                            board_grid = [["." for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)]
+                            for sq in chess.SQUARES:
+                                piece = self.analysis_active_board.piece_at(sq)
+                                if piece:
+                                    f = chess.square_file(sq)
+                                    r = chess.square_rank(sq)
+                                    board_grid[r][f] = piece.symbol()
+                            self.digital_state = board_grid
+                            self._analysis_grid_fen = fen
+                        self.clocks = ANALYSIS_CLOCKS
+                    else:
+                        self.digital_state = EMPTY_DIGITAL_GRID
+                        self.clocks = IDLE_CLOCKS
 
-                # 4. Broadcast state to all connected WebSocket clients
-                await broadcast_callback(payload)
+                    # 3. Coach engine live analysis (drives the eval cache regardless of clients)
+                    is_ai = getattr(lichess_engine, "is_ai_game", False)
+                    coach_ai_only = settings.get("coach_ai_only", True)
+                    fair_play_active = coach_ai_only and not is_ai
+
+                    if not fair_play_active and getattr(lichess_engine, "board", None) and self.game_status == "PLAYING":
+                        coach_engine.request_analysis(lichess_engine.board)
+
+                    # 4. Event-driven broadcast: send on any digest change, plus a periodic heartbeat.
+                    now_mono = time.monotonic()
+                    client_count = clients_provider() if clients_provider else 1
+                    if client_count > 0:
+                        digest = self._broadcast_digest(diag_info)
+                        if digest != last_digest or (now_mono - last_broadcast_mono) >= BROADCAST_HEARTBEAT_S:
+                            payload = self._build_broadcast_payload(diag_info)
+
+                            if not fair_play_active and getattr(lichess_engine, "board", None) and self.game_status == "PLAYING":
+                                coach_hints_enabled = settings.get("coach_hints_enabled", True)
+                                eval_res = coach_engine.get_cached_evaluation(lichess_engine.board.fen())
+                                if eval_res:
+                                    payload["coach"]["evaluation"] = {
+                                        "score_cp": eval_res.score_cp,
+                                        "mate": eval_res.mate,
+                                        "win_chance": eval_res.win_chance,
+                                        "best_move": eval_res.best_move,
+                                    }
+                                    if self.move_tracker.lifted_square and coach_hints_enabled:
+                                        l_c, l_r = self.move_tracker.lifted_square
+                                        from_sq = chess.square_name(chess.square(l_c, l_r))
+                                        hints = []
+                                        for t_c, t_r in self.move_tracker.legal_targets:
+                                            to_sq = chess.square_name(chess.square(t_c, t_r))
+                                            uci = f"{from_sq}{to_sq}"
+                                            m_analysis = eval_res.moves_map.get(uci) or eval_res.moves_map.get(f"{uci}q")
+                                            if m_analysis:
+                                                hints.append({
+                                                    "target_square": [t_c, t_r],
+                                                    "uci": uci,
+                                                    "tier": m_analysis.classification.value,
+                                                    "delta_cp": m_analysis.delta_cp,
+                                                })
+                                        payload["coach"]["lifted_move_hints"] = hints
+
+                            await broadcast_callback(payload)
+                            last_digest = digest
+                            last_broadcast_mono = now_mono
+                    else:
+                        # No listeners: keep only the heartbeat marker fresh
+                        last_broadcast_mono = now_mono
+
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Error in state update loop tick.")
+                    await asyncio.sleep(0.05)
 
                 # Poll interval
                 col_mode = settings.get("col_mode", "auto")
@@ -1805,8 +1876,6 @@ class BoardStateManager:
                     all_leds_off(self.strip)
                 except Exception as e:
                     logger.error(f"Error turning off LEDs on exit: {e}")
-        except Exception as e:
-            logger.error(f"Error in state update loop: {e}")
 
 
 # Global singleton state manager

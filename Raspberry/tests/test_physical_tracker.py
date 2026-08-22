@@ -547,14 +547,14 @@ def test_lift_only_triggered_on_active_transition(initial_physical_state, mock_e
     tracker.reset(initial_physical_state)
 
     # Initial state: all starting pieces occupied
-    res = tracker.process_physical_state(initial_physical_state, mock_engine)
+    tracker.process_physical_state(initial_physical_state, mock_engine)
     assert tracker.lifted_square is None
 
     # Player physically lifts e2 pawn (transitions from -1 to 0)
     lifted_state = [row[:] for row in initial_physical_state]
     lifted_state[4][1] = 0
 
-    res = tracker.process_physical_state(lifted_state, mock_engine)
+    tracker.process_physical_state(lifted_state, mock_engine)
     assert tracker.lifted_square == (4, 1)
     assert (4, 2) in tracker.legal_targets
     assert (4, 3) in tracker.legal_targets
@@ -583,7 +583,7 @@ def test_capture_target_lifted_first_initiates_capture_intent(initial_physical_s
     # Setup board position with e4 and d5 pawns
     mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     mock_engine.my_color = "white"
-    
+
     state = [row[:] for row in initial_physical_state]
     state[4][1] = 0  # e2 empty
     state[4][3] = -1 # e4 occupied by White
@@ -614,7 +614,7 @@ def test_capture_target_lifted_first_then_attacker_lifted_and_placed(initial_phy
 
     mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     mock_engine.my_color = "white"
-    
+
     state = [row[:] for row in initial_physical_state]
     state[4][1] = 0  # e2 empty
     state[4][3] = -1 # e4 White
@@ -653,7 +653,7 @@ def test_capture_target_lifted_first_direct_placement(initial_physical_state, mo
 
     mock_engine.board = chess.Board("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
     mock_engine.my_color = "white"
-    
+
     state = [row[:] for row in initial_physical_state]
     state[4][1] = 0  # e2 empty
     state[4][3] = -1 # e4 White

@@ -40,9 +40,21 @@ interface AnalysisTabProps {
   boardState: BoardState;
 }
 
-export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
+const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const analysis = boardState.analysis;
-  const [subMode, setSubMode] = useState<'review' | 'blunder_drill' | 'gm_relive'>('review');
+  type SubMode = 'review' | 'blunder_drill' | 'gm_relive';
+  const serverSubMode: SubMode = analysis?.submode ?? 'review';
+  // Local tab navigation with follow-the-server semantics: when the backend
+  // submode changes (e.g. drill started via board gesture), the view follows.
+  const [uiView, setUiView] = useState<{ server: SubMode; view: SubMode }>({
+    server: serverSubMode,
+    view: serverSubMode,
+  });
+  if (uiView.server !== serverSubMode) {
+    setUiView({ server: serverSubMode, view: serverSubMode });
+  }
+  const subMode = uiView.view;
+  const setSubMode = (view: SubMode) => setUiView((prev) => ({ ...prev, view }));
   const [gmGamesList, setGmGamesList] = useState<GMGameSummary[]>([]);
   const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -70,29 +82,44 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   // Fetch recent games on mount
   useEffect(() => {
-    fetchRecentGames();
-  }, [fetchRecentGames]);
+    let cancelled = false;
+    (async () => {
+      setIsLoadingRecentGames(true);
+      try {
+        const res = await getRecentLichessGames(10);
+        if (!cancelled && res && Array.isArray(res.games)) {
+          setRecentGames(res.games);
+        }
+      } catch (err) {
+        console.error('Error fetching recent Lichess games:', err);
+      } finally {
+        if (!cancelled) setIsLoadingRecentGames(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Fetch GM games on mount
   useEffect(() => {
-    getGMGames().then((data) => {
-      if (Array.isArray(data)) {
-        setGmGamesList(data);
-      }
-    }).catch((err) => console.error('Error fetching GM games:', err));
+    let cancelled = false;
+    getGMGames()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) {
+          setGmGamesList(data);
+        }
+      })
+      .catch(() => console.error('Error fetching GM games'));
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  // Sync submode with backend state
-  useEffect(() => {
-    if (analysis?.submode) {
-      setSubMode(analysis.submode);
-    }
-  }, [analysis?.submode]);
 
   const currentPly = analysis?.current_ply ?? 0;
   const totalPlys = analysis?.total_plys ?? 0;
   const playedAnalyses = analysis?.played_analyses ?? [];
-  const evaluations = analysis?.evaluations ?? [];
+  const evaluations = useMemo(() => analysis?.evaluations ?? [], [analysis]);
   const blunders = analysis?.blunders ?? [];
   const activeBlunderIndex = analysis?.blunder_index ?? 0;
   const currentBlunder = blunders[activeBlunderIndex];
@@ -114,7 +141,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       await startAnalysis();
       setFeedbackMsg({ text: 'Game analysis ready!', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3000);
-    } catch (err) {
+    } catch {
       setFeedbackMsg({ text: 'Failed to start analysis.', type: 'error' });
     }
   };
@@ -127,13 +154,12 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     });
     try {
       await startAnalysis({ moves_uci: game.moves_uci });
-      setSubMode('review');
       setFeedbackMsg({
         text: `Analysis ready for match vs ${game.opponent.username}! (${game.moves_count} moves)`,
         type: 'success',
       });
       setTimeout(() => setFeedbackMsg(null), 3500);
-    } catch (err) {
+    } catch {
       setFeedbackMsg({ text: 'Failed to load game for analysis.', type: 'error' });
     }
   };
@@ -161,10 +187,9 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     setFeedbackMsg({ text: 'Loading Grandmaster masterpiece...', type: 'info' });
     try {
       await startGMGame(gameId);
-      setSubMode('gm_relive');
       setFeedbackMsg({ text: 'GM game loaded! Guess the first move.', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3000);
-    } catch (err) {
+    } catch {
       setFeedbackMsg({ text: 'Failed to load GM game.', type: 'error' });
     }
   };
@@ -180,7 +205,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         setFeedbackMsg({ text: `❌ ${res.commentary || 'Incorrect guess.'}`, type: 'error' });
       }
       setGuessInput('');
-    } catch (err) {
+    } catch {
       setFeedbackMsg({ text: 'Error submitting guess.', type: 'error' });
     }
   };
@@ -196,7 +221,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         setFeedbackMsg({ text: `❌ ${res.message} (${res.attempts_remaining} attempts left)`, type: 'error' });
       }
       setGuessInput('');
-    } catch (err) {
+    } catch {
       setFeedbackMsg({ text: 'Error submitting blunder attempt.', type: 'error' });
     }
   };
@@ -214,7 +239,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     }
   };
 
-  const getQualityBadge = (tier: string) => {
+  const getQualityBadge = (tier?: string) => {
     switch (tier) {
       case 'best':
         return <span title="Best Move (Δ ≤ 15 cp) — Animated in Mint Emerald" className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm">BEST</span>;
@@ -693,7 +718,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <div className="space-y-2 pt-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Candidates</span>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {analysis?.current_eval?.top_moves?.slice(0, 3).map((m: any, idx: number) => (
+                  {analysis?.current_eval?.top_moves?.slice(0, 3).map((m: { uci?: string; score_cp?: number | null; mate?: number | null; classification?: string }, idx: number) => (
                     <div key={idx} className="flex items-center justify-between p-2 bg-slate-950/50 rounded-lg text-xs border border-slate-800/60">
                       <div className="flex items-center gap-2">
                         <span className="text-slate-500 font-bold">{idx + 1}.</span>
@@ -701,7 +726,9 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                         {getQualityBadge(m.classification)}
                       </div>
                       <span className="font-mono text-slate-400">
-                        {m.score_cp !== null ? `${m.score_cp > 0 ? '+' : ''}${(m.score_cp / 100).toFixed(1)}` : 'Mate'}
+                        {m.score_cp !== null && m.score_cp !== undefined
+                          ? `${m.score_cp > 0 ? '+' : ''}${(m.score_cp / 100).toFixed(1)}`
+                          : 'Mate'}
                       </span>
                     </div>
                   ))}
@@ -956,3 +983,5 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     </div>
   );
 };
+
+export default AnalysisTab;

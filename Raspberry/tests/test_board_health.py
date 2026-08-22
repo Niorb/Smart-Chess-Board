@@ -53,7 +53,7 @@ def test_get_health_status_structure():
     assert "scan_delay_ms" in matrix
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 @patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_healthy(mock_engine):
     """Verify HEALTHY status when all subsystems are operational and settings normal."""
@@ -68,7 +68,7 @@ def test_health_status_evaluation_healthy(mock_engine):
     assert health["subsystems"]["chess_engine"] == "CONNECTED"
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 @patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_missing_led_strip(mock_engine):
     """Verify DEGRADED status when LED strip is missing/not initialized."""
@@ -81,7 +81,7 @@ def test_health_status_evaluation_degraded_missing_led_strip(mock_engine):
     assert health["subsystems"]["led_strip"] == "DISCONNECTED"
 
 
-@patch("board_hardware.settings", {"col_mode": "manual", "disabled_squares": [], "scan_delay": 100})
+@patch("app.board_state.settings", {"col_mode": "manual", "disabled_squares": [], "scan_delay": 100})
 @patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_manual_col_mode(mock_engine):
     """Verify DEGRADED status when board is in manual column mode."""
@@ -93,7 +93,7 @@ def test_health_status_evaluation_degraded_manual_col_mode(mock_engine):
     assert health["matrix"]["col_mode"] == "manual"
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [[0, 1]], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [[0, 1]], "scan_delay": 10})
 @patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_disabled_squares(mock_engine):
     """Verify DEGRADED status when disabled squares are present."""
@@ -105,7 +105,7 @@ def test_health_status_evaluation_degraded_disabled_squares(mock_engine):
     assert len(health["matrix"]["disabled_squares"]) > 0
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 @patch("app.board_state.lichess_engine")
 def test_health_status_evaluation_degraded_engine_stopped(mock_engine):
     """Verify DEGRADED status when chess engine is not running."""
@@ -117,7 +117,7 @@ def test_health_status_evaluation_degraded_engine_stopped(mock_engine):
     assert health["subsystems"]["chess_engine"] == "DISCONNECTED"
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 def test_health_status_evaluation_disconnected_no_serial():
     """Verify DISCONNECTED status when serial connection is None."""
     bsm = create_healthy_state_manager()
@@ -128,7 +128,7 @@ def test_health_status_evaluation_disconnected_no_serial():
     assert health["subsystems"]["serial"] == "DISCONNECTED"
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 def test_health_status_evaluation_disconnected_closed_serial():
     """Verify DISCONNECTED status when serial port is closed."""
     bsm = create_healthy_state_manager()
@@ -139,7 +139,7 @@ def test_health_status_evaluation_disconnected_closed_serial():
     assert health["subsystems"]["serial"] == "DISCONNECTED"
 
 
-@patch("board_hardware.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
+@patch("app.board_state.settings", {"col_mode": "auto", "disabled_squares": [], "scan_delay": 10})
 def test_health_status_evaluation_disconnected_no_gpio():
     """Verify DISCONNECTED status when GPIO chip is not initialized."""
     bsm = create_healthy_state_manager()

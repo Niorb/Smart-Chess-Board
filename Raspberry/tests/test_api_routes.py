@@ -1,10 +1,8 @@
-import copy
 import os
 import sys
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -264,7 +262,7 @@ def test_claim_victory_game_route_alias_success():
 
 def test_claim_victory_route_not_playing():
     """Verify POST /api/lichess/claim-victory returns error when no game is active."""
-    from app.main import state_manager, lichess_engine
+    from app.main import lichess_engine, state_manager
     state_manager.game_status = "IDLE"
     lichess_engine.current_game_id = None
     client = TestClient(app)

@@ -7,10 +7,9 @@ LED Highlighting, and Fair-Play enforcement.
 """
 
 import asyncio
-import copy
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import chess
 import chess.engine
@@ -19,29 +18,15 @@ import pytest
 # Ensure parent directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.board_state import BoardStateManager
 from app.coach_engine import (
     CoachEngine,
     HeuristicEvaluator,
-    MoveAnalysis,
     MoveQuality,
     PositionEvaluation,
     calculate_win_chance,
     classify_move_delta,
 )
-from app.config import (
-    COLOR_EVAL_BLACK,
-    COLOR_EVAL_NEUTRAL,
-    COLOR_EVAL_WHITE,
-    COLOR_LEGAL_CAPTURE,
-    COLOR_LEGAL_TARGET,
-    COLOR_MOVE_BEST,
-    COLOR_MOVE_BLUNDER,
-    COLOR_MOVE_GOOD,
-    COLOR_MOVE_INACCURACY,
-)
-from app.led_helpers import Color, get_led_indices
-
+from app.led_helpers import get_led_indices
 
 # =============================================================================
 # 1. WIN CHANCE & DELTA CLASSIFICATION TESTS
@@ -214,8 +199,8 @@ class TestEvalBarLedIndexing:
         """Eval bar operates along File 'h' (row 7, ranks 1..8)."""
         h1_leds = get_led_indices(0, 7)  # col 0 (Rank 1), row 7 (File h)
         h8_leds = get_led_indices(7, 7)  # col 7 (Rank 8), row 7 (File h)
-        assert h1_leds == [16, 17]
-        assert h8_leds == [93, 94]
+        assert h1_leds == (16, 17)
+        assert h8_leds == (93, 94)
 
 
 # =============================================================================
@@ -230,8 +215,8 @@ class TestCoachSettingsPersistence:
         assert "coach_ai_only" in settings
 
     def test_rest_api_update_coach_settings(self):
-        from fastapi.testclient import TestClient
         from app.main import app
+        from fastapi.testclient import TestClient
 
         client = TestClient(app)
         payload = {

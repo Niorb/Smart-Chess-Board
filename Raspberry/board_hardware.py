@@ -9,8 +9,9 @@ from the ESP32 over a Serial Request-Response protocol.
 import json
 import logging
 import os
+import struct
 import time
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("smart-chess-app.hardware")
 
@@ -29,7 +30,7 @@ except ImportError:
         FALLING_EDGE = 1
         SET_PULL_UP = 1
     lgpio = MockLgpio()
-    print("WARNING: lgpio not found. Using MockLgpio.")
+    logger.warning("lgpio not found. Using MockLgpio.")
 
 try:
     from app.config import (
@@ -86,6 +87,28 @@ def get_settings_filepath():
 
 
 DEFAULT_COL_MUX_MAP = [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def _is_valid_mux_map(col_mux_map) -> bool:
+    return (
+        isinstance(col_mux_map, list)
+        and len(col_mux_map) == BOARD_COLS
+        and all(
+            isinstance(x, int) and 0 <= x < BOARD_COLS
+            for x in col_mux_map
+        )
+    )
+
+
+def _is_valid_baseline_matrix(baselines) -> bool:
+    return (
+        isinstance(baselines, list)
+        and len(baselines) == BOARD_COLS
+        and all(
+            isinstance(col, list) and len(col) == BOARD_ROWS
+            for col in baselines
+        )
+    )
 
 def get_default_settings() -> dict[str, Any]:
     return {
@@ -170,16 +193,7 @@ def load_settings():
                     loaded["night_mode"] = False
 
                 # Validate col_mux_map
-                col_mux_map = loaded.get("col_mux_map")
-                is_valid_col_mux_map = (
-                    isinstance(col_mux_map, list)
-                    and len(col_mux_map) == BOARD_COLS
-                    and all(
-                        isinstance(x, int) and 0 <= x < BOARD_COLS
-                        for x in col_mux_map
-                    )
-                )
-                if not is_valid_col_mux_map:
+                if not _is_valid_mux_map(loaded.get("col_mux_map")):
                     if "col_mux_map" in loaded:
                         logger.warning(
                             f"Invalid col_mux_map in {filepath}. Using standard default mapping."
@@ -187,16 +201,7 @@ def load_settings():
                     loaded["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
                 # Validate baseline matrix shape (8 rows x 8 columns)
-                baselines = loaded.get("baselines")
-                is_valid_baselines = (
-                    isinstance(baselines, list)
-                    and len(baselines) == BOARD_COLS
-                    and all(
-                        isinstance(col, list) and len(col) == BOARD_ROWS
-                        for col in baselines
-                    )
-                )
-                if not is_valid_baselines:
+                if not _is_valid_baseline_matrix(loaded.get("baselines")):
                     logger.warning(
                         f"Invalid baselines matrix shape in {filepath}. Using standard default matrix."
                     )
@@ -217,30 +222,12 @@ def load_settings():
             logger.error(f"Error auto-initializing settings file: {e}")
 
     # Ensure col_mux_map is valid in settings
-    col_mux_map = settings.get("col_mux_map")
-    is_valid_col_mux_map = (
-        isinstance(col_mux_map, list)
-        and len(col_mux_map) == BOARD_COLS
-        and all(
-            isinstance(x, int) and 0 <= x < BOARD_COLS
-            for x in col_mux_map
-        )
-    )
-    if not is_valid_col_mux_map:
+    if not _is_valid_mux_map(settings.get("col_mux_map")):
         logger.warning("col_mux_map invalid in settings dictionary. Falling back to default mapping.")
         settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
 
     # Ensure baseline matrix shape is valid in settings
-    baselines = settings.get("baselines")
-    is_valid_baselines = (
-        isinstance(baselines, list)
-        and len(baselines) == BOARD_COLS
-        and all(
-            isinstance(col, list) and len(col) == BOARD_ROWS
-            for col in baselines
-        )
-    )
-    if not is_valid_baselines:
+    if not _is_valid_baseline_matrix(settings.get("baselines")):
         logger.warning("Baselines shape invalid in settings dictionary. Falling back to default matrix.")
         settings["baselines"] = [[1550] * BOARD_ROWS for _ in range(BOARD_COLS)]
 
@@ -283,6 +270,19 @@ def save_defaults() -> bool:
     """
     save_settings()
     return True
+
+
+def get_last_game_params() -> dict:
+    """Returns the persisted last-game matchmaking parameters with standard defaults."""
+    params = settings.get("last_game_params") or {}
+    return {
+        "time_control": params.get("time_control", "10+0"),
+        "rated": bool(params.get("rated", False)),
+        "color": params.get("color", "random"),
+        "opponent": params.get("opponent", "auto"),
+        "ai_level": params.get("ai_level", 3),
+        "rating_range": params.get("rating_range", None),
+    }
 
 
 # Initial load on module import
@@ -339,7 +339,7 @@ def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
     return -1
 
 
-def _read_adc_packet(serial_conn, timeout_s=0.08) -> Optional[bytes]:
+def _read_adc_packet(serial_conn, timeout_s=0.08) -> bytes | None:
     """
     Reads 128-byte ADC payload from serial_conn.
     Fast path: reads 2-byte header (0xAA 0x55) in 1 shot.
@@ -381,12 +381,12 @@ def _read_adc_packet(serial_conn, timeout_s=0.08) -> Optional[bytes]:
         if data[0] == RESP_ADC_DATA and data[1] == 0x80 and data[2] == 0x00:
             # Binary framed packet starting with 0x81 0x80 0x00
             extra = serial_conn.read(4)
-            if len(extra) == 4:
-                full_payload = data[3:] + extra[:3]
-                crc = extra[3]
-                expected_crc = calc_crc8(data[:3] + full_payload)
-                if crc == expected_crc or len(full_payload) == 128:
-                    return full_payload
+            if len(extra) != 4:
+                return None
+            full_payload = data[3:] + extra[:3]
+            if calc_crc8(data[:3] + full_payload) != extra[3]:
+                return None
+            return full_payload
         # Raw 128-byte ADC data
         return data
     return None
@@ -395,6 +395,25 @@ def _read_adc_packet(serial_conn, timeout_s=0.08) -> Optional[bytes]:
 # =============================================================================
 # BOARD SCANNING (HYBRID)
 # =============================================================================
+
+def _send_settle_if_needed(serial_conn, settle_us: int):
+    """Sends CMD_SET_SETTLE to the ESP32 only when the settle time changed since last send."""
+    global last_sent_settle_us
+    if last_sent_settle_us != settle_us:
+        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
+        serial_conn.write(packet)
+        last_sent_settle_us = settle_us
+
+
+def _normalize_disabled_squares(raw_disabled) -> set:
+    """Normalizes disabled_squares entries ([c, r] lists or (c, r) tuples) into a set of tuples."""
+    if not raw_disabled:
+        return set()
+    return {
+        tuple(sq) if isinstance(sq, (list, tuple)) else sq
+        for sq in raw_disabled
+    }
+
 
 def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     """
@@ -422,11 +441,7 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
     non_mocked_count = (1 if col_mode == "manual" else BOARD_COLS) * BOARD_ROWS
 
-    global last_sent_settle_us
-    if last_sent_settle_us != settle_us:
-        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
-        serial_conn.write(packet)
-        last_sent_settle_us = settle_us
+    _send_settle_if_needed(serial_conn, settle_us)
 
     serial_conn.write(build_packet(CMD_SCAN_ADC))
 
@@ -434,9 +449,14 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     data = _read_adc_packet(serial_conn)
     expected_bytes = BOARD_COLS * BOARD_ROWS * 2
     if data is not None and len(data) == expected_bytes:
-        import struct
         vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
         diag["last_raw_line"] = f"BINARY:{len(vals)} vals"
+
+        baselines = settings["baselines"]
+        thresh_pos = settings["threshold_positive"]
+        thresh_neg = settings["threshold_negative"]
+        disabled = _normalize_disabled_squares(settings.get("disabled_squares"))
+
         for mux_ch in range(BOARD_COLS):
             c_phys = col_mux_map[mux_ch]
             for r_phys in range(BOARD_ROWS):
@@ -445,21 +465,20 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
                 r = c_phys
 
                 if col_mode == "manual" and c != manual_col:
-                    matrix[c][r] = settings["baselines"][c][r]
+                    matrix[c][r] = baselines[c][r]
                     raw_state[c][r] = 0
                     continue
 
-                disabled_squares = settings.get("disabled_squares", [])
-                if [c, r] in disabled_squares or (c, r) in disabled_squares:
-                    matrix[c][r] = settings["baselines"][c][r]
+                if (c, r) in disabled:
+                    matrix[c][r] = baselines[c][r]
                     raw_state[c][r] = 0
                     continue
 
                 matrix[c][r] = val
-                diff = val - settings["baselines"][c][r]
-                if diff > settings["threshold_positive"]:
+                diff = val - baselines[c][r]
+                if diff > thresh_pos:
                     raw_state[c][r] = 1
-                elif diff < -settings["threshold_negative"]:
+                elif diff < -thresh_neg:
                     raw_state[c][r] = -1
                 else:
                     raw_state[c][r] = 0
@@ -513,25 +532,28 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
         baseline_window = settings.get("baseline_window_s", 2)
         if in_loop_cal and not freeze_baseline and baseline_window > 0:
             now = time.time()
-            disabled_squares = settings.get("disabled_squares", [])
             for c in range(BOARD_COLS):
                 for r in range(BOARD_ROWS):
-                    if [c, r] in disabled_squares or (c, r) in disabled_squares:
+                    if (c, r) in disabled:
                         continue
 
                     val = matrix[c][r]
                     detected = (raw_state[c][r] != 0)
 
-                    if (c, r) not in baseline_history:
-                        baseline_history[(c, r)] = []
+                    history = baseline_history.setdefault((c, r), [])
+                    history.append((now, val, detected))
 
-                    baseline_history[(c, r)].append((now, val, detected))
+                    # Prune expired samples in one pass (history is time-ordered)
+                    stale = 0
+                    for entry in history:
+                        if now - entry[0] > baseline_window:
+                            stale += 1
+                        else:
+                            break
+                    if stale:
+                        del history[:stale]
 
-                    history = baseline_history[(c, r)]
-                    while history and (now - history[0][0]) > baseline_window:
-                        history.pop(0)
-
-                    if len(history) > 0 and not any(entry[2] for entry in history):
+                    if history and not any(entry[2] for entry in history):
                         if (now - history[0][0]) >= (baseline_window * 0.8):
                             avg_val = int(sum(entry[1] for entry in history) / len(history))
                             settings["baselines"][c][r] = avg_val
@@ -547,6 +569,50 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
     return matrix, diag
 
 
+def _prepare_serial_scan(serial_conn) -> list:
+    """Flushes buffers and returns the active column MUX map, sending settle config if needed."""
+    serial_conn.reset_input_buffer()
+    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
+    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
+    _send_settle_if_needed(serial_conn, settle_us)
+    return col_mux_map
+
+
+def _collect_calibration_samples(serial_conn, col_mux_map, duration_s, accumulate_ranks=None):
+    """
+    Repeatedly requests ADC scans for duration_s seconds, accumulating per-square sums/counts.
+    If accumulate_ranks is provided (a set of row indices), only those ranks are accumulated.
+    Returns (sums, counts) matrices.
+    """
+    sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    expected_bytes = BOARD_COLS * BOARD_ROWS * 2
+    start_time = time.time()
+    while time.time() - start_time < duration_s:
+        serial_conn.write(build_packet(CMD_SCAN_ADC))
+        data = _read_adc_packet(serial_conn)
+        if data is not None and len(data) == expected_bytes:
+            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
+            for mux_ch in range(BOARD_COLS):
+                c_phys = col_mux_map[mux_ch]
+                for r_phys in range(BOARD_ROWS):
+                    val = vals[mux_ch * BOARD_ROWS + r_phys]
+                    c = 7 - r_phys
+                    r = c_phys
+                    if accumulate_ranks is None or r in accumulate_ranks:
+                        sums[c][r] += val
+                        counts[c][r] += 1
+        else:
+            serial_conn.reset_input_buffer()
+        time.sleep(0.01)
+    return sums, counts
+
+
+def _clear_baseline_history():
+    global baseline_history
+    baseline_history.clear()
+
+
 def calibrate_board(h, serial_conn, duration_s=2.0):
     """
     Reads samples per channel continuously over a specified duration (default 2 seconds),
@@ -556,39 +622,8 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
         logger.error("Calibration failed: serial connection not initialized.")
         return False
 
-    sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-
-    # Flush buffers
-    serial_conn.reset_input_buffer()
-
-    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
-    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
-    global last_sent_settle_us
-    if last_sent_settle_us != settle_us:
-        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
-        serial_conn.write(packet)
-        last_sent_settle_us = settle_us
-
-    start_time = time.time()
-    while time.time() - start_time < duration_s:
-        serial_conn.write(build_packet(CMD_SCAN_ADC))
-        data = _read_adc_packet(serial_conn)
-        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-        if data is not None and len(data) == expected_bytes:
-            import struct
-            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-            for mux_ch in range(BOARD_COLS):
-                c_phys = col_mux_map[mux_ch]
-                for r_phys in range(BOARD_ROWS):
-                    val = vals[mux_ch * BOARD_ROWS + r_phys]
-                    c = 7 - r_phys
-                    r = c_phys
-                    sums[c][r] += val
-                    counts[c][r] += 1
-        else:
-            serial_conn.reset_input_buffer()
-        time.sleep(0.01)
+    col_mux_map = _prepare_serial_scan(serial_conn)
+    sums, counts = _collect_calibration_samples(serial_conn, col_mux_map, duration_s)
 
     total_valid_samples = sum(sum(counts[c]) for c in range(BOARD_COLS))
     if total_valid_samples == 0:
@@ -608,10 +643,7 @@ def calibrate_board(h, serial_conn, duration_s=2.0):
                 settings["baselines"][c][r] = 1550
 
     save_settings()
-
-    # Clear rolling baseline history
-    global baseline_history
-    baseline_history.clear()
+    _clear_baseline_history()
 
     return True
 
@@ -629,41 +661,10 @@ def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
         logger.error("Calibration with pieces failed: serial connection not initialized.")
         return False
 
-    sums = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-    counts = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
-
-    # Flush buffers
-    serial_conn.reset_input_buffer()
-
-    col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
-    settle_us = min(255, max(0, int(settings.get("mux_settle_us", 100))))
-    global last_sent_settle_us
-    if last_sent_settle_us != settle_us:
-        packet = build_packet(CMD_SET_SETTLE, bytes([min(255, max(0, int(settle_us)))]))
-        serial_conn.write(packet)
-        last_sent_settle_us = settle_us
-
-    start_time = time.time()
-    while time.time() - start_time < duration_s:
-        serial_conn.write(build_packet(CMD_SCAN_ADC))
-        data = _read_adc_packet(serial_conn)
-        expected_bytes = BOARD_COLS * BOARD_ROWS * 2
-        if data is not None and len(data) == expected_bytes:
-            import struct
-            vals = struct.unpack(f'<{BOARD_COLS * BOARD_ROWS}H', data)
-            for mux_ch in range(BOARD_COLS):
-                c_phys = col_mux_map[mux_ch]
-                for r_phys in range(BOARD_ROWS):
-                    val = vals[mux_ch * BOARD_ROWS + r_phys]
-                    c = 7 - r_phys
-                    r = c_phys
-                    # Only read empty middle ranks 3, 4, 5, 6 (r=2, 3, 4, 5) for all columns
-                    if r in (2, 3, 4, 5):
-                        sums[c][r] += val
-                        counts[c][r] += 1
-        else:
-            serial_conn.reset_input_buffer()
-        time.sleep(0.01)
+    col_mux_map = _prepare_serial_scan(serial_conn)
+    sums, counts = _collect_calibration_samples(
+        serial_conn, col_mux_map, duration_s, accumulate_ranks={2, 3, 4, 5}
+    )
 
     total_valid_samples = sum(sum(counts[c][r] for r in (2, 3, 4, 5)) for c in range(BOARD_COLS))
     if total_valid_samples == 0:
@@ -698,10 +699,7 @@ def calibrate_board_with_pieces(h, serial_conn, duration_s=2.0):
         settings["baselines"][c][7] = base_rank6
 
     save_settings()
-
-    # Clear rolling baseline history
-    global baseline_history
-    baseline_history.clear()
+    _clear_baseline_history()
 
     logger.info("Successfully calibrated board baselines with pieces in place.")
     return True

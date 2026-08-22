@@ -13,11 +13,12 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 import chess
-from dotenv import load_dotenv
 import httpx
+from dotenv import load_dotenv
 
 # Multi-path .env loading
 env_candidates = [
@@ -95,6 +96,30 @@ def parse_time_control(time_control_str: str | None) -> tuple[int, int]:
         return 10, 0
 
 
+class _SharedClientProxy:
+    """Delegates requests to the pooled engine client, injecting per-call headers/timeout."""
+
+    def __init__(self, client: "httpx.AsyncClient", headers: dict, timeout):
+        self._client = client
+        self._headers = headers
+        self._timeout = timeout
+
+    async def get(self, url: str, **kwargs):
+        kwargs.setdefault("headers", self._headers)
+        kwargs.setdefault("timeout", self._timeout)
+        return await self._client.get(url, **kwargs)
+
+    async def post(self, url: str, **kwargs):
+        kwargs.setdefault("headers", self._headers)
+        kwargs.setdefault("timeout", self._timeout)
+        return await self._client.post(url, **kwargs)
+
+    def stream(self, method: str, url: str, **kwargs):
+        kwargs.setdefault("headers", self._headers)
+        kwargs.setdefault("timeout", self._timeout)
+        return self._client.stream(method, url, **kwargs)
+
+
 class LichessEngine:
     def __init__(self):
         self.token = os.environ.get("LICHESS_API_TOKEN", "").strip()
@@ -128,6 +153,7 @@ class LichessEngine:
         self.last_game_id: str | None = None
         self.last_game_info: dict[str, Any] = {}
         self.last_game_my_color: str | None = None
+        self._last_move_cache: tuple[int, bool] = (-1, False)
         self._auto_claim_task: asyncio.Task | None = None
         self._seek_task: asyncio.Task | None = None
         self._stream_task: asyncio.Task | None = None
@@ -140,9 +166,7 @@ class LichessEngine:
         opp = self.game_info.get("opponent", {})
         username = (opp.get("username") or "").lower()
         title = opp.get("title")
-        if title == "BOT" or "stockfish" in username or "ai level" in username or username.startswith("ai"):
-            return True
-        return False
+        return bool(title == "BOT" or "stockfish" in username or "ai level" in username or username.startswith("ai"))
 
     def _get_headers(self) -> dict[str, str]:
         token = os.environ.get("LICHESS_API_TOKEN", self.token).strip()
@@ -153,6 +177,32 @@ class LichessEngine:
         if token and not token.startswith("lip_your"):
             headers["Authorization"] = f"Bearer {token}"
         return headers
+
+    @asynccontextmanager
+    async def _request_client(self, headers: dict, timeout):
+        """Yields a request proxy over the pooled client (falls back to a temp client offline)."""
+        client = self.client
+        owns = False
+        if client is None or client.is_closed:
+            client = httpx.AsyncClient(
+                base_url=LICHESS_BASE_URL,
+                timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0),
+                http2=True,
+            )
+            owns = True
+        try:
+            yield _SharedClientProxy(client, headers, timeout)
+        finally:
+            if owns:
+                await client.aclose()
+
+
+    def _save_settings_off_loop(self, save_fn) -> None:
+        """Persists settings without blocking the event loop when one is running."""
+        try:
+            asyncio.get_running_loop().run_in_executor(None, save_fn)
+        except RuntimeError:
+            save_fn()
 
     async def start(self, state_manager=None):
         """Initializes the HTTP client and fetches authenticated account details."""
@@ -192,16 +242,26 @@ class LichessEngine:
             return
 
         self._cancel_event.set()
-        if self._auto_claim_task and not self._auto_claim_task.done():
-            self._auto_claim_task.cancel()
-            self._auto_claim_task = None
+        tasks = [
+            t
+            for t in (
+                self._auto_claim_task,
+                self._seek_task,
+                self._stream_task,
+                self._event_stream_task,
+            )
+            if t and not t.done()
+        ]
+        for t in tasks:
+            t.cancel()
+        self._auto_claim_task = None
         self.opponent_gone = None
-        if self._seek_task and not self._seek_task.done():
-            self._seek_task.cancel()
-        if self._stream_task and not self._stream_task.done():
-            self._stream_task.cancel()
-        if self._event_stream_task and not self._event_stream_task.done():
-            self._event_stream_task.cancel()
+        # Await cancellations so no request is still using the client when it closes
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._seek_task = None
+        self._stream_task = None
+        self._event_stream_task = None
 
         if self.client and not self.client.is_closed:
             await self.client.aclose()
@@ -213,13 +273,13 @@ class LichessEngine:
 
     async def _listen_event_stream(self, state_manager):
         """Persistent listener for GET /api/stream/event capturing gameStart / incoming challenges."""
-        headers = self._get_headers()
-        headers["Accept"] = "application/x-ndjson"
-
         while self.is_running and not self._cancel_event.is_set():
             try:
-                async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=None) as client:
-                    async with client.stream("GET", "/api/stream/event") as response:
+                headers = self._get_headers()
+                headers["Accept"] = "application/x-ndjson"
+                async with self._request_client(headers, None) as client, client.stream(
+                    "GET", "/api/stream/event"
+                ) as response:
                         if response.status_code != 200:
                             logger.debug(f"Event stream HTTP {response.status_code}, retrying in 5s...")
                             await asyncio.sleep(5)
@@ -286,7 +346,7 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.get("/api/account")
                 if res.status_code == 200:
                     data = res.json()
@@ -360,7 +420,7 @@ class LichessEngine:
         games: list[dict[str, Any]] = []
 
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=12.0) as client:
+            async with self._request_client(headers, 12.0) as client:
                 res = await client.get(f"/api/games/user/{username}", params=params)
                 if res.status_code != 200:
                     logger.warning(f"Lichess recent games API returned status {res.status_code}: {res.text}")
@@ -507,7 +567,7 @@ class LichessEngine:
                 "ai_level": level,
                 "rating_range": None,
             }
-            save_settings()
+            self._save_settings_off_loop(save_settings)
         except Exception as e:
             logger.warning(f"Could not persist last_game_params in challenge_ai(): {e}")
 
@@ -521,7 +581,7 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=10.0) as client:
+            async with self._request_client(headers, 10.0) as client:
                 res = await client.post("/api/challenge/ai", data=form_data)
                 if res.status_code in [200, 201]:
                     data = res.json()
@@ -601,7 +661,7 @@ class LichessEngine:
                 "ai_level": ai_level,
                 "rating_range": rating_range,
             }
-            save_settings()
+            self._save_settings_off_loop(save_settings)
         except Exception as e:
             logger.warning(f"Could not persist last_game_params in seek(): {e}")
 
@@ -636,10 +696,9 @@ class LichessEngine:
         headers["Accept"] = "application/x-ndjson"
 
         try:
-            async with httpx.AsyncClient(
-                base_url=LICHESS_BASE_URL, headers=headers, timeout=None
-            ) as client:
-                async with client.stream("POST", "/api/board/seek", data=form_data) as response:
+            async with self._request_client(headers, None) as client, client.stream(
+                "POST", "/api/board/seek", data=form_data
+            ) as response:
                     if response.status_code != 200:
                         err_text = await response.aread()
                         logger.error(f"Lichess seek failed (HTTP {response.status_code}): {err_text.decode('utf-8')}")
@@ -699,44 +758,41 @@ class LichessEngine:
             self.username = acct.get("username")
 
         try:
-            async with httpx.AsyncClient(
-                base_url=LICHESS_BASE_URL, headers=headers, timeout=None
-            ) as client:
-                async with client.stream(
-                    "GET", f"/api/board/game/stream/{game_id}"
-                ) as response:
-                    if response.status_code != 200:
-                        logger.error(f"Failed to stream game {game_id}: HTTP {response.status_code}")
-                        if self.current_game_id == game_id and state_manager:
-                            state_manager.game_status = "IDLE"
-                        return
+            async with self._request_client(headers, None) as client, client.stream(
+                "GET", f"/api/board/game/stream/{game_id}"
+            ) as response:
+                if response.status_code != 200:
+                    logger.error(f"Failed to stream game {game_id}: HTTP {response.status_code}")
+                    if self.current_game_id == game_id and state_manager:
+                        state_manager.game_status = "IDLE"
+                    return
 
-                    logger.info(f"Streaming live game {game_id}...")
-                    async for line in response.aiter_lines():
-                        if self._cancel_event.is_set():
-                            break
+                logger.info(f"Streaming live game {game_id}...")
+                async for line in response.aiter_lines():
+                    if self._cancel_event.is_set():
+                        break
 
-                        line = line.strip()
-                        if not line:
-                            continue
+                    line = line.strip()
+                    if not line:
+                        continue
 
-                        try:
-                            event = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-                        event_type = event.get("type")
-                        if event_type == "gameFull":
-                            self._handle_game_full(event, state_manager)
-                        elif event_type == "gameState":
-                            self._handle_game_state(event, state_manager)
-                        elif event_type == "chatLine":
-                            logger.info(f"[Chat] {event.get('username')}: {event.get('text')}")
-                        elif event_type == "opponentGone":
-                            gone = bool(event.get("gone", False))
-                            claim_win = event.get("claimWinInSeconds", 0)
-                            logger.info(f"Opponent gone: {gone}, claim win in {claim_win}s")
-                            self._handle_opponent_gone(gone, claim_win, state_manager)
+                    event_type = event.get("type")
+                    if event_type == "gameFull":
+                        self._handle_game_full(event, state_manager)
+                    elif event_type == "gameState":
+                        self._handle_game_state(event, state_manager)
+                    elif event_type == "chatLine":
+                        logger.info(f"[Chat] {event.get('username')}: {event.get('text')}")
+                    elif event_type == "opponentGone":
+                        gone = bool(event.get("gone", False))
+                        claim_win = event.get("claimWinInSeconds", 0)
+                        logger.info(f"Opponent gone: {gone}, claim win in {claim_win}s")
+                        self._handle_opponent_gone(gone, claim_win, state_manager)
 
         except asyncio.CancelledError:
             logger.info(f"Game stream {game_id} cancelled.")
@@ -771,14 +827,11 @@ class LichessEngine:
             state_manager.last_game_metadata = dict(self.game_info)
 
         try:
-            try:
-                from app.board_hardware import save_settings, settings
-            except ImportError:
-                from board_hardware import save_settings, settings
+            from board_hardware import save_settings, settings
             settings["last_game_moves"] = list(moves)
             settings["last_game_id"] = self.current_game_id
             settings["last_game_my_color"] = self.my_color
-            save_settings()
+            self._save_settings_off_loop(save_settings)
         except Exception as e:
             logger.warning(f"Could not persist last_game_moves to settings: {e}")
 
@@ -845,9 +898,7 @@ class LichessEngine:
         # Check AI indicator if applicable
         if white_info.get("aiLevel"):
             self.my_color = "black"
-        elif black_info.get("aiLevel"):
-            self.my_color = "white"
-        elif my_user and my_user == white_user:
+        elif black_info.get("aiLevel") or my_user and my_user == white_user:
             self.my_color = "white"
         elif my_user and my_user == black_user:
             self.my_color = "black"
@@ -939,13 +990,16 @@ class LichessEngine:
     def _apply_moves(self, moves_str: str):
         """Reconstructs internal chess.Board from space-separated UCI move sequence."""
         self.board = chess.Board()
+        self._last_move_cache = (0, False)
         if moves_str:
             for uci in moves_str.strip().split():
                 try:
                     move = chess.Move.from_uci(uci)
-                    if move in self.board.legal_moves or self.board.is_legal(move):
+                    if move in self.board.legal_moves:
+                        self._last_move_cache = (len(self.board.move_stack) + 1, self.board.is_capture(move))
                         self.board.push(move)
                     else:
+                        logger.warning(f"Move {uci} not legal in reconstructed position; pushing anyway to stay in sync.")
                         self.board.push_uci(uci)
                 except Exception as e:
                     logger.warning(f"Could not push move {uci}: {e}")
@@ -978,12 +1032,16 @@ class LichessEngine:
         if self.board.move_stack:
             last_move = self.board.peek()
             last_move_uci = last_move.uci()
-            try:
-                m = self.board.pop()
-                last_move_is_capture = bool(self.board.is_capture(m))
-                self.board.push(m)
-            except Exception:
-                last_move_is_capture = False
+            cache_count, cache_capture = getattr(self, "_last_move_cache", (-1, False))
+            if cache_count == len(self.board.move_stack):
+                last_move_is_capture = cache_capture
+            else:
+                try:
+                    m = self.board.pop()
+                    last_move_is_capture = bool(self.board.is_capture(m))
+                    self.board.push(m)
+                except Exception:
+                    last_move_is_capture = False
 
         return {
             "game_id": self.current_game_id,
@@ -1030,7 +1088,7 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/move/{uci_move}")
                 if res.status_code == 200 and res.json().get("ok", True):
                     logger.info(f"Move {uci_move} accepted by Lichess.")
@@ -1054,7 +1112,7 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/claim-victory")
                 if res.status_code in [200, 201]:
                     logger.info(f"Victory claimed successfully for game {self.current_game_id}!")
@@ -1090,21 +1148,21 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/resign")
                 if res.status_code == 200:
                     self.game_info["is_game_over"] = True
                     self.game_info["winner"] = "black" if self.my_color == "white" else "white"
                     self.game_info["end_reason"] = "resign"
-                self._record_last_game(state_manager)
-                state_manager.game_status = "IDLE"
-                if state_manager and hasattr(state_manager, "trigger_animation"):
-                    state_manager.trigger_animation("GAME_LOST")
-                return res.status_code == 200
+                    self._record_last_game(state_manager)
+                    state_manager.game_status = "IDLE"
+                    if state_manager and hasattr(state_manager, "trigger_animation"):
+                        state_manager.trigger_animation("GAME_LOST")
+                    return True
+                logger.warning(f"Failed to resign game: HTTP {res.status_code} - {res.text}")
+                return False
         except Exception as e:
             logger.error(f"Error resigning game: {e}")
-            self._record_last_game(state_manager)
-            state_manager.game_status = "IDLE"
             return False
 
     async def abort(self, state_manager) -> bool:
@@ -1119,21 +1177,19 @@ class LichessEngine:
 
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/abort")
                 if res.status_code == 200:
                     self.game_info["is_game_over"] = True
                     self.game_info["end_reason"] = "abort"
-                self._record_last_game(state_manager)
-                state_manager.game_status = "IDLE"
-                return res.status_code == 200
+                    self._record_last_game(state_manager)
+                    state_manager.game_status = "IDLE"
+                    return True
+                logger.warning(f"Failed to abort game: HTTP {res.status_code} - {res.text}")
+                return False
         except Exception as e:
             logger.error(f"Error aborting game: {e}")
-            self._record_last_game(state_manager)
-            state_manager.game_status = "IDLE"
             return False
-
-    abort_game = abort
 
     async def draw(self, state_manager, accept: bool = True) -> bool:
         """Offers or accepts a draw via POST /api/board/game/{game_id}/draw/{yes/no}."""
@@ -1143,7 +1199,7 @@ class LichessEngine:
         action = "yes" if accept else "no"
         headers = self._get_headers()
         try:
-            async with httpx.AsyncClient(base_url=LICHESS_BASE_URL, headers=headers, timeout=5.0) as client:
+            async with self._request_client(headers, 5.0) as client:
                 res = await client.post(f"/api/board/game/{self.current_game_id}/draw/{action}")
                 return res.status_code == 200
         except Exception as e:
