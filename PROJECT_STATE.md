@@ -4,16 +4,17 @@
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
 ## Pending Deployment — Raspberry Pi Offline (code pushed, awaiting device)
-Full codebase optimization pass completed and verified OFFLINE (261/261 pytest, ruff clean, knip clean, tsc/eslint clean, vite build OK, app smoke test OK). The Raspberry Pi went offline before the final on-device verification round. Once `pi@pi` is reachable again, execute the mandatory deployment sequence:
+Full codebase optimization pass + ESP32 firmware update completed and verified OFFLINE (261/261 pytest, ruff clean, knip clean, tsc/eslint clean, vite build OK, app smoke test OK). The Raspberry Pi went offline before the final on-device verification round. Once `pi@pi` is reachable again, execute the mandatory deployment sequence:
 1. `ssh pi@pi` → `cd ~/chess_git` → `git pull` (board_settings.json is git-ignored and preserved).
 2. `cd ~/chess_git/Raspberry/frontend && npm run build`.
 3. `source ~/venv/chess/bin/activate && cd ~/chess_git/Raspberry && python -m pytest tests/ -q` (expect 261 passed).
-4. `sudo systemctl restart smart-chess` then verify: `sudo systemctl status smart-chess`, `sudo journalctl -u smart-chess -f`, load the web UI, confirm WebSocket state stream + LED idle render behave normally.
-5. On-device sanity checks worth doing manually: play a physical move during a game (move dispatch via pooled httpx client), toggle night mode gesture, run one lifecycle animation (baseline freeze/restore), open Analysis tab (lazy chunk loads).
+4. **Flash the ESP32** with `Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino` (user flashes via Arduino IDE; a clean compile is the pre-flash gate). Firmware changes: freshness-gated scan cache (`SCAN_CACHE_MAX_AGE_MS 20`) served to CMD_SCAN_ADC (kills the per-poll double blocking scan), parser self-resync on stalled packets, legacy single-byte handlers deleted (`hardware_test.py` migrated to framed protocol), rate-limited idle scanning (`IDLE_SCAN_INTERVAL_MS 5`).
+5. `sudo systemctl restart smart-chess` then verify: `sudo systemctl status smart-chess`, `sudo journalctl -u smart-chess -f` (must show NO CRC/TIMEOUT/PARSE_ERROR storms after the flash), load the web UI, confirm WebSocket state stream + LED idle render behave normally.
+6. On-device sanity checks worth doing manually: run `python hardware_test.py --quiet` briefly (validates the new framed scan path end-to-end), play a physical move during a game (move dispatch via pooled httpx client + improved scan latency), toggle night mode gesture, run one lifecycle animation (baseline freeze/restore), open Analysis tab (lazy chunk loads).
 
 Known notes for that session:
-- ESP32 firmware (`Raspberry/ESP32_firmware/analog_scanner`) was intentionally NOT modified: `CMD_SCAN_ADC` re-scans instead of serving `latest_scan`, and legacy handlers busy-wait. Fixing requires reflashing the ESP32 — separate session.
-- Test-only local venv used for offline verification lives at `/tmp/opencode/scb_venv` (ephemeral; recreate with `pip install pytest chess "httpx[http2]" fastapi python-dotenv pyserial`). The Pi venv needs no changes.
+- Deploy order matters for clean isolation: pull/build/pytest/restart service FIRST against the OLD firmware (fully compatible — same packet format), verify green, THEN flash the ESP32 and re-verify.
+- Test-only local venv used for offline verification lives at `/tmp/opencode/scb_venv` (ephemeral; recreate with `pip install pytest chess "httpx[http2]" fastapi python-dotenv pyserial ruff vulture`). The Pi venv needs no changes.
 - Recommended follow-ups logged in Task Backlog below.
 
 ## Active Agents Roster
@@ -26,6 +27,12 @@ Known notes for that session:
 - **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
 
 ## Completed Tasks
+- [x] ESP32 Firmware Optimization & Legacy Protocol Removal (`Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino`, `Raspberry/hardware_test.py`):
+  - **Freshness-Gated Scan Cache**: `CMD_SCAN_ADC` now serves the continuously-maintained `latest_scan` when it is at most 20 ms old (`SCAN_CACHE_MAX_AGE_MS`), performing a fresh blocking scan only when stale. Previously EVERY host poll triggered a full ~10-15 ms blocking scan in the request path, and loop()'s idle branch could run a second redundant scan immediately after — capping the effective scan rate and adding latency to every physical-move detection cycle.
+  - **Parser Self-Resync**: the 50 ms partial-packet staleness reset moved out of the `Serial.available()` branch, so a stream that stalls mid-packet recovers without waiting for more bytes (previously a corrupted/truncated frame could wedge the parser state until the next byte arrived).
+  - **Legacy Single-Byte Handlers Deleted**: removed `handleLegacyCommand` ('B'/'L'/'W'/'C'/'A'/'S') including three busy-wait receive loops that could block parsing for up to 10 ms each. Sole consumer `hardware_test.py` migrated to the framed binary protocol (`build_packet(CMD_SCAN_ADC)` + shared `_read_adc_packet`), given a proper serial lock on `set_serial_conn`, and equipped with a `--quiet` flag that suppresses per-tick timing/grid spam (prints only on state change).
+  - **Idle Scan Rate Gate**: idle background scanning rate-limited to one scan per 5 ms (`IDLE_SCAN_INTERVAL_MS`) instead of back-to-back full-speed passes, reducing idle CPU load and ADC self-heating while keeping the cache warm.
+  - Verification: Python-side gates all green locally (261/261 pytest, ruff clean, vulture clean, hardware_test import smoke test). On-device: compile via Arduino IDE is the pre-flash gate; post-flash journalctl must show no CRC/TIMEOUT/PARSE_ERROR storms.
 - [x] Full Codebase Optimization Pass (dead code elimination, performance, correctness, static-analysis clean):
   - **Serial Protocol Correctness (`Raspberry/board_hardware.py`)**: Enforced CRC-8 validation on framed ADC packets (the `or len(full_payload) == 128` clause made it vacuous — corrupted packets became phantom piece lifts); framed-packet trailing-read timeout no longer falls through returning header bytes as raw sensor data; hot scan loop hoists baselines/thresholds/normalized `disabled_squares` set once per scan (was O(n) list membership × 64 squares × 2 sites per tick); calibration sampling skeleton deduplicated into `_collect_calibration_samples`; O(n) baseline-history pruning.
   - **Event-Loop & Broadcast Architecture (`Raspberry/app/board_state.py`, `main.py`)**: Update-loop tick exceptions now log with traceback and continue (previously one transient error permanently killed scanning/LEDs/WS until restart); LED frame flush deduplicated into `flush_frame()`; arrival-flash decay and eval-bar math extracted to single helpers; per-tick setup validation contract preserved; analysis anchor-board reconstruction cached + gated on physical-state signature; `AnalysisEngineAdapter` hoisted to module scope (was re-created 100×/sec); digital grid rebuilt only on FEN change; idle tracker reset skips deep copy when clean; gesture reset now transition-based. `ConnectionManager` rewritten with per-client outgoing queues + sender tasks (slow client can no longer stall the loop or other clients), broadcast failures logged, payload construction skipped at zero clients, event-driven broadcast with cheap change digest + 250 ms heartbeat replacing unconditional ~100 Hz full-state pushes; `/api/board/clear_leds` moved off the event loop; fire-and-forget tasks held via `_spawn_task`.
@@ -320,7 +327,6 @@ Known notes for that session:
     - Enhanced "Save Current Stats as Defaults" with vivid emerald confirmation feedback including exact save timestamp and baseline/threshold summary.
 
 ## Task Backlog
-- [ ] ESP32 firmware (`analog_scanner.ino`): serve `CMD_SCAN_ADC` from the continuously-maintained `latest_scan` instead of re-scanning per request (saves ~10-15 ms latency per scan, gates the 100 Hz host rate); convert legacy busy-wait command handlers to non-blocking reads. Requires ESP32 reflash + on-device verification.
 - [ ] Promotion selection: physical underpromotion is silently auto-queened (`physical_tracker.py` hard-codes `"q"`). Consider a `promotion_mode` setting with a pending-selection LED prompt (pattern exists in `pending_castling_rook`).
 - [ ] En-passant captured-pawn cleanup: no transient guardrail exemption/LED prompt for the vanishing enemy pawn square (unlike castling rook handling), causing a false `unexpected_piece` alert until the user removes the pawn.
 - [ ] Split `App.tsx` (~2400 lines, ~45 `useState`) into PlayTab / DebugTab / ChessBoard / SensorOverlay / MatchmakingPanel components with memoized cell boundaries.

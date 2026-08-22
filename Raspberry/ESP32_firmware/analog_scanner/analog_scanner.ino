@@ -9,14 +9,14 @@
  * - Commands:
  *     CMD_PING (0x00) -> RESP_PONG (0x80)
  *     CMD_SCAN_ADC (0x01) -> RESP_ADC_DATA (0x81) with 128 bytes ADC data + CRC8
+ *                           (served from the freshness-gated cache; rescanned only when stale)
  *     CMD_SET_SETTLE (0x02) -> sets settle_us
  *     CMD_SET_LEDS (0x10) -> batch set (idx, r, g, b)
  *     CMD_SET_ALL (0x11) -> set all LEDs to (r, g, b) + show
  *     CMD_CLEAR_LEDS (0x12) -> clear all LEDs + show
  *     CMD_SHOW_LEDS (0x13) -> show()
  *     CMD_SET_AND_SHOW (0x14) -> batch set (idx, r, g, b) + show()
- * - Legacy single-byte fallback outside binary header ('B', 'C', 'W', 'L', 'A', 'S')
- * - Continuous matrix scanning during idle time
+ * - Rate-limited continuous matrix scanning during idle time (keeps the cache warm)
  */
 
 #include <Adafruit_NeoPixel.h>
@@ -45,8 +45,14 @@ const int ROW_MUX_S3 = 19;
 // Default MUX settling delay (us)
 int settle_us = 100;
 
+// Scan freshness / cadence tuning
+#define SCAN_CACHE_MAX_AGE_MS 20   // Max age of a cached scan served to CMD_SCAN_ADC
+#define IDLE_SCAN_INTERVAL_MS 5    // Minimum interval between idle background scans
+#define PARSER_STALE_TIMEOUT_MS 50 // Reset the parser when a partial packet stalls
+
 // Cache to store the latest raw scan of the 8x8 matrix
 uint16_t latest_scan[64] = {0};
+unsigned long latest_scan_ms = 0;
 
 // Binary packet protocol constants
 #define PKT_HEADER1      0xAA
@@ -124,14 +130,15 @@ void scanMatrix() {
     for (int rank_idx = 0; rank_idx < 8; rank_idx++) {
       // ROW_MUX select pins control Ranks 1-8 (Rows 0-7)
       setMuxChannel(ROW_MUX_S0, ROW_MUX_S1, ROW_MUX_S2, ROW_MUX_S3, rank_idx);
-      
+
       delayMicroseconds(settle_us);
-      
+
       // Double read to settle the internal ESP32 sample-and-hold circuit
       analogRead(MUX_ANALOG_IN);
       latest_scan[file_idx * 8 + rank_idx] = analogRead(MUX_ANALOG_IN);
     }
   }
+  latest_scan_ms = millis();
 }
 
 void sendPacket(uint8_t cmd_id, const uint8_t* payload, uint16_t length) {
@@ -161,7 +168,12 @@ void executeCommand(uint8_t cmd, const uint8_t* payload, uint16_t len) {
       break;
     }
     case CMD_SCAN_ADC: {
-      scanMatrix();
+      // Serve the continuously-maintained cache when fresh; rescan only if stale.
+      // Avoids re-running a full blocking scan on every host poll (previously the
+      // request path AND loop()'s idle branch could each scan per request).
+      if (millis() - latest_scan_ms > SCAN_CACHE_MAX_AGE_MS) {
+        scanMatrix();
+      }
       sendPacket(RESP_ADC_DATA, (const uint8_t*)latest_scan, 128);
       break;
     }
@@ -234,61 +246,6 @@ void executeCommand(uint8_t cmd, const uint8_t* payload, uint16_t len) {
   }
 }
 
-void handleLegacyCommand(char c) {
-  if (c == 'B') {
-    Serial.write(0xAA);
-    Serial.write(0x55);
-    Serial.write((uint8_t*)latest_scan, 128);
-  } else if (c == 'L') {
-    unsigned long start = millis();
-    while (Serial.available() < 4 && (millis() - start) < 10) {}
-    if (Serial.available() >= 4) {
-      int idx = Serial.read();
-      int r = Serial.read();
-      int g = Serial.read();
-      int b = Serial.read();
-      if (idx >= 0 && idx < NUM_LEDS_PER_STRIP) {
-        strip1.setPixelColor(idx, strip1.Color(r, g, b));
-      } else if (idx >= NUM_LEDS_PER_STRIP && idx < 2 * NUM_LEDS_PER_STRIP) {
-        strip2.setPixelColor(idx - NUM_LEDS_PER_STRIP, strip2.Color(r, g, b));
-      }
-    }
-  } else if (c == 'W') {
-    strip1.show();
-    strip2.show();
-  } else if (c == 'C') {
-    for (int i = 0; i < NUM_LEDS_PER_STRIP; i++) {
-      strip1.setPixelColor(i, 0);
-      strip2.setPixelColor(i, 0);
-    }
-    strip1.show();
-    strip2.show();
-  } else if (c == 'A') {
-    unsigned long start = millis();
-    while (Serial.available() < 3 && (millis() - start) < 10) {}
-    if (Serial.available() >= 3) {
-      int r = Serial.read();
-      int g = Serial.read();
-      int b = Serial.read();
-      for (int i = 0; i < NUM_LEDS_PER_STRIP; i++) {
-        strip1.setPixelColor(i, strip1.Color(r, g, b));
-        strip2.setPixelColor(i, strip2.Color(r, g, b));
-      }
-      strip1.show();
-      strip2.show();
-    }
-  } else if (c == 'S') {
-    unsigned long start = millis();
-    while (Serial.available() == 0 && (millis() - start) < 10) {}
-    if (Serial.available() > 0) {
-      int val = Serial.read();
-      if (val >= 0 && val <= 255) {
-        settle_us = val;
-      }
-    }
-  }
-}
-
 void setup() {
   Serial.setRxBufferSize(2048);
   Serial.begin(921600);
@@ -321,10 +278,13 @@ void setup() {
 }
 
 void loop() {
+  // Resynchronize the parser when a partially received stream stalls mid-packet,
+  // independent of whether new bytes keep arriving.
+  if (parser_state != STATE_IDLE && (millis() - last_rx_time > PARSER_STALE_TIMEOUT_MS)) {
+    parser_state = STATE_IDLE;
+  }
+
   if (Serial.available() > 0) {
-    if (parser_state != STATE_IDLE && (millis() - last_rx_time > 50)) {
-      parser_state = STATE_IDLE;
-    }
     last_rx_time = millis();
 
     uint8_t c = (uint8_t)Serial.read();
@@ -333,19 +293,14 @@ void loop() {
       case STATE_IDLE: {
         if (c == PKT_HEADER1) {
           parser_state = STATE_HEADER_2;
-        } else {
-          handleLegacyCommand((char)c);
         }
         break;
       }
       case STATE_HEADER_2: {
         if (c == PKT_HEADER2) {
           parser_state = STATE_CMD;
-        } else if (c == PKT_HEADER1) {
-          parser_state = STATE_HEADER_2;
-        } else {
+        } else if (c != PKT_HEADER1) {
           parser_state = STATE_IDLE;
-          handleLegacyCommand((char)c);
         }
         break;
       }
@@ -398,8 +353,8 @@ void loop() {
         break;
       }
     }
-  } else {
-    // Perform continuous background scan
+  } else if (millis() - latest_scan_ms >= IDLE_SCAN_INTERVAL_MS) {
+    // Rate-limited background scan keeps the cache warm without pinning the CPU/ADC
     scanMatrix();
   }
 }

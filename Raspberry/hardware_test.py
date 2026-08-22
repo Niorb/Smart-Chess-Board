@@ -7,6 +7,9 @@ Scans the 8x8 sensor matrix, calibrates per-square baselines,
 prints differences from baseline, and illuminates squares with significant magnetic deviation.
 """
 
+import argparse
+import struct
+import threading
 import time
 
 try:
@@ -39,15 +42,20 @@ from app.config import (
 )
 from app.led_helpers import Color, get_led_indices, init_strip
 from board_hardware import (
+    CMD_SCAN_ADC,
     COL_MUX_S0,
     COL_MUX_S1,
     COL_MUX_S2,
     COL_MUX_S3,
     DEFAULT_COL_MUX_MAP,
+    _read_adc_packet,
+    build_packet,
     init_mux_pins,
     set_mux_channel,
     settings,
 )
+
+SERIAL_LOCK = threading.RLock()
 
 BASELINE_SAMPLES = 10
 DIFF_LED_THRESHOLD = 150
@@ -126,25 +134,21 @@ def read_active_values(h, ser):
     col_mux_map = settings.get("col_mux_map", DEFAULT_COL_MUX_MAP)
 
     ser.reset_input_buffer()
-    ser.write(b"B")
+    ser.write(build_packet(CMD_SCAN_ADC))
 
-    header = ser.read(2)
-    if len(header) == 2 and header[0] == 0xAA and header[1] == 0x55:
-        expected_bytes = 8 * 8 * 2
-        data = ser.read(expected_bytes)
-        if len(data) == expected_bytes:
-            import struct
-            vals = struct.unpack('<64H', data)
-            for mux_ch in range(8):
-                c_phys = col_mux_map[mux_ch]
-                for r_phys in range(8):
-                    val = vals[mux_ch * 8 + r_phys]
-                    c = 7 - r_phys
-                    r = c_phys
-                    if c in values:
-                        if r in ACTIVE_ROWS:
-                            row_idx = ACTIVE_ROWS.index(r)
-                            values[c][row_idx] = val
+    data = _read_adc_packet(ser)
+    if data is not None and len(data) == 8 * 8 * 2:
+        vals = struct.unpack('<64H', data)
+        for mux_ch in range(8):
+            c_phys = col_mux_map[mux_ch]
+            for r_phys in range(8):
+                val = vals[mux_ch * 8 + r_phys]
+                c = 7 - r_phys
+                r = c_phys
+                if c in values:
+                    if r in ACTIVE_ROWS:
+                        row_idx = ACTIVE_ROWS.index(r)
+                        values[c][row_idx] = val
 
     return values
 
@@ -215,6 +219,15 @@ def print_diff_grid(differences):
 
 
 def main():
+    arg_parser = argparse.ArgumentParser(description="Smart Chess Board hardware diagnostic")
+    arg_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-tick timing lines and difference grids (prints on state change only)",
+    )
+    args = arg_parser.parse_args()
+    quiet = args.quiet
+
     print("--- Hardware Test (8x8 Grid, Baseline Differences) ---")
     print(f"Target columns: {ACTIVE_COLS}, rows: {ACTIVE_ROWS}")
     print(f"LED threshold: abs(diff) > {DIFF_LED_THRESHOLD}")
@@ -240,6 +253,7 @@ def main():
     ser = None
     baseline = None
     led_frame = None
+    last_printed_grid = None
 
     try:
         while True:
@@ -249,7 +263,7 @@ def main():
                     print(f"Serial: Connected to {SERIAL_PORT} at {BAUD_RATE}")
                     ser.reset_input_buffer()
                     if strip is not None:
-                        strip.set_serial_conn(ser)
+                        strip.set_serial_conn(ser, SERIAL_LOCK)
                 except Exception as e:
                     print(f"Serial: Waiting for connection... ({e})")
                     time.sleep(1)
@@ -267,8 +281,14 @@ def main():
                 led_frame = update_leds_from_differences(strip, differences, led_frame)
                 t3 = time.time()
 
-                print(f"[TIMING] Read: {t1-t0:.4f}s | Diff: {t2-t1:.4f}s | LED: {t3-t2:.4f}s")
-                print_diff_grid(differences)
+                grid_key = repr(differences)
+                if quiet:
+                    if grid_key != last_printed_grid:
+                        print_diff_grid(differences)
+                        last_printed_grid = grid_key
+                else:
+                    print(f"[TIMING] Read: {t1-t0:.4f}s | Diff: {t2-t1:.4f}s | LED: {t3-t2:.4f}s")
+                    print_diff_grid(differences)
             except Exception as e:
                 print(f"Serial: Read error: {e}")
                 if ser:
