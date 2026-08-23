@@ -3,19 +3,13 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Pending Deployment — Raspberry Pi Offline (code pushed, awaiting device)
-Full codebase optimization pass + ESP32 firmware update completed and verified OFFLINE (261/261 pytest, ruff clean, knip clean, tsc/eslint clean, vite build OK, app smoke test OK). The Raspberry Pi went offline before the final on-device verification round. Once `pi@pi` is reachable again, execute the mandatory deployment sequence:
-1. `ssh pi@pi` → `cd ~/chess_git` → `git pull` (board_settings.json is git-ignored and preserved).
-2. `cd ~/chess_git/Raspberry/frontend && npm run build`.
-3. `source ~/venv/chess/bin/activate && cd ~/chess_git/Raspberry && python -m pytest tests/ -q` (expect 261 passed).
-4. **Flash the ESP32** with `Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino` (user flashes via Arduino IDE; a clean compile is the pre-flash gate). Firmware changes: freshness-gated scan cache (`SCAN_CACHE_MAX_AGE_MS 20`) served to CMD_SCAN_ADC (kills the per-poll double blocking scan), parser self-resync on stalled packets, legacy single-byte handlers deleted (`hardware_test.py` migrated to framed protocol), rate-limited idle scanning (`IDLE_SCAN_INTERVAL_MS 5`).
-5. `sudo systemctl restart smart-chess` then verify: `sudo systemctl status smart-chess`, `sudo journalctl -u smart-chess -f` (must show NO CRC/TIMEOUT/PARSE_ERROR storms after the flash), load the web UI, confirm WebSocket state stream + LED idle render behave normally.
-6. On-device sanity checks worth doing manually: run `python hardware_test.py --quiet` briefly (validates the new framed scan path end-to-end), play a physical move during a game (move dispatch via pooled httpx client + improved scan latency), toggle night mode gesture, run one lifecycle animation (baseline freeze/restore), open Analysis tab (lazy chunk loads).
-
-Known notes for that session:
-- Deploy order matters for clean isolation: pull/build/pytest/restart service FIRST against the OLD firmware (fully compatible — same packet format), verify green, THEN flash the ESP32 and re-verify.
-- Test-only local venv used for offline verification lives at `/tmp/opencode/scb_venv` (ephemeral; recreate with `pip install pytest chess "httpx[http2]" fastapi python-dotenv pyserial ruff vulture`). The Pi venv needs no changes.
-- Recommended follow-ups logged in Task Backlog below.
+## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23)
+Both optimization commits (`572fb58` codebase pass, `cbc113e` firmware pass) are deployed to the Raspberry Pi and the ESP32 has been reflashed. Verification results:
+- `git pull` clean; frontend `npm run build` OK; **261/261 pytest passed on-device**; service restarted healthy.
+- ESP32 compiled via arduino-cli (22% flash / 7% RAM) and flashed (`cbc113e` firmware: freshness-gated scan cache, parser self-resync, legacy handlers removed, 5 ms idle-scan gate).
+- Post-flash: **0 CRC/TIMEOUT/PARSE errors** under continuous 10 ms polling; WS diagnostics `OK / 0 timeouts / 0 errors`; broadcast traffic measured at ~4 frames/s idle (event-driven coalescing active, down from ~100/s firehose).
+- `hardware_test.py --quiet` validated end-to-end on the new framed protocol (stable ADC readings).
+- Remaining manual check for the user: one physical lift/place move during a game to feel the improved move-detection latency.
 
 ## Active Agents Roster
 - **Architect** (`.agents/arch.md`) - System design, protocols, state machines.

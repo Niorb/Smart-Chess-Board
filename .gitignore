@@ -28,3 +28,6 @@ board_settings.json
 *.json.tmp
 
 
+
+# Settings backup sibling written by save_settings()
+*.bak
