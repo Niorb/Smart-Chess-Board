@@ -272,6 +272,11 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             <p className="text-xs text-slate-400">
               Interactive post-game review, blunder rehabilitation drills, and historical Grandmaster guess-the-move.
             </p>
+            {analysis?.error && (
+              <div className="mt-3 px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-700/60 text-xs text-rose-300">
+                {analysis.error}
+              </div>
+            )}
           </div>
         </div>
 

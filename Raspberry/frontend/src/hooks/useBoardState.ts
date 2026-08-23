@@ -75,6 +75,7 @@ interface AnalysisState {
   active: boolean;
   submode: 'review' | 'blunder_drill' | 'gm_relive';
   is_loading: boolean;
+  error?: string | null;
   current_ply: number;
   total_plys: number;
   game_moves: string[];

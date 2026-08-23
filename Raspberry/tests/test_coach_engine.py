@@ -2,14 +2,13 @@
 Raspberry/tests/test_coach_engine.py
 
 Comprehensive unit and integration test suite for the Stockfish AI Coach,
-Blunder Guard, Move Delta Classifier, Heuristic Fallback, File 'h' Eval Bar,
+Blunder Guard, Move Delta Classifier, Engine Recovery, File 'h' Eval Bar,
 LED Highlighting, and Fair-Play enforcement.
 """
 
 import asyncio
 import os
 import sys
-from unittest.mock import patch
 
 import chess
 import chess.engine
@@ -20,7 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.coach_engine import (
     CoachEngine,
-    HeuristicEvaluator,
+    CoachEngineUnavailable,
     MoveQuality,
     PositionEvaluation,
     calculate_win_chance,
@@ -94,98 +93,99 @@ class TestWinChanceAndClassification:
 # 2. HEURISTIC EVALUATOR (OFFLINE FALLBACK) TESTS
 # =============================================================================
 
-class TestHeuristicEvaluator:
-    @pytest.fixture
-    def evaluator(self):
-        return HeuristicEvaluator()
-
-    def test_starting_position_balance(self, evaluator):
-        """Initial board position should evaluate very close to 0."""
-        board = chess.Board()
-        score = evaluator.evaluate(board)
-        assert abs(score) <= 20
-
-    def test_material_advantage_white(self, evaluator):
-        """White with extra Queen should be ~+900 cp."""
-        board = chess.Board("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-        score = evaluator.evaluate(board)
-        assert score >= 800
-
-    def test_material_advantage_black(self, evaluator):
-        """Black with extra Rook should be negative from White's perspective."""
-        board = chess.Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBNR w Kkq - 0 1")
-        score = evaluator.evaluate(board)
-        assert score <= -400
-
-    def test_top_moves_generation(self, evaluator):
-        """Heuristic generator returns ranked moves with classifications."""
-        board = chess.Board()
-        moves = evaluator.get_top_moves(board, top_k=3)
-        assert len(moves) > 0
-        assert any(m.uci in ["e2e4", "d2d4", "g1f3", "c2c4"] for m in moves)
-        assert moves[0].classification == MoveQuality.BEST
-
-
 # =============================================================================
 # 3. COACH ENGINE ASYNC EVALUATION & CACHING TESTS
 # =============================================================================
 
 class TestCoachEngineAsync:
-    def test_coach_engine_init_and_fallback(self):
-        """If Stockfish is unavailable, coach gracefully operates in heuristic mode."""
-        async def _test():
-            engine = CoachEngine(stockfish_path="/nonexistent/path/to/stockfish")
-            await engine.start()
-            assert engine.is_heuristic_mode is True
+    def test_evaluate_position_requires_engine(self, fake_stockfish):
+        """Evaluation runs through Stockfish; a dead engine raises CoachEngineUnavailable."""
 
+        async def _test():
+            engine = CoachEngine(stockfish_path="/usr/games/stockfish")
+            await engine.start()
             result = await engine.evaluate_position(chess.STARTING_FEN)
             assert isinstance(result, PositionEvaluation)
             assert result.best_move is not None
             assert len(result.top_moves) > 0
+            assert fake_stockfish.calls >= 1
             await engine.stop()
 
         asyncio.run(_test())
 
-    def test_fen_caching(self):
+    def test_unavailable_engine_raises(self, fake_stockfish, monkeypatch):
+        """When the engine cannot launch, evaluation raises instead of degrading silently."""
+        import app.coach_engine as coach_module
+
+        async def failing_popen(path):
+            raise OSError("cannot spawn stockfish")
+
+        monkeypatch.setattr(coach_module.chess.engine, "popen_uci", failing_popen)
+
+        async def _test():
+            engine = CoachEngine(stockfish_path="/nonexistent/stockfish")
+            with pytest.raises(CoachEngineUnavailable):
+                await engine.evaluate_position(chess.STARTING_FEN)
+
+        asyncio.run(_test())
+
+    def test_engine_recovery_after_failure(self, fake_stockfish, monkeypatch):
+        """A crashed engine is relaunched and the retried analysis succeeds."""
+
+        call_count = {"n": 0}
+
+
+        async def _test():
+            engine = CoachEngine(stockfish_path="/usr/games/stockfish")
+            await engine.start()
+            original_analyse = fake_stockfish.analyse
+
+            async def crashing_analyse(board, limit, multipv=1):
+                if call_count["n"] == 0:
+                    call_count["n"] += 1
+                    raise RuntimeError("engine died unexpectedly")
+                return await original_analyse(board, limit, multipv=multipv)
+
+            fake_stockfish.analyse = crashing_analyse
+            result = await engine.evaluate_position(chess.STARTING_FEN)
+            assert isinstance(result, PositionEvaluation)
+            assert result.best_move is not None
+            await engine.stop()
+
+        asyncio.run(_test())
+
+    def test_fen_caching(self, fake_stockfish):
         """Re-evaluating identical FEN retrieves result from cache without re-computing."""
         async def _test():
-            engine = CoachEngine(stockfish_path=None)
-            await engine.start()
+            engine = CoachEngine(stockfish_path="/usr/games/stockfish")
 
             eval1 = await engine.evaluate_position(chess.STARTING_FEN)
-            with patch.object(engine.evaluator, "evaluate", wraps=engine.evaluator.evaluate) as mock_eval:
-                eval2 = await engine.evaluate_position(chess.STARTING_FEN)
-                mock_eval.assert_not_called()
+            calls_after_first = fake_stockfish.calls
+            eval2 = await engine.evaluate_position(chess.STARTING_FEN)
 
+            assert fake_stockfish.calls == calls_after_first
             assert eval1.best_move == eval2.best_move
             assert eval1.score_cp == eval2.score_cp
-            await engine.stop()
 
         asyncio.run(_test())
 
-    def test_task_cancellation_on_rapid_requests(self):
-        """Triggering new analysis while one is pending cleanly cancels previous task."""
+    def test_rapid_requests_do_not_cancel_inflight_analysis(self, fake_stockfish):
+        """request_analysis must skip while busy — cancelling UCI commands corrupts them."""
         async def _test():
-            engine = CoachEngine(stockfish_path=None)
-            await engine.start()
+            board_a = chess.Board()
+            board_b = chess.Board()
+            board_b.push_san("e4")
 
-            async def slow_eval():
-                await asyncio.sleep(0.5)
-                return await engine.evaluate_position("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+            engine = CoachEngine(stockfish_path="/usr/games/stockfish")
+            engine.request_analysis(board_a)
+            first_task = engine._analysis_task
+            assert first_task is not None
 
-            task1 = asyncio.create_task(slow_eval())
-            await asyncio.sleep(0.01)
+            engine.request_analysis(board_b)
+            assert engine._analysis_task is first_task
 
-            task2 = asyncio.create_task(engine.evaluate_position(chess.STARTING_FEN))
-            res2 = await task2
-            assert res2 is not None
-
-            task1.cancel()
-            try:
-                await task1
-            except asyncio.CancelledError:
-                pass
-            await engine.stop()
+            await first_task
+            assert engine.get_cached_evaluation(board_a.fen()) is not None
 
         asyncio.run(_test())
 

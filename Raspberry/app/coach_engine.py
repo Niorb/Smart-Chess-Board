@@ -3,15 +3,19 @@ app/coach_engine.py
 
 Asynchronous Stockfish AI Coach & Blunder Guard Engine for the Smart Chess Board.
 Provides real-time non-blocking evaluation, multi-PV scoring, move delta classification,
-evaluation caching, and cancellation on board position transitions.
-Includes graceful heuristic fallback when Stockfish binary is absent.
+evaluation caching, automatic engine recovery, and persistent game-analysis caching.
+Stockfish is mandatory: evaluation failures surface loudly instead of degrading silently.
 """
 
 import asyncio
+import contextlib
+import hashlib
+import json
 import logging
 import math
 import os
 import shutil
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -43,6 +47,10 @@ TIER_BEST_MAX_LOSS = 10        # delta <= 10 cp -> BEST
 TIER_GOOD_MAX_LOSS = 50        # 10 < delta <= 50 cp -> GOOD
 TIER_INACCURACY_MAX_LOSS = 150 # 50 < delta <= 150 cp -> INACCURACY
                                # delta > 150 cp -> BLUNDER
+
+
+class CoachEngineUnavailable(RuntimeError):
+    """Raised when Stockfish cannot be launched or fails repeatedly."""
 
 
 def calculate_win_chance(score_cp: int | None, mate: int | None) -> float:
@@ -146,145 +154,160 @@ class PositionEvaluation:
         }
 
 
-class HeuristicEvaluator:
-    """Lightweight static evaluation engine used for offline fallback and fast tests."""
-    PIECE_VALUES = {
-        chess.PAWN: 100,
-        chess.KNIGHT: 320,
-        chess.BISHOP: 330,
-        chess.ROOK: 500,
-        chess.QUEEN: 900,
-        chess.KING: 0,
-    }
+# =============================================================================
+# PERSISTENT GAME-ANALYSIS CACHE (fast re-analysis across sessions)
+# =============================================================================
 
-    def evaluate(self, board: chess.Board) -> int:
-        """Returns centipawn evaluation from White's perspective."""
-        if board.is_checkmate():
-            return -10000 if board.turn == chess.WHITE else 10000
-        if board.is_stalemate() or board.is_insufficient_material():
-            return 0
+ANALYSIS_CACHE_ENTRIES = 8
 
-        score = 0
-        for sq, piece in board.piece_map().items():
-            val = self.PIECE_VALUES.get(piece.piece_type, 0)
-            file_idx = chess.square_file(sq)
-            rank_idx = chess.square_rank(sq)
-            center_bonus = 0
-            if file_idx in [3, 4] and rank_idx in [3, 4]:
-                center_bonus = 20
-            elif file_idx in [2, 5] and rank_idx in [2, 5]:
-                center_bonus = 10
 
-            total_val = val + center_bonus
-            if piece.color == chess.WHITE:
-                score += total_val
-            else:
-                score -= total_val
+def _analysis_cache_path() -> str:
+    try:
+        from board_hardware import get_settings_filepath
+        settings_dir = os.path.dirname(get_settings_filepath()) or "."
+    except Exception:
+        settings_dir = "."
+    return os.path.join(settings_dir, "analysis_cache.json")
 
-        return score
 
-    def get_top_moves(self, board: chess.Board, top_k: int = 5) -> list[MoveAnalysis]:
-        """Generates up to top_k ranked moves with heuristic scores and quality classifications."""
-        legal = list(board.legal_moves)
-        if not legal:
-            return []
+def analysis_cache_key(moves_uci: list[str]) -> str:
+    return hashlib.sha1(" ".join(moves_uci).encode("utf-8")).hexdigest()
 
-        scored_moves = []
-        for move in legal:
-            board.push(move)
-            w_score = self.evaluate(board)
-            board.pop()
 
-            pov_score = w_score if board.turn == chess.WHITE else -w_score
-            scored_moves.append((move, pov_score, w_score))
+def load_cached_analysis(key: str) -> dict[str, Any] | None:
+    """Returns the cached batch-analysis result for a game move list, if present."""
+    path = _analysis_cache_path()
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        entry = data.get("entries", {}).get(key)
+        if entry and isinstance(entry.get("result"), dict):
+            return entry
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.debug(f"Could not read analysis cache: {e}")
+    return None
 
-        scored_moves.sort(key=lambda x: x[1], reverse=True)
-        best_pov = scored_moves[0][1]
 
-        results = []
-        for move, pov_score, w_score in scored_moves:
-            delta = max(0, best_pov - pov_score)
-            classification = classify_move_delta(delta)
-            results.append(
-                MoveAnalysis(
-                    uci=move.uci(),
-                    from_sq=chess.square_name(move.from_square),
-                    to_sq=chess.square_name(move.to_square),
-                    classification=classification,
-                    delta_cp=delta,
-                    score_cp=w_score,
-                    mate=None,
-                )
-            )
+def save_cached_analysis(key: str, moves_uci: list[str], result: dict[str, Any]) -> None:
+    """Persists a completed batch analysis (LRU-capped, atomic write)."""
+    path = _analysis_cache_path()
+    data: dict[str, Any] = {"version": 1, "order": [], "entries": {}}
+    try:
+        if os.path.exists(path):
+            with open(path) as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict) and isinstance(loaded.get("entries"), dict):
+                data = loaded
+                if not isinstance(data.get("order"), list):
+                    data["order"] = list(data["entries"].keys())
+    except Exception as e:
+        logger.debug(f"Rewriting analysis cache after read error: {e}")
 
-        return results
+    entries = data["entries"]
+    if key in data["order"]:
+        data["order"].remove(key)
+    data["order"].append(key)
+
+    entries[key] = {"moves": list(moves_uci), "saved_at": time.time(), "result": result}
+    while len(data["order"]) > ANALYSIS_CACHE_ENTRIES:
+        oldest = data["order"].pop(0)
+        entries.pop(oldest, None)
+
+    tmp_path = path + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(tmp_path, "w") as f:
+            json.dump(data, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception as e:
+        logger.warning(f"Could not persist analysis cache: {e}")
+        with contextlib.suppress(Exception):
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 
 class CoachEngine:
     """
     Manages background asynchronous Stockfish evaluation and move quality classification.
-    Caches position results and cancels stale analysis on position changes.
+    Caches position results, never cancels in-flight engine commands, and automatically
+    relaunches Stockfish if it dies. Evaluation requires Stockfish: failures raise
+    CoachEngineUnavailable instead of silently degrading.
     """
 
     def __init__(self, stockfish_path: str | None = None):
-        self.stockfish_path = stockfish_path or self._discover_stockfish()
+        self.stockfish_path = stockfish_path or self._discover_stockfish() or ""
         self._engine: chess.engine.UciProtocol | None = None
         self._analysis_task: asyncio.Task | None = None
         self._engine_lock: asyncio.Lock | None = None
         self._cache: dict[str, PositionEvaluation] = {}
         self._max_cache_entries: int = 128
         self._is_running: bool = False
-        self.is_heuristic_mode: bool = self.stockfish_path is None
-        self.evaluator = HeuristicEvaluator()
+        self._last_unavail_log: float = 0.0
 
     def _discover_stockfish(self) -> str | None:
         for candidate in STOCKFISH_CANDIDATE_PATHS:
             if candidate and os.path.exists(candidate) and os.path.isfile(candidate):
                 logger.info(f"Found Stockfish binary at: {candidate}")
                 return candidate
-        logger.info("Stockfish binary not found. Running CoachEngine in heuristic mode.")
+        logger.warning("Stockfish binary not found. Game analysis will be unavailable until it is installed.")
         return None
 
-    async def start(self):
-        """Initializes the background UCI Stockfish process if available."""
-        if self._is_running:
-            return
-        self._is_running = True
+    @property
+    def engine_available(self) -> bool:
+        return self._engine is not None or bool(self.stockfish_path)
 
-        if self.stockfish_path and not self._engine:
+    async def ensure_engine(self) -> bool:
+        """Launches the Stockfish process if not running. Returns True when available."""
+        if self._engine is not None:
+            return True
+
+        if not self.stockfish_path:
+            self.stockfish_path = self._discover_stockfish() or ""
+
+        if not self.stockfish_path:
+            return False
+
+        try:
+            _transport, protocol = await chess.engine.popen_uci(self.stockfish_path)
+            self._engine = protocol
             try:
-                _transport, protocol = await chess.engine.popen_uci(self.stockfish_path)
-                self._engine = protocol
-                self.is_heuristic_mode = False
-                try:
-                    # Optimize Stockfish for Raspberry Pi multi-core CPU & transposition table
-                    await self._engine.configure({"Threads": 3, "Hash": 64})
-                except Exception as e:
-                    logger.debug(f"Could not configure Stockfish threads/hash: {e}")
-                logger.info(f"Stockfish UCI engine started successfully ({self.stockfish_path}).")
+                # Optimize Stockfish for Raspberry Pi multi-core CPU & transposition table
+                await self._engine.configure({"Threads": 3, "Hash": 64})
             except Exception as e:
-                logger.warning(f"Could not launch Stockfish ({self.stockfish_path}): {e}. Using heuristic fallback.")
-                self._engine = None
-                self.is_heuristic_mode = True
-        else:
-            self.is_heuristic_mode = True
+                logger.debug(f"Could not configure Stockfish threads/hash: {e}")
+            logger.info(f"Stockfish UCI engine started successfully ({self.stockfish_path}).")
+            return True
+        except Exception as e:
+            logger.error(f"Could not launch Stockfish ({self.stockfish_path}): {e}")
+            self._engine = None
+            return False
+
+    async def start(self):
+        """Initializes the background UCI Stockfish process."""
+        self._is_running = True
+        await self.ensure_engine()
+
+    async def _close_engine(self):
+        """Terminates a misbehaving engine process so the next call can relaunch it."""
+        engine = self._engine
+        self._engine = None
+        if engine is not None:
+            with contextlib.suppress(Exception):
+                await engine.quit()
 
     async def stop(self):
         """Terminates active analysis and closes the Stockfish process."""
         self._is_running = False
         if self._analysis_task and not self._analysis_task.done():
             self._analysis_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._analysis_task
-            except asyncio.CancelledError:
-                pass
-
-        if self._engine:
-            try:
-                await self._engine.quit()
-            except Exception as e:
-                logger.debug(f"Error quitting Stockfish: {e}")
-            self._engine = None
+        self._analysis_task = None
+        await self._close_engine()
         logger.info("CoachEngine stopped.")
 
     def get_cached_evaluation(self, fen: str) -> PositionEvaluation | None:
@@ -292,17 +315,49 @@ class CoachEngine:
         clean_fen = " ".join(fen.split()[:4])
         return self._cache.get(clean_fen)
 
+    def request_analysis(self, board: chess.Board):
+        """Dispatches non-blocking async evaluation for the board position.
+
+        In-flight analyses are NEVER cancelled: cancelling a queued/in-flight UCI
+        command corrupts the engine command state (CommandState.NEW failures) and
+        forced silent fallbacks. With a 100 ms analysis limit, skipping while busy
+        keeps evaluations at most one tick stale.
+        """
+        clean_fen = " ".join(board.fen().split()[:4])
+        if clean_fen in self._cache:
+            return
+
+        task = self._analysis_task
+        if task is not None and not task.done():
+            return
+
+        try:
+            eval_task = asyncio.create_task(self.evaluate_position(board.fen()))
+        except RuntimeError:
+            return
+        self._analysis_task = eval_task
+        eval_task.add_done_callback(self._on_analysis_done)
+
+    def _on_analysis_done(self, task: asyncio.Task):
+        if task.cancelled() or task.exception() is None:
+            return
+        exc = task.exception()
+        now = time.monotonic()
+        if isinstance(exc, CoachEngineUnavailable):
+            if now - self._last_unavail_log > 30.0:
+                self._last_unavail_log = now
+                logger.warning(f"Position analysis skipped: {exc}")
+        else:
+            logger.error(f"Background position analysis failed: {exc}")
+
     async def evaluate_position(self, fen: str) -> PositionEvaluation:
-        """Evaluates position with caching and cancellation."""
+        """Evaluates a position with caching. Requires a working Stockfish engine."""
         clean_fen = " ".join(fen.split()[:4])
         if clean_fen in self._cache:
             return self._cache[clean_fen]
 
         board = chess.Board(fen)
-        if not self._engine or self.is_heuristic_mode:
-            result = self._evaluate_heuristic(board, clean_fen)
-        else:
-            result = await self._evaluate_stockfish(board, clean_fen)
+        result = await self._evaluate_stockfish(board, clean_fen)
 
         if len(self._cache) >= self._max_cache_entries:
             oldest_key = next(iter(self._cache))
@@ -311,58 +366,40 @@ class CoachEngine:
         self._cache[clean_fen] = result
         return result
 
-    def request_analysis(self, board: chess.Board):
-        """Dispatches non-blocking async evaluation task for the board position."""
-        clean_fen = " ".join(board.fen().split()[:4])
-        if clean_fen in self._cache:
-            return
-
-        if self._analysis_task and not self._analysis_task.done():
-            self._analysis_task.cancel()
-
-        self._analysis_task = asyncio.create_task(self.evaluate_position(board.fen()))
-
-    def _evaluate_heuristic(self, board: chess.Board, clean_fen: str) -> PositionEvaluation:
-        """Evaluates position using static heuristic."""
-        score_cp = self.evaluator.evaluate(board)
-        win_chance = calculate_win_chance(score_cp, mate=None)
-        ranked_moves = self.evaluator.get_top_moves(board)
-        top_moves = ranked_moves[:8]
-        moves_map = {m.uci: m for m in ranked_moves}
-        best_move = top_moves[0].uci if top_moves else None
-
-        return PositionEvaluation(
-            fen=clean_fen,
-            score_cp=score_cp,
-            mate=None,
-            win_chance=win_chance,
-            best_move=best_move,
-            top_moves=top_moves,
-            moves_map=moves_map,
-        )
+    async def _analyse_with_recovery(self, board: chess.Board, limit, multipv: int):
+        """Runs one multi-PV analyse, relaunching Stockfish once on engine failure."""
+        for attempt in (1, 2):
+            if not await self.ensure_engine():
+                raise CoachEngineUnavailable(
+                    "Stockfish binary unavailable. Install stockfish or set STOCKFISH_PATH."
+                )
+            try:
+                if self._engine_lock is None:
+                    self._engine_lock = asyncio.Lock()
+                async with self._engine_lock:
+                    return await self._engine.analyse(board, limit, multipv=multipv)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"Stockfish analysis failed (attempt {attempt}): {e}. Relaunching engine.")
+                await self._close_engine()
+        raise CoachEngineUnavailable("Stockfish analysis failed twice; engine relaunched unsuccessfully.")
 
     async def _evaluate_stockfish(self, board: chess.Board, clean_fen: str) -> PositionEvaluation:
         """Evaluates position using Stockfish multi-PV analysis."""
         legal = list(board.legal_moves)
         if not legal:
-            return self._evaluate_heuristic(board, clean_fen)
+            return PositionEvaluation(
+                fen=clean_fen, score_cp=0, mate=None, win_chance=50.0,
+                best_move=None, top_moves=[], moves_map={},
+            )
 
         multipv = min(len(legal), 8)
         limit = chess.engine.Limit(time=0.10, depth=12)
 
-        if self._engine_lock is None:
-            self._engine_lock = asyncio.Lock()
-
-        try:
-            async with self._engine_lock:
-                infos = await asyncio.shield(self._engine.analyse(board, limit, multipv=multipv))
-                if not isinstance(infos, list):
-                    infos = [infos]
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning(f"Stockfish analysis interrupted: {e}. Falling back to heuristic.")
-            return self._evaluate_heuristic(board, clean_fen)
+        infos = await self._analyse_with_recovery(board, limit, multipv)
+        if not isinstance(infos, list):
+            infos = [infos]
 
         best_info = infos[0] if infos else {}
         best_score_pov = best_info.get("score")
@@ -383,7 +420,6 @@ class CoachEngine:
 
         top_moves = []
         moves_map = {}
-        analyzed_ucis = set()
 
         for info in infos:
             pv = info.get("pv", [])
@@ -391,7 +427,6 @@ class CoachEngine:
                 continue
             move = pv[0]
             uci = move.uci()
-            analyzed_ucis.add(uci)
 
             move_score_pov = info.get("score")
             if move_score_pov:
@@ -446,7 +481,9 @@ class CoachEngine:
     async def batch_evaluate_game(self, moves_uci: list[str]) -> dict[str, Any]:
         """
         Evaluates an entire sequence of game moves starting from standard FEN.
-        Returns positions evaluations, played move classifications, accuracy scores, and mistake summaries.
+        Returns positions evaluations, played move classifications, accuracy scores,
+        and mistake summaries. Requires Stockfish: raises CoachEngineUnavailable
+        when the engine cannot analyze.
         """
         board = chess.Board()
         evaluations: list[dict[str, Any]] = []

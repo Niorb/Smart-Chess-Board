@@ -57,8 +57,12 @@ from app.coach_engine import (
     TIER_BEST_MAX_LOSS,
     TIER_GOOD_MAX_LOSS,
     TIER_INACCURACY_MAX_LOSS,
+    CoachEngineUnavailable,
     MoveQuality,
+    analysis_cache_key,
     coach_engine,
+    load_cached_analysis,
+    save_cached_analysis,
 )
 from app.config import (
     ANIM_MOVE_CONFIRM_DURATION_S,
@@ -218,6 +222,7 @@ class BoardStateManager:
         self.analysis_gm_score: int = 0
         self.analysis_gm_guesses: list[dict] = []
         self.analysis_is_loading: bool = False
+        self.analysis_error: str | None = None
         self.analysis_has_advanced: bool = False
         # Last game metadata for post-game analysis recall
         self.last_game_moves: list[str] = []
@@ -411,6 +416,7 @@ class BoardStateManager:
         self.analysis_submode = "review"
         self.analysis_is_loading = True
         self.analysis_has_advanced = False
+        self.analysis_error = None
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
@@ -452,6 +458,27 @@ class BoardStateManager:
                 ]
 
         self.analysis_current_ply = 0
+
+        # Fast path: serve previously completed Stockfish analysis for this exact game
+        cache_key = analysis_cache_key(self.analysis_game_moves)
+        cached = await asyncio.to_thread(load_cached_analysis, cache_key)
+        if cached and cached.get("moves") == list(self.analysis_game_moves):
+            result = cached["result"]
+            self.analysis_evaluations = result.get("evaluations", [])
+            self.analysis_played_analyses = result.get("played_analyses", [])
+            self.analysis_accuracy = {
+                "white": result.get("white_accuracy", 100.0),
+                "black": result.get("black_accuracy", 100.0),
+            }
+            self.analysis_counts = result.get("counts", {})
+            self.analysis_blunders = result.get("blunders", [])
+            self.analysis_error = None
+            self.analysis_is_loading = False
+            logger.info(
+                f"Analysis loaded from persistent cache ({len(self.analysis_game_moves)} plies)."
+            )
+            return self.get_analysis_payload()
+
         try:
             res = await coach_engine.batch_evaluate_game(self.analysis_game_moves)
             self.analysis_evaluations = res.get("evaluations", [])
@@ -462,13 +489,12 @@ class BoardStateManager:
             }
             self.analysis_counts = res.get("counts", {})
             self.analysis_blunders = res.get("blunders", [])
-        except Exception as e:
-            logger.error(f"Error in batch game evaluation: {e}")
-            self.analysis_evaluations = []
-            self.analysis_played_analyses = []
-            self.analysis_accuracy = {"white": 100.0, "black": 100.0}
-            self.analysis_counts = {}
-            self.analysis_blunders = []
+            self.analysis_error = None
+            # Persist for instant re-analysis of the same game later
+            await asyncio.to_thread(save_cached_analysis, cache_key, self.analysis_game_moves, res)
+        except CoachEngineUnavailable as e:
+            logger.error(f"Game analysis unavailable (Stockfish required): {e}")
+            self.analysis_error = f"Stockfish unavailable: {e}"
         finally:
             self.analysis_is_loading = False
 
@@ -513,6 +539,7 @@ class BoardStateManager:
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
+        self.analysis_error = None
         self._last_restoration_sig = None
         return self.get_analysis_payload()
 
@@ -846,6 +873,7 @@ class BoardStateManager:
             "active": self.game_status == "ANALYSIS",
             "submode": self.analysis_submode,
             "is_loading": self.analysis_is_loading,
+            "error": self.analysis_error,
             "current_ply": self.analysis_current_ply,
             "total_plys": len(self.analysis_game_moves),
             "game_moves": self.analysis_game_moves,

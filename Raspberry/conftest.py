@@ -10,7 +10,76 @@ import copy
 import os
 import tempfile
 
+import chess
 import pytest
+
+
+class FakeStockfishProtocol:
+    """
+    Deterministic in-process stand-in for the Stockfish UCI protocol.
+
+    Returns multi-PV info dicts built with real chess.engine score types so all
+    production parsing code paths run unchanged. Scores decay by alphabetical
+    move order, producing stable best moves, varied classifications, and
+    guaranteed blunder-tier tail moves for drill tests.
+    """
+
+    def __init__(self):
+        self.calls = 0
+        self.closed = False
+        self.score_ladder_cp = [25, 5, -10, -35, -70, -120, -190, -280]
+
+    async def configure(self, options):
+        pass
+
+    async def quit(self):
+        self.closed = True
+
+    async def analyse(self, board, limit, multipv=1):
+        self.calls += 1
+        legal = sorted(board.legal_moves, key=lambda m: m.uci())
+        infos = []
+        turn = board.turn
+        for i in range(min(multipv, len(legal))):
+            cp = self.score_ladder_cp[i % len(self.score_ladder_cp)]
+            infos.append({
+                "pv": [legal[i]],
+                "score": chess.engine.PovScore(chess.engine.Cp(cp), turn),
+                "depth": 12,
+            })
+        return infos
+
+
+@pytest.fixture(autouse=True)
+def fake_stockfish(monkeypatch):
+    """
+    Replaces Stockfish process launching with the deterministic fake protocol for
+    every test, making the coach/analysis suite fast and binary-independent while
+    exercising the real evaluation code paths.
+    """
+    from app import coach_engine as coach_module
+
+    protocol = FakeStockfishProtocol()
+
+    async def fake_popen_uci(path):
+        return (object(), protocol)
+
+    monkeypatch.setattr(chess.engine, "popen_uci", fake_popen_uci)
+    monkeypatch.setattr(
+        coach_module.CoachEngine,
+        "_discover_stockfish",
+        lambda self: "/usr/games/stockfish",
+    )
+
+    # Reset the global singleton between tests
+    coach_module.coach_engine._engine = None
+    coach_module.coach_engine._analysis_task = None
+    coach_module.coach_engine._cache.clear()
+    yield protocol
+    # Ensure no background task leaks into the next test
+    task = coach_module.coach_engine._analysis_task
+    if task and not task.done():
+        task.cancel()
 
 
 @pytest.fixture(autouse=True, scope="session")
