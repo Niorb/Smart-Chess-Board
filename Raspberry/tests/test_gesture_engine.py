@@ -171,7 +171,8 @@ class TestRestartPreviousGameGesture:
             board[6][0] = -1
             gesture.evaluate(board, now=102.0)
 
-            # Replace h2 -> completion
+            # Knight placement already flashed once; isolate the completion flash
+            mock_mgr.trigger_arrival_flash.reset_mock()
             board[7][1] = -1
             completed = gesture.evaluate(board, now=103.0)
             assert completed
@@ -237,9 +238,11 @@ class TestRestartPreviousGameGesture:
         gesture.evaluate(board, now=102.0)
         assert not gesture.is_active
 
-        # Replace a2 -> holdoff cleared
+        # Replace a2 (and h2 which was still held) -> holdoff cleared
         board[0][1] = -1
+        board[7][1] = -1
         gesture.evaluate(board, now=103.0)
+        assert not gesture.is_active
         board[7][1] = 0
         gesture.evaluate(board, now=104.0)
         assert gesture.is_active
