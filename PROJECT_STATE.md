@@ -3,13 +3,15 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23)
-Both optimization commits (`572fb58` codebase pass, `cbc113e` firmware pass) are deployed to the Raspberry Pi and the ESP32 has been reflashed. Verification results:
-- `git pull` clean; frontend `npm run build` OK; **261/261 pytest passed on-device**; service restarted healthy.
-- ESP32 compiled via arduino-cli (22% flash / 7% RAM) and flashed (`cbc113e` firmware: freshness-gated scan cache, parser self-resync, legacy handlers removed, 5 ms idle-scan gate).
-- Post-flash: **0 CRC/TIMEOUT/PARSE errors** under continuous 10 ms polling; WS diagnostics `OK / 0 timeouts / 0 errors`; broadcast traffic measured at ~4 frames/s idle (event-driven coalescing active, down from ~100/s firehose).
-- `hardware_test.py --quiet` validated end-to-end on the new framed protocol (stable ADC readings).
-- Remaining manual check for the user: one physical lift/place move during a game to feel the improved move-detection latency.
+## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev 8b66efb)
+All optimization commits plus the coach-engine analysis fix are live on the Raspberry Pi and the ESP32 runs the new firmware. Final on-device verification:
+- `git pull` clean; frontend built; **259/259 pytest passed**; service active.
+- ESP32 flashed (freshness-gated scan cache, parser self-resync, legacy protocol removal) — 0 serial/CRC errors since flash.
+- **Coach fix verified end-to-end**: fresh 10-ply batches run through REAL Stockfish in ~1.1–1.3 s with realistic varied score trajectories (e.g. `[38, 30, 27, 28, 26, 27, 25, 15, 33, 31, 29]`), `error: None`, and **zero CommandState / heuristic-fallback warnings** in the journal during batches. Second identical request served from the persistent cache in **0.035 s** (~38× faster).
+- Analysis results persist to `Raspberry/analysis_cache.json` (LRU 8 games, git-ignored sibling of board settings) — re-analyzing a finished game is instant across restarts.
+
+### Coach root cause (for the record)
+`request_analysis` cancelled the in-flight evaluation task on every position change during play. With `asyncio.shield` removed (optimization pass), cancellation propagated into python-chess and killed queued UCI commands (`CommandState.NEW`), so every live position silently fell back to the flat material heuristic. The warm heuristic cache then made post-game batch analysis finish instantly with wrong classifications/recommendations and no visible computing animation. Fix: never cancel in-flight analyses (skip while busy — 100 ms limit keeps evals fresh), make Stockfish mandatory (`CoachEngineUnavailable` raised after one relaunch/retry, surfaced in payload `error` + UI banner), auto-relaunch crashed engines, and persist per-game analyses for fast reuse.
 
 ## Active Agents Roster
 - **Architect** (`.agents/arch.md`) - System design, protocols, state machines.
