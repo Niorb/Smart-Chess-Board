@@ -1022,7 +1022,7 @@ function App() {
                       </span>
                     </div>
                     <span className="text-xs font-bold text-white">
-                      {state.gesture?.hint || state.physical?.gesture?.hint || "Kingside Corner Gate Active"}
+                      {state.gesture?.hint || state.physical?.gesture?.hint || "Replay Menu Active"}
                     </span>
                   </div>
                 </div>
@@ -1770,7 +1770,7 @@ function App() {
                   onClick={handleRestartPrevious}
                   disabled={loading || !isConnected}
                   className="w-full mt-2 bg-gradient-to-r from-slate-900 to-indigo-950/70 hover:from-slate-850 hover:to-indigo-900/80 border border-indigo-500/40 hover:border-indigo-400 disabled:opacity-50 text-indigo-100 font-bold text-xs py-3 px-4 rounded-xl shadow-md flex items-center justify-between gap-2 transition-all active:scale-[0.98] group"
-                  title="Quick restart using previous matchmaking settings (or physical gesture: lift h2 -> lift h1 -> replace both)"
+                  title="Quick restart using previous matchmaking settings (or physical gesture: lift h2, pick K=15+10 / B=10+0 / N=3+2 or toggle Rook AI/Human, replace h2)"
                 >
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 group-hover:text-white transition-colors">
@@ -1788,7 +1788,7 @@ function App() {
                     </div>
                   </div>
                   <span className="text-[9px] font-mono uppercase bg-indigo-900/60 border border-indigo-500/30 px-2 py-0.5 rounded text-indigo-300">
-                    h2 → h1 Gate
+                    h2 Replay Menu
                   </span>
                 </button>
 

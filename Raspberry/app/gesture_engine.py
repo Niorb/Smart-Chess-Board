@@ -4,7 +4,7 @@ app/gesture_engine.py
 Extensible Physical Board Gesture Engine for the Smart Chess Board.
 Provides base gesture abstractions, physical matrix evaluation during IDLE / GAME_OVER states,
 LED overlay generation, and concrete physical gesture implementations such as the
-"Kingside Corner Gate" (lift h2 -> lift h1 -> replace both) to restart the previous match.
+"Replay Last Game" selection menu (lift h2 -> pick King/Bishop/Knight/Rook options -> replace h2).
 """
 
 import asyncio
@@ -128,6 +128,29 @@ class BaseGesture(ABC):
         self.step = 0
         self.start_time = 0.0
 
+    def _get_board_anomalies(
+        self, physical_state: list[list[int]]
+    ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+        """
+        Returns (lifted_starting_squares, extra_occupied_center_squares).
+        Starting squares: Ranks 0, 1 (White), Ranks 6, 7 (Black).
+        Center squares: Ranks 2..5 (expected empty).
+        """
+        lifted_starting: set[tuple[int, int]] = set()
+        extra_occupied: set[tuple[int, int]] = set()
+
+        for c in range(BOARD_COLS):
+            for r in range(BOARD_ROWS):
+                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                if r in (0, 1, 6, 7):
+                    if val == 0:
+                        lifted_starting.add((c, r))
+                else:
+                    if val != 0:
+                        extra_occupied.add((c, r))
+
+        return lifted_starting, extra_occupied
+
     @abstractmethod
     def execute_completion(self) -> None:
         """Dispatches the completion action (e.g. async task creation)."""
@@ -174,29 +197,6 @@ class CornerGateGesture(BaseGesture):
     ):
         super().__init__(name=name, description=description, timeout=timeout)
         self.state_manager = state_manager
-
-    def _get_board_anomalies(
-        self, physical_state: list[list[int]]
-    ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-        """
-        Returns (lifted_starting_squares, extra_occupied_center_squares).
-        Starting squares: Ranks 0, 1 (White), Ranks 6, 7 (Black).
-        Center squares: Ranks 2..5 (expected empty).
-        """
-        lifted_starting: set[tuple[int, int]] = set()
-        extra_occupied: set[tuple[int, int]] = set()
-
-        for c in range(BOARD_COLS):
-            for r in range(BOARD_ROWS):
-                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
-                if r in (0, 1, 6, 7):
-                    if val == 0:
-                        lifted_starting.add((c, r))
-                else:
-                    if val != 0:
-                        extra_occupied.add((c, r))
-
-        return lifted_starting, extra_occupied
 
     def _overlay_palette(self, now: float) -> tuple[int, int, int, int]:
         """Returns (lifted_solid, next_pulse, completion_first, completion_second) colors."""
@@ -307,49 +307,240 @@ class CornerGateGesture(BaseGesture):
             )
 
 
-class RestartPreviousGameGesture(CornerGateGesture):
+class RestartPreviousGameGesture(BaseGesture):
     """
-    Kingside Corner Gate gesture:
+    "Replay Last Game" selection-menu gesture:
       - Initial setup: Full standard chess starting position.
-      - Step 1: Lift h2 (column 7, row 1).
-                LEDs: Amber on h2, pulsing Azure on h1.
-      - Step 2: Lift h1 (column 7, row 0) while h2 remains lifted.
-                LEDs: Pulsing Emerald on both h1 and h2.
-      - Step 3 (Completion): Replace both pieces back to (7, 1) and (7, 0)
-                in standard starting configuration.
-      - Result: Triggers confirmation arrival flash on h1/h2 and starts
-                matchmaking with the stored last_game_params.
+      - Step 1: Lift h2 pawn (column 7, row 1).
+                LEDs: Amber on h2 + four option squares lit on White's kingside back rank:
+                  - e1 King   (Royal Violet)    -> 15+10 time control
+                  - f1 Bishop (Cyan Azure)      -> 10+0 time control
+                  - g1 Knight (Mint Emerald)    -> 3+2 time control
+                  - h1 Rook   (Magenta=AI / Gold=Human) -> toggles AI vs Human opponent
+                The currently-selected time control square breathes brighter.
+      - Step 2: Lift an option piece:
+                  - Time-control pieces register their choice when placed back down
+                    (confirmed with an arrival flash on that square).
+                  - Lifting the Rook instantly toggles AI/Human (LED color flips while held);
+                    placing it back confirms with a flash.
+                Multiple selections may be made while h2 stays lifted. Each interaction
+                refreshes the inactivity timer.
+      - Step 3 (Completion): Replace the h2 pawn to start the search with the chosen settings.
+      - Cancellations: lifting any unrelated starting piece, holding two option pieces,
+        dropping h2 while an option is still in hand, center-square occupation,
+        or inactivity timeout. After any cancellation, all lifted pieces must be
+        replaced before the gesture can re-arm.
+      - Defaults: seeded from the persisted last_game_params at menu open.
     """
 
-    H1_COORD: tuple[int, int] = (7, 0)  # File h (c=7), Rank 1 (r=0)
     H2_COORD: tuple[int, int] = (7, 1)  # File h (c=7), Rank 2 (r=1)
-    starter_coord: tuple[int, int] = (7, 1)
+    KING_COORD: tuple[int, int] = (4, 0)  # e1 -> 15+10
+    BISHOP_COORD: tuple[int, int] = (5, 0)  # f1 -> 10+0
+    KNIGHT_COORD: tuple[int, int] = (6, 0)  # g1 -> 3+2
+    ROOK_COORD: tuple[int, int] = (7, 0)  # h1 -> AI/Human toggle
+    starter_coord: tuple[int, int] = H2_COORD
     starter_color: int = Color(240, 160, 20)  # Warm Amber
 
-    def __init__(self, state_manager: Any = None, timeout: float = 5.0):
+    TC_SELECTIONS: dict[tuple[int, int], str] = {
+        KING_COORD: "15+10",
+        BISHOP_COORD: "10+0",
+        KNIGHT_COORD: "3+2",
+    }
+
+    COLOR_INT_KING_OPTION = COLOR_INT_ROYAL_VIOLET
+    COLOR_INT_BISHOP_OPTION = COLOR_INT_AZURE
+    COLOR_INT_KNIGHT_OPTION = COLOR_INT_MINT_EMERALD
+    COLOR_INT_AI_MODE = Color(255, 40, 180)  # Hot Magenta - Stockfish AI opponent selected
+    COLOR_INT_HUMAN_MODE = Color(255, 200, 0)  # Golden Amber - Human opponent selected
+
+    def __init__(self, state_manager: Any = None, timeout: float = 30.0):
         super().__init__(
             name="restart_previous_game",
-            description="Kingside Corner Gate: lift h2 -> lift h1 -> replace both to restart last game",
+            description="Replay menu: lift h2 -> pick K/B/N time control or toggle Rook AI/Human -> replace h2 to start",
             state_manager=state_manager,
             timeout=timeout,
         )
-        self.first_coord = self.H2_COORD
-        self.second_coord = self.H1_COORD
-        self.hint_step1 = "Lift h1 (Rook) to complete corner gate"
-        self.hint_step2 = "Replace h1 and h2 to restart previous game"
+        self.selected_tc: str | None = None
+        self.opponent_mode: str | None = None  # "ai" | "human"
+        self._held_option: tuple[int, int] | None = None
+        self._holdoff: bool = False
         self.log_prefix = "Restart gesture"
 
     @property
     def hint(self) -> str | None:
-        if self.step == 1:
-            return self.hint_step1
-        elif self.step == 2:
-            return self.hint_step2
-        return None
+        if self.step != 1:
+            return None
+        mode_name = "AI" if self.opponent_mode == "ai" else "Human"
+        return (
+            f"Lift King=15+10 · Bishop=10+0 · Knight=3+2 · Rook toggles AI/Human "
+            f"(now: {mode_name}) — replace h2 to start search ({self.selected_tc} vs {mode_name})"
+        )
+
+    def reset(self) -> None:
+        super().reset()
+        self._held_option = None
+
+    def _soft_cancel(self, reason: str) -> None:
+        """Cancels the active menu and waits for a full board reset before re-arming."""
+        logger.debug(f"{self.log_prefix} cancelled: {reason}")
+        self.reset()
+        self._holdoff = True
+
+    def _sync_defaults(self) -> None:
+        """Seeds selection defaults from the persisted last-game matchmaking params."""
+        try:
+            from board_hardware import get_last_game_params
+
+            params = get_last_game_params()
+        except Exception:
+            params = {}
+        tc = params.get("time_control") or "10+0"
+        self.selected_tc = tc if tc in set(self.TC_SELECTIONS.values()) else "10+0"
+        self.opponent_mode = "human" if params.get("opponent") == "human" else "ai"
+
+    def _confirm_selection(self, coord: tuple[int, int]) -> None:
+        """Arrival-flash confirmation for a placed-back option piece."""
+        logger.info(
+            f"{self.log_prefix} selection confirmed: tc={self.selected_tc}, "
+            f"opponent={self.opponent_mode} (square {coord})"
+        )
+        if self.state_manager:
+            self.state_manager.trigger_arrival_flash(coord[0], coord[1], duration=0.6)
+
+    def evaluate(self, physical_state: list[list[int]], now: float) -> bool:
+        lifted_starting, extra_occupied = self._get_board_anomalies(physical_state)
+
+        # Center squares bumped with pieces immediately cancels the menu
+        if len(extra_occupied) > 0:
+            if self.is_active:
+                self._soft_cancel(f"center pieces occupied: {extra_occupied}")
+            return False
+
+        # Holdoff: after any cancellation/timeout wait until every piece is replaced
+        if self._holdoff:
+            if not lifted_starting:
+                self._holdoff = False
+            return False
+
+        # Step 0 -> 1: arm the menu when ONLY the h2 pawn is lifted
+        if not self.is_active:
+            if lifted_starting == {self.H2_COORD}:
+                self.step = 1
+                self.start_time = now
+                self._held_option = None
+                self._sync_defaults()
+                logger.info(
+                    f"{self.log_prefix}: replay menu opened (defaults: tc={self.selected_tc}, "
+                    f"opponent={self.opponent_mode})"
+                )
+            return False
+
+        # Menu open: inactivity timeout closes it
+        if now - self.start_time > self.timeout:
+            logger.info(f"{self.log_prefix} menu timed out after {self.timeout}s of inactivity.")
+            had_lifts = bool(lifted_starting)
+            self.reset()
+            self._holdoff = had_lifts
+            return False
+
+        option_squares = set(self.TC_SELECTIONS) | {self.ROOK_COORD}
+        allowed = {self.H2_COORD} | option_squares
+
+        # Bumping any unrelated starting piece cancels the menu
+        if not lifted_starting.issubset(allowed):
+            self._soft_cancel(f"unexpected piece(s) lifted: {lifted_starting - allowed}")
+            return False
+
+        # h2 pawn replaced -> completion (only valid with no option piece still in hand)
+        if self.H2_COORD not in lifted_starting:
+            if lifted_starting & option_squares:
+                self._soft_cancel("h2 replaced while an option piece was still in hand")
+                return False
+            logger.info(f"{self.log_prefix} COMPLETED: launching search (tc={self.selected_tc}, opponent={self.opponent_mode})")
+            self.reset()
+            return True
+
+        held = lifted_starting & option_squares
+        if len(held) > 1:
+            self._soft_cancel("multiple option pieces lifted simultaneously")
+            return False
+
+        if not held:
+            # An option piece was just placed back -> confirm its registration
+            if self._held_option is not None:
+                confirmed = self._held_option
+                self._held_option = None
+                self.start_time = now  # refresh inactivity timer
+                self._confirm_selection(confirmed)
+            return False
+
+        coord = next(iter(held))
+        if coord != self._held_option:
+            self._held_option = coord
+            self.start_time = now  # refresh inactivity timer
+            if coord == self.ROOK_COORD:
+                self.opponent_mode = "human" if self.opponent_mode == "ai" else "ai"
+                logger.info(f"{self.log_prefix}: rook toggled opponent mode -> {self.opponent_mode}")
+            else:
+                self.selected_tc = self.TC_SELECTIONS[coord]
+                logger.info(f"{self.log_prefix}: {coord} selected time control -> {self.selected_tc}")
+        return False
+
+    def get_led_overlay(self, now: float) -> dict[tuple[int, int], int]:
+        overlay: dict[tuple[int, int], int] = {}
+        if self.step != 1:
+            return overlay
+
+        # h2 anchor: solid warm amber
+        overlay[self.H2_COORD] = self.starter_color
+
+        pulse = math.sin(now * 6.0) * 0.5 + 0.5
+
+        def _option_color(coord: tuple[int, int]) -> int:
+            if coord == self.KING_COORD:
+                return self.COLOR_INT_KING_OPTION
+            if coord == self.BISHOP_COORD:
+                return self.COLOR_INT_BISHOP_OPTION
+            if coord == self.KNIGHT_COORD:
+                return self.COLOR_INT_KNIGHT_OPTION
+            return self.COLOR_INT_AI_MODE if self.opponent_mode == "ai" else self.COLOR_INT_HUMAN_MODE
+
+        options = [*self.TC_SELECTIONS, self.ROOK_COORD]
+        for coord in options:
+            color = _option_color(coord)
+            if self._held_option == coord:
+                # Piece currently in hand: solid full brightness
+                overlay[coord] = color
+            elif coord == self.ROOK_COORD or self.TC_SELECTIONS.get(coord) == self.selected_tc:
+                # Actionable toggle / current selection: bright breathing pulse
+                overlay[coord] = scale_color(color, 0.45 + 0.55 * pulse)
+            else:
+                # Non-selected alternatives: dim steady
+                overlay[coord] = scale_color(color, 0.38)
+        return overlay
+
+    def to_dict(self, now: float | None = None) -> dict[str, Any]:
+        data = super().to_dict(now)
+        if self.is_active:
+            data["selection"] = {
+                "time_control": self.selected_tc,
+                "opponent": self.opponent_mode,
+            }
+        return data
 
     def execute_completion(self) -> None:
-        """Triggers arrival confirmation flash and launches previous game matchmaking."""
-        self._flash_completion_squares()
+        """Flashes the chosen squares and launches matchmaking with the selected settings."""
+        extra_squares: list[tuple[int, int]] = []
+        inverse_tc = {tc: coord for coord, tc in self.TC_SELECTIONS.items()}
+        if self.selected_tc in inverse_tc:
+            extra_squares.append(inverse_tc[self.selected_tc])
+        if self.state_manager:
+            self.state_manager.trigger_arrival_flash(
+                self.H2_COORD[0],
+                self.H2_COORD[1],
+                duration=0.6,
+                extra_squares=extra_squares,
+            )
 
         async def _dispatch_restart():
             try:
@@ -358,12 +549,22 @@ class RestartPreviousGameGesture(CornerGateGesture):
                 from app.lichess_engine import lichess_engine
 
                 params = get_last_game_params()
+                tc = self.selected_tc or params["time_control"]
+                opponent = self.opponent_mode or params.get("opponent", "auto")
                 logger.info(
-                    f"Restarting game via gesture with params: tc={params['time_control']}, rated={params['rated']}, "
-                    f"color={params['color']}, opponent={params['opponent']}, ai_level={params['ai_level']}, "
+                    f"Restarting game via gesture with params: tc={tc}, rated={params['rated']}, "
+                    f"color={params['color']}, opponent={opponent}, ai_level={params['ai_level']}, "
                     f"range={params['rating_range']}"
                 )
-                await lichess_engine.seek(self.state_manager, **params)
+                await lichess_engine.seek(
+                    self.state_manager,
+                    time_control=tc,
+                    rated=params["rated"],
+                    color=params["color"],
+                    opponent=opponent,
+                    ai_level=params["ai_level"],
+                    rating_range=params["rating_range"],
+                )
             except Exception as e:
                 logger.error(f"Error dispatching restart game seek in gesture: {e}")
 
