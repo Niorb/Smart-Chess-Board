@@ -543,6 +543,39 @@ class BoardStateManager:
         self._last_restoration_sig = None
         return self.get_analysis_payload()
 
+    def _try_conclude_analysis_on_board_reset(self, setup_res: SetupResult) -> bool:
+        """
+        Detects when the physical board has been fully restored to the standard
+        starting position during Analysis mode and transitions back to IDLE.
+
+        A complete 32-piece starting layout proves no piece is genuinely in hand,
+        so any lingering move-tracker transients (e.g. lifted_square wedged by
+        illegal free-form placements while the user restored captured pieces)
+        are discarded rather than allowed to block the transition.
+        """
+        if (
+            getattr(self, "analysis_is_loading", False)
+            or not getattr(self, "analysis_has_advanced", False)
+            or not setup_res.is_setup_ready
+        ):
+            return False
+
+        self.move_tracker.reset(self.physical_state)
+        logger.info(
+            "Physical board fully reset to standard starting position after analysis. "
+            "Concluding analysis mode and transitioning to IDLE (ready for gestures)."
+        )
+        self.stop_analysis_mode()
+        self.prev_setup_ready = True
+        if hasattr(self, "gesture_engine"):
+            self.gesture_engine.reset()
+        self.trigger_animation(
+            "BOARD_READY",
+            {"night_mode": bool(settings.get("night_mode", False))},
+        )
+        self.guardrail_result = None
+        return True
+
     def start_blunder_drill(self, index: int = 0) -> dict[str, Any]:
         """Starts Blunder Blitz Drill mode for an extracted blunder."""
         self.game_status = "ANALYSIS"
@@ -1720,31 +1753,9 @@ class BoardStateManager:
                                 setup_res = self.setup_validator.validate(self.physical_state)
                                 self.setup_result = setup_res
 
-                                # If analysis has been reviewed/progressed (or pieces were moved during analysis)
-                                # and the user puts all pieces back into the standard initial starting position:
-                                if (
-                                    not getattr(self, "analysis_is_loading", False)
-                                    and getattr(self, "analysis_has_advanced", False)
-                                    and setup_res.is_setup_ready
-                                    and getattr(self.move_tracker, "lifted_square", None) is None
-                                    and getattr(self.move_tracker, "in_flight_move", None) is None
-                                    and getattr(self.move_tracker, "pending_castling_rook", None) is None
-                                ):
-                                    logger.info(
-                                        "Physical board fully reset to standard starting position after analysis. "
-                                        "Concluding analysis mode and transitioning to IDLE (ready for gestures)."
-                                    )
-                                    self.stop_analysis_mode()
-                                    self.prev_setup_ready = True
-                                    if hasattr(self, "gesture_engine"):
-                                        self.gesture_engine.reset()
-                                    self.trigger_animation(
-                                        "BOARD_READY",
-                                        {"night_mode": bool(settings.get("night_mode", False))},
-                                    )
-                                    self.move_tracker.reset(self.physical_state)
-                                    self.guardrail_result = None
-                                else:
+                                # If the user puts all pieces back into the standard initial
+                                # starting position after reviewing, conclude Analysis mode.
+                                if not self._try_conclude_analysis_on_board_reset(setup_res):
                                     if not getattr(self, "analysis_is_loading", False):
                                         if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
                                             self.analysis_has_advanced = True

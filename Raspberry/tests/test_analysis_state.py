@@ -506,32 +506,91 @@ def test_analysis_board_reset_to_starting_position_transitions_to_idle():
                 if p:
                     phys_start[c][r] = -1 if p.color == chess.WHITE else 1
 
+        # Simulate a wedged move tracker: free-form piece restoration during
+        # analysis leaves stale transients (illegal placements never clear
+        # lifted_square). A complete 32-piece layout must still conclude analysis.
         mgr.physical_state = phys_start
         mgr.move_tracker.reset(phys_start)
+        mgr.move_tracker.lifted_square = (4, 3)
+        mgr.move_tracker.invalid_placement = (4, 1)
+        mgr.move_tracker.set_in_flight_move(0, 0, 0, 1, "a1a2")
 
         # Validate board setup readiness
         setup_res = mgr.setup_validator.validate(mgr.physical_state)
         assert setup_res.is_setup_ready is True
 
-        # Trigger transition logic
-        if (
-            mgr.analysis_has_advanced
-            and setup_res.is_setup_ready
-            and mgr.move_tracker.lifted_square is None
-        ):
-            mgr.stop_analysis_mode()
-            mgr.prev_setup_ready = True
-            mgr.gesture_engine.reset()
-            mgr.trigger_animation("BOARD_READY", {"night_mode": False})
+        # Trigger transition logic (the same call the update loop makes)
+        concluded = mgr._try_conclude_analysis_on_board_reset(setup_res)
 
+        assert concluded is True
         assert mgr.game_status == "IDLE"
         assert mgr.prev_setup_ready is True
         assert mgr.active_animation is not None
         assert mgr.active_animation.name == "BOARD_READY"
 
+        # Wedged tracker transients were discarded on conclusion
+        assert mgr.move_tracker.lifted_square is None
+        assert mgr.move_tracker.in_flight_move is None
+        assert mgr.move_tracker.invalid_placement is None
+
         # Gesture engine is active and ready to evaluate in IDLE state
         mgr.gesture_engine.evaluate(mgr.physical_state, mgr.game_status)
         assert mgr.gesture_engine is not None
+
+    asyncio.run(_test())
+
+
+def test_analysis_board_reset_blocked_while_loading():
+    """The reset-to-IDLE transition must not fire while Stockfish batch analysis is still loading."""
+    async def _test():
+        from unittest.mock import MagicMock
+
+        mgr = BoardStateManager()
+        mgr.strip = MagicMock()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        mgr.step_analysis(2)
+        mgr.analysis_is_loading = True
+
+        start_board = chess.Board()
+        phys_start = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = start_board.piece_at(chess.square(c, r))
+                if p:
+                    phys_start[c][r] = -1 if p.color == chess.WHITE else 1
+        mgr.physical_state = phys_start
+        mgr.move_tracker.reset(phys_start)
+
+        setup_res = mgr.setup_validator.validate(mgr.physical_state)
+        assert mgr._try_conclude_analysis_on_board_reset(setup_res) is False
+        assert mgr.game_status == "ANALYSIS"
+
+    asyncio.run(_test())
+
+
+def test_analysis_board_reset_requires_review_progress():
+    """A full starting layout alone must not exit analysis before the user reviewed anything."""
+    async def _test():
+        from unittest.mock import MagicMock
+
+        mgr = BoardStateManager()
+        mgr.strip = MagicMock()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        assert mgr.analysis_has_advanced is False
+
+        start_board = chess.Board()
+        phys_start = [[0] * 8 for _ in range(8)]
+        for c in range(8):
+            for r in range(8):
+                p = start_board.piece_at(chess.square(c, r))
+                if p:
+                    phys_start[c][r] = -1 if p.color == chess.WHITE else 1
+        mgr.physical_state = phys_start
+        mgr.move_tracker.reset(phys_start)
+
+        setup_res = mgr.setup_validator.validate(mgr.physical_state)
+        assert mgr._try_conclude_analysis_on_board_reset(setup_res) is False
+        assert mgr.game_status == "ANALYSIS"
 
     asyncio.run(_test())
 
