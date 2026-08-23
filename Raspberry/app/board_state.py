@@ -929,6 +929,35 @@ class BoardStateManager:
             "diagnostics": diag_info,
         }
 
+    def _process_setup_ready_edge(self, is_ready: bool, gestures_just_completed: list[str]) -> None:
+        """
+        Fires/cancels the BOARD_READY animation on setup-readiness transitions.
+
+        Suppressed on the tick a physical gesture completes: the gate-closing
+        placement restores the starting position and must not replay the
+        setup animation.
+        """
+        if self.game_status not in ["IDLE", "SETUP", "GAME_OVER"]:
+            self.prev_setup_ready = False
+            return
+
+        if is_ready and not self.prev_setup_ready:
+            gesture_active = hasattr(self, "gesture_engine") and self.gesture_engine.is_active
+            if not gestures_just_completed and not gesture_active:
+                self.trigger_animation(
+                    "BOARD_READY",
+                    {"night_mode": bool(settings.get("night_mode", False))},
+                )
+            self.prev_setup_ready = True
+        elif not is_ready and self.prev_setup_ready:
+            self.prev_setup_ready = False
+            if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
+                self.active_animation = None
+                if self.frozen_baselines is not None:
+                    settings["baselines"] = [list(col) for col in self.frozen_baselines]
+                    clear_baseline_history()
+                    self.frozen_baselines = None
+
     def get_full_state(self, diag_info=None):
         """Constructs a complete serialized snapshot of the full system state."""
         if diag_info is None:
@@ -1766,31 +1795,17 @@ class BoardStateManager:
                                 self.guardrail_result = None
 
                                 # Physical gesture evaluation during IDLE / GAME_OVER
+                                completed_gestures: list[str] = []
                                 if hasattr(self, "gesture_engine"):
-                                    self.gesture_engine.evaluate(self.physical_state, self.game_status)
+                                    completed_gestures = self.gesture_engine.evaluate(
+                                        self.physical_state, self.game_status
+                                    )
 
                                 # Setup Ready Edge Detection & Animation Triggering
-                                if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
-                                    self.setup_result = self.setup_validator.validate(self.physical_state)
-                                    is_ready = self.setup_result.is_setup_ready
-
-                                    if is_ready and not self.prev_setup_ready:
-                                        if not (hasattr(self, "gesture_engine") and self.gesture_engine.is_active):
-                                            self.trigger_animation(
-                                                "BOARD_READY",
-                                                {"night_mode": bool(settings.get("night_mode", False))},
-                                            )
-                                        self.prev_setup_ready = True
-                                    elif not is_ready and self.prev_setup_ready:
-                                        self.prev_setup_ready = False
-                                        if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
-                                            self.active_animation = None
-                                            if self.frozen_baselines is not None:
-                                                settings["baselines"] = [list(col) for col in self.frozen_baselines]
-                                                clear_baseline_history()
-                                                self.frozen_baselines = None
-                                else:
-                                    self.prev_setup_ready = False
+                                self.setup_result = self.setup_validator.validate(self.physical_state)
+                                self._process_setup_ready_edge(
+                                    self.setup_result.is_setup_ready, completed_gestures
+                                )
 
                             if hasattr(self, "gesture_engine"):
                                 if self.game_status not in ["IDLE", "GAME_OVER"]:

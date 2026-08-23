@@ -20,6 +20,52 @@ def test_board_state_manager_init():
     assert len(bsm.digital_state) == 8
 
 
+def test_board_ready_suppressed_on_gesture_completion_tick():
+    """Closing a gesture gate (second piece replaced) must NOT replay the BOARD_READY setup animation."""
+    bsm = BoardStateManager()
+    bsm.game_status = "IDLE"
+    bsm.prev_setup_ready = False
+
+    bsm._process_setup_ready_edge(is_ready=True, gestures_just_completed=["start_analysis"])
+
+    assert bsm.prev_setup_ready is True
+    assert bsm.active_animation is None
+
+
+def test_board_ready_fires_on_plain_setup_restore():
+    """Without a completing gesture, restoring the full setup still triggers the animation."""
+    bsm = BoardStateManager()
+    bsm.game_status = "IDLE"
+    bsm.prev_setup_ready = False
+
+    bsm._process_setup_ready_edge(is_ready=True, gestures_just_completed=[])
+
+    assert bsm.prev_setup_ready is True
+    assert bsm.active_animation is not None
+    assert bsm.active_animation.name == "BOARD_READY"
+
+
+def test_setup_unready_cancels_pending_board_ready():
+    """Lifting a piece while BOARD_READY plays cancels the animation and restores baselines."""
+    from app.led_animations import create_animation
+    from board_hardware import settings as board_settings
+
+    bsm = BoardStateManager()
+    bsm.game_status = "IDLE"
+    baselines = [[100 + c] * 8 for c in range(8)]
+    board_settings["baselines"] = [list(col) for col in baselines]
+    bsm.frozen_baselines = [list(col) for col in baselines]
+    bsm.active_animation = create_animation("BOARD_READY")
+    bsm.prev_setup_ready = True
+
+    bsm._process_setup_ready_edge(is_ready=False, gestures_just_completed=[])
+
+    assert bsm.prev_setup_ready is False
+    assert bsm.active_animation is None
+    assert bsm.frozen_baselines is None
+    assert board_settings["baselines"][0][0] == 100
+
+
 def test_physical_payload_structure():
     bsm = BoardStateManager()
     payload = bsm.get_physical_payload()
