@@ -3,7 +3,14 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev 8b66efb)
+## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev d2c5431)
+All optimization commits plus the coach-engine analysis fix are live on the Raspberry Pi and the ESP32 runs the new firmware. Final on-device verification:
+- `git pull` clean; frontend built; **265/265 pytest passed**; ruff clean; service active with no error-level journal entries.
+
+### Analysis reset-to-IDLE fix (rev d2c5431)
+Root cause: free-form piece restoration during Analysis mode wedged `PhysicalMoveTracker` with a stale `lifted_square` (an illegal placement sets `invalid_placement` but never clears `lifted_square`, physical_tracker.py Case B.3), and the ANALYSIS loop branch — unlike IDLE — had no transient-recovery path. The auto-exit gate required all transients `None`, so restoring the starting position was never recognized and the 3-pawn starter gestures never returned. Fix: extracted `_try_conclude_analysis_on_board_reset()` in `board_state.py`; a complete 32-piece starting layout proves no piece is in hand, so stale tracker transients are discarded and the transition to IDLE + `BOARD_READY` + `gesture_engine.reset()` proceeds. Regression tests added (wedged-tracker conclusion, loading-immunity, review-progress requirement).
+
+## Previous Deployment Status — rev 8b66efb
 All optimization commits plus the coach-engine analysis fix are live on the Raspberry Pi and the ESP32 runs the new firmware. Final on-device verification:
 - `git pull` clean; frontend built; **259/259 pytest passed**; service active.
 - ESP32 flashed (freshness-gated scan cache, parser self-resync, legacy protocol removal) — 0 serial/CRC errors since flash.
