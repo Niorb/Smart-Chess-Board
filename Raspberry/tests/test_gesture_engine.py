@@ -171,7 +171,7 @@ class TestRestartPreviousGameGesture:
             board[6][0] = -1
             gesture.evaluate(board, now=102.0)
 
-            # Knight placement already flashed once; isolate the completion flash
+            # Knight placement already flashed once; isolate the completion actions
             mock_mgr.trigger_arrival_flash.reset_mock()
             board[7][1] = -1
             completed = gesture.evaluate(board, now=103.0)
@@ -179,13 +179,12 @@ class TestRestartPreviousGameGesture:
             assert gesture.step == 0
             assert not gesture.is_active
 
-            # Completion flashes h2 + knight square
-            mock_mgr.trigger_arrival_flash.assert_called_once_with(7, 1, duration=0.6, extra_squares=[(6, 0)])
-
             with patch(
                 "app.lichess_engine.lichess_engine.seek", new_callable=AsyncMock
             ) as mock_seek:
                 gesture.execute_completion()
+                # Completion flashes h2 + knight square
+                mock_mgr.trigger_arrival_flash.assert_called_once_with(7, 1, duration=0.6, extra_squares=[(6, 0)])
                 await asyncio.sleep(0.01)
                 mock_seek.assert_awaited_once()
                 kwargs = mock_seek.await_args.kwargs
