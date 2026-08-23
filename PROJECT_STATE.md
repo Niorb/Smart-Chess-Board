@@ -3,9 +3,12 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev d2c5431)
+## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev 32574fc)
 All optimization commits plus the coach-engine analysis fix are live on the Raspberry Pi and the ESP32 runs the new firmware. Final on-device verification:
 - `git pull` clean; frontend built; **265/265 pytest passed**; ruff clean; service active with no error-level journal entries.
+
+### BOARD_READY snap-flash rework (rev 32574fc)
+`render_board_ready` replaced with "The Emerald Snap Flash": duration cut 1.4s → 0.5s (`ANIM_BOARD_READY_DURATION_S`). Phase 1 (0–40%) is a rapid dual-army inward sweep; Phase 2 (40–100%) is a bright center-diamond pop decaying exponentially while corner rooks + kings fade in to hand off to ambient. Power budget unchanged (≤ 10 squares).
 
 ### Analysis reset-to-IDLE fix (rev d2c5431)
 Root cause: free-form piece restoration during Analysis mode wedged `PhysicalMoveTracker` with a stale `lifted_square` (an illegal placement sets `invalid_placement` but never clears `lifted_square`, physical_tracker.py Case B.3), and the ANALYSIS loop branch — unlike IDLE — had no transient-recovery path. The auto-exit gate required all transients `None`, so restoring the starting position was never recognized and the 3-pawn starter gestures never returned. Fix: extracted `_try_conclude_analysis_on_board_reset()` in `board_state.py`; a complete 32-piece starting layout proves no piece is in hand, so stale tracker transients are discarded and the transition to IDLE + `BOARD_READY` + `gesture_engine.reset()` proceeds. Regression tests added (wedged-tracker conclusion, loading-immunity, review-progress requirement).
