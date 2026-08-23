@@ -3,6 +3,9 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
+## Latest Change — Replay Last Game selection menu (rev 73747de, deployed 2026-08-23)
+`RestartPreviousGameGesture` rewritten from the h2→h1 corner gate into an interactive selection menu (`Raspberry/app/gesture_engine.py`): lifting the **h2 pawn** opens a menu lighting four kingside back-rank pieces — **e1 King = 15+10**, **f1 Bishop = 10+0**, **g1 Knight = 3+2**, **h1 Rook = AI/Human toggle** (Magenta=AI / Gold=Human). Time-control choices register on replacement with an arrival flash; the rook toggles instantly at lift with live LED feedback. Multiple selections can be made while h2 stays lifted (each interaction refreshes the 30 s inactivity timer); replacing h2 starts matchmaking with the chosen time control/mode plus remaining params from persisted `last_game_params`. Cancellations (extra piece lifts, two options at once, dropping h2 while holding an option, center occupation, timeout) require all pieces replaced before re-arm (`_holdoff`). Defaults seeded from `last_game_params`; WS payload gained a `selection` field; frontend banner/labels updated. `_get_board_anomalies` moved to `BaseGesture`, which now accepts `state_manager`. Tests: 13 restart-gesture cases in `test_gesture_engine.py`; **271/271 pytest passed on Pi**, ruff clean, service restarted.
+
 ## Deployment Status — ✅ DEPLOYED & VERIFIED ON DEVICE (2026-08-23, rev 32574fc)
 All optimization commits plus the coach-engine analysis fix are live on the Raspberry Pi and the ESP32 runs the new firmware. Final on-device verification:
 - `git pull` clean; frontend built; **265/265 pytest passed**; ruff clean; service active with no error-level journal entries.
