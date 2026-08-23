@@ -675,17 +675,16 @@ def render_board_ready(
     progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
-    BOARD_READY / SETUP_COMPLETE animation ("The Emerald Resonance Sweep"):
-    Choreographed, low-power procedural celebration when all 32 pieces are correctly
+    BOARD_READY / SETUP_COMPLETE animation ("The Emerald Snap Flash"):
+    Quick, punchy procedural confirmation when all 32 pieces are correctly
     placed in starting positions.
 
-    Phasing (Duration: 1.4s):
-    - Phase 1 (0.00 -> 0.50): Symmetrical inward army sweep from flank files (a/h) toward
-      center files (d/e) along Ranks 1-2 (White) and Ranks 7-8 (Black).
-    - Phase 2 (0.45 -> 0.85): Center battle line harmony flare on (d4, e4, d5, e5).
-    - Phase 3 (0.75 -> 1.00): Settle & Anchor transition: Center light fades while
-      the 4 corner rooks (a1, h1, a8, h8) and 2 kings (e1, e8) illuminate to transition
-      directly into the persistent ambient breathing state.
+    Phasing (Duration: 0.5s):
+    - Phase 1 (0.00 -> 0.40): Rapid dual-army inward snap sweep from flank files (a/h)
+      toward center files (d/e) along Ranks 1-2 (White) and Ranks 7-8 (Black).
+    - Phase 2 (0.40 -> 1.00): Bright center battle-line pop on (d4, e4, d5, e5) with a
+      fast exponential decay, while the 4 corner rooks (a1, h1, a8, h8) and 2 kings
+      (e1, e8) quickly fade in to hand off to the persistent ambient breathing state.
 
     Lighting Budget: Strictly <= 10 squares active simultaneously (< 16% of board).
     Adaptive: Supports both Day Mode and Night Mode sapphire palettes.
@@ -708,10 +707,10 @@ def render_board_ready(
     progress = max(0.0, min(1.0, progress))
 
     # =========================================================================
-    # PHASE 1 (progress 0.00 -> 0.48): Dual Army Inward Sweep
+    # PHASE 1 (progress 0.00 -> 0.40): Dual Army Snap Sweep
     # =========================================================================
-    if progress < 0.48:
-        p1 = progress / 0.48  # 0.0 -> 1.0
+    if progress < 0.40:
+        p1 = progress / 0.40  # 0.0 -> 1.0
         # Active flank file index: 0 (a/h) -> 1 (b/g) -> 2 (c/f) -> 3 (d/e)
         flank_idx = min(3, max(0, int(p1 * 4.0)))
         file_w = flank_idx
@@ -719,7 +718,7 @@ def render_board_ready(
 
         # Local intra-step pulse
         step_phase = (p1 * 4.0) % 1.0
-        intensity = 0.5 + 0.4 * math.sin(step_phase * math.pi)
+        intensity = 0.7 + 0.3 * math.sin(step_phase * math.pi)
         wave_col = blend_colors(col_primary, col_secondary, p1 * 0.5)
         scaled_col = scale_color(wave_col, intensity)
 
@@ -729,28 +728,24 @@ def render_board_ready(
             set_square_in_frame(frame, file_e, r, scaled_col)
 
     # =========================================================================
-    # PHASE 2 (progress 0.48 -> 0.76): Center Battle Line Harmony Flare
+    # PHASE 2 (progress 0.40 -> 1.00): Center Pop Decay + Royal Guard Handshake
     # =========================================================================
-    elif progress < 0.76:
-        p2 = (progress - 0.48) / 0.28  # 0.0 -> 1.0
-        flare_int = math.sin(p2 * math.pi) * 0.85
+    else:
+        p2 = (progress - 0.40) / 0.60  # 0.0 -> 1.0
 
+        # Fast exponential decay flash on the center diamond: d4, e4, d5, e5
+        flare_int = 0.9 * math.exp(-5.5 * p2)
         if flare_int > 0.03:
-            # Diamond center squares: d4, e4, d5, e5 -> (3, 3), (4, 3), (3, 4), (4, 4)
             center_squares = [(3, 3), (4, 3), (3, 4), (4, 4)]
-            flare_col = blend_colors(col_primary, COLOR_INT_DRAW_WHITE, 0.35)
+            flare_col = blend_colors(col_primary, COLOR_INT_DRAW_WHITE, 0.45)
             scaled_flare = scale_color(flare_col, flare_int)
 
             for c_sq, r_sq in center_squares:
                 set_square_in_frame(frame, c_sq, r_sq, scaled_flare)
 
-    # =========================================================================
-    # PHASE 3 (progress 0.76 -> 1.00): Royal Guard Anchor Handshake
-    # =========================================================================
-    else:
-        p3 = (progress - 0.76) / 0.24  # 0.0 -> 1.0
-        anchor_int = 0.10 + 0.15 * min(1.0, p3 * 1.5)
-
+        # Corner rooks + kings fade in during the tail to transition into ambient
+        anchor_fade = max(0.0, min(1.0, (p2 - 0.55) / 0.45))
+        anchor_int = 0.10 + 0.15 * anchor_fade
         if anchor_int > 0.02:
             # 4 Corner Rooks + 2 Kings: a1, h1, a8, h8, e1, e8
             anchor_squares = [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]

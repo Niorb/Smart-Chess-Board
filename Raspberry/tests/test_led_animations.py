@@ -473,10 +473,10 @@ def test_board_ready_animation_factory():
 
 def test_render_board_ready_day_and_night():
     """
-    Verify BOARD_READY animation ('The Emerald Resonance Sweep'):
+    Verify BOARD_READY animation ('The Emerald Snap Flash'):
     - Strictly within 10 squares illuminated simultaneously at any single frame (< 16% of board).
     - Works correctly in both Day Mode and Night Mode across all phases.
-    - Transitions smoothly through Dual Army Inward Sweep -> Center Flare -> Royal Guard Anchor.
+    - Transitions smoothly through Dual Army Snap Sweep -> Center Pop Decay -> Royal Guard Anchor.
     """
     progress_samples = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]
 
