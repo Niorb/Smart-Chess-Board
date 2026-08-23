@@ -331,6 +331,41 @@ def test_game_start_event_joins_session_initiated_game():
     asyncio.run(_test())
 
 
+def test_game_start_event_accepts_match_while_actively_seeking():
+    """While SEEKING, any gameStart is our own seek being accepted — even if the
+    seek stream never delivered the id. Must join, register, and cancel the seek."""
+    async def _test():
+        engine = LichessEngine()
+        mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "SEEKING"
+
+        cancelled_seek = asyncio.Event()
+        mock_seek_task = MagicMock()
+        mock_seek_task.done.return_value = False
+
+        def _set_event():
+            cancelled_seek.set()
+
+        mock_seek_task.cancel.side_effect = _set_event
+        engine._seek_task = mock_seek_task
+
+        async def _fake_stream(game_id, state_manager):
+            pass
+
+        with patch.object(engine, "stream_game", new=_fake_stream):
+            joined = engine._handle_game_start_event({"id": "matchedGame9"}, mock_state_mgr)
+
+        assert joined is True
+        assert engine.current_game_id == "matchedGame9"
+        assert "matchedGame9" in engine._session_games
+        assert mock_state_mgr.game_status == "PLAYING"
+        assert cancelled_seek.is_set(), "redundant seek stream must be cancelled"
+        assert engine._seek_task is None
+        assert engine._stream_task is not None
+        engine._stream_task.cancel()
+    asyncio.run(_test())
+
+
 def test_challenge_ai_registers_session_game():
     """challenge_ai() must register the returned game ID as session-initiated."""
     async def _test():

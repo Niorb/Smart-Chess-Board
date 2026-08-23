@@ -307,25 +307,49 @@ class LichessEngine:
 
     def _handle_game_start_event(self, game_info: dict[str, Any], state_manager) -> bool:
         """
-        Joins a game announced by the event stream ONLY if it was initiated by
-        this session (via seek()/challenge_ai()). Prevents the server from
-        auto-resuming stale/foreign games on startup.
+        Joins a game announced by the event stream when it belongs to this session.
+
+        Two acceptance paths:
+        - The game id was registered by this session (seek()/challenge_ai()).
+        - OR the board is actively SEEKING: while a human seek is open, any new
+          gameStart can only be our own seek being accepted. This is a required
+          fallback because the seek stream itself does not always deliver the
+          matched game id.
+
+        Otherwise the event is ignored, preventing auto-resume of stale/foreign
+        games on startup (status is IDLE then).
         """
         game_id = game_info.get("id") or game_info.get("gameId")
         if not game_id or game_id == self.current_game_id:
             return False
 
-        if game_id not in self._session_games:
+        actively_seeking = bool(state_manager and getattr(state_manager, "game_status", None) == "SEEKING")
+        if game_id not in self._session_games and not actively_seeking:
             logger.info(
                 f"Lichess event stream: ignoring gameStart for game {game_id} "
                 "(not initiated by this session)."
             )
             return False
 
-        logger.info(f"Lichess event stream: joining session-initiated game {game_id}")
+        if actively_seeking:
+            logger.info(
+                f"Lichess event stream: accepting gameStart for game {game_id} "
+                "while a seek is active (seek-stream fallback)."
+            )
+        else:
+            logger.info(f"Lichess event stream: joining session-initiated game {game_id}")
+
+        self._session_games.add(game_id)
         self.current_game_id = game_id
         if state_manager:
             state_manager.game_status = "PLAYING"
+
+        # A match was found — the open seek stream is now redundant.
+        if self._seek_task and not self._seek_task.done():
+            logger.info("Cancelling redundant seek stream after match.")
+            self._seek_task.cancel()
+        self._seek_task = None
+
         if self._stream_task and not self._stream_task.done():
             self._stream_task.cancel()
         self._stream_task = asyncio.create_task(self.stream_game(game_id, state_manager))
@@ -719,11 +743,15 @@ class LichessEngine:
                         try:
                             event = json.loads(line)
                         except json.JSONDecodeError:
+                            logger.debug(f"Seek stream: unparseable line: {line[:200]}")
                             continue
+
+                        event_type = event.get("type")
+                        logger.debug(f"Seek stream event: type={event_type}")
 
                         # Extract game ID
                         game_id = event.get("id") or event.get("gameId") or event.get("game", {}).get("id")
-                        if not game_id and event.get("type") == "gameStart":
+                        if not game_id and event_type == "gameStart":
                             game_id = event.get("game", {}).get("id")
 
                         if game_id:
