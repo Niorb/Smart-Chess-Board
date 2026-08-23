@@ -84,10 +84,17 @@ class BaseGesture(ABC):
     starter_coord: tuple[int, int] | None = None
     starter_color: int | None = None
 
-    def __init__(self, name: str, description: str, timeout: float = 5.0):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        timeout: float = 5.0,
+        state_manager: Any = None,
+    ):
         self.name = name
         self.description = description
         self.timeout = timeout
+        self.state_manager = state_manager
         self.step: int = 0
         self.start_time: float = 0.0
 
@@ -195,8 +202,7 @@ class CornerGateGesture(BaseGesture):
         state_manager: Any = None,
         timeout: float = 5.0,
     ):
-        super().__init__(name=name, description=description, timeout=timeout)
-        self.state_manager = state_manager
+        super().__init__(name=name, description=description, timeout=timeout, state_manager=state_manager)
 
     def _overlay_palette(self, now: float) -> tuple[int, int, int, int]:
         """Returns (lifted_solid, next_pulse, completion_first, completion_second) colors."""
