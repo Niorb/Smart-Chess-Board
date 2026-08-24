@@ -489,6 +489,10 @@ function App() {
     const saved = localStorage.getItem('scb_eval_bar_enabled');
     return saved !== null ? saved === 'true' : true;
   });
+  const [openingHintsEnabled, setOpeningHintsEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('scb_opening_hints_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [coachAiOnly, setCoachAiOnly] = useState<boolean>(() => {
     const saved = localStorage.getItem('scb_coach_ai_only');
     return saved !== null ? saved === 'true' : true;
@@ -532,6 +536,7 @@ function App() {
     pMode?: 'auto' | 'pieces' | 'empty';
     coachHints?: boolean;
     evalBar?: boolean;
+    openingHints?: boolean;
     aiOnly?: boolean;
     inLoopCal?: boolean;
     intensity?: number;
@@ -550,6 +555,7 @@ function App() {
     pieces_mode: overrides?.pMode ?? piecesMode,
     coach_hints_enabled: overrides?.coachHints ?? coachHintsEnabled,
     eval_bar_enabled: overrides?.evalBar ?? evalBarEnabled,
+    opening_hints_enabled: overrides?.openingHints ?? openingHintsEnabled,
     coach_ai_only: overrides?.aiOnly ?? coachAiOnly,
     in_loop_calibration: overrides?.inLoopCal ?? inLoopCalibration,
     led_intensity: overrides?.intensity ?? ledIntensity,
@@ -586,6 +592,7 @@ function App() {
     localStorage.setItem('scb_pieces_mode', String(merged.pieces_mode));
     localStorage.setItem('scb_coach_hints_enabled', String(merged.coach_hints_enabled));
     localStorage.setItem('scb_eval_bar_enabled', String(merged.eval_bar_enabled));
+    localStorage.setItem('scb_opening_hints_enabled', String(merged.opening_hints_enabled));
     localStorage.setItem('scb_coach_ai_only', String(merged.coach_ai_only));
     localStorage.setItem('scb_in_loop_calibration', String(merged.in_loop_calibration));
     localStorage.setItem('scb_led_intensity', String(merged.led_intensity));
@@ -647,6 +654,10 @@ function App() {
         if (res.eval_bar_enabled !== undefined) {
           setEvalBarEnabled(res.eval_bar_enabled);
           localStorage.setItem('scb_eval_bar_enabled', String(res.eval_bar_enabled));
+        }
+        if (res.opening_hints_enabled !== undefined) {
+          setOpeningHintsEnabled(res.opening_hints_enabled);
+          localStorage.setItem('scb_opening_hints_enabled', String(res.opening_hints_enabled));
         }
         if (res.coach_ai_only !== undefined) {
           setCoachAiOnly(res.coach_ai_only);
@@ -831,6 +842,7 @@ function App() {
           if (res.settings.pieces_mode) localStorage.setItem('scb_pieces_mode', res.settings.pieces_mode);
           if (res.settings.coach_hints_enabled !== undefined) localStorage.setItem('scb_coach_hints_enabled', String(res.settings.coach_hints_enabled));
           if (res.settings.eval_bar_enabled !== undefined) localStorage.setItem('scb_eval_bar_enabled', String(res.settings.eval_bar_enabled));
+          if (res.settings.opening_hints_enabled !== undefined) localStorage.setItem('scb_opening_hints_enabled', String(res.settings.opening_hints_enabled));
           if (res.settings.coach_ai_only !== undefined) localStorage.setItem('scb_coach_ai_only', String(res.settings.coach_ai_only));
           if (res.settings.in_loop_calibration !== undefined) localStorage.setItem('scb_in_loop_calibration', String(res.settings.in_loop_calibration));
           if (res.settings.led_intensity !== undefined) localStorage.setItem('scb_led_intensity', String(res.settings.led_intensity));
@@ -1512,6 +1524,31 @@ function App() {
                   >
                     <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
                       coachHintsEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* Cartographer's Path / Opening Book Highlights Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <Compass size={13} className="text-emerald-400" />
+                      Cartographer's Path
+                    </span>
+                    <span className="text-[10px] text-slate-400">Opening trailblazers (Emerald/Azure) & novelty flare</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !openingHintsEnabled;
+                      setOpeningHintsEnabled(next);
+                      persistSettings({ openingHints: next });
+                    }}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
+                      openingHintsEnabled ? 'bg-emerald-600' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                      openingHintsEnabled ? 'translate-x-5' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>

@@ -182,6 +182,8 @@ export interface BoardSettingsOptions {
   pieces_mode?: 'auto' | 'pieces' | 'empty';
   coach_hints_enabled?: boolean;
   eval_bar_enabled?: boolean;
+  clock_bar_enabled?: boolean;
+  opening_hints_enabled?: boolean;
   coach_ai_only?: boolean;
   in_loop_calibration?: boolean;
   led_intensity?: number;
@@ -264,6 +266,8 @@ export interface BoardSettings {
   pieces_mode?: 'auto' | 'pieces' | 'empty';
   coach_hints_enabled?: boolean;
   eval_bar_enabled?: boolean;
+  clock_bar_enabled?: boolean;
+  opening_hints_enabled?: boolean;
   coach_ai_only?: boolean;
   in_loop_calibration?: boolean;
   led_intensity?: number;

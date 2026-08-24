@@ -1695,8 +1695,13 @@ class BoardStateManager:
 
                     # Cartographer's Path Book Moves lookup for this lifted piece
                     book_moves_map = {}
-                    if opening_hints_enabled and getattr(lichess_engine, "board", None) and self.current_opening and not self.current_opening.out_of_book:
-                        candidate_book_moves = get_book_moves_for_square(lichess_engine.board, l_c, l_r)
+                    active_playing_board = (
+                        self.local_engine.board
+                        if (hasattr(self, "local_engine") and self.local_engine.is_active)
+                        else getattr(lichess_engine, "board", None)
+                    )
+                    if opening_hints_enabled and active_playing_board and self.current_opening and not self.current_opening.out_of_book:
+                        candidate_book_moves = get_book_moves_for_square(active_playing_board, l_c, l_r)
                         for bm in candidate_book_moves:
                             book_moves_map[bm.to_coord] = bm
 
@@ -2406,8 +2411,10 @@ class BoardStateManager:
                     # Update Opening Classification & Detect Out-Of-Book Novelty
                     if active_chess_board is not None:
                         new_opening = get_opening_info(active_chess_board)
+                        opening_hints_enabled = settings.get("opening_hints_enabled", True)
                         if (
-                            self.current_opening is not None
+                            opening_hints_enabled
+                            and self.current_opening is not None
                             and not self.current_opening.out_of_book
                             and new_opening.out_of_book
                         ):

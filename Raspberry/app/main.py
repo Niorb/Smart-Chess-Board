@@ -283,6 +283,8 @@ def apply_settings(body: ThresholdSettings) -> None:
         settings["led_intensity"] = min(100, max(10, int(body.led_intensity)))
     if body.night_mode is not None:
         settings["night_mode"] = bool(body.night_mode)
+    if body.opening_hints_enabled is not None:
+        settings["opening_hints_enabled"] = bool(body.opening_hints_enabled)
 
 
 # --- REST API Endpoints ---

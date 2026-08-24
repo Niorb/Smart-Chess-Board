@@ -791,3 +791,35 @@ def test_broadcast_payload_contains_clocks_raw():
         assert payload["clocks_raw"]["black"] is not None
     finally:
         lichess_engine.raw_clocks_ms, lichess_engine.clocks_updated_at = saved
+
+
+def test_opening_hints_enabled_toggle():
+    """Verifies that opening_hints_enabled setting toggles Cartographer's Path LED styling."""
+    from board_hardware import settings
+    from app.led_helpers import COLOR_INT_MINT_EMERALD, COLOR_INT_AZURE, COLOR_INT_LEGAL_MOVE, get_led_indices
+
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "IDLE"
+    bsm.move_tracker.lifted_square = (4, 1)  # e2 pawn lifted
+    bsm.move_tracker.legal_targets = [(4, 2), (4, 3)]  # e3, e4
+
+    # 1. With opening_hints_enabled = True -> e4 (mainline) is Mint Emerald, e3 (sideline) is Azure
+    settings["opening_hints_enabled"] = True
+    bsm._update_leds()
+    lit_by_idx = _lit_colors_by_index(bsm.strip)
+    e4_idx = get_led_indices(3, 4)[0]  # col 4, row 3
+    e3_idx = get_led_indices(2, 4)[0]  # col 4, row 2
+    assert lit_by_idx.get(e4_idx) == COLOR_INT_MINT_EMERALD
+    assert lit_by_idx.get(e3_idx) == COLOR_INT_AZURE
+
+    # 2. With opening_hints_enabled = False -> targets render standard legal move color
+    bsm.strip.reset_mock()
+    settings["opening_hints_enabled"] = False
+    bsm._update_leds()
+    lit_by_idx_off = _lit_colors_by_index(bsm.strip)
+    assert lit_by_idx_off.get(e4_idx) == COLOR_INT_LEGAL_MOVE
+    assert lit_by_idx_off.get(e3_idx) == COLOR_INT_LEGAL_MOVE
+
+    # Restore default
+    settings["opening_hints_enabled"] = True
