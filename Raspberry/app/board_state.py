@@ -1478,6 +1478,8 @@ class BoardStateManager:
                                     rh_from = (ord(rh_uci[0]) - ord('a'), int(rh_uci[1]) - 1)
                                     rh_to = (ord(rh_uci[2]) - ord('a'), int(rh_uci[3]) - 1)
                                     if all(0 <= v < 8 for v in (*rh_from, *rh_to)):
+                                        if rh_from == self.analysis_anchor_coord:
+                                            rh_from = rh_to
                                         render_return_home_guide(now, frame, rh_from, rh_to, c_return_home)
                             except (ValueError, TypeError):
                                 pass

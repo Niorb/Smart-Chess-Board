@@ -27,6 +27,7 @@ from app.led_animations import (
     render_board_ready,
     render_castle_trace,
     render_clock_bar,
+    render_return_home_guide,
     render_game_drawn,
     render_game_lost,
     render_game_started,

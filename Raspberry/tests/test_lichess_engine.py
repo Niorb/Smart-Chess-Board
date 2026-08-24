@@ -827,6 +827,8 @@ def test_get_interpolated_clocks_passthrough_when_no_timestamp():
 
 def test_get_interpolated_clocks_passthrough_without_board():
     """With no board to identify side-to-move, no interpolation occurs."""
+    import time
+
     engine = LichessEngine()
     engine.raw_clocks_ms = {"white": 60000, "black": 30000}
     engine.clocks_updated_at = time.time() - 10.0

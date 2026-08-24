@@ -762,13 +762,13 @@ def test_analysis_return_home_guide_renders_on_last_branch_move():
         for idx in origin_indices:
             assert lit.get(idx) == scale_color(COLOR_INT_RETURN_HOME, 0.35)
 
-        # Un-play one branch move: guide steps back to c7c5 (origin c7 -> to c5)
+        # Un-play one branch move: guide steps back to c7c5. Its origin c7 IS the
+        # anchor square, so the dot is suppressed and the violet anchor stays visible.
         mgr.analysis_branch_moves = ["c7c5"]
         lit = _gold_values(mgr)
         for idx in get_led_indices(4, 2):
             assert idx in lit
-        for idx in origin_indices:
-            assert lit.get(idx) == scale_color(COLOR_INT_RETURN_HOME, 0.35)
+        assert lit.get(origin_indices[0]) != scale_color(COLOR_INT_RETURN_HOME, 0.35)
 
         # Branch fully cleared: no return-home gold anywhere
         mgr.analysis_branch_moves = []
