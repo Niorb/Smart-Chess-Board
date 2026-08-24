@@ -46,6 +46,7 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_CLOCK_CRIT,
     COLOR_INT_NIGHT_CLOCK_OK,
     COLOR_INT_NIGHT_CLOCK_WARN,
+    COLOR_INT_NIGHT_MODE,
     COLOR_INT_OPPONENT_CAPTURE,
     get_led_indices,
 )
