@@ -754,10 +754,10 @@ def test_analysis_return_home_guide_renders_on_last_branch_move():
                     lit[c.args[0]] = c.args[1]
             return lit
 
-        # Guide targets the LAST branch move c5c4: origin c7 (file 2, rank 6), to c5 (file 2, rank 4)
+        # Guide targets the LAST branch move c5c4: origin c5 (file 2, rank 4), to c4 (file 2, rank 3)
         lit = _gold_values(mgr)
-        to_indices = get_led_indices(4, 2)
-        origin_indices = get_led_indices(6, 2)
+        to_indices = get_led_indices(3, 2)
+        origin_indices = get_led_indices(4, 2)
         for idx in to_indices:
             assert idx in lit and scale_color(COLOR_INT_RETURN_HOME, 0.55) <= lit[idx] <= COLOR_INT_RETURN_HOME
         for idx in origin_indices:
