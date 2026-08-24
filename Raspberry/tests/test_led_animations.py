@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.config import (
     ANIM_BOARD_READY_DURATION_S,
     ANIM_CASTLE_PERIOD_S,
+    ANIM_GAME_START_DURATION_S,
     ANIM_SEEKING_DURATION_S,
     ANIM_SEEKING_PERIOD_S,
     MOVE_TRACE_PERIOD_S,
