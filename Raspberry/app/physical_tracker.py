@@ -320,6 +320,7 @@ class PhysicalMoveTracker:
                         "is_castling": is_castling,
                         "rook_from": rook_coords[0] if rook_coords else None,
                         "rook_to": rook_coords[1] if rook_coords else None,
+                        "phase": "king" if is_castling else "standard",
                     }
                     logger.info(
                         f"Opponent move pending physical mirroring: {last_move_uci} "
@@ -366,17 +367,43 @@ class PhysicalMoveTracker:
                 rook_origin_empty = (physical_state[r_from_c][r_from_r] == 0)
                 rook_target_occupied = (physical_state[r_to_c][r_to_r] != 0)
 
-                # Castling complete when BOTH King and Rook have reached their targets
+                current_phase = self.pending_opponent_move.get("phase", "king")
+
+                # Both pieces moved (e.g. simultaneous or rook moved first) -> complete
                 if king_origin_empty and king_target_occupied and rook_origin_empty and rook_target_occupied:
-                    logger.info(f"Physical board confirmed opponent castling move: {self.pending_opponent_move['uci']}")
+                    logger.info(f"Physical board confirmed opponent castling complete: {self.pending_opponent_move['uci']}")
                     self.arrival_flash = {
-                        "square": (to_c, to_r),
+                        "square": (r_to_c, r_to_r),
                         "start_time": time.time(),
                         "duration": ANIM_MOVE_CONFIRM_DURATION_S,
                         "is_capture": False,
                     }
                     self.pending_opponent_move = None
                     self.invalid_placement = None
+                elif current_phase == "king":
+                    # Phase 1 (King Time): King placed at destination -> advance to Phase 2 (Rook Time)
+                    if king_origin_empty and king_target_occupied:
+                        logger.info(f"Physical board confirmed opponent castling King placement: ({to_c},{to_r})")
+                        self.arrival_flash = {
+                            "square": (to_c, to_r),
+                            "start_time": time.time(),
+                            "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                            "is_capture": False,
+                        }
+                        self.pending_opponent_move["phase"] = "rook"
+                        self.invalid_placement = None
+                elif current_phase == "rook":
+                    # Phase 2 (Rook Time): Rook placed at destination -> castling complete
+                    if rook_origin_empty and rook_target_occupied:
+                        logger.info(f"Physical board confirmed opponent castling Rook placement: ({r_to_c},{r_to_r})")
+                        self.arrival_flash = {
+                            "square": (r_to_c, r_to_r),
+                            "start_time": time.time(),
+                            "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                            "is_capture": False,
+                        }
+                        self.pending_opponent_move = None
+                        self.invalid_placement = None
             else:
                 # Opponent move completed when piece lifted from origin and placed on target
                 origin_empty = (physical_state[from_c][from_r] == 0)

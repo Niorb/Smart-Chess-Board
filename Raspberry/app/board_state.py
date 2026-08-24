@@ -1624,26 +1624,29 @@ class BoardStateManager:
                     rook_from = self.move_tracker.pending_opponent_move.get("rook_from")
                     rook_to = self.move_tracker.pending_opponent_move.get("rook_to")
 
-                    target_color = c_opp_to_capture if is_capture else c_opp_to_quiet
+                    # Harmonized trace & destination color (quiet moves: Sky Azure; captures: Ruby Crimson)
                     trace_color = c_capture_trace if is_capture else c_move_trace
 
                     if is_castling and rook_from and rook_to:
-                        # Highlight King from->to and Rook from->to
-                        set_square_leds(from_c, from_r, c_opp_from)
-                        set_square_leds(to_c, to_r, c_opp_to_quiet)
-                        set_square_leds(rook_from[0], rook_from[1], c_opp_from)
-                        set_square_leds(rook_to[0], rook_to[1], c_opp_to_quiet)
-
-                        # Choreographed castling trace: King moves 2 squares first, followed by Rook move
-                        king_path = interpolate_move_path(from_c, from_r, to_c, to_r)
-                        rook_path = interpolate_move_path(rook_from[0], rook_from[1], rook_to[0], rook_to[1])
-                        render_castle_trace(king_path, rook_path, now, frame, trace_color=trace_color, blend_arrival=True)
+                        phase = self.move_tracker.pending_opponent_move.get("phase", "king")
+                        if phase == "king":
+                            # Phase 1: King move indication (e8 -> g8 / e1 -> g1)
+                            set_square_leds(from_c, from_r, c_opp_from)
+                            set_square_leds(to_c, to_r, trace_color)
+                            king_path = interpolate_move_path(from_c, from_r, to_c, to_r)
+                            render_move_trace(king_path, now, frame, trace_color=trace_color, blend_arrival=True)
+                        else:
+                            # Phase 2: Rook move indication (h8 -> f8 / h1 -> f1)
+                            set_square_leds(rook_from[0], rook_from[1], c_opp_from)
+                            set_square_leds(rook_to[0], rook_to[1], trace_color)
+                            rook_path = interpolate_move_path(rook_from[0], rook_from[1], rook_to[0], rook_to[1])
+                            render_move_trace(rook_path, now, frame, trace_color=trace_color, blend_arrival=True)
                     else:
-                        # Standard Move Trace: Keep start and arrival squares lit
+                        # Standard Move Trace: Origin square in c_opp_from, Arrival square & comet in trace_color
                         set_square_leds(from_c, from_r, c_opp_from)
-                        set_square_leds(to_c, to_r, target_color)
+                        set_square_leds(to_c, to_r, trace_color)
 
-                        # Interpolate path and render moving comet pulse with arrival flare
+                        # Interpolate path and render moving comet pulse with arrival flare in trace_color
                         path = interpolate_move_path(from_c, from_r, to_c, to_r)
                         render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
 

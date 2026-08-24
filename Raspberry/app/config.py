@@ -35,9 +35,9 @@ COLOR_SETUP_MISPLACED = (28, 8, 0)  # Dim amber warning for misplaced pieces dur
 COLOR_PIECE_LIFTED = (144, 80, 0)  # Amber / Gold for lifted piece origin
 COLOR_LEGAL_TARGET = (0, 24, 48)  # Subtle deep cyan for legal quiet target dots
 COLOR_LEGAL_CAPTURE = (64, 10, 24)  # Subtle deep ruby/rose for legal capture target dots
-COLOR_OPPONENT_FROM = (176, 56, 0)  # Orange for opponent move origin
-COLOR_OPPONENT_TO = (0, 112, 176)  # Cyan/blue for opponent move destination
-COLOR_OPPONENT_CAPTURE = (192, 0, 32)  # Ruby red for opponent capture target square
+COLOR_OPPONENT_FROM = (220, 100, 0)  # Solar Orange for opponent piece that needs to move
+COLOR_OPPONENT_TO = (0, 150, 240)  # Electric Sky Azure for opponent move destination (unified with move trace)
+COLOR_OPPONENT_CAPTURE = (220, 20, 50)  # Radiant Ruby Crimson for opponent capture target (unified with capture trace)
 COLOR_CHECK = (176, 0, 0)  # Red highlight on King in check
 COLOR_ILLEGAL = (144, 0, 0)  # Red for invalid placement
 COLOR_MOVE_CONFIRM = (48, 255, 128)  # Vibrant emerald/spring green arrival confirmation flash
@@ -73,8 +73,8 @@ COLOR_TURN_BLACK = (20, 70, 140)      # Cool azure tone for Black's turn King
 COLOR_OPPONENT_DISCONNECTED = (220, 100, 0)  # Alert amber beacon & countdown gauge
 
 # Lifecycle & Trace Animation Colors — (R, G, B) tuples
-COLOR_MOVE_TRACE = (176, 16, 144)  # Vibrant magenta/violet pulse along move trajectory
-COLOR_CAPTURE_TRACE = (204, 32, 64)  # High-energy rose-crimson pulse along capture trajectory
+COLOR_MOVE_TRACE = (0, 150, 240)  # Electric Sky Azure pulse along quiet move trajectory (unified with arrival)
+COLOR_CAPTURE_TRACE = (220, 20, 50)  # Radiant Ruby Crimson pulse along capture trajectory (unified with arrival)
 COLOR_VICTORY_GOLD = (204, 172, 0)  # Shimmering gold for victory
 COLOR_VICTORY_GREEN = (0, 204, 48)  # Emerald green wave for victory
 COLOR_DEFEAT_RED = (176, 0, 16)  # Crimson wave for defeat
@@ -128,11 +128,11 @@ COLOR_NIGHT_LEGAL_TARGET = (0, 210, 140)  # Luminous mint emerald / aqua green (
 COLOR_NIGHT_LEGAL_CAPTURE = (240, 20, 60)  # Pure radiant crimson for legal captures
 
 # Opponent Moves & Traces
-COLOR_NIGHT_OPPONENT_FROM = (230, 90, 0)  # Radiant solar orange for opponent move origin
-COLOR_NIGHT_OPPONENT_TO = (0, 220, 200)  # Vivid electric mint-cyan for opponent destination
-COLOR_NIGHT_OPPONENT_CAPTURE = (255, 10, 40)  # Pure laser crimson for opponent capture target
-COLOR_NIGHT_MOVE_TRACE = (220, 30, 180)  # Vivid neon magenta/violet pulse along move trajectory
-COLOR_NIGHT_CAPTURE_TRACE = (255, 40, 70)  # High-energy rose-crimson pulse along capture trajectory
+COLOR_NIGHT_OPPONENT_FROM = (240, 140, 0)  # Radiant solar gold for opponent piece that needs to move
+COLOR_NIGHT_OPPONENT_TO = (0, 220, 230)  # Vivid electric aqua cyan for opponent destination (unified with move trace)
+COLOR_NIGHT_OPPONENT_CAPTURE = (255, 10, 40)  # Pure laser crimson for opponent capture target (unified with capture trace)
+COLOR_NIGHT_MOVE_TRACE = (0, 220, 230)  # Vivid electric aqua cyan pulse along move trajectory (unified with arrival)
+COLOR_NIGHT_CAPTURE_TRACE = (255, 10, 40)  # Pure laser crimson pulse along capture trajectory (unified with arrival)
 
 # King Status & Turn Breathing Halos
 COLOR_NIGHT_CHECK = (255, 10, 10)  # Laser red on King in check

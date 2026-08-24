@@ -420,10 +420,11 @@ def test_sync_game_opponent_castling_detection(mock_engine):
     assert tracker.pending_opponent_move["is_castling"] is True
     assert tracker.pending_opponent_move["rook_from"] == (7, 7)  # h8
     assert tracker.pending_opponent_move["rook_to"] == (5, 7)    # f8
+    assert tracker.pending_opponent_move["phase"] == "king"
 
 
 def test_opponent_castling_physical_mirror_requires_king_and_rook(mock_engine):
-    """Verify that opponent castling is only confirmed once both King and Rook are placed."""
+    """Verify that opponent castling progresses in 2 distinct phases: King step first, then Rook step."""
     tracker = PhysicalMoveTracker()
     mock_engine.my_color = "white"
 
@@ -440,6 +441,7 @@ def test_opponent_castling_physical_mirror_requires_king_and_rook(mock_engine):
     mock_engine.game_info["turn"] = "white"
 
     tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move["phase"] == "king"
 
     # Initial physical board state with pieces on e8 and h8
     state = [[0] * 8 for _ in range(8)]
@@ -451,18 +453,21 @@ def test_opponent_castling_physical_mirror_requires_king_and_rook(mock_engine):
     state[6][7] = 1  # g8 placed
     res = tracker.process_physical_state(state, mock_engine)
     assert res is None
-    # Pending move must STILL be active because Rook hasn't moved yet!
+    # Pending move must advance to Phase 2 (Rook time) with King arrival flash
     assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["phase"] == "rook"
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (6, 7)
 
     # Step 2: Human moves Rook (h8 -> f8)
     state[7][7] = 0  # h8 lifted
     state[5][7] = 1  # f8 placed
     res2 = tracker.process_physical_state(state, mock_engine)
     assert res2 is None
-    # Now both King and Rook are placed -> pending move is cleared and arrival flash triggered!
+    # Now both King and Rook are placed -> pending move is cleared and Rook arrival flash triggered!
     assert tracker.pending_opponent_move is None
     assert tracker.arrival_flash is not None
-    assert tracker.arrival_flash["square"] == (6, 7)
+    assert tracker.arrival_flash["square"] == (5, 7)
 
 
 def test_player_castling_triggers_pending_rook_and_placement_confirms(mock_engine):

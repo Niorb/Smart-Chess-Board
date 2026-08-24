@@ -325,11 +325,12 @@ def test_legal_target_and_capture_dots_colors():
 
 
 def test_board_state_castling_move_led_render():
-    """Verify that _update_leds lights up King and Rook from/to squares on castling."""
+    """Verify that _update_leds lights up King move in Phase 1 and Rook move in Phase 2 for opponent castling."""
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
     bsm.game_status = "PLAYING"
 
+    # Phase 1: King Time
     bsm.move_tracker.pending_opponent_move = {
         "uci": "e1g1",
         "from": (4, 0),
@@ -338,8 +339,16 @@ def test_board_state_castling_move_led_render():
         "is_castling": True,
         "rook_from": (7, 0),
         "rook_to": (5, 0),
+        "phase": "king",
     }
 
+    bsm._update_leds()
+    assert bsm.strip.setPixelColor.called
+    assert bsm.strip.show.called
+
+    # Phase 2: Rook Time
+    bsm.strip.reset_mock()
+    bsm.move_tracker.pending_opponent_move["phase"] = "rook"
     bsm._update_leds()
     assert bsm.strip.setPixelColor.called
     assert bsm.strip.show.called
