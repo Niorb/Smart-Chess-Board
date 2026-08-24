@@ -3,7 +3,22 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Cyber-Physical Local Game Engine & Setup Auto-Start (2026-08-24)
+## Latest Change — The King's Bow Physical Resignation Gesture & Opening Hints Switch (2026-08-25)
+1. **The King's Bow Physical Resignation Gesture (`physical_tracker.py`, `board_state.py`)**:
+   - **Pondering Safety**: Lifting the friendly King displays normal legal move targets. Moving the King to a legal destination always executes a standard chess move with 100% priority.
+   - **The King's Bow Surrender**: Holding the King lifted for $\ge 3.0\text{s}$ arms resignation (pulsing Laser Crimson origin halo + soft garnet cross-halo). Replacing the King back on its origin square while armed **confirms resignation**.
+   - **King Laid to Rest (Tipped)**: Leaving the King off the board for $\ge 5.0\text{s}$ auto-confirms resignation on abandonment timeout.
+   - **Short Cancel**: Replacing the King before the 3.0s arming threshold cleanly cancels move selection without side effects.
+   - **Game Engine Integration**: Automatically dispatches resignation to online Lichess games (`POST /api/board/game/{game_id}/resign`) and concludes Local matches (`stop_local_game(reason="resignation")`).
+   - **Visuals & Electrical Power Budget**: Low-power LED rendering (`render_resignation_aura`) consuming $\le 10$ LEDs ($\approx 92.8\text{mA} \ll 220\text{mA}$ ceiling), with Day and Night Mode variants.
+   - **React 19 Frontend**: Real-time "The King's Bow Armed" toast notification banner and WebSocket synchronization.
+   - **Automated Test Suite**: 5 dedicated tests in `Raspberry/tests/test_gesture_resignation.py` (338/338 total tests passing on Pi).
+
+2. **Cartographer's Path Toggle Switch (`App.tsx`, `main.py`, `board_hardware.py`)**:
+   - Added `opening_hints_enabled: bool` setting in backend, REST API (`POST /api/board/settings`), and local storage.
+   - Added toggle switch in Settings panel with Compass icon to enable/disable opening trailblazers and novelty flares.
+
+## Previous Change — Cyber-Physical Local Game Engine & Setup Auto-Start (2026-08-24)
 Implemented zero-touch automatic Local Two-Player game initiation and cyber-physical state management:
 1. **Setup Readiness Arming Gate (`can_start_local_game`)**:
    - Strictly armed only when all 32 pieces are in standard starting positions (`is_setup_ready == True`), no transients exist, and gestures are idle.
