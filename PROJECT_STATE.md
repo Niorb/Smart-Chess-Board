@@ -3,7 +3,26 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — The King's Bow Physical Resignation Gesture & Opening Hints Switch (2026-08-25)
+## Latest Change — Redesigned Defeat & Draw Animations (2026-08-25)
+1. **"The Sovereign's Eclipse" (`GAME_LOST` Redesign in `led_animations.py`)**:
+   - **Unified Realm Symmetry**: Removed the single-square "meteor" strike coordinate artifact. The animation is centered on the symmetrical board center $(3.5, 3.5)$ with identical visual majesty for White and Black.
+   - **Phase 1: Inward Perimeter Collapse ($0.00 \le p < 0.35$)**: Inward-sweeping Gaussian ring closing in from the 28 perimeter squares to the central royal core in Obsidian Garnet and Blazing Ruby.
+   - **Phase 2: Crown Fracture & Shatter Shockwave ($0.35 \le p < 0.70$)**: White-hot crown detonation flash on the central thrones, an expanding circular ruby shockwave ring, and 4 flying molten gold shards along diagonal rays.
+   - **Phase 3: Smoldering Embers & Obsidian Dissolve ($0.70 \le p \le 1.00$)**: Dual-harmonic organic flickering cinders with a central dying hearth cardiac pulse fading smoothly into obsidian darkness.
+   - **Power Budget**: Peak $\le 18$ active squares ($\approx 179.2\text{mA} \ll 220\text{mA}$ limit; $\le 80\text{mA}$ in Night Mode).
+   - **Duration**: $2.8\text{s}$.
+
+2. **"The Celestial Equilibrium" (`GAME_DRAWN` Redesign in `led_animations.py`)**:
+   - **Harmonic Dual Tides ($0.00 \le p < 0.38$)**: Luminous Pearl White wave (Rank 1–2 advancing upward from SW) meets Celestial Sapphire wave (Rank 7–8 advancing downward from NE).
+   - **The Equatorial Vortex ($0.38 \le p < 0.72$)**: The two tides collide at Ranks 4–5, swirling in a gentle Yin-Yang breathing equilibrium and blending into Radiant Aqua.
+   - **Serene Horizon Dissolve ($0.72 \le p \le 1.00$)**: Tranquil outward horizontal dispersion settling the entire board into peaceful stillness.
+   - **Power Budget**: Peak $\le 16$ active squares ($\approx 135\text{mA} \ll 220\text{mA}$ limit; $\le 60\text{mA}$ in Night Mode).
+   - **Duration**: $2.6\text{s}$.
+
+3. **Automated Verification**:
+   - 338/338 unit tests passing on physical Raspberry Pi.
+
+## Previous Change — The King's Bow Physical Resignation Gesture & Opening Hints Switch (2026-08-25)
 1. **The King's Bow Physical Resignation Gesture (`physical_tracker.py`, `board_state.py`)**:
    - **Pondering Safety**: Lifting the friendly King displays normal legal move targets. Moving the King to a legal destination always executes a standard chess move with 100% priority.
    - **The King's Bow Surrender**: Holding the King lifted for $\ge 3.0\text{s}$ arms resignation (pulsing Laser Crimson origin halo + soft garnet cross-halo). Replacing the King back on its origin square while armed **confirms resignation**.
