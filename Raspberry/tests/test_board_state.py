@@ -796,7 +796,7 @@ def test_broadcast_payload_contains_clocks_raw():
 def test_opening_hints_enabled_toggle():
     """Verifies that opening_hints_enabled setting toggles Cartographer's Path LED styling."""
     from board_hardware import settings
-    from app.led_helpers import COLOR_INT_MINT_EMERALD, COLOR_INT_AZURE, COLOR_INT_LEGAL_MOVE, get_led_indices
+    from app.led_helpers import COLOR_INT_MINT_EMERALD, COLOR_INT_AZURE, COLOR_INT_LEGAL_TARGET, get_led_indices
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -818,8 +818,8 @@ def test_opening_hints_enabled_toggle():
     settings["opening_hints_enabled"] = False
     bsm._update_leds()
     lit_by_idx_off = _lit_colors_by_index(bsm.strip)
-    assert lit_by_idx_off.get(e4_idx) == COLOR_INT_LEGAL_MOVE
-    assert lit_by_idx_off.get(e3_idx) == COLOR_INT_LEGAL_MOVE
+    assert lit_by_idx_off.get(e4_idx) == COLOR_INT_LEGAL_TARGET
+    assert lit_by_idx_off.get(e3_idx) == COLOR_INT_LEGAL_TARGET
 
     # Restore default
     settings["opening_hints_enabled"] = True
