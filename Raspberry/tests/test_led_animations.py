@@ -136,56 +136,62 @@ def test_render_game_won():
 
 def test_render_game_lost():
     """
-    Verify GAME_LOST animation ("The Royal Cataclysm"):
-    - Strictly within 16 squares illuminated simultaneously at any single frame (< 25% of board).
-    - Works correctly for White King, Black King, and custom coordinates.
-    - All phases (converging crossfire, shockwave ring, fissure decay, cardiac ember) illuminate properly.
+    Verify GAME_LOST animation ("The Sovereign's Eclipse"):
+    - Strictly within 18 squares illuminated simultaneously at any single frame (< 28% of board).
+    - Fully symmetrical and unified for White and Black.
+    - All 3 phases (inward perimeter collapse, shockwave ring + shards, smoldering embers) illuminate properly.
+    - Night Mode scaling operates cleanly.
     """
-    # 1. Test White King default
+    # 1. Test Day Mode across all phases
     for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
         frame = [0] * NUM_LEDS
-        render_game_lost(p, frame, {"my_color": "white"})
-        assert any(frame), f"Frame empty at progress {p} for White"
+        render_game_lost(p, frame, {"my_color": "white", "night_mode": False})
+        assert any(frame), f"Frame empty at progress {p} in Day Mode"
         lit_squares = 0
         for c in range(8):
             for r in range(8):
                 sq_indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for White"
+        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for Day Mode"
 
-    # 2. Test Black King default
-    for p in [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]:
-        frame_black = [0] * NUM_LEDS
-        render_game_lost(p, frame_black, {"my_color": "black"})
-        assert any(frame_black), f"Frame empty at progress {p} for Black"
+    # 2. Test Night Mode across all phases
+    for p in [0.10, 0.40, 0.60, 0.80, 0.92]:
+        frame_night = [0] * NUM_LEDS
+        render_game_lost(p, frame_night, {"my_color": "black", "night_mode": True})
+        assert any(frame_night), f"Frame empty at progress {p} in Night Mode"
         lit_squares = 0
         for c in range(8):
             for r in range(8):
                 sq_indices = get_led_indices(r, c)
-                if any(frame_black[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                if any(frame_night[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for Black"
-
-    # 3. Test custom King coordinates
-    for p in [0.1, 0.5, 0.85]:
-        frame_custom = [0] * NUM_LEDS
-        render_game_lost(p, frame_custom, {"king_c": 3, "king_r": 4})
-        assert any(frame_custom), f"Frame empty at progress {p} for custom king pos"
-        lit_squares = 0
-        for c in range(8):
-            for r in range(8):
-                sq_indices = get_led_indices(r, c)
-                if any(frame_custom[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
-                    lit_squares += 1
-        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for custom king pos"
-
+        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for Night Mode"
 
 
 def test_render_game_drawn():
-    frame = [0] * NUM_LEDS
-    render_game_drawn(0.5, frame, {}, now=time.time())
-    assert any(frame)
+    """
+    Verify GAME_DRAWN animation ("The Celestial Equilibrium"):
+    - Strictly within 16 squares illuminated simultaneously at any single frame (< 25% of board).
+    - Tests Phase 1 (dual army tides), Phase 2 (equatorial vortex), Phase 3 (horizon dissolve).
+    - Day Mode and Night Mode support.
+    """
+    for p in [0.10, 0.25, 0.45, 0.60, 0.75, 0.90]:
+        frame = [0] * NUM_LEDS
+        render_game_drawn(p, frame, {"night_mode": False}, now=time.time())
+        assert any(frame), f"Frame empty at progress {p} for GAME_DRAWN Day Mode"
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                sq_indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                    lit_squares += 1
+        assert lit_squares <= 16, f"Too many squares lit ({lit_squares}) at progress {p} for GAME_DRAWN"
+
+    # Night Mode
+    frame_night = [0] * NUM_LEDS
+    render_game_drawn(0.50, frame_night, {"night_mode": True}, now=time.time())
+    assert any(frame_night), "Frame empty at progress 0.50 for GAME_DRAWN Night Mode"
 
 
 def test_render_move_trace():

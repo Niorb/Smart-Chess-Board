@@ -32,7 +32,18 @@ try:
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DRAW_BLUE,
+        COLOR_INT_DRAW_EQUILIBRIUM,
+        COLOR_INT_DRAW_PEARL,
+        COLOR_INT_DRAW_SAPPHIRE,
+        COLOR_INT_DRAW_TWILIGHT,
         COLOR_INT_DRAW_WHITE,
+        COLOR_INT_ECLIPSE_ASH,
+        COLOR_INT_ECLIPSE_CRIMSON,
+        COLOR_INT_ECLIPSE_EMBER,
+        COLOR_INT_ECLIPSE_FLASH,
+        COLOR_INT_ECLIPSE_GARNET,
+        COLOR_INT_ECLIPSE_GOLD,
+        COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
@@ -40,6 +51,16 @@ try:
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
         COLOR_INT_NIGHT_DRAW_BLUE,
+        COLOR_INT_NIGHT_DRAW_EQUILIBRIUM,
+        COLOR_INT_NIGHT_DRAW_PEARL,
+        COLOR_INT_NIGHT_DRAW_SAPPHIRE,
+        COLOR_INT_NIGHT_DRAW_TWILIGHT,
+        COLOR_INT_NIGHT_ECLIPSE_CRIMSON,
+        COLOR_INT_NIGHT_ECLIPSE_EMBER,
+        COLOR_INT_NIGHT_ECLIPSE_FLASH,
+        COLOR_INT_NIGHT_ECLIPSE_GARNET,
+        COLOR_INT_NIGHT_ECLIPSE_GOLD,
+        COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
         COLOR_INT_NIGHT_PROMO_BISHOP,
@@ -96,7 +117,18 @@ except ImportError:
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
         COLOR_INT_DRAW_BLUE,
+        COLOR_INT_DRAW_EQUILIBRIUM,
+        COLOR_INT_DRAW_PEARL,
+        COLOR_INT_DRAW_SAPPHIRE,
+        COLOR_INT_DRAW_TWILIGHT,
         COLOR_INT_DRAW_WHITE,
+        COLOR_INT_ECLIPSE_ASH,
+        COLOR_INT_ECLIPSE_CRIMSON,
+        COLOR_INT_ECLIPSE_EMBER,
+        COLOR_INT_ECLIPSE_FLASH,
+        COLOR_INT_ECLIPSE_GARNET,
+        COLOR_INT_ECLIPSE_GOLD,
+        COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
@@ -104,6 +136,16 @@ except ImportError:
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
         COLOR_INT_NIGHT_DRAW_BLUE,
+        COLOR_INT_NIGHT_DRAW_EQUILIBRIUM,
+        COLOR_INT_NIGHT_DRAW_PEARL,
+        COLOR_INT_NIGHT_DRAW_SAPPHIRE,
+        COLOR_INT_NIGHT_DRAW_TWILIGHT,
+        COLOR_INT_NIGHT_ECLIPSE_CRIMSON,
+        COLOR_INT_NIGHT_ECLIPSE_EMBER,
+        COLOR_INT_NIGHT_ECLIPSE_FLASH,
+        COLOR_INT_NIGHT_ECLIPSE_GARNET,
+        COLOR_INT_NIGHT_ECLIPSE_GOLD,
+        COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
         COLOR_INT_NIGHT_PROMO_BISHOP,
@@ -111,6 +153,8 @@ except ImportError:
         COLOR_INT_NIGHT_PROMO_QUEEN,
         COLOR_INT_NIGHT_PROMO_ROOK,
         COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NIGHT_RESIGN_HALO,
+        COLOR_INT_NIGHT_RESIGN_PRIMARY,
         COLOR_INT_NIGHT_SEEKING_BODY,
         COLOR_INT_NIGHT_SEEKING_HEAD,
         COLOR_INT_NIGHT_SEEKING_TAIL,
@@ -124,6 +168,8 @@ except ImportError:
         COLOR_INT_PROMO_QUEEN,
         COLOR_INT_PROMO_ROOK,
         COLOR_INT_PROMO_ROOT,
+        COLOR_INT_RESIGN_HALO,
+        COLOR_INT_RESIGN_PRIMARY,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
@@ -548,204 +594,236 @@ def render_game_won(
                 set_square_in_frame(frame, c, r, COLOR_INT_OFF)
 
 
-# Game Lost Palette: "The Royal Cataclysm (Requiem for a Fallen Sovereign)"
-COLOR_INT_CROWN_LIGHTNING = color_rgb(255, 245, 230)  # Fractured white lightning flash
-COLOR_INT_STRIKE_RUBY = color_rgb(255, 18, 48)  # Blazing laser strike ruby
-COLOR_INT_BLOOD_RUBY = color_rgb(196, 12, 32)  # Expanding shockwave ruby
-COLOR_INT_CROWN_EMBER = color_rgb(235, 110, 10)  # Molten crown amber shards
-COLOR_INT_OBSIDIAN_CRIMSON = color_rgb(120, 8, 18)  # Deep trailing fissure crimson
-COLOR_INT_DYING_CINDER = color_rgb(68, 6, 4)  # Smoldering ember cinder
-COLOR_INT_CHARRED_ASH = color_rgb(24, 2, 2)  # Fading charcoal ash
-
+# =============================================================================
+# REDESIGNED LIFECYCLE ANIMATIONS: GAME_LOST & GAME_DRAWN
+# =============================================================================
 
 def render_game_lost(
     progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
-    GAME_LOST animation: "The Royal Cataclysm (Requiem for a Fallen Sovereign)"
-    A high-impact, 4-phase cyber-physical defeat sequence dynamically centered on the defeated King:
-    - Phase 1: The Crimson Siege / Converging Crossfire (0.00 <= progress < 0.28).
-      3 lethal ballistic laser bolts converging from board perimeters onto the King.
-    - Phase 2: Crown Shatter & Hyper-Radial Shockwave (0.28 <= progress < 0.58).
-      White-hot lightning detonation on King's square + expanding Gaussian shockwave ring + 4 flying shards.
-    - Phase 3: Fissure Decay & Obsidian Abyss (0.58 <= progress < 0.82).
-      Organic cinders & jagged cooling fissures collapsing back towards the King.
-    - Phase 4: The Royal Eclipse / Dying Hearth Pulse (0.82 <= progress <= 1.00).
-      Solitary biphasic cardiac pulse on the King's square fading into complete blackout.
+    GAME_LOST animation: "The Sovereign's Eclipse"
+    A unified, symmetrical 3-phase imperial cataclysm sequence operating across
+    the entire 8x8 realm (identical visual drama for White and Black):
 
-    Hardware Budget: 8-14 active squares peak during shockwave (< 22% board power),
-    safely managed by binary chunking and power rail stability.
+    - Phase 1: Inward Perimeter Collapse / The Closing Vice (0.00 <= progress < 0.35).
+      Imperial shadow closing inward from the 28 perimeter squares to the central throne core.
+    - Phase 2: Crown Fracture & Shatter Shockwave (0.35 <= progress < 0.70).
+      White-hot crown detonation + expanding Gaussian ruby shockwave ring + 4 flying molten gold shards.
+    - Phase 3: Smoldering Embers & Obsidian Dissolve (0.70 <= progress <= 1.00).
+      Organic dual-harmonic flickering cinders + central dying cardiac hearth pulse fading into dark.
+
+    Hardware Budget: <= 14 active squares peak (< 180mA on 5V rail).
     """
     if now == 0.0:
         now = time.time()
 
-    # 1. Clear frame buffer
+    is_night = bool(params.get("night_mode", False))
+    col_flash = COLOR_INT_NIGHT_ECLIPSE_FLASH if is_night else COLOR_INT_ECLIPSE_FLASH
+    col_gold = COLOR_INT_NIGHT_ECLIPSE_GOLD if is_night else COLOR_INT_ECLIPSE_GOLD
+    col_ruby = COLOR_INT_NIGHT_ECLIPSE_RUBY if is_night else COLOR_INT_ECLIPSE_RUBY
+    col_crimson = COLOR_INT_NIGHT_ECLIPSE_CRIMSON if is_night else COLOR_INT_ECLIPSE_CRIMSON
+    col_garnet = COLOR_INT_NIGHT_ECLIPSE_GARNET if is_night else COLOR_INT_ECLIPSE_GARNET
+    col_ember = COLOR_INT_NIGHT_ECLIPSE_EMBER if is_night else COLOR_INT_ECLIPSE_EMBER
+    col_ash = COLOR_INT_NIGHT_MODE if is_night else COLOR_INT_ECLIPSE_ASH
+    col_idle = COLOR_INT_NIGHT_MODE if is_night else COLOR_INT_OFF
+
+    # Clear frame buffer
     for c in range(8):
         for r in range(8):
-            set_square_in_frame(frame, c, r, COLOR_INT_OFF)
+            set_square_in_frame(frame, c, r, col_idle)
 
     progress = max(0.0, min(1.0, progress))
+    c0, r0 = 3.5, 3.5  # Symmetrical realm center
 
-    # 2. Dynamic King Position Extraction
-    if "king_c" in params and "king_r" in params:
-        try:
-            king_c = int(round(float(params["king_c"])))
-            king_r = int(round(float(params["king_r"])))
-            if not (0 <= king_c < 8 and 0 <= king_r < 8):
-                king_c, king_r = 4, 0
-        except (ValueError, TypeError):
-            king_c, king_r = 4, 0
-    elif "king_sq" in params and isinstance(params["king_sq"], (tuple, list)) and len(params["king_sq"]) == 2:
-        try:
-            king_c = int(round(float(params["king_sq"][0])))
-            king_r = int(round(float(params["king_sq"][1])))
-            if not (0 <= king_c < 8 and 0 <= king_r < 8):
-                king_c, king_r = 4, 0
-        except (ValueError, TypeError):
-            king_c, king_r = 4, 0
-    else:
-        my_color = str(params.get("my_color", "white")).strip().lower()
-        king_c, king_r = (4, 7) if my_color == "black" else (4, 0)
+    # =========================================================================
+    # PHASE 1: Inward Perimeter Collapse / The Closing Vice (0.00 -> 0.35)
+    # =========================================================================
+    if progress < 0.35:
+        p1 = progress / 0.35  # 0.0 -> 1.0
+        r_max = 4.95
+        r_collapse = r_max * (1.0 - (p1 ** 1.15)) + 0.6
+        sigma1 = 0.42 + 0.15 * (1.0 - p1)
+        phase_int = 0.65 + 0.35 * (p1 ** 2)
 
-    # 3. Phase Dispatch & Choreography
-    if progress < 0.25:
-        # =========================================================================
-        # PHASE 1: The Crimson Siege / Converging Crossfire (0.00 -> 0.25)
-        # =========================================================================
-        p1 = progress / 0.25  # 0.0 -> 1.0
-        e1 = p1 ** 1.35  # Accelerating ballistic projectile
+        for c in range(8):
+            for r in range(8):
+                d_c = math.hypot(c - c0, r - r0)
+                dr = abs(d_c - r_collapse)
+                if dr < (sigma1 * 2.2):
+                    w = math.exp(-(dr * dr) / (2.0 * sigma1 * sigma1)) * phase_int
+                    if w > 0.035:
+                        col = blend_colors(col_garnet, col_ruby, min(1.0, p1 ** 1.5))
+                        set_square_in_frame(frame, c, r, scale_color(col, min(1.0, w)))
 
-        # 3 distinct converging vectors from opposing board perimeters
-        origins = [
-            (7 - king_c, 7 if king_r < 4 else 0),  # Opposite rank mirror
-            (7 if king_c < 4 else 0, 7 - king_r),  # Opposite file mirror
-            (7 - king_c, 7 - king_r)  # Diagonal polar mirror
-        ]
+    # =========================================================================
+    # PHASE 2: Crown Fracture & Shatter Shockwave (0.35 -> 0.70)
+    # =========================================================================
+    elif progress < 0.70:
+        p2 = (progress - 0.35) / 0.35  # 0.0 -> 1.0
 
-        for orig_c, orig_r in origins:
-            cur_c = orig_c + (king_c - orig_c) * e1
-            cur_r = orig_r + (king_r - orig_r) * e1
-
-            # Render bolt head (blazing ruby with white tip)
-            for c in range(8):
-                for r in range(8):
-                    dist = math.hypot(c - cur_c, r - cur_r)
-                    if dist < 1.1:
-                        intensity = math.exp(-4.0 * dist * dist) * (0.65 + 0.35 * p1)
-                        if intensity > 0.06:
-                            col = blend_colors(COLOR_INT_STRIKE_RUBY, COLOR_INT_CROWN_LIGHTNING, max(0.0, 1.0 - dist))
-                            blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.9)
-
-    elif progress < 0.55:
-        # =========================================================================
-        # PHASE 2: Crown Shatter & Hyper-Radial Shockwave (0.25 -> 0.55)
-        # =========================================================================
-        p2 = (progress - 0.25) / 0.30  # 0.0 -> 1.0
-
-        # A. Central Detonation Flash (initial 35% of Phase 2)
-        if p2 < 0.35:
-            flash_p = p2 / 0.35
+        # A. Central Crown Fracture Flash (Initial 25% of Phase 2)
+        if p2 < 0.25:
+            flash_p = p2 / 0.25
             flash_int = (1.0 - flash_p) ** 2
-            flash_col = blend_colors(COLOR_INT_CROWN_LIGHTNING, COLOR_INT_CROWN_EMBER, flash_p)
-            set_square_in_frame(frame, king_c, king_r, scale_color(flash_col, flash_int))
+            flash_col = blend_colors(col_flash, col_gold, flash_p)
+            for c in (3, 4):
+                for r in (3, 4):
+                    set_square_in_frame(frame, c, r, scale_color(flash_col, flash_int))
 
         # B. Expanding Gaussian Shockwave Ring
-        wave_radius = (p2 ** 0.80) * 8.2
-        wave_sigma = 0.28 + 0.12 * p2
+        r_shock = (p2 ** 0.82) * 5.8
+        sigma2 = 0.32 + 0.18 * p2
         ring_decay = 1.0 - 0.55 * p2
 
         for c in range(8):
             for r in range(8):
-                d_k = math.hypot(c - king_c, r - king_r)
-                dr = abs(d_k - wave_radius)
-                if dr < 0.48:
-                    intensity = math.exp(-(dr * dr) / (2.0 * wave_sigma * wave_sigma)) * ring_decay
-                    if intensity > 0.12:
-                        col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_OBSIDIAN_CRIMSON, min(1.0, d_k / 8.0))
-                        blend_square_in_frame(frame, c, r, scale_color(col, intensity), 0.85)
+                d_c = math.hypot(c - c0, r - r0)
+                dr = abs(d_c - r_shock)
+                if dr < (sigma2 * 2.2):
+                    w = math.exp(-(dr * dr) / (2.0 * sigma2 * sigma2)) * ring_decay
+                    if w > 0.04:
+                        col = blend_colors(col_ruby, col_crimson, min(1.0, d_c / 4.5))
+                        blend_square_in_frame(frame, c, r, scale_color(col, min(1.0, w)), 0.90)
 
-        # C. 4 Flying Molten Crown Shards
-        shard_dirs = [(-1.0, 1.0), (1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
-        shard_dist = (p2 ** 0.75) * 3.2
-        shard_int = (1.0 - p2) * 0.90 + 0.08
+        # C. 4 Flying Molten Gold Shards Along Diagonal Rays
+        shard_dist = (p2 ** 0.75) * 4.8
+        shard_int = (1.0 - p2) * 0.92
+        shard_rays = [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)]
 
-        for dir_x, dir_y in shard_dirs:
-            s_c = king_c + dir_x * shard_dist
-            s_r = king_r + dir_y * shard_dist
-            sc_i, sr_i = int(round(s_c)), int(round(s_r))
-            if 0 <= sc_i < 8 and 0 <= sr_i < 8 and shard_int > 0.06:
-                shard_col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_STRIKE_RUBY, p2)
-                blend_square_in_frame(frame, sc_i, sr_i, scale_color(shard_col, shard_int), 0.95)
+        if shard_int > 0.05:
+            shard_col = blend_colors(col_gold, col_ruby, p2 * 0.8)
+            for dx, dy in shard_rays:
+                sc = c0 + dx * 0.7071 * shard_dist
+                sr = r0 + dy * 0.7071 * shard_dist
+                sci, sri = int(round(sc)), int(round(sr))
+                if 0 <= sci < 8 and 0 <= sri < 8:
+                    blend_square_in_frame(frame, sci, sri, scale_color(shard_col, shard_int), 0.95)
 
-    elif progress < 0.80:
-        # =========================================================================
-        # PHASE 3: Fissure Decay & Obsidian Abyss (0.55 -> 0.80)
-        # =========================================================================
-        p3 = (progress - 0.55) / 0.25  # 0.0 -> 1.0
-        decay_env = (1.0 - p3) ** 1.3
+    # =========================================================================
+    # PHASE 3: Smoldering Embers & Obsidian Dissolve (0.70 -> 1.00)
+    # =========================================================================
+    else:
+        p3 = (progress - 0.70) / 0.30  # 0.0 -> 1.0
+        decay_env = (1.0 - p3) ** 1.4
 
+        # A. Organic Dual-Harmonic Smoldering Cinders
         for c in range(8):
             for r in range(8):
-                d_k = math.hypot(c - king_c, r - king_r)
-                if d_k <= 1.5:
-                    # Harmonic cinder noise & tight radial falloff around shattered throne
-                    flicker = 0.75 + 0.25 * math.sin(now * 16.0 + c * 19.3 + r * 31.7)
-                    falloff = math.exp(-d_k / 0.95)
-                    intensity = decay_env * falloff * flicker
-                    if d_k < 0.1:
-                        intensity = max(0.08 * decay_env, intensity)
+                d_c = math.hypot(c - c0, r - r0)
+                h = 0.5 * (math.sin(now * 15.0 + c * 19.3 + r * 31.7) + math.cos(now * 9.5 + c * 27.1 + r * 13.9))
+                if h > 0.40:
+                    cinder_int = (((h - 0.40) / 0.60) ** 2) * decay_env * 0.65
+                    if cinder_int > 0.02:
+                        cinder_col = blend_colors(col_gold, col_ember, p3)
+                        set_square_in_frame(frame, c, r, scale_color(cinder_col, cinder_int))
 
-                    if intensity > 0.02:
-                        col = blend_colors(COLOR_INT_CROWN_EMBER, COLOR_INT_DYING_CINDER, min(1.0, p3 + d_k * 0.15))
-                        set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.90))
-
-    else:
-        # =========================================================================
-        # PHASE 4: The Royal Eclipse / Dying Hearth Pulse (0.80 -> 1.00)
-        # =========================================================================
-        p4 = (progress - 0.80) / 0.20  # 0.0 -> 1.0
-
-        if p4 < 0.98:
-            # Bi-phasic heartbeat wave ("lub-dub")
-            hb_osc = (math.sin(p4 * 2.5 * math.pi) ** 6) + 0.40 * (math.sin(max(0.0, p4 * 2.5 * math.pi - 0.35 * math.pi)) ** 6)
-            hb_env = math.exp(-2.5 * p4)
-            pulse_intensity = max(0.04, hb_osc * hb_env * 0.95)
-
-            ember_col = blend_colors(COLOR_INT_BLOOD_RUBY, COLOR_INT_CHARRED_ASH, p4)
-            set_square_in_frame(frame, king_c, king_r, scale_color(ember_col, pulse_intensity))
-        else:
-            set_square_in_frame(frame, king_c, king_r, COLOR_INT_OFF)
-
-
-
+        # B. Central Dying Hearth Pulse (Biphasic Heartbeat)
+        if p3 < 0.95:
+            hb_osc = (math.sin(p3 * 2.5 * math.pi) ** 4) + 0.35 * (math.sin(max(0.0, p3 * 2.5 * math.pi - 0.4 * math.pi)) ** 4)
+            for c in (3, 4):
+                for r in (3, 4):
+                    d_c = math.hypot(c - c0, r - r0)
+                    hearth_int = hb_osc * math.exp(-3.0 * p3) * math.exp(-d_c / 1.0)
+                    if hearth_int > 0.02:
+                        hearth_col = blend_colors(col_crimson, col_ash, p3)
+                        blend_square_in_frame(frame, c, r, scale_color(hearth_col, hearth_int), 0.90)
 
 
 def render_game_drawn(
     progress: float, frame: list[int], params: dict[str, Any], now: float = 0.0
 ) -> None:
     """
-    GAME_DRAWN animation:
-    Symmetrical curtain sweep across files a-d and e-h meeting in the center in tranquil blue and white.
+    GAME_DRAWN animation: "The Celestial Equilibrium"
+    A graceful 3-phase procedural sequence portraying the balance of two equal cosmic forces:
+
+    - Phase 1: Dual Army Tidal Waves (0.00 <= progress < 0.38).
+      Pearl White tide (Rank 1-2) advancing upward vs Deep Celestial Sapphire tide (Rank 7-8) advancing downward.
+    - Phase 2: The Equatorial Vortex (0.38 <= progress < 0.72).
+      Harmonic orbital swirl and gentle breathing equilibrium at Ranks 4-5 blending into Radiant Aqua.
+    - Phase 3: Serene Horizon Dissolve (0.72 <= progress <= 1.00).
+      Tranquil outward flank ripple settling the board peacefully to rest.
+
+    Hardware Budget: <= 12 active squares peak (< 130mA on 5V rail).
     """
     if now == 0.0:
         now = time.time()
 
-    curtain_pos = progress * 4.2  # 0.0 (perimeter a, h) to 3.5 (center d, e)
-    fade = 1.0 - (progress * 0.4)
-    blue_col = COLOR_INT_NIGHT_DRAW_BLUE if params.get("night_mode", False) else COLOR_INT_DRAW_BLUE
+    is_night = bool(params.get("night_mode", False))
+    col_pearl = COLOR_INT_NIGHT_DRAW_PEARL if is_night else COLOR_INT_DRAW_PEARL
+    col_sapphire = COLOR_INT_NIGHT_DRAW_SAPPHIRE if is_night else COLOR_INT_DRAW_SAPPHIRE
+    col_equilibrium = COLOR_INT_NIGHT_DRAW_EQUILIBRIUM if is_night else COLOR_INT_DRAW_EQUILIBRIUM
+    col_twilight = COLOR_INT_NIGHT_DRAW_TWILIGHT if is_night else COLOR_INT_DRAW_TWILIGHT
+    col_idle = COLOR_INT_NIGHT_MODE if is_night else COLOR_INT_OFF
 
+    # Clear frame buffer
     for c in range(8):
-        # Symmetrical file coordinate from perimeter (0 for a/h, 3 for d/e)
-        file_dist = min(c, 7 - c)
-        d = abs(file_dist - curtain_pos)
-        wave = math.exp(-2.2 * d * d)
-        settled = 0.35 if file_dist <= curtain_pos else 0.0
-
         for r in range(8):
-            ripple = 0.85 + 0.15 * math.sin(now * 3.5 + r * 0.9)
-            intensity = max(0.0, min(1.0, wave + settled)) * fade * ripple
-            color = blend_colors(blue_col, COLOR_INT_DRAW_WHITE, 0.4)
-            set_square_in_frame(frame, c, r, scale_color(color, intensity))
+            set_square_in_frame(frame, c, r, col_idle)
+
+    progress = max(0.0, min(1.0, progress))
+    c0, r0 = 3.5, 3.5
+
+    # =========================================================================
+    # PHASE 1: Dual Army Tidal Waves (0.00 -> 0.38)
+    # =========================================================================
+    if progress < 0.38:
+        p1 = progress / 0.38  # 0.0 -> 1.0
+        y_white = -0.5 + 4.0 * p1
+        y_black = 7.5 - 4.0 * p1
+        sigma_t = 0.52
+
+        for c in range(8):
+            for r in range(8):
+                dy_w = abs(c - y_white)
+                dy_b = abs(c - y_black)
+                w_w = math.exp(-(dy_w * dy_w) / (2.0 * sigma_t * sigma_t)) * (0.75 + 0.25 * math.cos(r * math.pi / 3.5))
+                w_b = math.exp(-(dy_b * dy_b) / (2.0 * sigma_t * sigma_t)) * (0.75 + 0.25 * math.sin(r * math.pi / 3.5))
+
+                total_w = w_w + w_b
+                if total_w > 0.04:
+                    ratio_w = w_w / (total_w + 1e-5)
+                    wave_col = blend_colors(col_sapphire, col_pearl, ratio_w)
+                    set_square_in_frame(frame, c, r, scale_color(wave_col, min(1.0, total_w)))
+
+    # =========================================================================
+    # PHASE 2: The Equatorial Vortex (0.38 -> 0.72)
+    # =========================================================================
+    elif progress < 0.72:
+        p2 = (progress - 0.38) / 0.34  # 0.0 -> 1.0
+        breathing = 0.82 + 0.18 * math.sin(now * 7.0)
+
+        for c in range(8):
+            for r in range(8):
+                d_c = math.hypot(c - c0, r - r0)
+                theta = math.atan2(r - r0, c - c0)
+                swirl = math.sin(2.0 * theta + 6.0 * now - 1.6 * d_c)
+
+                # Equatorial spatial envelope concentrated along Ranks 4-5
+                w_vortex = math.exp(-((c - 3.5) ** 2) / 1.9) * math.exp(-((d_c - 1.8) ** 2) / (2.0 * 0.75 * 0.75))
+                vortex_int = w_vortex * breathing * (0.80 + 0.20 * swirl)
+
+                if vortex_int > 0.04:
+                    blend_factor = max(0.0, min(1.0, 0.5 + 0.35 * ((c - 3.5) / max(0.2, d_c)) + 0.25 * swirl))
+                    base_col = blend_colors(col_sapphire, col_pearl, blend_factor)
+                    final_col = blend_colors(base_col, col_equilibrium, 0.45)
+                    set_square_in_frame(frame, c, r, scale_color(final_col, min(1.0, vortex_int)))
+
+    # =========================================================================
+    # PHASE 3: Serene Horizon Dissolve (0.72 -> 1.00)
+    # =========================================================================
+    else:
+        p3 = (progress - 0.72) / 0.28  # 0.0 -> 1.0
+        dissolve_env = 0.5 * (1.0 + math.cos(math.pi * p3)) * (1.0 - 0.3 * p3)
+        r_flank = p3 * 4.2
+
+        for c in range(8):
+            for r in range(8):
+                dr = abs(abs(r - r0) - r_flank)
+                w_horizon = math.exp(-((c - 3.5) ** 2) / 1.5) * math.exp(-(dr * dr) / (2.0 * 0.65 * 0.65)) * dissolve_env
+                if w_horizon > 0.02:
+                    horizon_col = blend_colors(col_equilibrium, col_twilight, p3)
+                    set_square_in_frame(frame, c, r, scale_color(horizon_col, min(1.0, w_horizon)))
 
 
 def render_board_ready(

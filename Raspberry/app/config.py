@@ -193,6 +193,34 @@ COLOR_NIGHT_NOVELTY_FLARE = (240, 180, 20)  # Vivid Golden Solar Flare
 COLOR_NIGHT_RESIGN_PRIMARY = (160, 16, 36) # Velvet Ruby
 COLOR_NIGHT_RESIGN_HALO = (80, 8, 18)      # Midnight Crimson
 
+# "The Sovereign's Eclipse" (GAME_LOST Palette)
+COLOR_ECLIPSE_FLASH = (255, 245, 235)  # White-hot fractured crown detonation
+COLOR_ECLIPSE_GOLD = (255, 175, 25)    # Flying molten crown shards
+COLOR_ECLIPSE_RUBY = (255, 18, 48)     # Blazing laser strike ruby
+COLOR_ECLIPSE_CRIMSON = (196, 12, 32)  # Blood crimson shockwave
+COLOR_ECLIPSE_GARNET = (110, 8, 20)    # Obsidian garnet perimeter fissure
+COLOR_ECLIPSE_EMBER = (75, 10, 6)      # Smoldering ember cinder
+COLOR_ECLIPSE_ASH = (20, 3, 4)         # Charcoal ash dying hearth
+
+# "The Celestial Equilibrium" (GAME_DRAWN Palette)
+COLOR_DRAW_PEARL = (240, 242, 255)       # Luminous pearl ivory (White army tide)
+COLOR_DRAW_SAPPHIRE = (0, 110, 235)      # Celestial royal sapphire (Black army tide)
+COLOR_DRAW_EQUILIBRIUM = (0, 210, 230)   # Radiant equilibrium aqua vortex
+COLOR_DRAW_TWILIGHT = (60, 85, 170)      # Horizon twilight dissolve
+
+# Night Mode variants for high-contrast visibility against moonlight sapphire background
+COLOR_NIGHT_ECLIPSE_FLASH = (220, 210, 240)
+COLOR_NIGHT_ECLIPSE_GOLD = (210, 140, 20)
+COLOR_NIGHT_ECLIPSE_RUBY = (180, 16, 40)
+COLOR_NIGHT_ECLIPSE_CRIMSON = (140, 10, 28)
+COLOR_NIGHT_ECLIPSE_GARNET = (70, 8, 25)
+COLOR_NIGHT_ECLIPSE_EMBER = (45, 8, 12)
+
+COLOR_NIGHT_DRAW_PEARL = (180, 195, 235)
+COLOR_NIGHT_DRAW_SAPPHIRE = (0, 80, 200)
+COLOR_NIGHT_DRAW_EQUILIBRIUM = (0, 180, 210)
+COLOR_NIGHT_DRAW_TWILIGHT = (30, 45, 95)
+
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
 # =============================================================================
@@ -203,8 +231,8 @@ ANIM_CASTLE_PERIOD_S = 2.0  # Traversal period for 2-phase King + Rook castling 
 ANIM_MOVE_CONFIRM_DURATION_S = 0.45  # Snappy 450ms exponential decay
 ANIM_GAME_START_DURATION_S = 2.2  # Duration for choreographed army scan & royal focus
 ANIM_GAME_WON_DURATION_S = 3.0  # Duration for victory celebration waves
-ANIM_GAME_LOST_DURATION_S = 2.5  # Duration for defeat collapsing wave
-ANIM_GAME_DRAWN_DURATION_S = 2.0  # Duration for draw curtain wave
+ANIM_GAME_LOST_DURATION_S = 2.8  # Duration for defeat Sovereign's Eclipse sequence
+ANIM_GAME_DRAWN_DURATION_S = 2.6  # Duration for draw Celestial Equilibrium sequence
 ANIM_BOARD_READY_DURATION_S = 0.5  # Duration for board setup ready snap-flash
 ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
