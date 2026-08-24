@@ -316,6 +316,10 @@ export async function startBlunderDrill(index: number = 0) {
   return jsonPost('/analysis/blunder_drill/start', { index });
 }
 
+export async function submitBlunderAttempt(uci: string) {
+  return jsonPost('/analysis/blunder_drill/attempt', { uci });
+}
+
 export async function toggleBlunderHint() {
   return jsonPost('/analysis/blunder_drill/hint');
 }
