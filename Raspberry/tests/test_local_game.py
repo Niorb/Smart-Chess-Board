@@ -166,7 +166,7 @@ class TestSetupReadinessArmingGate:
         sm.physical_state = placed_state
 
         move_res = sm.move_tracker.process_physical_state(placed_state, adapter)
-        assert move_res == (5, 2, 5, 4, "")  # 1-indexed (col 5, row 2) -> (col 5, row 4) == e2e4
+        assert move_res == (5, 2, 5, 4, None)  # 1-indexed (col 5, row 2) -> (col 5, row 4) == e2e4
 
         # Simulate update_loop handling of the move
         from_f, from_r, to_f, to_r, promo = move_res
@@ -230,7 +230,8 @@ class TestLocalGameApiRoutes:
         assert resign_resp.json()["status"] == "success"
         assert resign_resp.json()["winner"] == "black"
 
-        # Stop local match
+        # Start second match to test manual stop
+        client.post("/api/game/local/start")
         stop_resp = client.post("/api/game/local/stop", json={"winner": "draw", "reason": "agreement"})
         assert stop_resp.status_code == 200
         assert stop_resp.json()["status"] == "success"
