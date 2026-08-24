@@ -643,16 +643,16 @@ def render_game_lost(
         p1 = progress / 0.35  # 0.0 -> 1.0
         r_max = 4.95
         r_collapse = r_max * (1.0 - (p1 ** 1.15)) + 0.6
-        sigma1 = 0.28 + 0.08 * (1.0 - p1)
+        sigma1 = 0.24 + 0.06 * (1.0 - p1)
         phase_int = 0.65 + 0.35 * (p1 ** 2)
 
         for c in range(8):
             for r in range(8):
                 d_c = math.hypot(c - c0, r - r0)
                 dr = abs(d_c - r_collapse)
-                if dr < (sigma1 * 1.8):
+                if dr < (sigma1 * 1.5):
                     w = math.exp(-(dr * dr) / (2.0 * sigma1 * sigma1)) * phase_int
-                    if w > 0.12:
+                    if w > 0.18:
                         col = blend_colors(col_garnet, col_ruby, min(1.0, p1 ** 1.5))
                         set_square_in_frame(frame, c, r, scale_color(col, min(1.0, w)))
 
@@ -673,16 +673,16 @@ def render_game_lost(
 
         # B. Expanding Gaussian Shockwave Ring
         r_shock = (p2 ** 0.82) * 5.8
-        sigma2 = 0.30 + 0.14 * p2
+        sigma2 = 0.28 + 0.12 * p2
         ring_decay = 1.0 - 0.55 * p2
 
         for c in range(8):
             for r in range(8):
                 d_c = math.hypot(c - c0, r - r0)
                 dr = abs(d_c - r_shock)
-                if dr < (sigma2 * 1.8):
+                if dr < (sigma2 * 1.6):
                     w = math.exp(-(dr * dr) / (2.0 * sigma2 * sigma2)) * ring_decay
-                    if w > 0.10:
+                    if w > 0.15:
                         col = blend_colors(col_ruby, col_crimson, min(1.0, d_c / 4.5))
                         blend_square_in_frame(frame, c, r, scale_color(col, min(1.0, w)), 0.90)
 
@@ -691,7 +691,7 @@ def render_game_lost(
         shard_int = (1.0 - p2) * 0.92
         shard_rays = [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)]
 
-        if shard_int > 0.08:
+        if shard_int > 0.10:
             shard_col = blend_colors(col_gold, col_ruby, p2 * 0.8)
             for dx, dy in shard_rays:
                 sc = c0 + dx * 0.7071 * shard_dist
@@ -712,9 +712,9 @@ def render_game_lost(
             for r in range(8):
                 d_c = math.hypot(c - c0, r - r0)
                 h = 0.5 * (math.sin(now * 15.0 + c * 19.3 + r * 31.7) + math.cos(now * 9.5 + c * 27.1 + r * 13.9))
-                if h > 0.45:
-                    cinder_int = (((h - 0.45) / 0.55) ** 2) * decay_env * 0.65
-                    if cinder_int > 0.04:
+                if h > 0.48:
+                    cinder_int = (((h - 0.48) / 0.52) ** 2) * decay_env * 0.65
+                    if cinder_int > 0.05:
                         cinder_col = blend_colors(col_gold, col_ember, p3)
                         set_square_in_frame(frame, c, r, scale_color(cinder_col, cinder_int))
 
@@ -725,7 +725,7 @@ def render_game_lost(
                 for r in (3, 4):
                     d_c = math.hypot(c - c0, r - r0)
                     hearth_int = hb_osc * math.exp(-3.0 * p3) * math.exp(-d_c / 1.0)
-                    if hearth_int > 0.04:
+                    if hearth_int > 0.05:
                         hearth_col = blend_colors(col_crimson, col_ash, p3)
                         blend_square_in_frame(frame, c, r, scale_color(hearth_col, hearth_int), 0.90)
 
@@ -738,13 +738,13 @@ def render_game_drawn(
     A graceful 3-phase procedural sequence portraying the balance of two equal cosmic forces:
 
     - Phase 1: Dual Army Tidal Waves (0.00 <= progress < 0.38).
-      Pearl White tide (Rank 1-2) advancing upward vs Deep Celestial Sapphire tide (Rank 7-8) advancing downward.
+      Pearl White tide (Rank 1-2) advancing upward from SW vs Deep Celestial Sapphire tide (Rank 7-8) advancing downward from NE.
     - Phase 2: The Equatorial Vortex (0.38 <= progress < 0.72).
       Harmonic orbital swirl and gentle breathing equilibrium at Ranks 4-5 blending into Radiant Aqua.
     - Phase 3: Serene Horizon Dissolve (0.72 <= progress <= 1.00).
       Tranquil outward flank ripple settling the board peacefully to rest.
 
-    Hardware Budget: <= 12 active squares peak (< 130mA on 5V rail).
+    Hardware Budget: <= 14 active squares peak (< 140mA on 5V rail).
     """
     if now == 0.0:
         now = time.time()
@@ -771,18 +771,18 @@ def render_game_drawn(
         p1 = progress / 0.38  # 0.0 -> 1.0
         y_white = -0.5 + 4.0 * p1
         y_black = 7.5 - 4.0 * p1
-        sigma_t = 0.38
+        sigma_t = 0.34
 
         for c in range(8):
             for r in range(8):
                 dy_w = abs(r - y_white)
                 dy_b = abs(r - y_black)
-                file_env = 0.70 + 0.30 * math.cos((c - 3.5) * math.pi / 4.0)
-                w_w = math.exp(-(dy_w * dy_w) / (2.0 * sigma_t * sigma_t)) * file_env
-                w_b = math.exp(-(dy_b * dy_b) / (2.0 * sigma_t * sigma_t)) * file_env
+                # Counter-flowing spatial envelopes: White from SW, Black from NE
+                w_w = math.exp(-(dy_w * dy_w) / (2.0 * sigma_t * sigma_t)) * math.exp(-((c - 2.5) ** 2) / 4.5)
+                w_b = math.exp(-(dy_b * dy_b) / (2.0 * sigma_t * sigma_t)) * math.exp(-((c - 4.5) ** 2) / 4.5)
 
                 total_w = w_w + w_b
-                if total_w > 0.12:
+                if total_w > 0.15:
                     ratio_w = w_w / (total_w + 1e-5)
                     wave_col = blend_colors(col_sapphire, col_pearl, ratio_w)
                     set_square_in_frame(frame, c, r, scale_color(wave_col, min(1.0, total_w)))
