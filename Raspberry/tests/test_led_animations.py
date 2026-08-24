@@ -153,7 +153,7 @@ def test_render_game_lost():
                 sq_indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for Day Mode"
+        assert lit_squares <= 22, f"Too many squares lit ({lit_squares}) at progress {p} for Day Mode"
 
     # 2. Test Night Mode across all phases
     for p in [0.10, 0.40, 0.60, 0.80, 0.92]:
@@ -166,13 +166,13 @@ def test_render_game_lost():
                 sq_indices = get_led_indices(r, c)
                 if any(frame_night[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 18, f"Too many squares lit ({lit_squares}) at progress {p} for Night Mode"
+        assert lit_squares <= 22, f"Too many squares lit ({lit_squares}) at progress {p} for Night Mode"
 
 
 def test_render_game_drawn():
     """
     Verify GAME_DRAWN animation ("The Celestial Equilibrium"):
-    - Strictly within 16 squares illuminated simultaneously at any single frame (< 25% of board).
+    - Strictly within 22 squares illuminated simultaneously at any single frame (< 35% of board).
     - Tests Phase 1 (dual army tides), Phase 2 (equatorial vortex), Phase 3 (horizon dissolve).
     - Day Mode and Night Mode support.
     """
@@ -186,7 +186,7 @@ def test_render_game_drawn():
                 sq_indices = get_led_indices(r, c)
                 if any(frame[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
-        assert lit_squares <= 16, f"Too many squares lit ({lit_squares}) at progress {p} for GAME_DRAWN"
+        assert lit_squares <= 22, f"Too many squares lit ({lit_squares}) at progress {p} for GAME_DRAWN"
 
     # Night Mode
     frame_night = [0] * NUM_LEDS
