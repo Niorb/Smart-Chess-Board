@@ -857,8 +857,9 @@ function App() {
     setTimeout(() => setSettingsStatus(null), 4000);
   };
 
-  const isMyTurn = state.status === 'PLAYING' && state.game?.turn === state.my_color;
-  const isOpponentTurn = state.status === 'PLAYING' && !isMyTurn;
+  const isLocalGame = state.game?.is_local ?? false;
+  const isMyTurn = state.status === 'PLAYING' && (isLocalGame || state.game?.turn === state.my_color);
+  const isOpponentTurn = state.status === 'PLAYING' && !isLocalGame && !isMyTurn;
 
   // Smooth clock display: snapshot raw clocks + local receipt time whenever the server
   // heartbeat refreshes them, then drain the side-to-move client-side between updates.
@@ -1380,6 +1381,12 @@ function App() {
               {/* Match Playing Info */}
               {state.status === 'PLAYING' && (
                 <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Mode:</span>
+                    <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {isLocalGame ? 'Local Match (OTB)' : (state.coach?.is_ai_game ? 'Stockfish AI' : 'Lichess Online')}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400">Game ID:</span>
                     <span className="font-mono text-emerald-400 font-bold">{state.game?.game_id || 'Active'}</span>

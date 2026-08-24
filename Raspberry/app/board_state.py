@@ -183,6 +183,189 @@ class AnalysisEngineAdapter:
         self.game_info = {}
 
 
+class LocalGameEngine:
+    """
+    Dedicated local chess game coordinator for physical two-player over-the-board matches.
+    Maintains python-chess Board, move stack, turn timers, and game over evaluations.
+    """
+
+    def __init__(self):
+        self.board: chess.Board = chess.Board()
+        self.game_id: str | None = None
+        self.start_time: float = 0.0
+        self.move_timestamps: list[float] = []
+        self.is_active: bool = False
+        self.winner: str | None = None  # "white" | "black" | "draw" | None
+        self.end_reason: str | None = None  # "checkmate" | "stalemate" | "threefold" | "50-move" | "insufficient_material" | "resignation" | "reset"
+        self._last_move_cache: tuple[int, bool] = (-1, False)
+
+    @property
+    def my_color(self) -> str:
+        """Returns active side-to-move so PhysicalMoveTracker tracks whoever's turn it is."""
+        return "white" if self.board.turn == chess.WHITE else "black"
+
+    @property
+    def game_info(self) -> dict[str, Any]:
+        """Provides game_info dictionary compatible with PhysicalMoveTracker.sync_game."""
+        last_move_uci = self.board.peek().uci() if self.board.move_stack else None
+        return {
+            "game_id": self.game_id,
+            "rated": False,
+            "speed": "unlimited",
+            "turn": "white" if self.board.turn == chess.WHITE else "black",
+            "my_color": self.my_color,
+            "opponent": {"username": "Local Player", "rating": 0, "title": None, "is_ai": False},
+            "last_move": last_move_uci,
+            "legal_moves": [m.uci() for m in self.board.legal_moves],
+            "is_check": self.board.is_check(),
+            "is_game_over": self.is_game_over,
+            "winner": self.winner,
+            "end_reason": self.end_reason,
+        }
+
+    @property
+    def is_game_over(self) -> bool:
+        return self.winner is not None or self.board.is_game_over()
+
+    def start_game(self, fen: str | None = None, game_id: str | None = None) -> None:
+        """Initializes a new local match."""
+        if fen:
+            self.board = chess.Board(fen)
+        else:
+            self.board = chess.Board()
+        self.game_id = game_id or f"local_{int(time.time())}"
+        self.start_time = time.time()
+        self.move_timestamps = [self.start_time]
+        self.is_active = True
+        self.winner = None
+        self.end_reason = None
+        self._last_move_cache = (-1, False)
+        logger.info(f"LocalGameEngine started game {self.game_id}")
+
+    def apply_move(self, uci: str) -> bool:
+        """Applies a UCI move to the local board and checks for endgame conditions."""
+        if not self.is_active:
+            return False
+        try:
+            move = chess.Move.from_uci(uci)
+            if move not in self.board.legal_moves:
+                logger.warning(f"Illegal move rejected in LocalGameEngine: {uci}")
+                return False
+            self.board.push(move)
+            self.move_timestamps.append(time.time())
+            self._check_game_over()
+            return True
+        except Exception as e:
+            logger.error(f"Error applying move {uci} in LocalGameEngine: {e}")
+            return False
+
+    def make_move(
+        self,
+        from_file: int,
+        from_rank: int,
+        to_file: int,
+        to_rank: int,
+        promotion: str | None = None,
+    ) -> bool:
+        """1-indexed coordinate helper for physical move tracker."""
+        from_sq = f"{chr(ord('a') + from_file - 1)}{from_rank}"
+        to_sq = f"{chr(ord('a') + to_file - 1)}{to_rank}"
+        uci = f"{from_sq}{to_sq}{promotion or ''}"
+        return self.apply_move(uci)
+
+    def _check_game_over(self) -> None:
+        """Evaluates checkmate, stalemate, and draw conditions."""
+        if self.board.is_checkmate():
+            self.winner = "black" if self.board.turn == chess.WHITE else "white"
+            self.end_reason = "checkmate"
+            logger.info(f"Local match finished: {self.winner.upper()} won by checkmate!")
+        elif self.board.is_stalemate():
+            self.winner = "draw"
+            self.end_reason = "stalemate"
+            logger.info("Local match finished: Draw by stalemate!")
+        elif self.board.is_insufficient_material():
+            self.winner = "draw"
+            self.end_reason = "insufficient_material"
+            logger.info("Local match finished: Draw by insufficient material!")
+        elif self.board.can_claim_fifty_moves():
+            self.winner = "draw"
+            self.end_reason = "50_move_rule"
+            logger.info("Local match finished: Draw by 50-move rule!")
+        elif self.board.can_claim_threefold_repetition():
+            self.winner = "draw"
+            self.end_reason = "threefold_repetition"
+            logger.info("Local match finished: Draw by threefold repetition!")
+
+    def resign(self, player_color: str = "white") -> None:
+        """Resigns the active game on behalf of player_color."""
+        if not self.is_active:
+            return
+        self.winner = "black" if player_color.lower() == "white" else "white"
+        self.end_reason = "resignation"
+        logger.info(f"Local match resigned by {player_color}. Winner: {self.winner}")
+
+    def reset(self) -> None:
+        """Resets the local game state back to clean initial."""
+        self.board = chess.Board()
+        self.game_id = None
+        self.start_time = 0.0
+        self.move_timestamps = []
+        self.is_active = False
+        self.winner = None
+        self.end_reason = None
+        self._last_move_cache = (-1, False)
+
+    def get_board(self) -> list[list[str]]:
+        """Returns 8x8 piece grid matching frontend/hardware coordinates."""
+        grid = [["." for _ in range(8)] for _ in range(8)]
+        for rank_idx in range(8):
+            for file_idx in range(8):
+                sq = chess.square(file_idx, rank_idx)
+                piece = self.board.piece_at(sq)
+                grid[rank_idx][file_idx] = piece.symbol() if piece else "."
+        return grid
+
+    def get_game_payload(self) -> dict[str, Any]:
+        """Returns structured metadata for WebSockets and API endpoints."""
+        last_move_uci = None
+        last_move_is_capture = False
+        if self.board.move_stack:
+            last_move = self.board.peek()
+            last_move_uci = last_move.uci()
+            cache_count, cache_capture = getattr(self, "_last_move_cache", (-1, False))
+            if cache_count == len(self.board.move_stack):
+                last_move_is_capture = cache_capture
+            else:
+                try:
+                    m = self.board.pop()
+                    last_move_is_capture = bool(self.board.is_capture(m))
+                    self.board.push(m)
+                except Exception:
+                    last_move_is_capture = False
+
+        turn_str = "white" if self.board.turn == chess.WHITE else "black"
+        return {
+            "game_id": self.game_id,
+            "type": "local",
+            "is_local": True,
+            "rated": False,
+            "speed": "unlimited",
+            "turn": turn_str,
+            "my_color": turn_str,
+            "white": {"username": "White (Local)", "rating": None, "title": None},
+            "black": {"username": "Black (Local)", "rating": None, "title": None},
+            "opponent": {"username": "Local Player", "rating": None, "title": None, "is_ai": False},
+            "opponent_gone": None,
+            "last_move": last_move_uci,
+            "last_move_is_capture": last_move_is_capture,
+            "legal_moves": [m.uci() for m in self.board.legal_moves],
+            "is_check": self.board.is_check(),
+            "is_game_over": self.is_game_over,
+            "winner": self.winner,
+            "end_reason": self.end_reason,
+        }
+
+
 # Shared immutable-ish sync targets (identity-stable so broadcast digests can detect change)
 EMPTY_DIGITAL_GRID = [["." for _ in range(8)] for _ in range(8)]
 ANALYSIS_CLOCKS = {"white": "∞", "black": "∞"}
@@ -247,10 +430,12 @@ class BoardStateManager:
         self.last_game_id: str | None = None
         self.last_game_metadata: dict[str, Any] = {}
 
-        # Setup verification, move tracking, and physical gesture subsystems
+        # Setup verification, move tracking, physical gestures, and local two-player engine
         self.setup_validator = SetupValidator()
         self.move_tracker = PhysicalMoveTracker()
         self.gesture_engine = PhysicalGestureEngine(state_manager=self)
+        self.local_engine = LocalGameEngine()
+        self.can_start_local_game: bool = False
         self.setup_result: SetupResult = self.setup_validator.validate(self.physical_state)
         self.prev_setup_ready: bool = False
 
@@ -463,6 +648,60 @@ class BoardStateManager:
             "custom_trace_path": [list(sq) for sq in self.custom_trace_path] if self.custom_trace_path else None,
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
         }
+
+    def start_local_game(self, fen: str | None = None) -> dict[str, Any]:
+        """
+        Starts a local two-player over-the-board match.
+        """
+        if self.game_status == "ANALYSIS":
+            self.stop_analysis_mode()
+
+        self.local_engine.start_game(fen=fen)
+        self.game_status = "PLAYING"
+        self.can_start_local_game = False
+        self.move_tracker.reset(self.physical_state)
+        if hasattr(self, "gesture_engine"):
+            self.gesture_engine.reset()
+        self.digital_state = self.local_engine.get_board()
+        self.current_opening = get_opening_info(self.local_engine.board)
+        logger.info(f"Local two-player game session activated ({self.local_engine.game_id}).")
+        return {"status": "success", "game_id": self.local_engine.game_id, "turn": self.local_engine.my_color}
+
+    def stop_local_game(self, winner: str | None = None, reason: str = "resignation") -> dict[str, Any]:
+        """
+        Concludes or resigns the active local game session.
+        """
+        if not hasattr(self, "local_engine") or not self.local_engine.is_active:
+            return {"status": "error", "message": "No active local game to stop"}
+
+        if winner:
+            self.local_engine.winner = winner
+        self.local_engine.end_reason = reason
+        self.local_engine.is_active = False
+        self._record_last_game_from_local()
+        self.game_status = "GAME_OVER"
+        self.trigger_animation("GAME_WON" if winner in ("white", "black") else "GAME_DRAWN")
+        return {"status": "success", "winner": self.local_engine.winner, "reason": reason}
+
+    def _record_last_game_from_local(self) -> None:
+        """Records the moves and metadata of the most recently finished local game for post-game analysis."""
+        if not (hasattr(self, "local_engine") and self.local_engine.board and self.local_engine.board.move_stack):
+            return
+
+        moves = [m.uci() for m in self.local_engine.board.move_stack]
+        self.last_game_moves = list(moves)
+        self.last_game_id = self.local_engine.game_id
+        self.last_game_metadata = self.local_engine.get_game_payload()
+
+        try:
+            from board_hardware import save_settings, settings
+            settings["last_game_moves"] = list(moves)
+            settings["last_game_id"] = self.local_engine.game_id
+            settings["last_game_my_color"] = "white"
+            save_settings()
+            logger.info(f"Recorded local game ({len(moves)} plies) for post-game analysis.")
+        except Exception as e:
+            logger.warning(f"Could not persist last_game_moves from local game: {e}")
 
     async def start_analysis_mode(
         self, moves_uci: list[str] | None = None, game_id: str | None = None
@@ -1006,28 +1245,44 @@ class BoardStateManager:
 
     def _build_broadcast_payload(self, diag_info) -> dict[str, Any]:
         """Constructs the unified WebSocket broadcast payload."""
-        engine_board = getattr(lichess_engine, "board", None)
-        turn = None
-        if engine_board is not None:
+        if hasattr(self, "local_engine") and self.local_engine.is_active:
+            engine_board = self.local_engine.board
+            game_payload = self.local_engine.get_game_payload()
+            my_color = self.local_engine.my_color
             turn = "white" if engine_board.turn == chess.WHITE else "black"
-        try:
-            interp_clocks = lichess_engine.get_interpolated_clocks()
-        except Exception:
-            interp_clocks = {"white": None, "black": None}
+            clocks_raw = {
+                "white": None,
+                "black": None,
+                "updated_at": None,
+                "turn": turn,
+            }
+        else:
+            engine_board = getattr(lichess_engine, "board", None)
+            game_payload = lichess_engine.get_game_payload()
+            my_color = lichess_engine.my_color
+            turn = None
+            if engine_board is not None:
+                turn = "white" if engine_board.turn == chess.WHITE else "black"
+            try:
+                interp_clocks = lichess_engine.get_interpolated_clocks()
+            except Exception:
+                interp_clocks = {"white": None, "black": None}
+            clocks_raw = {
+                "white": interp_clocks.get("white"),
+                "black": interp_clocks.get("black"),
+                "updated_at": getattr(lichess_engine, "clocks_updated_at", None),
+                "turn": turn,
+            }
+
         return {
             "status": self.game_status,
             "virtual_only": self.virtual_only,
             "physical": self.get_physical_payload(),
             "digital": self.digital_state,
             "clocks": self.clocks,
-            "clocks_raw": {
-                "white": interp_clocks.get("white"),
-                "black": interp_clocks.get("black"),
-                "updated_at": getattr(lichess_engine, "clocks_updated_at", None),
-                "turn": turn,
-            },
-            "my_color": lichess_engine.my_color,
-            "game": lichess_engine.get_game_payload(),
+            "clocks_raw": clocks_raw,
+            "my_color": my_color,
+            "game": game_payload,
             "coach": self._build_coach_payload(),
             "opening": self.current_opening.to_dict() if self.current_opening else None,
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
@@ -1037,7 +1292,8 @@ class BoardStateManager:
 
     def _process_setup_ready_edge(self, is_ready: bool, gestures_just_completed: list[str]) -> None:
         """
-        Fires/cancels the BOARD_READY animation on setup-readiness transitions.
+        Fires/cancels the BOARD_READY animation on setup-readiness transitions and
+        arms/disarms the local two-player game auto-start gate.
 
         Suppressed on the tick a physical gesture completes: the gate-closing
         placement restores the starting position and must not replay the
@@ -1054,9 +1310,13 @@ class BoardStateManager:
                     "BOARD_READY",
                     {"night_mode": bool(settings.get("night_mode", False))},
                 )
+            self.can_start_local_game = True
             self.prev_setup_ready = True
         elif not is_ready and self.prev_setup_ready:
             self.prev_setup_ready = False
+            # Only disarm local game start if we are not lifting a piece to make a move
+            if self.game_status not in ["PLAYING", "ANALYSIS"] and (not hasattr(self, "move_tracker") or self.move_tracker.lifted_square is None):
+                self.can_start_local_game = False
             if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
                 self.active_animation = None
                 if self.frozen_baselines is not None:
@@ -1766,9 +2026,11 @@ class BoardStateManager:
         """Cheap change signature of everything the WebSocket payload exposes."""
         mt = self.move_tracker
         opp_gone = getattr(lichess_engine, "opponent_gone", None) or {}
+        local_active = hasattr(self, "local_engine") and self.local_engine.is_active
+        eval_board = self.local_engine.board if local_active else getattr(lichess_engine, "board", None)
         eval_res = (
-            coach_engine.get_cached_evaluation(lichess_engine.board.fen())
-            if (self.game_status == "PLAYING" and getattr(lichess_engine, "board", None))
+            coach_engine.get_cached_evaluation(eval_board.fen())
+            if (self.game_status == "PLAYING" and eval_board)
             else None
         )
         return (
@@ -1778,9 +2040,13 @@ class BoardStateManager:
             id(self.digital_state),
             str(self.clocks.get("white")),
             str(self.clocks.get("black")),
-            lichess_engine.my_color,
+            self.local_engine.my_color if local_active else lichess_engine.my_color,
             getattr(lichess_engine, "is_ai_game", False),
             getattr(lichess_engine, "game_status", None),
+            local_active,
+            getattr(self.local_engine, "game_id", None) if hasattr(self, "local_engine") else None,
+            getattr(self.local_engine, "winner", None) if hasattr(self, "local_engine") else None,
+            self.can_start_local_game,
             diag_info["status"],
             diag_info["timeouts"],
             mt.lifted_square,
@@ -1875,37 +2141,71 @@ class BoardStateManager:
 
                             # Physical Move Tracking during PLAYING state
                             if self.game_status == "PLAYING":
-                                self.move_tracker.sync_game(lichess_engine)
-                                move_result = self.move_tracker.process_physical_state(
-                                    self.physical_state, lichess_engine
-                                )
-                                if move_result:
-                                    from_f, from_r, to_f, to_r, promo = move_result
-                                    logger.info(
-                                        f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                                if hasattr(self, "local_engine") and self.local_engine.is_active:
+                                    self.move_tracker.sync_game(self.local_engine)
+                                    move_result = self.move_tracker.process_physical_state(
+                                        self.physical_state, self.local_engine
                                     )
-
-                                    async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
-                                        try:
-                                            success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
-                                            if not success:
-                                                logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
-                                                self.move_tracker.clear_in_flight_move()
-                                        except Exception as err:
-                                            logger.error(f"Unexpected error dispatching move: {err}")
+                                    if move_result:
+                                        from_f, from_r, to_f, to_r, promo = move_result
+                                        from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                        to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                        uci = f"{from_sq}{to_sq}{promo or ''}"
+                                        logger.info(f"Physical local move detected: {uci}")
+                                        success = self.local_engine.apply_move(uci)
+                                        if success:
+                                            self.digital_state = self.local_engine.get_board()
+                                            if self.local_engine.is_game_over:
+                                                self._record_last_game_from_local()
+                                                self.game_status = "GAME_OVER"
+                                                if self.local_engine.winner in ("white", "black"):
+                                                    self.trigger_animation("GAME_WON")
+                                                else:
+                                                    self.trigger_animation("GAME_DRAWN")
+                                        else:
+                                            logger.warning(f"Illegal physical move rejected by LocalGameEngine: {uci}")
                                             self.move_tracker.clear_in_flight_move()
 
-                                    self._spawn_task(_dispatch_move_task(from_f, from_r, to_f, to_r, promo))
-
-                                # Compute live guardrail synchronization status
-                                if getattr(lichess_engine, "board", None):
-                                    self.guardrail_result = self.setup_validator.validate_game_state(
-                                        self.physical_state,
-                                        lichess_engine.board,
-                                        self.move_tracker,
-                                    )
+                                    if getattr(self.local_engine, "board", None):
+                                        self.guardrail_result = self.setup_validator.validate_game_state(
+                                            self.physical_state,
+                                            self.local_engine.board,
+                                            self.move_tracker,
+                                        )
+                                    else:
+                                        self.guardrail_result = None
                                 else:
-                                    self.guardrail_result = None
+                                    self.move_tracker.sync_game(lichess_engine)
+                                    move_result = self.move_tracker.process_physical_state(
+                                        self.physical_state, lichess_engine
+                                    )
+                                    if move_result:
+                                        from_f, from_r, to_f, to_r, promo = move_result
+                                        logger.info(
+                                            f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                                        )
+
+                                        async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
+                                            try:
+                                                success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                                                if not success:
+                                                    logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                                    self.move_tracker.clear_in_flight_move()
+                                            except Exception as err:
+                                                logger.error(f"Unexpected error dispatching move: {err}")
+                                                self.move_tracker.clear_in_flight_move()
+
+                                        self._spawn_task(_dispatch_move_task(from_f, from_r, to_f, to_r, promo))
+
+                                    # Compute live guardrail synchronization status
+                                    if getattr(lichess_engine, "board", None):
+                                        self.guardrail_result = self.setup_validator.validate_game_state(
+                                            self.physical_state,
+                                            lichess_engine.board,
+                                            self.move_tracker,
+                                        )
+                                    else:
+                                        self.guardrail_result = None
                             elif self.game_status == "ANALYSIS":
                                 # Check physical starting position setup readiness
                                 setup_res = self.setup_validator.validate(self.physical_state)
@@ -1944,24 +2244,17 @@ class BoardStateManager:
                                     else:
                                         self.guardrail_result = None
                             else:
-                                mt = self.move_tracker
-                                has_transient = bool(
-                                    mt.lifted_square
-                                    or mt.in_flight_move
-                                    or mt.pending_opponent_move
-                                    or mt.pending_castling_rook
-                                    or mt.pending_capture_target
-                                    or mt.capture_candidate_attackers
-                                    or mt.invalid_placement
-                                    or mt.arrival_flash
-                                    or mt.legal_targets
-                                    or mt.legal_captures
-                                )
-                                if has_transient:
-                                    mt.reset(self.physical_state)
-                                elif mt.last_physical_state != self.physical_state:
-                                    mt.last_physical_state = [row[:] for row in self.physical_state]
-                                self.guardrail_result = None
+                                self.setup_result = self.setup_validator.validate(self.physical_state)
+
+                                # If in GAME_OVER and user restores starting 32-piece layout, transition cleanly to IDLE
+                                if self.game_status == "GAME_OVER" and self.setup_result.is_setup_ready:
+                                    logger.info("Board restored to standard starting setup from GAME_OVER. Resetting to IDLE.")
+                                    if hasattr(self, "local_engine"):
+                                        self.local_engine.reset()
+                                    self.game_status = "IDLE"
+                                    self.move_tracker.reset(self.physical_state)
+                                    if hasattr(self, "gesture_engine"):
+                                        self.gesture_engine.reset()
 
                                 # Physical gesture evaluation during IDLE / GAME_OVER
                                 completed_gestures: list[str] = []
@@ -1971,10 +2264,53 @@ class BoardStateManager:
                                     )
 
                                 # Setup Ready Edge Detection & Animation Triggering
-                                self.setup_result = self.setup_validator.validate(self.physical_state)
                                 self._process_setup_ready_edge(
                                     self.setup_result.is_setup_ready, completed_gestures
                                 )
+
+                                # Auto-Start Local Game Check when board is armed and ready in IDLE
+                                gesture_in_progress = bool(
+                                    hasattr(self, "gesture_engine")
+                                    and self.gesture_engine.is_active
+                                    and self.gesture_engine.active_gesture
+                                    and self.gesture_engine.active_gesture.step > 1
+                                )
+                                if self.game_status == "IDLE" and self.can_start_local_game and not gesture_in_progress:
+                                    initial_board = chess.Board()
+                                    adapter = AnalysisEngineAdapter(initial_board)
+                                    move_result = self.move_tracker.process_physical_state(
+                                        self.physical_state, adapter
+                                    )
+                                    if move_result:
+                                        from_f, from_r, to_f, to_r, promo = move_result
+                                        from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                        to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                        uci = f"{from_sq}{to_sq}{promo or ''}"
+                                        logger.info(f"White played opening move from IDLE setup: {uci}. Auto-starting local game!")
+                                        self.start_local_game()
+                                        self.local_engine.apply_move(uci)
+                                        self.digital_state = self.local_engine.get_board()
+                                        if hasattr(self, "gesture_engine"):
+                                            self.gesture_engine.reset()
+                                else:
+                                    mt = self.move_tracker
+                                    has_transient = bool(
+                                        mt.lifted_square
+                                        or mt.in_flight_move
+                                        or mt.pending_opponent_move
+                                        or mt.pending_castling_rook
+                                        or mt.pending_capture_target
+                                        or mt.capture_candidate_attackers
+                                        or mt.invalid_placement
+                                        or mt.arrival_flash
+                                        or mt.legal_targets
+                                        or mt.legal_captures
+                                    )
+                                    if has_transient and not self.can_start_local_game:
+                                        mt.reset(self.physical_state)
+                                    elif mt.last_physical_state != self.physical_state:
+                                        mt.last_physical_state = [row[:] for row in self.physical_state]
+                                    self.guardrail_result = None
 
                             if hasattr(self, "gesture_engine"):
                                 if self.game_status not in ["IDLE", "GAME_OVER"]:
@@ -1991,18 +2327,25 @@ class BoardStateManager:
                             "errors": 0,
                         }
 
-                    # 2. Digital Board Sync with Lichess Engine or Analysis Board
+                    # 2. Digital Board Sync with Lichess Engine, Local Engine, or Analysis Board
                     active_chess_board = None
                     if self.game_status == "PLAYING":
-                        new_grid = lichess_engine.get_board()
-                        if new_grid != self.digital_state:
-                            self.digital_state = new_grid
-                        interp = lichess_engine.get_interpolated_clocks()
-                        self.clocks = {
-                            "white": format_clock_ms(interp["white"]),
-                            "black": format_clock_ms(interp["black"]),
-                        }
-                        active_chess_board = getattr(lichess_engine, "board", None)
+                        if hasattr(self, "local_engine") and self.local_engine.is_active:
+                            new_grid = self.local_engine.get_board()
+                            if new_grid != self.digital_state:
+                                self.digital_state = new_grid
+                            self.clocks = ANALYSIS_CLOCKS
+                            active_chess_board = self.local_engine.board
+                        else:
+                            new_grid = lichess_engine.get_board()
+                            if new_grid != self.digital_state:
+                                self.digital_state = new_grid
+                            interp = lichess_engine.get_interpolated_clocks()
+                            self.clocks = {
+                                "white": format_clock_ms(interp["white"]),
+                                "black": format_clock_ms(interp["black"]),
+                            }
+                            active_chess_board = getattr(lichess_engine, "board", None)
                     elif self.game_status == "ANALYSIS":
                         fen = self.analysis_active_board.fen()
                         if fen != self._analysis_grid_fen:
@@ -2017,6 +2360,14 @@ class BoardStateManager:
                             self._analysis_grid_fen = fen
                         self.clocks = ANALYSIS_CLOCKS
                         active_chess_board = self.analysis_active_board
+                    elif self.game_status == "GAME_OVER":
+                        if hasattr(self, "local_engine") and self.local_engine.game_id:
+                            self.digital_state = self.local_engine.get_board()
+                            active_chess_board = self.local_engine.board
+                        else:
+                            self.digital_state = lichess_engine.get_board()
+                            active_chess_board = getattr(lichess_engine, "board", None)
+                        self.clocks = IDLE_CLOCKS
                     else:
                         self.digital_state = EMPTY_DIGITAL_GRID
                         self.clocks = IDLE_CLOCKS

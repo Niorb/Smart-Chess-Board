@@ -258,10 +258,22 @@ export interface BoardState {
   opening?: OpeningPayload | null;
   game?: {
     game_id: string | null;
+    type?: string;
+    is_local?: boolean;
     rated: boolean;
     speed?: string | null;
     turn: 'white' | 'black';
     my_color: 'white' | 'black' | null;
+    white?: {
+      username: string;
+      rating?: number | null;
+      title?: string | null;
+    };
+    black?: {
+      username: string;
+      rating?: number | null;
+      title?: string | null;
+    };
     opponent?: {
       username: string;
       rating: number;

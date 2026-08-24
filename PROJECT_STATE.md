@@ -3,7 +3,25 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Feature P1 (Royal Promotion Scepter) & Feature P2 (Cartographer's Path) (2026-08-24)
+## Latest Change — Cyber-Physical Local Game Engine & Setup Auto-Start (2026-08-24)
+Implemented zero-touch automatic Local Two-Player game initiation and cyber-physical state management:
+1. **Setup Readiness Arming Gate (`can_start_local_game`)**:
+   - Strictly armed only when all 32 pieces are in standard starting positions (`is_setup_ready == True`), no transients exist, and gestures are idle.
+   - **Teardown & Setup Immunity**: Putting pieces back one by one or clearing the board will never accidentally trigger a game.
+   - Gesture disambiguation: Lifting `a2`, `e2`, or `h2` and placing on legal chess squares starts the game; lifting secondary gesture pieces advances into the gesture sequence instead.
+2. **Cyber-Physical Local Game Engine (`LocalGameEngine`)**:
+   - Symmetrical over-the-board physical play for White and Black turns with legal move hints, Cartographer's Path opening dots, capture tracking, castling, en passant, and the Royal Promotion Scepter.
+   - Real-time endgame detection (Checkmate, Stalemate, 50-move rule, Threefold repetition).
+   - Seamless post-game recording (`_record_last_game_from_local`): finished local games are immediately ready for Stockfish 17.1 coach analysis and Blunder Blitz drills via Center Royal Gate (`e2+d2`) or web UI.
+   - Zero-touch board reset: restoring 32 starting pieces in `GAME_OVER` automatically resets state back to `IDLE` with `BOARD_READY` flash.
+3. **REST API & Web UI**:
+   - Added `POST /api/game/local/start` and `POST /api/game/local/stop`.
+   - Updated `POST /api/game/move`, `POST /api/game/resign`, and `POST /api/game/draw` to support local matches.
+   - React 19 Frontend: Added "Local Match (OTB)" indicator badge, turn labels, and local game controls.
+4. **Automated Test Suite**:
+   - Comprehensive test coverage in `Raspberry/tests/test_local_game.py`.
+
+## Previous Change — Feature P1 (Royal Promotion Scepter) & Feature P2 (Cartographer's Path) (2026-08-24)
 Implemented two major cyber-physical intelligence features:
 1. **Feature P1: The Royal Promotion Scepter (Multi-Piece Underpromotion Selector)**:
    - Dynamic 4-piece slot allocation algorithm (`compute_promotion_layout` in `Raspberry/app/physical_tracker.py`):

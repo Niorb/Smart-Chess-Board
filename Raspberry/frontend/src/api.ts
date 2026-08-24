@@ -144,6 +144,14 @@ export async function offerDraw(accept: boolean = true) {
   return jsonPost('/game/draw', { accept });
 }
 
+export async function startLocalGame(fen?: string) {
+  return jsonPost('/game/local/start', { fen: fen ?? null });
+}
+
+export async function stopLocalGame(winner?: string, reason?: string) {
+  return jsonPost('/game/local/stop', { winner: winner ?? null, reason: reason ?? 'resignation' });
+}
+
 export async function makeMove(fromSquare: string, toSquare: string, promotion?: string) {
   return jsonPost('/game/move', {
     from_square: fromSquare,

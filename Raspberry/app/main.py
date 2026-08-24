@@ -190,6 +190,15 @@ class ModeRequest(BaseModel):
     virtual_only: bool
 
 
+class StartLocalGameRequest(BaseModel):
+    fen: str | None = None
+
+
+class StopLocalGameRequest(BaseModel):
+    winner: str | None = None
+    reason: str = "resignation"
+
+
 class StartAnalysisRequest(BaseModel):
     moves_uci: list[str] | None = None
     game_id: str | None = None
@@ -556,6 +565,23 @@ async def make_move_route(body: MoveRequest):
     if not src or not dst:
         return {"status": "error", "message": "Invalid square coordinates"}
 
+    if hasattr(state_manager, "local_engine") and state_manager.local_engine.is_active:
+        from_sq = body.from_square.lower().strip()
+        to_sq = body.to_square.lower().strip()
+        uci = f"{from_sq}{to_sq}{body.promotion or ''}"
+        success = state_manager.local_engine.apply_move(uci)
+        if success:
+            state_manager.digital_state = state_manager.local_engine.get_board()
+            if state_manager.local_engine.is_game_over:
+                state_manager._record_last_game_from_local()
+                state_manager.game_status = "GAME_OVER"
+                if state_manager.local_engine.winner in ("white", "black"):
+                    state_manager.trigger_animation("GAME_WON")
+                else:
+                    state_manager.trigger_animation("GAME_DRAWN")
+            return {"status": "success"}
+        return {"status": "error", "message": "Illegal move for local match"}
+
     success = await lichess_engine.make_move(
         src[0], src[1], dst[0], dst[1], promotion=body.promotion
     )
@@ -563,6 +589,21 @@ async def make_move_route(body: MoveRequest):
         return {"status": "success"}
     else:
         return {"status": "error", "message": "Move was rejected by Lichess"}
+
+
+@app.post("/api/game/local/start")
+async def start_local_game_route(body: StartLocalGameRequest | None = None):
+    """Starts a new local two-player game session."""
+    fen = body.fen if body else None
+    return state_manager.start_local_game(fen=fen)
+
+
+@app.post("/api/game/local/stop")
+async def stop_local_game_route(body: StopLocalGameRequest | None = None):
+    """Concludes or resigns the active local two-player game session."""
+    winner = body.winner if body else None
+    reason = body.reason if body else "resignation"
+    return state_manager.stop_local_game(winner=winner, reason=reason)
 
 
 @app.post("/api/game/promote")
@@ -588,9 +629,16 @@ def lookup_opening_route(moves: str = ""):
 
 @app.post("/api/game/resign")
 async def resign_game_route():
-    """Resigns the active game on Lichess."""
+    """Resigns the active game on Lichess or local session."""
     if state_manager.game_status != "PLAYING":
         return {"status": "error", "message": "No active game to resign"}
+
+    if hasattr(state_manager, "local_engine") and state_manager.local_engine.is_active:
+        import chess
+        cur_turn = state_manager.local_engine.board.turn
+        loser_color = "white" if cur_turn == chess.WHITE else "black"
+        winner_color = "black" if loser_color == "white" else "white"
+        return state_manager.stop_local_game(winner=winner_color, reason="resignation")
 
     success = await lichess_engine.resign(state_manager)
     return {"status": "resigned" if success else "error"}
@@ -609,9 +657,12 @@ async def claim_victory_route():
 
 @app.post("/api/game/draw")
 async def draw_game_route(body: DrawRequest | None = None):
-    """Offers or accepts a draw on Lichess."""
+    """Offers or accepts a draw on Lichess or local session."""
     if state_manager.game_status != "PLAYING":
         return {"status": "error", "message": "No active game to offer draw"}
+
+    if hasattr(state_manager, "local_engine") and state_manager.local_engine.is_active:
+        return state_manager.stop_local_game(winner="draw", reason="draw_agreement")
 
     accept = body.accept if body else True
     success = await lichess_engine.draw(state_manager, accept=accept)
