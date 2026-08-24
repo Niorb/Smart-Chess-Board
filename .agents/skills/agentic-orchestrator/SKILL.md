@@ -1,6 +1,6 @@
 ---
 name: agentic-orchestrator
-description: Enforces the agentic orchestration workflow for the Smart Chess Board ecosystem. Routes tasks through domain-specialist sub-agents in .agents/ (Architect, Developer, QA, Hardware, Automation, Explorer, Creative), enforces GEMINI.md directives, handoff protocols, and Raspberry Pi SSH deployment steps. Use whenever tasked with implementing features, debugging hardware/software, refactoring code, executing deployment, or managing Smart Chess Board sub-agents.
+description: Enforces the agentic orchestration workflow for the Smart Chess Board ecosystem. Routes tasks through domain-specialist sub-agents in .agents/ (Architect, Hardware, Game Engine, Chess AI, Lighting Designer, Frontend, QA, Explorer, Creative), enforces GEMINI.md directives, handoff protocols, and Raspberry Pi SSH deployment steps. Use whenever tasked with implementing features, debugging hardware/software, refactoring code, executing deployment, or managing Smart Chess Board sub-agents.
 ---
 
 # Agentic Orchestrator Skill
@@ -23,39 +23,45 @@ When assigned a task, route thinking, investigation, implementation, and verific
 
 | Specialist Agent | Prompt File | Core Responsibilities & Routing Triggers |
 | :--- | :--- | :--- |
-| **Code Explorer** | [.agents/explorer.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/explorer.md) | Codebase search, file & symbol lookups, tracing dependency graphs, call hierarchies, AST inspections. *Must be consulted FIRST before editing existing code.* |
-| **Architect** | [.agents/arch.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/arch.md) | System schemas, API contracts, state machine definitions, WebSocket protocols, cross-component interface specs. *Must validate approach prior to major implementation.* |
-| **Developer** | [.agents/dev.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/dev.md) | FastAPI Python backend (`app/`), AsyncIO patterns, React/Vite UI (`Raspberry/frontend/`), Stockfish engine connector (`chess_engine_async.py`). |
-| **Hardware Specialist** | [.agents/hardware.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/hardware.md) | ESP32 C++ firmware (`Raspberry/ESP32_firmware/`), RPi GPIO drivers (`led_helpers.py`, WS281x), multiplexing, matrix calibration (`board_settings.json`), serial protocol. |
-| **Automation Specialist** | [.agents/automation.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/automation.md) | Playwright Python automation (`playwright_chesscom/`), Chess.com DOM scraping, stealth move simulation, session cookie persistence. |
-| **QA Specialist** | [.agents/qa.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/qa.md) | Code reviews, unit/integration test suites (`pytest`), edge-case analysis, hardware simulation (`mock_hardware.py`), verification before task completion. |
-| **Creative Innovator** | [.agents/creative.md](file:///c:/Users/robin/Bureau/Smart%20Chess%20Board/.agents/creative.md) | Feature brainstorming, UX enhancements, LED animation modes, training modes. **ONLY invoked upon explicit user request.** |
+| **Code Explorer** | [.agents/agents/explorer.md](file:///home/robin/Smart-Chess-Board/.agents/agents/explorer.md) | Codebase search, file & symbol lookups, tracing dependency graphs, call hierarchies, AST inspections. *Must be consulted FIRST before editing existing code.* |
+| **System Architect** | [.agents/agents/arch.md](file:///home/robin/Smart-Chess-Board/.agents/agents/arch.md) | System schemas, API contracts, state machine definitions, WebSocket protocols, cross-component interface specs, binary serial frame specs. *Must validate approach prior to major implementation.* |
+| **Embedded & Hardware Specialist** | [.agents/agents/hardware.md](file:///home/robin/Smart-Chess-Board/.agents/agents/hardware.md) | ESP32 C++ firmware (`Raspberry/ESP32_firmware/`), CD74HC4067 MUX scanning, Hall sensor ADC matrix calibration, CRC-8 binary serial framing, `board_settings.json` protection. |
+| **Core Game & State Engine Specialist** | [.agents/agents/game_engine.md](file:///home/robin/Smart-Chess-Board/.agents/agents/game_engine.md) | FastAPI Python backend (`app/main.py`), central state loop (`board_state.py`), physical piece tracking (`physical_tracker.py`), board gestures (`gesture_engine.py`), setup validation (`setup_validator.py`). |
+| **Chess AI & Lichess Specialist** | [.agents/agents/chess_ai.md](file:///home/robin/Smart-Chess-Board/.agents/agents/chess_ai.md) | Stockfish 17.1 UCI wrapper (`coach_engine.py`), Lichess Board API NDJSON streaming (`lichess_engine.py`), clock synchronization, blunder scoring, master games (`gm_games.py`). |
+| **Lighting & Animation Designer** | [.agents/agents/led_visuals.md](file:///home/robin/Smart-Chess-Board/.agents/agents/led_visuals.md) | WS2812B LED array rendering (`led_animations.py`, `led_helpers.py`), serpentine Strip 1/2 mapping, clock/eval bars, trajectory traces, electrical power budgeting ($\le 220\text{mA}$). |
+| **Web Frontend & UI/UX Specialist** | [.agents/agents/frontend.md](file:///home/robin/Smart-Chess-Board/.agents/agents/frontend.md) | React 19 / Vite / TypeScript components (`App.tsx`, `AnalysisTab.tsx`), WebSocket client hooks (`useBoardState.ts`), typed REST client (`api.ts`), Tailwind styling. |
+| **QA & Testing Specialist** | [.agents/agents/qa.md](file:///home/robin/Smart-Chess-Board/.agents/agents/qa.md) | Code reviews, pytest unit/integration test suites (~300 tests), edge-case analysis, mock hardware drivers, test sandboxing (`conftest.py`), static analysis quality gates. |
+| **Creative Innovator** | [.agents/agents/creative.md](file:///home/robin/Smart-Chess-Board/.agents/agents/creative.md) | Feature brainstorming, UX enhancements, novel physical gestures, training modes. **ONLY invoked upon explicit user request.** |
 
 ---
 
 ## 3. Mandatory Agent Handoff Pipeline
 
-Follow this 4-step pipeline for every non-trivial modification or feature request:
+Follow this 5-step pipeline for every non-trivial modification or feature request:
 
 ```mermaid
 graph TD
-    A["1. Context & Exploration (.agents/explorer.md)"] --> B["2. Architecture & Contracts (.agents/arch.md)"]
-    B --> C["3. Implementation (.agents/dev.md | hardware.md | automation.md)"]
-    C --> D["4. Verification & QA (.agents/qa.md)"]
+    A["1. Context & Exploration (.agents/agents/explorer.md)"] --> B["2. Architecture & Contracts (.agents/agents/arch.md)"]
+    B --> C["3. Domain Implementation (game_engine | hardware | chess_ai | led_visuals | frontend)"]
+    C --> D["4. Verification & QA (.agents/agents/qa.md)"]
     D --> E["5. Remote SSH Deployment (Raspberry Pi)"]
 ```
 
-1. **Step 1: Context Gathering (`.agents/explorer.md`)**
+1. **Step 1: Context Gathering (`.agents/agents/explorer.md`)**
    - Perform precise code lookups, symbol searches, and trace call paths. Never assume file structures or function signatures without checking source files.
-2. **Step 2: Schema & Contract Design (`.agents/arch.md`)**
+2. **Step 2: Schema & Contract Design (`.agents/agents/arch.md`)**
    - For multi-component or structural changes, validate state machine transitions, event payload formats, or WebSocket contracts before writing code.
 3. **Step 3: Domain Implementation**
    - Delegate code generation strictly to the domain specialist:
-     - **Backend / Web UI / Engine** -> `dev.md`
-     - **Firmware / GPIO / LEDs / Serial** -> `hardware.md`
-     - **Playwright / Chess.com Sync** -> `automation.md`
-4. **Step 4: Verification & QA (`.agents/qa.md`)**
-   - Review code for edge cases, race conditions, memory leaks, and run pytest unit/integration test suites.
+     - **Backend / State / Gestures / Tracker** -> `game_engine.md`
+     - **Firmware / MUX / Serial CRC** -> `hardware.md`
+     - **Stockfish / Lichess API** -> `chess_ai.md`
+     - **LED Animations / Lighting** -> `led_visuals.md`
+     - **React UI / Web Dashboard** -> `frontend.md`
+4. **Step 4: Verification & QA (`.agents/agents/qa.md`)**
+   - Review code for edge cases, race conditions, memory leaks, and run pytest unit/integration test suites in mock sandboxes.
+5. **Step 5: Remote SSH Deployment**
+   - Execute the standard remote deployment pipeline to the physical Raspberry Pi.
 
 ---
 
@@ -84,7 +90,8 @@ After making any code changes, execute the following sequence:
 
 ---
 
-## 5. State Management & Human Gatekeeping
+## 5. State Management & Settings Protection
 
 - **State File**: Read `PROJECT_STATE.md` before starting work and update it after completing significant milestones.
+- **Strict Settings Protection Directive**: NEVER overwrite or commit live board calibration data (`board_settings.json`). Always preserve user baselines and settings backups (`board_settings.json.bak`).
 - **Human Gatekeeping**: Ask for explicit user approval before performing destructive actions (e.g. force-pushing, removing database data) or adding new external package dependencies.

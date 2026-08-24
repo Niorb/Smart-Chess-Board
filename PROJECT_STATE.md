@@ -3,7 +3,18 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Smooth clock ticking + return-home divergence guide (rev 4b13dac, deployed 2026-08-24)
+## Latest Change — Agent Fleet Redesign & Domain Specialization (2026-08-24)
+Redesigned and optimized the AI Agent Fleet to align with the matured cyber-physical codebase:
+- Decommissioned obsolete Playwright / Chess.com browser automation specialist (`automation.md`).
+- Decomposed monolithic full-stack developer role into 4 dedicated specialists:
+  - **Core Game & State Engine Specialist** (`game_engine.md`): `board_state.py`, `physical_tracker.py`, `gesture_engine.py`, `setup_validator.py`, `main.py`.
+  - **Chess AI & Lichess Cloud Specialist** (`chess_ai.md`): Stockfish 17.1 UCI async wrapper (`coach_engine.py`), Lichess Board API NDJSON streaming (`lichess_engine.py`), clock synchronization, blunder scoring, `gm_games.py`.
+  - **Lighting & Animation Designer** (`led_visuals.md`): WS2812B LED array rendering (`led_animations.py`, `led_helpers.py`), serpentine Strip 1/2 mapping, clock/eval bars, trajectory traces, electrical power budgeting ($\le 220\text{mA}$).
+  - **Web Frontend & UI/UX Specialist** (`frontend.md`): React 19 / Vite / TypeScript components (`App.tsx`, `AnalysisTab.tsx`), WebSocket client hooks (`useBoardState.ts`), typed REST client (`api.ts`), Tailwind styling.
+- Refined and updated **System Architect** (`arch.md`), **Embedded & Hardware Specialist** (`hardware.md`), **QA & Testing Specialist** (`qa.md`), **Code Explorer** (`explorer.md`), and **Creative Innovator** (`creative.md`).
+- Synchronized `AGENTS.md`, `GEMINI.md`, and `.agents/skills/agentic-orchestrator/SKILL.md` with the new roster and strict SSH Pi deployment protocols.
+
+## Previous Change — Smooth clock ticking + return-home divergence guide (rev 4b13dac, deployed 2026-08-24)
 **Smooth clocks**: Lichess pushes gameState ~1Hz (push stream, no polling possible) — the web UI was the slow surface. `LichessEngine.get_interpolated_clocks()` drains the side-to-move clock locally between events; `update_loop` now recomputes formatted `self.clocks` every tick and `_build_broadcast_payload` gained `clocks_raw` ({white, black, updated_at, turn}). Frontend (`App.tsx`) snapshots raw values on receipt, ticks the turn side every 500 ms client-side (skew-free local elapsed), falls back to strings when absent. LED bars were already smooth.
 **Return-home guide**: while branching in ANALYSIS, a pulsing gold halo (`render_return_home_guide`, `COLOR_RETURN_HOME`/night variant) marks the arrival square of the LAST branch move ("un-play this next") with a steady 35% dot on its origin; it steps back automatically as physical un-plays truncate `analysis_branch_moves`. Origin dot suppressed when it coincides with the violet anchor square. Web banner chip "Off line · ply N + [Return to game]" added to the ANALYSIS banner wired to existing `branch_reset` API. Tests: interpolation (4), renderer (5), integration guide (1), payload shape (1); **296/296 pytest passed on Pi**, frontend rebuilt, service restarted.
 
@@ -34,13 +45,15 @@ All optimization commits plus the coach-engine analysis fix are live on the Rasp
 `request_analysis` cancelled the in-flight evaluation task on every position change during play. With `asyncio.shield` removed (optimization pass), cancellation propagated into python-chess and killed queued UCI commands (`CommandState.NEW`), so every live position silently fell back to the flat material heuristic. The warm heuristic cache then made post-game batch analysis finish instantly with wrong classifications/recommendations and no visible computing animation. Fix: never cancel in-flight analyses (skip while busy — 100 ms limit keeps evals fresh), make Stockfish mandatory (`CoachEngineUnavailable` raised after one relaunch/retry, surfaced in payload `error` + UI banner), auto-relaunch crashed engines, and persist per-game analyses for fast reuse.
 
 ## Active Agents Roster
-- **Architect** (`.agents/arch.md`) - System design, protocols, state machines.
-- **Developer** (`.agents/dev.md`) - FastAPI backend, React/Vite frontend, stockfish engine integration.
-- **QA Specialist** (`.agents/qa.md`) - Unit tests, mock hardware drivers, edge cases.
-- **Hardware Specialist** (`.agents/hardware.md`) - ESP32 firmware, GPIO, matrix inversion, LED strip driver.
-- **Automation Specialist** (`.agents/automation.md`) - Playwright browser scripts, Chess.com online sync.
-- **Creative Innovator** (`.agents/creative.md`) - Feature brainstorming & ideas (Invoked ONLY on explicit user request).
-- **Code Explorer** (`.agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
+- **System Architect** (`.agents/agents/arch.md`) - System design, schemas, API contracts, state machines, serial framing.
+- **Embedded & Hardware Specialist** (`.agents/agents/hardware.md`) - ESP32 firmware, GPIO, CD74HC4067 MUX, Hall sensor matrix calibration, binary CRC-8 serial protocol.
+- **Core Game & State Engine Specialist** (`.agents/agents/game_engine.md`) - Central state coordinator (`board_state.py`), physical move tracker, board gestures, setup validator, FastAPI app.
+- **Chess AI & Lichess Specialist** (`.agents/agents/chess_ai.md`) - Stockfish 17.1 UCI wrapper (`coach_engine.py`), Lichess Board API NDJSON streaming (`lichess_engine.py`), clock synchronization, blunder scoring, GM games database.
+- **Lighting & Animation Designer** (`.agents/agents/led_visuals.md`) - WS2812B LED array rendering (`led_animations.py`, `led_helpers.py`), serpentine mapping, clock/eval bars, trajectory traces, electrical power budgeting ($\le 220\text{mA}$).
+- **Web Frontend & UI/UX Specialist** (`.agents/agents/frontend.md`) - React 19 / Vite / TypeScript SPA (`App.tsx`, `AnalysisTab.tsx`), WebSocket state hooks (`useBoardState.ts`), typed REST client (`api.ts`).
+- **QA & Testing Specialist** (`.agents/agents/qa.md`) - Pytest unit/integration test suites (~300 tests), mock hardware drivers, test sandboxing (`conftest.py`), regression prevention, static analysis quality gates.
+- **Code Explorer** (`.agents/agents/explorer.md`) - Search, index, trace, and locate codebase information and symbol definitions.
+- **Creative Innovator** (`.agents/agents/creative.md`) - Feature brainstorming & ideas (Invoked ONLY on explicit user request).
 
 ## Completed Tasks
 - [x] ESP32 Firmware Optimization & Legacy Protocol Removal (`Raspberry/ESP32_firmware/analog_scanner/analog_scanner.ino`, `Raspberry/hardware_test.py`):
