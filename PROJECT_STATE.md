@@ -3,7 +3,23 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Redesigned Defeat & Draw Animations (2026-08-25)
+## Latest Change — Color-Harmonized Opponent Movement & Two-Phase Castling (2026-08-25)
+1. **Opponent Movement Color Harmonization (`config.py`, `board_state.py`)**:
+   - **Origin Square (Piece to Move)**: Lit in distinct Solar Orange `COLOR_OPPONENT_FROM` (`220, 100, 0` Day / `240, 140, 0` Night).
+   - **Quiet Move Path & Arrival**: 100% unified in **Electric Sky Azure** `(0, 150, 240)` Day / `(0, 220, 230)` Night. Destination square rests in this hue and flares smoothly to full brightness on comet arrival with zero color clash artifacts.
+   - **Capture Move Path & Arrival**: 100% unified in **Radiant Ruby Crimson** `(220, 20, 50)` Day / `(255, 10, 40)` Night.
+
+2. **Two-Phase Opponent Castling Sequence ("In 2 Times", `physical_tracker.py`, `board_state.py`)**:
+   - **Phase 1 (King Time)**: Displays ONLY the King's move (e.g. `e8` origin in Solar Orange, `g8` destination in Sky Azure + animated comet trace `e8 -> g8`).
+     - Placing King on `g8` triggers King green arrival flash and automatically advances state to Phase 2.
+   - **Phase 2 (Rook Time)**: Displays ONLY the Rook's move (e.g. `h8` origin in Solar Orange, `f8` destination in Sky Azure + animated comet trace `h8 -> f8`).
+     - Placing Rook on `f8` triggers Rook green arrival flash and completes the castling sequence.
+   - **Simultaneous/Rook-First Resilience**: Handles simultaneous piece placement or rook-first movement gracefully without lockups.
+
+3. **Automated Verification**:
+   - All 338 unit tests passed on physical Raspberry Pi.
+
+## Previous Change — Redesigned Defeat & Draw Animations (2026-08-25)
 1. **"The Sovereign's Eclipse" (`GAME_LOST` Redesign in `led_animations.py`)**:
    - **Unified Realm Symmetry**: Removed the single-square "meteor" strike coordinate artifact. The animation is centered on the symmetrical board center $(3.5, 3.5)$ with identical visual majesty for White and Black.
    - **Phase 1: Inward Perimeter Collapse ($0.00 \le p < 0.35$)**: Inward-sweeping Gaussian ring closing in from the 28 perimeter squares to the central royal core in Obsidian Garnet and Blazing Ruby.
