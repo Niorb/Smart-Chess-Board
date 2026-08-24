@@ -718,14 +718,15 @@ def render_game_lost(
                         cinder_col = blend_colors(col_gold, col_ember, p3)
                         set_square_in_frame(frame, c, r, scale_color(cinder_col, cinder_int))
 
-        # B. Central Dying Hearth Pulse (Biphasic Heartbeat)
-        if p3 < 0.95:
+        # B. Central Dying Hearth Pulse (Biphasic Heartbeat + Smoldering Glow)
+        if p3 < 0.98:
             hb_osc = (math.sin(p3 * 2.5 * math.pi) ** 4) + 0.35 * (math.sin(max(0.0, p3 * 2.5 * math.pi - 0.4 * math.pi)) ** 4)
+            hearth_factor = (hb_osc * 0.85 + 0.15 * (1.0 - p3)) * math.exp(-2.2 * p3)
             for c in (3, 4):
                 for r in (3, 4):
                     d_c = math.hypot(c - c0, r - r0)
-                    hearth_int = hb_osc * math.exp(-3.0 * p3) * math.exp(-d_c / 1.0)
-                    if hearth_int > 0.05:
+                    hearth_int = hearth_factor * math.exp(-d_c / 1.2)
+                    if hearth_int > 0.01:
                         hearth_col = blend_colors(col_crimson, col_ash, p3)
                         blend_square_in_frame(frame, c, r, scale_color(hearth_col, hearth_int), 0.90)
 
