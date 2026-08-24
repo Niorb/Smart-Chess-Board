@@ -13,7 +13,13 @@ from typing import Any
 
 import chess
 
-from app.config import ANIM_MOVE_CONFIRM_DURATION_S, BOARD_COLS, BOARD_ROWS
+from app.config import (
+    ANIM_MOVE_CONFIRM_DURATION_S,
+    BOARD_COLS,
+    BOARD_ROWS,
+    RESIGNATION_ABANDON_DURATION_S,
+    RESIGNATION_HOLD_DURATION_S,
+)
 from app.path_interpolator import get_castle_rook_move, is_castle_uci
 
 logger = logging.getLogger("smart-chess-app.tracker")
@@ -144,6 +150,11 @@ class PhysicalMoveTracker:
         self.pending_capture_target: tuple[int, int] | None = None
         self.capture_candidate_attackers: list[tuple[int, int]] = []
         self.pending_promotion: dict[str, Any] | None = None
+        self.king_lift_time: float | None = None
+        self.resignation_armed: bool = False
+        self.resignation_hold_duration: float = RESIGNATION_HOLD_DURATION_S
+        self.resignation_abandon_duration: float = RESIGNATION_ABANDON_DURATION_S
+        self.resignation_color: str | None = None
         self.last_physical_state: list[list[int]] | None = None
 
     def set_in_flight_move(
@@ -170,6 +181,9 @@ class PhysicalMoveTracker:
         self.pending_capture_target = None
         self.capture_candidate_attackers = []
         self.pending_promotion = None
+        self.king_lift_time = None
+        self.resignation_armed = False
+        self.resignation_color = None
 
     def reset(self, initial_state: list[list[int]] | None = None) -> None:
         """Resets all move tracking states."""
@@ -185,6 +199,9 @@ class PhysicalMoveTracker:
         self.pending_capture_target = None
         self.capture_candidate_attackers = []
         self.pending_promotion = None
+        self.king_lift_time = None
+        self.resignation_armed = False
+        self.resignation_color = None
         self.last_physical_state = [row[:] for row in initial_state] if initial_state is not None else None
 
     def resolve_promotion(
@@ -654,6 +671,15 @@ class PhysicalMoveTracker:
                             self.lifted_square = (c, r)
                             self.invalid_placement = None
 
+                            if piece.piece_type == chess.KING:
+                                self.king_lift_time = time.time()
+                                self.resignation_armed = False
+                                self.resignation_color = "white" if piece.color == chess.WHITE else "black"
+                            else:
+                                self.king_lift_time = None
+                                self.resignation_armed = False
+                                self.resignation_color = None
+
                             # Calculate legal destination squares & captures
                             targets = []
                             captures = []
@@ -693,8 +719,36 @@ class PhysicalMoveTracker:
             from_c, from_r = self.lifted_square
             sq_from = chess.square(from_c, from_r)
 
-            # 1. Returned to starting square -> Cancel move
+            # Check if King hold arming threshold is reached
+            if self.king_lift_time is not None:
+                elapsed_hold = time.time() - self.king_lift_time
+                if elapsed_hold >= self.resignation_hold_duration and not self.resignation_armed:
+                    self.resignation_armed = True
+                    logger.info(
+                        f"The King's Bow resignation gesture ARMED for {self.resignation_color} "
+                        f"(held {elapsed_hold:.1f}s >= {self.resignation_hold_duration}s)."
+                    )
+
+            # 1. Returned to starting square -> Check King's Bow resignation or cancel move
             if physical_state[from_c][from_r] != 0:
+                if self.resignation_armed and self.king_lift_time is not None:
+                    resigning_color = self.resignation_color or ("white" if board.turn == chess.WHITE else "black")
+                    elapsed_hold = time.time() - self.king_lift_time
+                    logger.info(
+                        f"The King's Bow gesture CONFIRMED! Player ({resigning_color}) yielded by placing King back after {elapsed_hold:.1f}s hold."
+                    )
+                    self.lifted_square = None
+                    self.legal_targets = []
+                    self.legal_captures = []
+                    self.pending_capture_target = None
+                    self.capture_candidate_attackers = []
+                    self.invalid_placement = None
+                    self.king_lift_time = None
+                    self.resignation_armed = False
+                    self.resignation_color = None
+                    self.last_physical_state = [row[:] for row in physical_state]
+                    return (0, 0, 0, 0, f"resign_{resigning_color}")
+
                 logger.info(f"Piece returned to ({from_c},{from_r}). Move cancelled.")
                 self.lifted_square = None
                 self.legal_targets = []
@@ -702,6 +756,9 @@ class PhysicalMoveTracker:
                 self.pending_capture_target = None
                 self.capture_candidate_attackers = []
                 self.invalid_placement = None
+                self.king_lift_time = None
+                self.resignation_armed = False
+                self.resignation_color = None
                 self.last_physical_state = [row[:] for row in physical_state]
                 return None
 
@@ -725,6 +782,11 @@ class PhysicalMoveTracker:
 
                 if is_placed:
                     is_capture = (existing_piece is not None or (t_c, t_r) == self.pending_capture_target)
+
+                    # Normal move cancels any pending resignation timers
+                    self.king_lift_time = None
+                    self.resignation_armed = False
+                    self.resignation_color = None
 
                     # Check for castling move to prompt the corresponding Rook movement
                     # (geometric check only: a King moving two files horizontally is castling in standard chess)
@@ -813,6 +875,27 @@ class PhysicalMoveTracker:
                 if physical_state[inv_c][inv_r] == 0:
                     self.invalid_placement = None
 
+            # 4. Check King tipped / laid to rest timeout (off board >= 5.0s without illegal placement)
+            if self.king_lift_time is not None and not placed_illegally:
+                elapsed_abandon = time.time() - self.king_lift_time
+                if elapsed_abandon >= self.resignation_abandon_duration:
+                    resigning_color = self.resignation_color or ("white" if board.turn == chess.WHITE else "black")
+                    logger.info(
+                        f"King tipped / laid to rest timeout reached ({elapsed_abandon:.1f}s >= {self.resignation_abandon_duration}s). "
+                        f"Resignation CONFIRMED for {resigning_color}."
+                    )
+                    self.lifted_square = None
+                    self.legal_targets = []
+                    self.legal_captures = []
+                    self.pending_capture_target = None
+                    self.capture_candidate_attackers = []
+                    self.invalid_placement = None
+                    self.king_lift_time = None
+                    self.resignation_armed = False
+                    self.resignation_color = None
+                    self.last_physical_state = [row[:] for row in physical_state]
+                    return (0, 0, 0, 0, f"resign_{resigning_color}")
+
         self.last_physical_state = [row[:] for row in physical_state]
         return None
 
@@ -869,6 +952,12 @@ class PhysicalMoveTracker:
                     "timestamp": self.in_flight_move.get("timestamp", 0.0),
                 }
                 if self.in_flight_move
+                else None
+            ),
+            "resignation_armed": self.resignation_armed,
+            "king_lift_elapsed": (
+                round(time.time() - self.king_lift_time, 2)
+                if self.king_lift_time is not None
                 else None
             ),
         }

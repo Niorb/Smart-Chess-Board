@@ -85,6 +85,7 @@ from app.led_animations import (
     render_move_trace,
     render_opponent_disconnected,
     render_promotion_scepter,
+    render_resignation_aura,
     render_return_home_guide,
     render_uncharted_novelty,
     scale_color,
@@ -1683,10 +1684,24 @@ class BoardStateManager:
                         k_r = chess.square_rank(king_sq)
                         set_square_leds(k_c, k_r, c_check)
 
-                # 3. Lifted Piece & Legal Target Dots (with Coach / Opening / Blunder Guard hints)
+                # 3. Lifted Piece & Legal Target Dots (with Coach / Opening / Resignation Aura)
                 if self.move_tracker.lifted_square:
                     l_c, l_r = self.move_tracker.lifted_square
-                    set_square_leds(l_c, l_r, c_piece_lifted)
+                    if getattr(self.move_tracker, "resignation_armed", False):
+                        lifted_elapsed = (
+                            now - self.move_tracker.king_lift_time
+                            if self.move_tracker.king_lift_time
+                            else 3.0
+                        )
+                        render_resignation_aura(
+                            now,
+                            frame,
+                            (l_c, l_r),
+                            lifted_elapsed,
+                            {"night_mode": night_mode},
+                        )
+                    else:
+                        set_square_leds(l_c, l_r, c_piece_lifted)
                     coach_hints_enabled = settings.get("coach_hints_enabled", True)
                     opening_hints_enabled = settings.get("opening_hints_enabled", True)
                     coach_active = coach_hints_enabled and not fair_play_active
@@ -2177,23 +2192,31 @@ class BoardStateManager:
                                     )
                                     if move_result:
                                         from_f, from_r, to_f, to_r, promo = move_result
-                                        from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                        to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                        uci = f"{from_sq}{to_sq}{promo or ''}"
-                                        logger.info(f"Physical local move detected: {uci}")
-                                        success = self.local_engine.apply_move(uci)
-                                        if success:
-                                            self.digital_state = self.local_engine.get_board()
-                                            if self.local_engine.is_game_over:
-                                                self._record_last_game_from_local()
-                                                self.game_status = "GAME_OVER"
-                                                if self.local_engine.winner in ("white", "black"):
-                                                    self.trigger_animation("GAME_WON")
-                                                else:
-                                                    self.trigger_animation("GAME_DRAWN")
+                                        if promo and str(promo).startswith("resign_"):
+                                            resigning_color = str(promo).split("_", 1)[1]
+                                            winner = "black" if resigning_color == "white" else "white"
+                                            logger.info(
+                                                f"Physical resignation gesture triggered in local game for {resigning_color}. Winner: {winner}"
+                                            )
+                                            self.stop_local_game(winner=winner, reason="resignation")
                                         else:
-                                            logger.warning(f"Illegal physical move rejected by LocalGameEngine: {uci}")
-                                            self.move_tracker.clear_in_flight_move()
+                                            from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                            to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                            uci = f"{from_sq}{to_sq}{promo or ''}"
+                                            logger.info(f"Physical local move detected: {uci}")
+                                            success = self.local_engine.apply_move(uci)
+                                            if success:
+                                                self.digital_state = self.local_engine.get_board()
+                                                if self.local_engine.is_game_over:
+                                                    self._record_last_game_from_local()
+                                                    self.game_status = "GAME_OVER"
+                                                    if self.local_engine.winner in ("white", "black"):
+                                                        self.trigger_animation("GAME_WON")
+                                                    else:
+                                                        self.trigger_animation("GAME_DRAWN")
+                                            else:
+                                                logger.warning(f"Illegal physical move rejected by LocalGameEngine: {uci}")
+                                                self.move_tracker.clear_in_flight_move()
 
                                     if getattr(self.local_engine, "board", None):
                                         self.guardrail_result = self.setup_validator.validate_game_state(
@@ -2210,21 +2233,28 @@ class BoardStateManager:
                                     )
                                     if move_result:
                                         from_f, from_r, to_f, to_r, promo = move_result
-                                        logger.info(
-                                            f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
-                                        )
+                                        if promo and str(promo).startswith("resign_"):
+                                            resigning_color = str(promo).split("_", 1)[1]
+                                            logger.info(
+                                                f"Physical resignation gesture triggered in Lichess game for {resigning_color}."
+                                            )
+                                            self._spawn_task(lichess_engine.resign(self))
+                                        else:
+                                            logger.info(
+                                                f"Physical move detected: ({from_f},{from_r}) -> ({to_f},{to_r}) promo={promo}"
+                                            )
 
-                                        async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
-                                            try:
-                                                success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
-                                                if not success:
-                                                    logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                            async def _dispatch_move_task(f_f, f_r, t_f, t_r, p):
+                                                try:
+                                                    success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                                                    if not success:
+                                                        logger.warning("Move rejected by Lichess API. Releasing in-flight lock.")
+                                                        self.move_tracker.clear_in_flight_move()
+                                                except Exception as err:
+                                                    logger.error(f"Unexpected error dispatching move: {err}")
                                                     self.move_tracker.clear_in_flight_move()
-                                            except Exception as err:
-                                                logger.error(f"Unexpected error dispatching move: {err}")
-                                                self.move_tracker.clear_in_flight_move()
 
-                                        self._spawn_task(_dispatch_move_task(from_f, from_r, to_f, to_r, promo))
+                                            self._spawn_task(_dispatch_move_task(from_f, from_r, to_f, to_r, promo))
 
                                     # Compute live guardrail synchronization status
                                     if getattr(lichess_engine, "board", None):

@@ -47,6 +47,8 @@ try:
         COLOR_INT_NIGHT_PROMO_QUEEN,
         COLOR_INT_NIGHT_PROMO_ROOK,
         COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NIGHT_RESIGN_HALO,
+        COLOR_INT_NIGHT_RESIGN_PRIMARY,
         COLOR_INT_NIGHT_SEEKING_BODY,
         COLOR_INT_NIGHT_SEEKING_HEAD,
         COLOR_INT_NIGHT_SEEKING_TAIL,
@@ -60,6 +62,8 @@ try:
         COLOR_INT_PROMO_QUEEN,
         COLOR_INT_PROMO_ROOK,
         COLOR_INT_PROMO_ROOT,
+        COLOR_INT_RESIGN_HALO,
+        COLOR_INT_RESIGN_PRIMARY,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
@@ -1384,3 +1388,45 @@ def render_uncharted_novelty(
             if sq_int > 0.05:
                 clamped_int = min(1.0, sq_int)
                 set_square_in_frame(frame, c, r, scale_color(col_flare, clamped_int))
+
+
+def render_resignation_aura(
+    now: float,
+    frame: list[int],
+    king_origin: tuple[int, int],
+    elapsed: float,
+    params: dict[str, Any] | None = None,
+) -> None:
+    """
+    Renders "The King's Bow" Resignation Gesture Aura:
+    - On King origin square: Sinusoidal breathing pulse in Laser Crimson (Color(220, 24, 40))
+    - On 4 cross-adjacent squares (up, down, left, right): Soft radial breathing halo in Radiant Garnet
+    - Frequency accelerates smoothly as elapsed approaches the 5.0s abandonment ceiling
+    Peak active LEDs <= 10, power draw <= 95mA on 5V rail.
+    """
+    params = params or {}
+    is_night = bool(params.get("night_mode", False))
+
+    col_primary = COLOR_INT_NIGHT_RESIGN_PRIMARY if is_night else COLOR_INT_RESIGN_PRIMARY
+    col_halo = COLOR_INT_NIGHT_RESIGN_HALO if is_night else COLOR_INT_RESIGN_HALO
+    power_scale = 0.50 if is_night else 0.70
+
+    k_c, k_r = int(king_origin[0]), int(king_origin[1])
+    if not (0 <= k_c < 8 and 0 <= k_r < 8):
+        return
+
+    # Breathing rate accelerates from 2.5Hz at 3.0s to 5.0Hz at 5.0s
+    progress = max(0.0, min(1.0, (elapsed - 3.0) / 2.0))
+    freq = 2.5 + 2.5 * progress
+    wave = 0.5 + 0.5 * math.sin(2.0 * math.pi * freq * now)
+
+    # Origin square intensity
+    origin_int = (0.35 + 0.65 * wave) * power_scale
+    set_square_in_frame(frame, k_c, k_r, scale_color(col_primary, origin_int))
+
+    # Cross-adjacent halo squares
+    halo_int = (0.15 + 0.25 * wave) * power_scale
+    for dc, dr in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+        nc, nr = k_c + dc, k_r + dr
+        if 0 <= nc < 8 and 0 <= nr < 8:
+            set_square_in_frame(frame, nc, nr, scale_color(col_halo, halo_int))

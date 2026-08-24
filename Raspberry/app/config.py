@@ -106,6 +106,10 @@ COLOR_PROMO_BISHOP = (220, 140, 0)     # Warm Sun Amber
 # Cartographer's Path / Opening Novelty Flare (Day Mode)
 COLOR_NOVELTY_FLARE = (255, 200, 40)   # Luminous golden solar flare for uncharted novelty moves
 
+# The King's Bow Resignation Gesture (Day Mode)
+COLOR_RESIGN_PRIMARY = (220, 24, 40)    # Laser Crimson for King's Bow resignation origin square
+COLOR_RESIGN_HALO = (140, 10, 25)       # Radiant Garnet for resignation aura cross-halo
+
 # =============================================================================
 # NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
 # (Engineered for crystal-clear contrast and vibrancy against moonlight blue floor)
@@ -128,50 +132,24 @@ COLOR_NIGHT_OPPONENT_FROM = (230, 90, 0)  # Radiant solar orange for opponent mo
 COLOR_NIGHT_OPPONENT_TO = (0, 220, 200)  # Vivid electric mint-cyan for opponent destination
 COLOR_NIGHT_OPPONENT_CAPTURE = (255, 10, 40)  # Pure laser crimson for opponent capture target
 COLOR_NIGHT_MOVE_TRACE = (220, 30, 180)  # Vivid neon magenta/violet pulse along move trajectory
-COLOR_NIGHT_CAPTURE_TRACE = (255, 40, 70)  # High-energy rose-crimson pulse along capture trajectory
+COLOR_NIGHT_MOVE_BEST = (0, 255, 160)  # High-vibrancy mint emerald (Night Mode best move)
+COLOR_NIGHT_MOVE_GOOD = (0, 210, 255)  # Electric cyan azure (Night Mode good move)
+COLOR_NIGHT_MOVE_INACC = (255, 170, 0)  # Radiant solar amber (Night Mode inaccuracy)
+COLOR_NIGHT_MOVE_BLUNDER = (255, 20, 60)  # Pure vivid laser ruby (Night Mode blunder)
 
-# King Status & Turn Breathing Halos
-COLOR_NIGHT_CHECK = (255, 10, 10)  # Laser red on King in check
-COLOR_NIGHT_TURN_WHITE = (240, 210, 120)  # Radiant warm sunlight gold halo for White's turn
-COLOR_NIGHT_TURN_BLACK = (170, 40, 230)  # Electric amethyst purple halo for Black's turn (distinct from blue)
-
-# Diagnostics & Guardrails
-COLOR_NIGHT_ILLEGAL = (220, 0, 0)  # High-visibility red for invalid placement
-COLOR_NIGHT_GUARDRAIL_MISSING = (240, 150, 0)  # Vivid amber warning
-COLOR_NIGHT_GUARDRAIL_UNEXPECTED = (255, 20, 20)  # Vivid red alert
-COLOR_NIGHT_CAPTURE_AURA_TARGET = (255, 40, 80)
-COLOR_NIGHT_CAPTURE_AURA_ATTACKER = (255, 190, 30)
-
-# Coach & Move Quality
-COLOR_NIGHT_MOVE_BEST = (0, 255, 90)  # Neon Emerald for Best Move
-COLOR_NIGHT_MOVE_GOOD = (0, 230, 210)  # Electric Mint Aqua for Good Move
-COLOR_NIGHT_MOVE_INACCURACY = (255, 180, 0)  # Vivid Goldenrod for Inaccuracy
-COLOR_NIGHT_MOVE_BLUNDER = (255, 30, 40)  # Laser Crimson for Blunder
-
-# Live Evaluation Bar
-COLOR_NIGHT_EVAL_WHITE = (150, 150, 190)  # Bright pearl silver for White advantage
-COLOR_NIGHT_EVAL_BLACK = (60, 10, 95)  # Velvet violet for Black advantage (distinct from blue floor)
-COLOR_NIGHT_EVAL_NEUTRAL = (40, 35, 60)  # Neutral midpoint
-
-# Analysis Divergence Return-Home Guide Colors
-COLOR_NIGHT_RETURN_HOME = (255, 200, 40)  # Vivid gold halo marking the branch move to un-play next
-
-# Chess Clock Drain Bar
-COLOR_NIGHT_CLOCK_OK = (0, 230, 110)  # Vivid neon emerald for ample time remaining
-COLOR_NIGHT_CLOCK_WARN = (255, 180, 0)  # Vivid goldenrod for low time warning
-COLOR_NIGHT_CLOCK_CRIT = (255, 20, 20)  # Laser red for critical time scramble
-
-# Lifecycle & Animation Colors
-COLOR_NIGHT_DRAW_BLUE = (0, 140, 255)  # Luminous sky sapphire for draw curtain
-COLOR_NIGHT_SEEKING_HEAD = (240, 255, 220)  # Radiant starlight head
-COLOR_NIGHT_SEEKING_BODY = (0, 230, 200)  # Electric mint-cyan body
-COLOR_NIGHT_SEEKING_TAIL = (0, 80, 180)  # Royal twilight tail
-COLOR_NIGHT_START_BLACK_PRIMARY = (0, 210, 255)  # Vivid electric cyan
-COLOR_NIGHT_START_BLACK_SECONDARY = (130, 60, 240)  # Electric royal violet
-COLOR_NIGHT_BOARD_READY_PRIMARY = (0, 240, 160)  # Vivid neon aqua for night setup completion sweep
-COLOR_NIGHT_BOARD_READY_SECONDARY = (0, 180, 255)  # Electric cyan accent
-COLOR_NIGHT_BOARD_READY_AMBIENT = (10, 60, 60)  # Subtle starlight mint breathing glow for ready state
-COLOR_NIGHT_MINT_EMERALD = (0, 255, 160)  # Vivid neon mint emerald (Night Mode)
+# System Status & Feedback
+COLOR_NIGHT_ERROR = (255, 20, 50)  # Pure ruby red
+COLOR_NIGHT_CHECK = (255, 15, 60)  # Piercing laser magenta-red for check alert
+COLOR_NIGHT_ILLEGAL = (255, 20, 40)  # Pure scarlet
+COLOR_NIGHT_GUARDRAIL_MISSING = (255, 60, 0)  # Vivid neon amber-orange
+COLOR_NIGHT_GUARDRAIL_UNEXPECTED = (255, 20, 80)  # Electric crimson
+COLOR_NIGHT_CAPTURE_AURA_TARGET = (255, 15, 60)  # Laser ruby
+COLOR_NIGHT_CAPTURE_AURA_ATTACKER = (255, 140, 0)  # Vivid solar amber
+COLOR_NIGHT_CLOCK_OK = (0, 230, 150)  # Luminous mint green (Night Mode clock normal)
+COLOR_NIGHT_CLOCK_WARN = (255, 160, 0)  # Radiant solar amber (Night Mode clock <=25%)
+COLOR_NIGHT_CLOCK_CRIT = (255, 20, 60)  # Piercing laser crimson (Night Mode clock <=10%)
+COLOR_NIGHT_RETURN_HOME = (255, 180, 20)  # Vivid Solar Gold (Night Mode return-to-game guide)
+COLOR_NIGHT_MINT_EMERALD = (0, 255, 160)     # Vivid high-contrast mint emerald (Night Mode)
 COLOR_NIGHT_AZURE = (0, 210, 255)         # Vivid electric cyan azure (Night Mode)
 COLOR_NIGHT_ROYAL_VIOLET = (170, 50, 255) # Luminous royal violet (Night Mode)
 
@@ -184,6 +162,10 @@ COLOR_NIGHT_PROMO_BISHOP = (255, 160, 20)  # Radiant Sun Amber
 
 # Cartographer's Path / Opening Novelty Flare (Night Mode)
 COLOR_NIGHT_NOVELTY_FLARE = (240, 180, 20)  # Vivid Golden Solar Flare
+
+# The King's Bow Resignation Gesture (Night Mode)
+COLOR_NIGHT_RESIGN_PRIMARY = (160, 16, 36) # Velvet Ruby
+COLOR_NIGHT_RESIGN_HALO = (80, 8, 18)      # Midnight Crimson
 
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
@@ -202,4 +184,5 @@ ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
 ANIM_ANALYSIS_COMPUTING_DURATION_S = 10.0  # Duration for analysis computing animation
 ANIM_UNCHARTED_NOVELTY_DURATION_S = 0.35  # High-speed 350ms outward radial starburst pulse
-
+RESIGNATION_HOLD_DURATION_S = 3.0  # Holding King for 3.0s arms King's Bow resignation
+RESIGNATION_ABANDON_DURATION_S = 5.0  # Leaving King off board for 5.0s auto-resigns

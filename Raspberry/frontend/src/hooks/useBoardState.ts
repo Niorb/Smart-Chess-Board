@@ -241,6 +241,8 @@ export interface BoardState {
       to: [number, number];
       timestamp?: number;
     } | null;
+    resignation_armed?: boolean;
+    king_lift_elapsed?: number | null;
   };
   digital: string[][];
   my_color: 'white' | 'black' | null;

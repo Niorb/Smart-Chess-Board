@@ -2553,6 +2553,17 @@ function App() {
         </div>
       )}
 
+      {/* The King's Bow Physical Resignation Toast */}
+      {state.physical?.resignation_armed && state.status === 'PLAYING' && (
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/60 rounded-xl px-4 py-2.5 shadow-2xl z-40 flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-red-200">The King's Bow Armed</span>
+            <span className="text-[10px] text-red-300/80">Replace King to surrender • Place on target to move</span>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="p-3 text-center border-t border-slate-900 text-[10px] text-slate-500 font-mono">
         Smart Chess Board • Lichess Integration v2.0 • Raspberry Pi 4B
