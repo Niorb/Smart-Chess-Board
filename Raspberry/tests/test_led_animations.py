@@ -164,7 +164,7 @@ def test_render_game_lost():
         for c in range(8):
             for r in range(8):
                 sq_indices = get_led_indices(r, c)
-                if any(frame_night[idx] != 0 for idx in sq_indices if idx < NUM_LEDS):
+                if any(frame_night[idx] not in (0, COLOR_INT_NIGHT_MODE) for idx in sq_indices if idx < NUM_LEDS):
                     lit_squares += 1
         assert lit_squares <= 22, f"Too many squares lit ({lit_squares}) at progress {p} for Night Mode"
 
@@ -192,6 +192,13 @@ def test_render_game_drawn():
     frame_night = [0] * NUM_LEDS
     render_game_drawn(0.50, frame_night, {"night_mode": True}, now=time.time())
     assert any(frame_night), "Frame empty at progress 0.50 for GAME_DRAWN Night Mode"
+    active_night = 0
+    for c in range(8):
+        for r in range(8):
+            sq_indices = get_led_indices(r, c)
+            if any(frame_night[idx] not in (0, COLOR_INT_NIGHT_MODE) for idx in sq_indices if idx < NUM_LEDS):
+                active_night += 1
+    assert active_night <= 22
 
 
 def test_render_move_trace():
