@@ -1314,9 +1314,6 @@ class BoardStateManager:
             self.prev_setup_ready = True
         elif not is_ready and self.prev_setup_ready:
             self.prev_setup_ready = False
-            # Only disarm local game start if we are not lifting a piece to make a move
-            if self.game_status not in ["PLAYING", "ANALYSIS"] and (not hasattr(self, "move_tracker") or self.move_tracker.lifted_square is None):
-                self.can_start_local_game = False
             if self.active_animation and self.active_animation.name in ["BOARD_READY", "SETUP_COMPLETE"]:
                 self.active_animation = None
                 if self.frozen_baselines is not None:
@@ -1524,7 +1521,31 @@ class BoardStateManager:
             if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
                 self.setup_result = self.setup_validator.validate(self.physical_state)
                 setup_result = self.setup_result
-                if not setup_result.is_setup_ready:
+
+                # Check if a White piece is lifted for an opening move in IDLE
+                if self.game_status == "IDLE" and self.move_tracker.lifted_square is not None:
+                    lifted_c, lifted_r = self.move_tracker.lifted_square
+                    set_square_leds(lifted_c, lifted_r, c_piece_lifted)
+
+                    # Get opening book moves for the lifted square
+                    book_moves = get_book_moves_for_square(chess.Board(), lifted_c, lifted_r)
+                    book_targets: dict[tuple[int, int], str] = {
+                        bm.to_coord: bm.classification for bm in book_moves
+                    }
+
+                    for t_c, t_r in self.move_tracker.legal_targets:
+                        target_coord = (t_c, t_r)
+                        if target_coord in book_targets:
+                            cls = book_targets[target_coord]
+                            color_int = COLOR_INT_MINT_EMERALD if cls == "mainline" else COLOR_INT_AZURE
+                            set_square_leds(t_c, t_r, color_int)
+                        else:
+                            set_square_leds(t_c, t_r, c_legal_target)
+
+                    if self.move_tracker.invalid_placement:
+                        inv_c, inv_r = self.move_tracker.invalid_placement
+                        set_square_leds(inv_c, inv_r, c_invalid_placement)
+                elif not setup_result.is_setup_ready:
                     # Missing starting pieces
                     for c, r in setup_result.missing_white + setup_result.missing_black:
                         set_square_leds(c, r, c_setup_missing)
@@ -2292,6 +2313,15 @@ class BoardStateManager:
                                         self.digital_state = self.local_engine.get_board()
                                         if hasattr(self, "gesture_engine"):
                                             self.gesture_engine.reset()
+                                    elif self.move_tracker.lifted_square is None and not self.setup_result.is_setup_ready:
+                                        # Only disarm if multiple pieces are missing or board was genuinely cleared
+                                        missing_total = (
+                                            len(self.setup_result.missing_white)
+                                            + len(self.setup_result.missing_black)
+                                            + len(self.setup_result.misplaced_pieces)
+                                        )
+                                        if missing_total > 1:
+                                            self.can_start_local_game = False
                                 else:
                                     mt = self.move_tracker
                                     has_transient = bool(
