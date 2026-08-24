@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Color-Harmonized Opponent Movement & Two-Phase Castling (2026-08-25)
+## Latest Change — Fast Game Start Animation & Persistent First-Move Color Anchor (2026-08-25)
+1. **Snappy `GAME_STARTED` Lifecycle Animation (`led_animations.py`, `config.py`)**:
+   - **Reduced Duration**: Shortened from $2.2\text{s}$ to $1.2\text{s}$ for a fast, punchy color proclamation.
+   - **Choreography**:
+     - Fast electric lightning wave across player's home ranks (Ranks 1–2 in Ivory Gold for White; Ranks 8–7 in Cosmic Cyan for Black).
+     - Radiant royal crown pulse on the King and Queen squares (`e1/d1` or `e8/d8`).
+2. **Persistent First-Move Color Anchor (`board_state.py`)**:
+   - **Visual Anchor**: Until the player plays their first physical move (`move_count == 0` for White; `move_count <= 1` for Black), the player's home royal thrones (`e1/d1` for White; `e8/d8` for Black) maintain a gentle, rhythmic breathing halo ($I = 0.28 + 0.14 \sin(3.0 t)$) in the player's signature army color (Warm Ivory Gold for White, Electric Cosmic Cyan for Black).
+   - **Looking Away Safety**: Even if the player was looking away when the game started, glancing at the board at any time before their first move unambiguously reveals which color they are playing.
+   - **Seamless Dissolve**: As soon as the player executes their first physical move, the persistent anchor deactivates and standard turn breathing takes over.
+3. **Automated Verification**:
+   - 339/339 unit tests passing on physical Raspberry Pi.
+
+## Previous Change — Color-Harmonized Opponent Movement & Two-Phase Castling (2026-08-25)
 1. **Opponent Movement Color Harmonization (`config.py`, `board_state.py`)**:
    - **Origin Square (Piece to Move)**: Lit in distinct Solar Orange `COLOR_OPPONENT_FROM` (`220, 100, 0` Day / `240, 140, 0` Night).
    - **Quiet Move Path & Arrival**: 100% unified in **Electric Sky Azure** `(0, 150, 240)` Day / `(0, 220, 230)` Night. Destination square rests in this hue and flares smoothly to full brightness on comet arrival with zero color clash artifacts.
