@@ -574,6 +574,8 @@ function App() {
     pMode?: 'auto' | 'pieces' | 'empty';
     coachHints?: boolean;
     evalBar?: boolean;
+    clockBar?: boolean;
+    openingHints?: boolean;
     aiOnly?: boolean;
     inLoopCal?: boolean;
     intensity?: number;
