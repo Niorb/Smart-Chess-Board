@@ -728,7 +728,8 @@ def test_analysis_return_home_guide_renders_on_last_branch_move():
     and a dim gold dot its origin; popping the branch moves the guide back."""
     from unittest.mock import MagicMock
 
-    from app.led_helpers import COLOR_INT_RETURN_HOME, get_led_indices, scale_color
+    from app.led_animations import scale_color
+    from app.led_helpers import COLOR_INT_RETURN_HOME, get_led_indices
     from board_hardware import settings
 
     orig_nm = settings.get("night_mode", False)
