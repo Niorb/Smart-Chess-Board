@@ -1527,15 +1527,18 @@ class BoardStateManager:
                     lifted_c, lifted_r = self.move_tracker.lifted_square
                     set_square_leds(lifted_c, lifted_r, c_piece_lifted)
 
-                    # Get opening book moves for the lifted square
-                    book_moves = get_book_moves_for_square(chess.Board(), lifted_c, lifted_r)
-                    book_targets: dict[tuple[int, int], str] = {
-                        bm.to_coord: bm.classification for bm in book_moves
-                    }
+                    # Get opening book moves for the lifted square if enabled
+                    opening_hints_enabled = settings.get("opening_hints_enabled", True)
+                    book_targets: dict[tuple[int, int], str] = {}
+                    if opening_hints_enabled:
+                        book_moves = get_book_moves_for_square(chess.Board(), lifted_c, lifted_r)
+                        book_targets = {
+                            bm.to_coord: bm.classification for bm in book_moves
+                        }
 
                     for t_c, t_r in self.move_tracker.legal_targets:
                         target_coord = (t_c, t_r)
-                        if target_coord in book_targets:
+                        if opening_hints_enabled and target_coord in book_targets:
                             cls = book_targets[target_coord]
                             color_int = COLOR_INT_MINT_EMERALD if cls == "mainline" else COLOR_INT_AZURE
                             set_square_leds(t_c, t_r, color_int)
