@@ -836,6 +836,7 @@ def test_opening_hints_enabled_toggle():
 
 def test_first_move_color_persistence_anchor():
     """Verify that player's home royal thrones maintain persistent breathing color anchor until 1st move is made."""
+    import chess
     from app.lichess_engine import lichess_engine
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
