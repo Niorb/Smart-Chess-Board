@@ -450,27 +450,27 @@ def render_game_started(progress: float, frame: list[int], params: dict[str, Any
         royal_squares = [(4, 7), (3, 7)]  # e8 (King), d8 (Queen)
         center_clash = [((3, 6), (3, 4)), ((4, 6), (4, 4))]  # d7->d5, e7->e5
 
-    # Phase 1 (progress 0.0 -> 0.65): Army Ignition Sweep
-    if progress < 0.65:
-        p_sweep = progress / 0.65
+    # Phase 1 (progress 0.0 -> 0.60): Fast Lightning Army Ignition Sweep
+    if progress < 0.60:
+        p_sweep = progress / 0.60
         n_sq = len(army_path)
         head_pos = p_sweep * (n_sq - 1)
         for i, (c, r) in enumerate(army_path):
             dist = abs(i - head_pos)
-            if dist < 2.2:
-                intensity = math.exp(-2.0 * dist * dist)
+            if dist < 2.0:
+                intensity = math.exp(-2.5 * dist * dist)
                 if intensity > 0.03:
                     col = blend_colors(primary_col, secondary_col, min(1.0, dist * 0.7))
-                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.9))
+                    set_square_in_frame(frame, c, r, scale_color(col, intensity * 0.95))
 
-    # Phase 2 (progress 0.50 -> 0.85): Royal Focus Pulse on King & Queen
-    if 0.50 <= progress <= 0.85:
-        p_royal = (progress - 0.50) / 0.35
-        royal_intensity = math.sin(p_royal * math.pi) * 0.85
+    # Phase 2 (progress 0.40 -> 0.85): Royal Focus Pulse on King & Queen
+    if 0.40 <= progress <= 0.85:
+        p_royal = (progress - 0.40) / 0.45
+        royal_intensity = math.sin(p_royal * math.pi) * 0.95
         if royal_intensity > 0.03:
             for k_c, k_r in royal_squares:
-                col = blend_colors(primary_col, COLOR_INT_DRAW_WHITE, 0.3)
-                set_square_in_frame(frame, k_c, k_r, scale_color(col, royal_intensity))
+                col = blend_colors(primary_col, COLOR_INT_DRAW_WHITE, 0.35)
+                blend_square_in_frame(frame, k_c, k_r, scale_color(col, royal_intensity), 0.90)
 
     # Phase 3 (progress 0.70 -> 1.0): Battle Line Center Ignition
     if progress >= 0.70:

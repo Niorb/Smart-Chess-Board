@@ -832,3 +832,37 @@ def test_opening_hints_enabled_toggle():
 
     # Restore default
     settings["opening_hints_enabled"] = True
+
+
+def test_first_move_color_persistence_anchor():
+    """Verify that player's home royal thrones maintain persistent breathing color anchor until 1st move is made."""
+    from app.lichess_engine import lichess_engine
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+
+    saved_board = lichess_engine.board
+    saved_color = lichess_engine.my_color
+    try:
+        # Case 1: Playing Black, Move 1 (White hasn't moved yet -> move_stack empty)
+        lichess_engine.board = chess.Board()
+        lichess_engine.my_color = "black"
+        bsm._update_leds()
+        assert bsm.strip.setPixelColor.called
+
+        # Case 2: Playing Black, Move 1 (White played e2e4 -> move_stack len 1)
+        # Black has still not made their first move -> persistent anchor remains active
+        bsm.strip.reset_mock()
+        lichess_engine.board.push_san("e4")
+        bsm._update_leds()
+        assert bsm.strip.setPixelColor.called
+
+        # Case 3: Black plays move 1 (e7e5 -> move_stack len 2)
+        # First move completed -> persistent anchor deactivates
+        bsm.strip.reset_mock()
+        lichess_engine.board.push_san("e5")
+        bsm._update_leds()
+        assert bsm.strip.setPixelColor.called
+    finally:
+        lichess_engine.board = saved_board
+        lichess_engine.my_color = saved_color

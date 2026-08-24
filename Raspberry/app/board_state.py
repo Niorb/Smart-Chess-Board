@@ -149,6 +149,7 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_ROYAL_VIOLET,
     COLOR_INT_NIGHT_SETUP_MISPLACED,
     COLOR_INT_NIGHT_SETUP_MISSING,
+    COLOR_INT_NIGHT_START_BLACK_PRIMARY,
     COLOR_INT_NIGHT_TURN_BLACK,
     COLOR_INT_NIGHT_TURN_WHITE,
     COLOR_INT_OFF,
@@ -160,6 +161,8 @@ from app.led_helpers import (
     COLOR_INT_ROYAL_VIOLET,
     COLOR_INT_SETUP_MISPLACED,
     COLOR_INT_SETUP_MISSING,
+    COLOR_INT_START_BLACK_PRIMARY,
+    COLOR_INT_START_WHITE_PRIMARY,
     COLOR_INT_TURN_BLACK,
     COLOR_INT_TURN_WHITE,
     Color,
@@ -1771,18 +1774,51 @@ class BoardStateManager:
                         unexpected_color=c_guardrail_unexp,
                     )
 
-                # 6. Active Player Turn Ambient Indicator (Subtle breathing halo on active King)
+                # 6. Active Player Turn Ambient Indicator & First-Move Color Persistence Anchor
                 if getattr(lichess_engine, "board", None) and not lichess_engine.board.is_check():
                     active_turn = lichess_engine.board.turn
-                    active_king_sq = lichess_engine.board.king(active_turn)
-                    if active_king_sq is not None:
-                        ak_c = chess.square_file(active_king_sq)
-                        ak_r = chess.square_rank(active_king_sq)
-                        if self.move_tracker.lifted_square != (ak_c, ak_r):
-                            turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
-                            turn_pulse = math.sin(now * 2.5) * 0.5 + 0.5
-                            turn_intensity = 0.16 + 0.10 * turn_pulse
-                            set_square_leds(ak_c, ak_r, scale_color(turn_col, turn_intensity))
+                    my_col_str = str(getattr(lichess_engine, "my_color", "") or "").lower()
+                    my_chess_color = chess.WHITE if my_col_str == "white" else (chess.BLACK if my_col_str == "black" else None)
+                    move_count = len(lichess_engine.board.move_stack)
+
+                    # Persistent player color reminder: active until player plays their first move
+                    # (For White: move_count == 0; For Black: move_count <= 1 until Black plays move 1 at ply 2)
+                    first_move_pending = False
+                    if my_chess_color is not None:
+                        if my_chess_color == chess.WHITE and move_count == 0:
+                            first_move_pending = True
+                        elif my_chess_color == chess.BLACK and move_count <= 1:
+                            first_move_pending = True
+
+                    if first_move_pending and my_chess_color is not None:
+                        # Illuminate persistent player color reminder on player's royal thrones
+                        my_king_sq = lichess_engine.board.king(my_chess_color)
+                        if my_king_sq is not None:
+                            k_c = chess.square_file(my_king_sq)
+                            k_r = chess.square_rank(my_king_sq)
+                            q_c = 3  # Queen file d (d1 or d8)
+                            q_r = k_r
+                            p_col = (
+                                (COLOR_INT_START_WHITE_PRIMARY if not night_mode else COLOR_INT_NIGHT_TURN_WHITE)
+                                if my_chess_color == chess.WHITE
+                                else (COLOR_INT_NIGHT_START_BLACK_PRIMARY if night_mode else COLOR_INT_START_BLACK_PRIMARY)
+                            )
+                            p_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                            p_intensity = 0.28 + 0.14 * p_pulse
+                            if self.move_tracker.lifted_square != (k_c, k_r):
+                                set_square_leds(k_c, k_r, scale_color(p_col, p_intensity))
+                            if self.move_tracker.lifted_square != (q_c, q_r):
+                                set_square_leds(q_c, q_r, scale_color(p_col, p_intensity * 0.75))
+                    else:
+                        active_king_sq = lichess_engine.board.king(active_turn)
+                        if active_king_sq is not None:
+                            ak_c = chess.square_file(active_king_sq)
+                            ak_r = chess.square_rank(active_king_sq)
+                            if self.move_tracker.lifted_square != (ak_c, ak_r):
+                                turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
+                                turn_pulse = math.sin(now * 2.5) * 0.5 + 0.5
+                                turn_intensity = 0.16 + 0.10 * turn_pulse
+                                set_square_leds(ak_c, ak_r, scale_color(turn_col, turn_intensity))
 
                 # 7. Opponent Disconnected Warning Beacon & Victory Claim Countdown Gauge
                 if getattr(lichess_engine, "opponent_gone", None) and lichess_engine.opponent_gone.get("gone"):
