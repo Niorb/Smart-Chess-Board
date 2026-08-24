@@ -701,6 +701,7 @@ def test_board_state_eval_bar_fallback_when_clock_bar_disabled():
     bsm.strip = MagicMock()
     bsm.game_status = "PLAYING"
     settings["clock_bar_enabled"] = False
+    settings["coach_ai_only"] = False
 
     with _ClockStateSnapshot():
         # Clock state is deliberately VALID so only the setting gates the fallback.
