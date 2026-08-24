@@ -1136,3 +1136,19 @@ def render_clock_bar(
     if n_lit < 8 and rem > 0:
         edge_pulse = math.sin(now * 5.0) * 0.2 + 0.8
         set_square_in_frame(frame, col, n_lit, scale_color(urgency_color, rem * edge_pulse))
+
+
+def render_return_home_guide(
+    now: float,
+    frame: list[int],
+    from_sq: tuple[int, int],
+    to_sq: tuple[int, int],
+    color: int,
+) -> None:
+    """Pulsing halo on the arrival square of the last branch move (un-play this next)
+    plus a steady dim dot on its origin square. Guides the user back to the game
+    timeline during ANALYSIS branching."""
+    halo_intensity = 0.55 + 0.45 * (math.sin(now * 2 * math.pi * 0.9) * 0.5 + 0.5)
+    set_square_in_frame(frame, to_sq[0], to_sq[1], scale_color(color, halo_intensity))
+    if from_sq != to_sq:
+        set_square_in_frame(frame, from_sq[0], from_sq[1], scale_color(color, 0.35))

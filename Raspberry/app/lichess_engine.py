@@ -1045,6 +1045,22 @@ class LichessEngine:
             self.board.peek().uci() if self.board.move_stack else None
         )
 
+    def get_interpolated_clocks(self) -> dict[str, int | None]:
+        """Clock ms with the side-to-move drained to now, for smooth display between stream events."""
+        raw = self.raw_clocks_ms
+        result: dict[str, int | None] = {
+            "white": int(raw["white"]) if raw["white"] is not None else None,
+            "black": int(raw["black"]) if raw["black"] is not None else None,
+        }
+        if self.clocks_updated_at is None or result["white"] is None or result["black"] is None:
+            return result
+        elapsed = time.time() - self.clocks_updated_at
+        board = getattr(self, "board", None)
+        if board is not None:
+            stm = "white" if board.turn == chess.WHITE else "black"
+            result[stm] = max(0, int(result[stm] - elapsed * 1000))
+        return result
+
     def get_board(self) -> list[list[str]]:
         """
         Returns 8x8 piece grid matching the frontend and hardware coordinates:

@@ -769,3 +769,25 @@ def test_board_state_clock_interpolation_side_to_move_drains():
         # Full squares on both bars use the ok urgency band (>0.25 fraction)
         assert lit_by_idx.get(get_led_indices(0, 7)[0]) == COLOR_INT_CLOCK_OK
         assert lit_by_idx.get(get_led_indices(0, 0)[0]) == COLOR_INT_CLOCK_OK
+
+
+def test_broadcast_payload_contains_clocks_raw():
+    """The WS payload carries raw interpolated clocks + turn for frontend ticking."""
+    from app.lichess_engine import lichess_engine
+
+    bsm = BoardStateManager()
+    payload = bsm._build_broadcast_payload({})
+
+    assert "clocks_raw" in payload
+    clocks_raw = payload["clocks_raw"]
+    assert set(clocks_raw.keys()) == {"white", "black", "updated_at", "turn"}
+    assert clocks_raw["turn"] in ("white", "black", None)
+    saved = (lichess_engine.raw_clocks_ms, lichess_engine.clocks_updated_at)
+    try:
+        lichess_engine.raw_clocks_ms = {"white": 60000, "black": 30000}
+        lichess_engine.clocks_updated_at = time.time()
+        payload = bsm._build_broadcast_payload({})
+        assert payload["clocks_raw"]["white"] is not None
+        assert payload["clocks_raw"]["black"] is not None
+    finally:
+        lichess_engine.raw_clocks_ms, lichess_engine.clocks_updated_at = saved

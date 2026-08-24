@@ -737,3 +737,66 @@ def test_clock_color_palettes_day_and_night_defined_and_distinct():
         assert day != night
     for ok_c, warn_c, crit_c in palettes:
         assert len({ok_c, warn_c, crit_c}) == 3
+
+
+# =============================================================================
+# Return-Home Divergence Guide (render_return_home_guide)
+# =============================================================================
+
+RETURN_HOME_COLOR = color_rgb(200, 160, 20)
+
+
+def _square_color(frame, file_idx, rank_idx):
+    values = {frame[idx] for idx in get_led_indices(rank_idx, file_idx) if idx < len(frame)}
+    values.discard(0)
+    return values
+
+
+def test_render_return_home_guide_lights_both_squares():
+    """Halo on the arrival square and dim dot on the origin square."""
+    frame = [0] * NUM_LEDS
+    render_return_home_guide(1.0, frame, (2, 6), (2, 4), RETURN_HOME_COLOR)
+    assert len(_square_color(frame, 2, 4)) == 1
+    assert len(_square_color(frame, 2, 6)) == 1
+    # Other squares untouched
+    assert not _square_color(frame, 0, 0)
+
+
+def test_render_return_home_guide_halo_pulses_within_bounds():
+    """The halo oscillates between 55% and 100% of the base color intensity."""
+    lo = scale_color(RETURN_HOME_COLOR, 0.55)
+    hi = RETURN_HOME_COLOR
+    seen = []
+    for i in range(60):
+        frame = [0] * NUM_LEDS
+        render_return_home_guide(i * 0.05, frame, (2, 6), (2, 4), RETURN_HOME_COLOR)
+        halo = next(iter(_square_color(frame, 2, 4)))
+        seen.append(halo)
+        assert lo <= halo <= hi
+    # It actually animates across samples
+    assert len(set(seen)) > 2
+
+
+def test_render_return_home_guide_dot_steady_dim():
+    """The origin dot is a constant 35% brightness variant, never pulsing."""
+    frame = [0] * NUM_LEDS
+    render_return_home_guide(7.3, frame, (2, 6), (2, 4), RETURN_HOME_COLOR)
+    dot = next(iter(_square_color(frame, 2, 6)))
+    assert dot == scale_color(RETURN_HOME_COLOR, 0.35)
+
+
+def test_render_return_home_guide_same_square_skips_dot():
+    """When origin equals arrival only one square is lit (no double-write artifacts)."""
+    frame = [0] * NUM_LEDS
+    render_return_home_guide(1.0, frame, (4, 3), (4, 3), RETURN_HOME_COLOR)
+    lit_rows = [
+        r for r in range(8) if any(frame[idx] != 0 for idx in get_led_indices(r, 4) if idx < len(frame))
+    ]
+    assert lit_rows == [3]
+
+
+def test_return_home_color_day_night_distinct():
+    """Day and night return-home palettes are defined and distinct."""
+    from app.led_helpers import COLOR_INT_NIGHT_RETURN_HOME, COLOR_INT_RETURN_HOME
+
+    assert COLOR_INT_RETURN_HOME != COLOR_INT_NIGHT_RETURN_HOME

@@ -210,6 +210,12 @@ export interface BoardState {
     white: string;
     black: string;
   };
+  clocks_raw?: {
+    white: number | null;
+    black: number | null;
+    updated_at: number | null;
+    turn: 'white' | 'black' | null;
+  };
   coach?: CoachPayload;
   game?: {
     game_id: string | null;

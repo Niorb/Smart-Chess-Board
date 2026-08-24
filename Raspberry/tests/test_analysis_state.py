@@ -721,3 +721,58 @@ def test_update_leds_analysis_loading_vs_review_transition():
 
 
 
+
+
+def test_analysis_return_home_guide_renders_on_last_branch_move():
+    """While branching, a gold halo marks the last branch move's arrival square
+    and a dim gold dot its origin; popping the branch moves the guide back."""
+    from unittest.mock import MagicMock
+
+    from app.led_helpers import COLOR_INT_RETURN_HOME, get_led_indices, scale_color
+    from board_hardware import settings
+
+    orig_nm = settings.get("night_mode", False)
+    settings["night_mode"] = False
+    try:
+        mgr = BoardStateManager()
+        mgr.strip = MagicMock()
+        mgr.game_status = "ANALYSIS"
+        mgr.analysis_submode = "review"
+        mgr.analysis_game_moves = ["e2e4", "e7e5"]
+        mgr.analysis_current_ply = 1
+        mgr.analysis_anchor_ply = 1
+        mgr.analysis_anchor_coord = (2, 6)  # c7
+        mgr.analysis_branch_moves = ["c7c5", "c5c4"]
+
+        def _gold_values(mgr_obj):
+            mgr_obj.strip.reset_mock()
+            mgr_obj._update_leds()
+            lit = {}
+            for c in mgr_obj.strip.setPixelColor.call_args_list:
+                if c.args[1] != 0:
+                    lit[c.args[0]] = c.args[1]
+            return lit
+
+        # Guide targets the LAST branch move c5c4: origin c7 (file 2, rank 6), to c5 (file 2, rank 4)
+        lit = _gold_values(mgr)
+        to_indices = get_led_indices(4, 2)
+        origin_indices = get_led_indices(6, 2)
+        for idx in to_indices:
+            assert idx in lit and scale_color(COLOR_INT_RETURN_HOME, 0.55) <= lit[idx] <= COLOR_INT_RETURN_HOME
+        for idx in origin_indices:
+            assert lit.get(idx) == scale_color(COLOR_INT_RETURN_HOME, 0.35)
+
+        # Un-play one branch move: guide steps back to c7c5 (origin c7 -> to c5)
+        mgr.analysis_branch_moves = ["c7c5"]
+        lit = _gold_values(mgr)
+        for idx in get_led_indices(4, 2):
+            assert idx in lit
+        for idx in origin_indices:
+            assert lit.get(idx) == scale_color(COLOR_INT_RETURN_HOME, 0.35)
+
+        # Branch fully cleared: no return-home gold anywhere
+        mgr.analysis_branch_moves = []
+        lit = _gold_values(mgr)
+        assert COLOR_INT_RETURN_HOME not in set(lit.values())
+    finally:
+        settings["night_mode"] = orig_nm

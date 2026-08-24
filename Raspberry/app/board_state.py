@@ -83,6 +83,7 @@ from app.led_animations import (
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
+    render_return_home_guide,
     scale_color,
 )
 from app.led_helpers import (
@@ -135,6 +136,7 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_OPPONENT_FROM,
     COLOR_INT_NIGHT_OPPONENT_TO,
     COLOR_INT_NIGHT_PIECE_LIFTED,
+    COLOR_INT_NIGHT_RETURN_HOME,
     COLOR_INT_NIGHT_ROYAL_VIOLET,
     COLOR_INT_NIGHT_SETUP_MISPLACED,
     COLOR_INT_NIGHT_SETUP_MISSING,
@@ -145,6 +147,7 @@ from app.led_helpers import (
     COLOR_INT_OPPONENT_FROM,
     COLOR_INT_OPPONENT_TO,
     COLOR_INT_PIECE_LIFTED,
+    COLOR_INT_RETURN_HOME,
     COLOR_INT_ROYAL_VIOLET,
     COLOR_INT_SETUP_MISPLACED,
     COLOR_INT_SETUP_MISSING,
@@ -155,7 +158,7 @@ from app.led_helpers import (
     get_led_indices,
     init_strip,
 )
-from app.lichess_engine import lichess_engine
+from app.lichess_engine import format_clock_ms, lichess_engine
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import GameGuardrailResult, SetupResult, SetupValidator
@@ -955,12 +958,26 @@ class BoardStateManager:
 
     def _build_broadcast_payload(self, diag_info) -> dict[str, Any]:
         """Constructs the unified WebSocket broadcast payload."""
+        engine_board = getattr(lichess_engine, "board", None)
+        turn = None
+        if engine_board is not None:
+            turn = "white" if engine_board.turn == chess.WHITE else "black"
+        try:
+            interp_clocks = lichess_engine.get_interpolated_clocks()
+        except Exception:
+            interp_clocks = {"white": None, "black": None}
         return {
             "status": self.game_status,
             "virtual_only": self.virtual_only,
             "physical": self.get_physical_payload(),
             "digital": self.digital_state,
             "clocks": self.clocks,
+            "clocks_raw": {
+                "white": interp_clocks.get("white"),
+                "black": interp_clocks.get("black"),
+                "updated_at": getattr(lichess_engine, "clocks_updated_at", None),
+                "turn": turn,
+            },
             "my_color": lichess_engine.my_color,
             "game": lichess_engine.get_game_payload(),
             "coach": self._build_coach_payload(),
@@ -1450,6 +1467,20 @@ class BoardStateManager:
                                 set_square_leds(bm_to_c, bm_to_r, bm_color)
                                 bm_path = interpolate_move_path(bm_from_c, bm_from_r, bm_to_c, bm_to_r)
                                 render_move_trace(bm_path, now, frame, trace_color=c_move_best, blend_arrival=True)
+
+                        # 4) Step-by-step "path home" guide: pulsing halo on the arrival square of
+                        # the last branch move (un-play this next) plus a dim dot on its origin.
+                        if self.analysis_branch_moves:
+                            c_return_home = COLOR_INT_NIGHT_RETURN_HOME if night_mode else COLOR_INT_RETURN_HOME
+                            rh_uci = self.analysis_branch_moves[-1]
+                            try:
+                                if len(rh_uci) >= 4:
+                                    rh_from = (ord(rh_uci[0]) - ord('a'), int(rh_uci[1]) - 1)
+                                    rh_to = (ord(rh_uci[2]) - ord('a'), int(rh_uci[3]) - 1)
+                                    if all(0 <= v < 8 for v in (*rh_from, *rh_to)):
+                                        render_return_home_guide(now, frame, rh_from, rh_to, c_return_home)
+                            except (ValueError, TypeError):
+                                pass
                     else:
                         # On main game timeline:
                         if 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
@@ -1876,7 +1907,11 @@ class BoardStateManager:
                         new_grid = lichess_engine.get_board()
                         if new_grid != self.digital_state:
                             self.digital_state = new_grid
-                        self.clocks = lichess_engine.clocks
+                        interp = lichess_engine.get_interpolated_clocks()
+                        self.clocks = {
+                            "white": format_clock_ms(interp["white"]),
+                            "black": format_clock_ms(interp["black"]),
+                        }
                     elif self.game_status == "ANALYSIS":
                         fen = self.analysis_active_board.fen()
                         if fen != self._analysis_grid_fen:

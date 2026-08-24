@@ -22,7 +22,8 @@ import {
   testMoveTrace,
   saveBoardDefaults,
   startAnalysis,
-  stopAnalysis
+  stopAnalysis,
+  resetAnalysisBranch
 } from './api'
 import type { LichessAccount, LastGameParams, BoardSettings } from './api'
 import { 
@@ -856,6 +857,45 @@ function App() {
   const isMyTurn = state.status === 'PLAYING' && state.game?.turn === state.my_color;
   const isOpponentTurn = state.status === 'PLAYING' && !isMyTurn;
 
+  // Smooth clock display: snapshot raw clocks + local receipt time whenever the server
+  // heartbeat refreshes them, then drain the side-to-move client-side between updates.
+  const clocksSnapshot = useMemo(() => {
+    const raw = state.clocks_raw;
+    if (!raw || raw.updated_at == null) return null;
+    return { raw, receivedAt: Date.now() };
+  }, [state.clocks_raw?.updated_at]);
+
+  const [clockTick, setClockTick] = useState(0);
+  const clockTickerActive = state.status === 'PLAYING' && clocksSnapshot !== null;
+  useEffect(() => {
+    if (!clockTickerActive) return;
+    const t = window.setInterval(() => setClockTick((v) => v + 1), 500);
+    return () => window.clearInterval(t);
+  }, [clockTickerActive]);
+
+  const displayClocks = useMemo(() => {
+    void clockTick;
+    const fallback = {
+      white: state.clocks?.white ?? '?:??',
+      black: state.clocks?.black ?? '?:??',
+    };
+    if (!clocksSnapshot || clocksSnapshot.raw.turn === null) return fallback;
+    const { white, black, turn } = clocksSnapshot.raw;
+    if (white == null || black == null) return fallback;
+    const formatMs = (ms: number): string => {
+      const totalSeconds = Math.floor(ms / 1000);
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      if (mins > 0) return `${mins}:${String(secs).padStart(2, '0')}`;
+      return `${secs}.${Math.floor((ms % 1000) / 100)}s`;
+    };
+    const elapsedMs = Date.now() - clocksSnapshot.receivedAt;
+    return {
+      white: turn === 'white' ? formatMs(Math.max(0, white - elapsedMs)) : formatMs(white),
+      black: turn === 'black' ? formatMs(Math.max(0, black - elapsedMs)) : formatMs(black),
+    };
+  }, [clockTick, clocksSnapshot, state.clocks]);
+
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
       {/* Header / Top Navigation Bar */}
@@ -1063,7 +1103,7 @@ function App() {
                   ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.3)]'
                   : 'bg-slate-950 border-slate-800 text-slate-400'
               }`}>
-                {state.my_color === 'white' ? (state.clocks?.black || '?:??') : (state.clocks?.white || '?:??')}
+                {state.my_color === 'white' ? displayClocks.black : displayClocks.white}
               </div>
             </div>
 
@@ -1271,7 +1311,7 @@ function App() {
                   ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                   : 'bg-slate-950 border-slate-800 text-slate-400'
               }`}>
-                {state.my_color === 'black' ? (state.clocks?.black || '?:??') : (state.clocks?.white || '?:??')}
+                {state.my_color === 'black' ? displayClocks.black : displayClocks.white}
               </div>
             </div>
           </div>
@@ -1507,6 +1547,25 @@ function App() {
                 <p className="text-xs text-violet-300/80 leading-relaxed">
                   You are currently exploring a post-game review or training drill. You can jump directly into the full Analysis Lab or start a new match below.
                 </p>
+                {state.analysis?.is_branching && (
+                  <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-amber-200 flex items-center gap-2">
+                      Off line · ply {state.analysis.anchor_ply ?? 0}
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        {state.analysis.branch_moves?.length || 0} branch {state.analysis.branch_moves?.length === 1 ? 'move' : 'moves'}
+                      </span>
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await resetAnalysisBranch();
+                      }}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0"
+                    >
+                      <RotateCcw size={12} />
+                      Return to game
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     onClick={() => setActiveTab('analysis')}

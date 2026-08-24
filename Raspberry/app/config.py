@@ -62,6 +62,9 @@ COLOR_CLOCK_OK = (0, 80, 32)          # Dim emerald green for ample time remaini
 COLOR_CLOCK_WARN = (96, 64, 0)        # Dim amber/orange for low time warning
 COLOR_CLOCK_CRIT = (88, 8, 8)         # Dim red for critical time scramble
 
+# Analysis Divergence Return-Home Guide Colors — (R, G, B) tuples
+COLOR_RETURN_HOME = (110, 85, 0)      # Dim gold halo marking the branch move to un-play next
+
 # Active Player Turn Ambient Indicator Colors — (R, G, B) tuples (subtle breathing halo on active King)
 COLOR_TURN_WHITE = (140, 130, 90)     # Warm ivory tone for White's turn King
 COLOR_TURN_BLACK = (20, 70, 140)      # Cool azure tone for Black's turn King
@@ -139,6 +142,9 @@ COLOR_NIGHT_MOVE_BLUNDER = (255, 30, 40)  # Laser Crimson for Blunder
 COLOR_NIGHT_EVAL_WHITE = (150, 150, 190)  # Bright pearl silver for White advantage
 COLOR_NIGHT_EVAL_BLACK = (60, 10, 95)  # Velvet violet for Black advantage (distinct from blue floor)
 COLOR_NIGHT_EVAL_NEUTRAL = (40, 35, 60)  # Neutral midpoint
+
+# Analysis Divergence Return-Home Guide Colors
+COLOR_NIGHT_RETURN_HOME = (255, 200, 40)  # Vivid gold halo marking the branch move to un-play next
 
 # Chess Clock Drain Bar
 COLOR_NIGHT_CLOCK_OK = (0, 230, 110)  # Vivid neon emerald for ample time remaining

@@ -776,3 +776,61 @@ def test_game_over_triggers_record_last_game():
 
 
 
+
+
+def test_get_interpolated_clocks_drains_side_to_move():
+    """Only the side-to-move clock drains; the other side stays static."""
+    import time
+
+    import chess
+
+    engine = LichessEngine()
+    engine.raw_clocks_ms = {"white": 60000, "black": 30000}
+    engine.clocks_updated_at = time.time() - 10.0
+
+    engine.board = chess.Board()  # white to move
+    result = engine.get_interpolated_clocks()
+    assert abs(result["white"] - 50000) <= 1500
+    assert result["black"] == 30000
+
+    engine.board.turn = chess.BLACK
+    result = engine.get_interpolated_clocks()
+    assert result["white"] == 60000
+    assert abs(result["black"] - 20000) <= 1500
+
+
+def test_get_interpolated_clocks_clamps_flag_fall():
+    """A long gap since the last event clamps the drained clock at zero."""
+    import time
+
+    import chess
+
+    engine = LichessEngine()
+    engine.raw_clocks_ms = {"white": 2000, "black": 5000}
+    engine.clocks_updated_at = time.time() - 3600.0
+    engine.board = chess.Board()
+
+    result = engine.get_interpolated_clocks()
+    assert result["white"] == 0
+    assert result["black"] == 5000
+
+
+def test_get_interpolated_clocks_passthrough_when_no_timestamp():
+    """Without a timestamp (no stream event yet) raw values pass through as ints."""
+    engine = LichessEngine()
+    engine.raw_clocks_ms = {"white": 61234, "black": None}
+    engine.clocks_updated_at = None
+
+    result = engine.get_interpolated_clocks()
+    assert result == {"white": 61234, "black": None}
+
+
+def test_get_interpolated_clocks_passthrough_without_board():
+    """With no board to identify side-to-move, no interpolation occurs."""
+    engine = LichessEngine()
+    engine.raw_clocks_ms = {"white": 60000, "black": 30000}
+    engine.clocks_updated_at = time.time() - 10.0
+    engine.board = None
+
+    result = engine.get_interpolated_clocks()
+    assert result == {"white": 60000, "black": 30000}
