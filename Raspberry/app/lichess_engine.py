@@ -134,6 +134,8 @@ class LichessEngine:
         self.board: chess.Board = chess.Board()
         self.clocks: dict[str, str] = {"white": "?", "black": "?"}
         self.raw_clocks_ms: dict[str, int | float | None] = {"white": None, "black": None}
+        self.initial_clocks_ms: dict[str, int | None] = {"white": None, "black": None}
+        self.clocks_updated_at: float | None = None
         self.game_info: dict[str, Any] = {
             "game_id": None,
             "rated": False,
@@ -962,6 +964,8 @@ class LichessEngine:
         wtime = state_data.get("wtime")
         btime = state_data.get("btime")
         self.raw_clocks_ms = {"white": wtime, "black": btime}
+        self.initial_clocks_ms = {"white": wtime, "black": btime}
+        self.clocks_updated_at = time.time()
         self.clocks = {
             "white": format_clock_ms(wtime),
             "black": format_clock_ms(btime),
@@ -996,6 +1000,7 @@ class LichessEngine:
         wtime = event.get("wtime")
         btime = event.get("btime")
         self.raw_clocks_ms = {"white": wtime, "black": btime}
+        self.clocks_updated_at = time.time()
         self.clocks = {
             "white": format_clock_ms(wtime),
             "black": format_clock_ms(btime),

@@ -57,6 +57,11 @@ COLOR_MOVE_BLUNDER = (220, 24, 40)    # Crimson / Red for Blunder
 COLOR_EVAL_WHITE = (80, 80, 100)      # Cool light tone for White advantage
 COLOR_EVAL_BLACK = (10, 20, 60)       # Dim navy tone for Black advantage
 
+# Chess Clock Drain Bar Colors — (R, G, B) tuples (subtle, scaled for low power)
+COLOR_CLOCK_OK = (0, 80, 32)          # Dim emerald green for ample time remaining
+COLOR_CLOCK_WARN = (96, 64, 0)        # Dim amber/orange for low time warning
+COLOR_CLOCK_CRIT = (88, 8, 8)         # Dim red for critical time scramble
+
 # Active Player Turn Ambient Indicator Colors — (R, G, B) tuples (subtle breathing halo on active King)
 COLOR_TURN_WHITE = (140, 130, 90)     # Warm ivory tone for White's turn King
 COLOR_TURN_BLACK = (20, 70, 140)      # Cool azure tone for Black's turn King
@@ -134,6 +139,11 @@ COLOR_NIGHT_MOVE_BLUNDER = (255, 30, 40)  # Laser Crimson for Blunder
 COLOR_NIGHT_EVAL_WHITE = (150, 150, 190)  # Bright pearl silver for White advantage
 COLOR_NIGHT_EVAL_BLACK = (60, 10, 95)  # Velvet violet for Black advantage (distinct from blue floor)
 COLOR_NIGHT_EVAL_NEUTRAL = (40, 35, 60)  # Neutral midpoint
+
+# Chess Clock Drain Bar
+COLOR_NIGHT_CLOCK_OK = (0, 230, 110)  # Vivid neon emerald for ample time remaining
+COLOR_NIGHT_CLOCK_WARN = (255, 180, 0)  # Vivid goldenrod for low time warning
+COLOR_NIGHT_CLOCK_CRIT = (255, 20, 20)  # Laser red for critical time scramble
 
 # Lifecycle & Animation Colors
 COLOR_NIGHT_DRAW_BLUE = (0, 140, 255)  # Luminous sky sapphire for draw curtain

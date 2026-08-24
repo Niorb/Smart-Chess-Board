@@ -26,6 +26,7 @@ from app.led_animations import (
     create_animation,
     render_board_ready,
     render_castle_trace,
+    render_clock_bar,
     render_game_drawn,
     render_game_lost,
     render_game_started,
@@ -37,7 +38,13 @@ from app.led_animations import (
 )
 from app.led_helpers import (
     COLOR_INT_CAPTURE_TRACE,
+    COLOR_INT_CLOCK_CRIT,
+    COLOR_INT_CLOCK_OK,
+    COLOR_INT_CLOCK_WARN,
     COLOR_INT_MOVE_TRACE,
+    COLOR_INT_NIGHT_CLOCK_CRIT,
+    COLOR_INT_NIGHT_CLOCK_OK,
+    COLOR_INT_NIGHT_CLOCK_WARN,
     COLOR_INT_OPPONENT_CAPTURE,
     get_led_indices,
 )
@@ -560,3 +567,173 @@ def test_render_analysis_computing_power_budget_and_night_mode():
 
 
 
+
+
+# =============================================================================
+# Chess Clock Drain Bars (render_clock_bar)
+# =============================================================================
+
+CLOCK_OK_COLOR = color_rgb(10, 200, 20)
+CLOCK_WARN_COLOR = color_rgb(220, 140, 10)
+CLOCK_CRIT_COLOR = color_rgb(200, 30, 30)
+
+
+def _clock_bar_lit_rows(frame, col):
+    """Return the sorted list of rows lit on a file column in the frame."""
+    lit = []
+    for r in range(8):
+        if any(frame[idx] != 0 for idx in get_led_indices(r, col) if idx < len(frame)):
+            lit.append(r)
+    return lit
+
+
+def test_render_clock_bar_guards_invalid_inputs():
+    """None remaining/total and non-positive totals must leave the frame untouched."""
+    for remaining, total in [(None, 300.0), (120.0, None), (120.0, 0.0), (120.0, -5.0)]:
+        frame = [0] * NUM_LEDS
+        render_clock_bar(1.0, frame, 7, remaining, total, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+        assert not any(frame), f"frame must stay unlit for remaining={remaining}, total={total}"
+
+
+def test_render_clock_bar_full_bar_frac_one():
+    """frac=1.0 lights all 8 rows at full ok brightness with no pulse scaling."""
+    now = 12.34
+    frame = [0] * NUM_LEDS
+    render_clock_bar(now, frame, 7, 600.0, 600.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert _clock_bar_lit_rows(frame, 7) == list(range(8))
+    for r in range(8):
+        for idx in get_led_indices(r, 7):
+            assert frame[idx] == CLOCK_OK_COLOR
+
+
+def test_render_clock_bar_flag_fall_dark():
+    """At exact flag-fall (frac=0) nothing is painted on the clock file (current behavior)."""
+    frame = [0] * NUM_LEDS
+    render_clock_bar(1.0, frame, 7, 0.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert not any(frame)
+
+
+def test_render_clock_bar_clamps_negative_and_huge_remaining():
+    """Negative remaining clamps to flag-fall (dark); huge remaining clamps to a full bar."""
+    frame_neg = [0] * NUM_LEDS
+    render_clock_bar(1.0, frame_neg, 3, -42.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert not any(frame_neg)
+
+    frame_big = [0] * NUM_LEDS
+    render_clock_bar(1.0, frame_big, 3, 10_000.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert _clock_bar_lit_rows(frame_big, 3) == list(range(8))
+    for r in range(8):
+        for idx in get_led_indices(r, 3):
+            assert frame_big[idx] == CLOCK_OK_COLOR
+
+
+def test_render_clock_bar_truncation_half():
+    """frac=0.5 -> exactly rows 0-3 lit via truncation, with no fractional edge square."""
+    frame = [0] * NUM_LEDS
+    render_clock_bar(3.3, frame, 0, 150.0, 300.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert _clock_bar_lit_rows(frame, 0) == [0, 1, 2, 3]
+    for r in range(4):
+        for idx in get_led_indices(r, 0):
+            assert frame[idx] == CLOCK_OK_COLOR
+
+
+def test_render_clock_bar_fractional_edge_breathing_square():
+    """A partial step lights one dim breathing edge square just above the full squares."""
+    frame = [0] * NUM_LEDS
+    # frac ~0.775: rows 0-5 full, row 6 is the fractional edge
+    render_clock_bar(2.0, frame, 4, 310.0, 400.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert _clock_bar_lit_rows(frame, 4) == [0, 1, 2, 3, 4, 5, 6]
+    full_idx = get_led_indices(0, 4)[0]
+    edge_idx = get_led_indices(6, 4)[0]
+    assert 0 < frame[edge_idx] < frame[full_idx]
+
+
+def _clock_is_scaled_variant(color_int: int, base: int) -> bool:
+    """True if color_int equals scale_color(base, f) for some factor f in [0, 1]."""
+    return any(scale_color(base, i / 1000.0) == color_int for i in range(1001))
+
+
+def test_render_clock_bar_urgency_thresholds():
+    """
+    Urgency bands use strict > comparisons:
+      - frac > 0.25 -> ok
+      - 0.10 < frac <= 0.25 -> warn
+      - frac <= 0.10 -> crit (pulsing)
+    Every rendered pixel must be the exact base color or a brightness-scaled
+    variant of the band's base color.
+    """
+    cases = [
+        (0.26, CLOCK_OK_COLOR),
+        (0.251, CLOCK_OK_COLOR),
+        (0.25, CLOCK_WARN_COLOR),
+        (0.11, CLOCK_WARN_COLOR),
+        (0.101, CLOCK_WARN_COLOR),
+        (0.10, CLOCK_CRIT_COLOR),
+        (0.05, CLOCK_CRIT_COLOR),
+    ]
+    for frac, base in cases:
+        frame = [0] * NUM_LEDS
+        render_clock_bar(1.0, frame, 2, frac * 100.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+        colors = {frame[idx] for r in range(8) for idx in get_led_indices(r, 2) if idx < len(frame)}
+        colors.discard(0)
+        assert colors, f"No colors rendered for frac={frac}"
+        for c in colors:
+            assert _clock_is_scaled_variant(c, base), (
+                f"Color {unpack_rgb(c)} at frac={frac} is not a scaled variant of {unpack_rgb(base)}"
+            )
+        # Bands never bleed into each other's exact palettes
+        others = {CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR} - {base}
+        for c in colors:
+            for o in others:
+                assert not _clock_is_scaled_variant(c, o), f"Band crossover at frac={frac}: {unpack_rgb(c)}"
+
+
+def test_render_clock_bar_crit_pulse_stays_nonzero():
+    """The critical pulse must never fully blank the bar across two pulse periods."""
+    for i in range(50):
+        ts = i * 0.05  # covers 2.5 s of the 0.5 s sine pulse period
+        frame = [0] * NUM_LEDS
+        render_clock_bar(ts, frame, 0, 5.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+        vals = [frame[idx] for idx in get_led_indices(0, 0) if idx < len(frame)]
+        assert any(v != 0 for v in vals), f"Crit square went dark at t={ts}"
+
+
+def test_render_clock_bar_urgency_colors_differ_per_band():
+    """Same square, same timestamp: ok / warn / crit bands must produce distinct colors."""
+    rendered = []
+    for remaining in [80.0, 20.0, 5.0]:  # fracs 0.8, 0.2, 0.05 -> ok, warn, crit
+        frame = [0] * NUM_LEDS
+        render_clock_bar(7.77, frame, 1, remaining, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+        row0 = {frame[idx] for idx in get_led_indices(0, 1) if idx < len(frame)}
+        row0.discard(0)
+        assert len(row0) == 1
+        rendered.append(row0.pop())
+    assert len(set(rendered)) == 3, f"Urgency bands must differ, got {rendered}"
+
+
+def test_render_clock_bar_columns_target_distinct_files():
+    """col 0 (a-file) and col 7 (h-file) paint disjoint LED index sets."""
+    indices_a = {idx for r in range(8) for idx in get_led_indices(r, 0) if idx < NUM_LEDS}
+    indices_h = {idx for r in range(8) for idx in get_led_indices(r, 7) if idx < NUM_LEDS}
+    assert indices_a.isdisjoint(indices_h)
+
+    frame_a = [0] * NUM_LEDS
+    render_clock_bar(1.0, frame_a, 0, 50.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    frame_h = [0] * NUM_LEDS
+    render_clock_bar(1.0, frame_h, 7, 50.0, 100.0, CLOCK_OK_COLOR, CLOCK_WARN_COLOR, CLOCK_CRIT_COLOR)
+    assert _clock_bar_lit_rows(frame_a, 0) == list(range(4))
+    assert _clock_bar_lit_rows(frame_a, 7) == []
+    assert _clock_bar_lit_rows(frame_h, 7) == list(range(4))
+    assert _clock_bar_lit_rows(frame_h, 0) == []
+
+
+def test_clock_color_palettes_day_and_night_defined_and_distinct():
+    """Day and night clock palettes exist, are distinct from each other and cross-band."""
+    palettes = [
+        (COLOR_INT_CLOCK_OK, COLOR_INT_CLOCK_WARN, COLOR_INT_CLOCK_CRIT),
+        (COLOR_INT_NIGHT_CLOCK_OK, COLOR_INT_NIGHT_CLOCK_WARN, COLOR_INT_NIGHT_CLOCK_CRIT),
+    ]
+    for day, night in zip(*palettes):
+        assert day != night
+    for ok_c, warn_c, crit_c in palettes:
+        assert len({ok_c, warn_c, crit_c}) == 3

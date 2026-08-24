@@ -1094,3 +1094,45 @@ def render_opponent_disconnected(
             set_square_in_frame(
                 frame, c, gauge_rank, scale_color(COLOR_INT_OPPONENT_DISCONNECTED, 0.55 * rem * edge_pulse)
             )
+
+
+def render_clock_bar(
+    now: float,
+    frame: list[int],
+    col: int,
+    remaining_s: float | None,
+    total_s: float | None,
+    ok_color: int,
+    warn_color: int,
+    crit_color: int,
+) -> None:
+    """Draining chess-clock bar along a file (col 0 = black/a-file, col 7 = white/h-file).
+
+    Painted early in the PLAYING layer stack so piece-move highlights overwrite it.
+    NOTE: render_opponent_disconnected paints the back ranks incl. cols 0/7 later in
+    the frame and intentionally overwrites the clock-bar end squares.
+    """
+    if total_s is None or total_s <= 0 or remaining_s is None:
+        return
+    frac = min(1.0, max(0.0, remaining_s / total_s))
+    n_lit = int(frac * 8)
+
+    if frac > 0.25:
+        urgency_color = ok_color
+    elif frac > 0.10:
+        urgency_color = warn_color
+    else:
+        urgency_color = crit_color
+
+    if urgency_color == crit_color:
+        pulse = math.sin(now * 4.0 * math.pi) * 0.5 + 0.5
+        intensity = 0.65 + 0.35 * pulse
+        urgency_color = scale_color(urgency_color, intensity)
+
+    for r in range(n_lit):
+        set_square_in_frame(frame, col, r, urgency_color)
+
+    rem = frac * 8 - n_lit
+    if n_lit < 8 and rem > 0:
+        edge_pulse = math.sin(now * 5.0) * 0.2 + 0.8
+        set_square_in_frame(frame, col, n_lit, scale_color(urgency_color, rem * edge_pulse))

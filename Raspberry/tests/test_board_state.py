@@ -565,3 +565,203 @@ def test_board_state_setup_ready_cancellation_on_lift():
 
 
 
+
+
+# =============================================================================
+# Chess Clock Drain Bars (PLAYING mode, files a/h) & eval-bar fallback
+# =============================================================================
+
+def _seed_clock_state(raw_white_ms, raw_black_ms, initial_white_ms, initial_black_ms, updated_at):
+    """Seed the global lichess engine singleton with a deterministic clock state."""
+    from app.lichess_engine import lichess_engine
+    lichess_engine.raw_clocks_ms = {"white": raw_white_ms, "black": raw_black_ms}
+    lichess_engine.initial_clocks_ms = {"white": initial_white_ms, "black": initial_black_ms}
+    lichess_engine.clocks_updated_at = updated_at
+
+
+class _ClockStateSnapshot:
+    """Saves/restores the global lichess engine fields mutated by clock-bar tests."""
+
+    FIELDS = ("board", "raw_clocks_ms", "initial_clocks_ms", "clocks_updated_at", "opponent_gone")
+
+    def __enter__(self):
+        from app.lichess_engine import lichess_engine
+        self._engine = lichess_engine
+        self._saved = {f: getattr(lichess_engine, f, None) for f in self.FIELDS}
+        for f in self.FIELDS:
+            if isinstance(self._saved[f], dict):
+                self._saved[f] = dict(self._saved[f])
+        return self
+
+    def __exit__(self, *exc):
+        for f, value in self._saved.items():
+            setattr(self._engine, f, value)
+        return False
+
+
+def _lit_colors_by_index(strip):
+    """Map LED index -> last nonzero color written by setPixelColor during flush_frame."""
+    lit = {}
+    for c in strip.setPixelColor.call_args_list:
+        if c.args[1] != 0:
+            lit[c.args[0]] = c.args[1]
+    return lit
+
+
+def _lit_ranks_for_file(lit_by_idx, file_idx):
+    """Return ranks whose square on the given file received at least one nonzero LED."""
+    from app.led_helpers import get_led_indices
+    return [
+        rank
+        for rank in range(8)
+        if any(idx in lit_by_idx for idx in get_led_indices(rank, file_idx))
+    ]
+
+
+def test_board_state_clock_bars_render_and_suppress_eval_bar():
+    """
+    With valid clock state during PLAYING, files a/h render chess-clock drain bars
+    (COLOR_INT_CLOCK_OK) and the perimeter eval bar is fully suppressed.
+    """
+    import chess
+    from app.lichess_engine import lichess_engine
+    from app.led_helpers import (
+        COLOR_INT_CLOCK_OK,
+        COLOR_INT_EVAL_BLACK,
+        COLOR_INT_EVAL_WHITE,
+        COLOR_INT_NIGHT_CLOCK_CRIT,
+        COLOR_INT_NIGHT_CLOCK_OK,
+        COLOR_INT_NIGHT_CLOCK_WARN,
+        COLOR_INT_NIGHT_EVAL_BLACK,
+        COLOR_INT_NIGHT_EVAL_WHITE,
+        get_led_indices,
+    )
+
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+
+    with _ClockStateSnapshot():
+        # White to move; white has full time, black has drained half its clock.
+        lichess_engine.board = chess.Board()
+        _seed_clock_state(60000, 30000, 60000, 60000, time.time())
+        lichess_engine.opponent_gone = None
+
+        bsm._update_leds()
+
+        assert bsm.strip.setPixelColor.called
+        assert bsm.strip.show.called
+
+        lit_by_idx = _lit_colors_by_index(bsm.strip)
+        all_colors = {c.args[1] for c in bsm.strip.setPixelColor.call_args_list}
+
+        # White clock bar: h-file (file 7) at frac=1.0 -> all 8 ranks in clock-ok green
+        assert _lit_ranks_for_file(lit_by_idx, 7) == list(range(8))
+        for rank in range(8):
+            for idx in get_led_indices(rank, 7):
+                if idx in lit_by_idx:
+                    assert lit_by_idx[idx] == COLOR_INT_CLOCK_OK
+
+        # Black clock bar: a-file (file 0) at frac=0.5 -> truncated to ranks 0-3
+        assert _lit_ranks_for_file(lit_by_idx, 0) == [0, 1, 2, 3]
+        for rank in range(4):
+            for idx in get_led_indices(rank, 0):
+                if idx in lit_by_idx:
+                    assert lit_by_idx[idx] == COLOR_INT_CLOCK_OK
+
+        # Eval bar must be suppressed entirely (day AND night palette colors absent)
+        for banned in (
+            COLOR_INT_EVAL_WHITE,
+            COLOR_INT_EVAL_BLACK,
+            COLOR_INT_NIGHT_EVAL_WHITE,
+            COLOR_INT_NIGHT_EVAL_BLACK,
+            COLOR_INT_NIGHT_CLOCK_OK,
+            COLOR_INT_NIGHT_CLOCK_WARN,
+            COLOR_INT_NIGHT_CLOCK_CRIT,
+        ):
+            assert banned not in all_colors, f"Unexpected color {banned} while clock bars active"
+
+
+def test_board_state_eval_bar_fallback_when_clock_bar_disabled():
+    """
+    With clock_bar_enabled=False and otherwise-valid clock state, the legacy
+    eval-bar path still renders on file h and no clock colors appear.
+    """
+    from board_hardware import settings
+    from app.lichess_engine import lichess_engine
+    from app.led_helpers import (
+        COLOR_INT_CLOCK_OK,
+        COLOR_INT_EVAL_BLACK,
+        COLOR_INT_EVAL_WHITE,
+        get_led_indices,
+    )
+
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    settings["clock_bar_enabled"] = False
+
+    with _ClockStateSnapshot():
+        # Clock state is deliberately VALID so only the setting gates the fallback.
+        lichess_engine.board = chess.Board()
+        _seed_clock_state(60000, 30000, 60000, 60000, time.time())
+        lichess_engine.opponent_gone = None
+
+        bsm._update_leds()
+
+        assert bsm.strip.setPixelColor.called
+        assert bsm.strip.show.called
+
+        lit_by_idx = _lit_colors_by_index(bsm.strip)
+        all_colors = {c.args[1] for c in bsm.strip.setPixelColor.call_args_list}
+
+        # Eval bar renders on file h: win_chance defaults to 50 -> 4 white / 4 black rows
+        h_ranks = _lit_ranks_for_file(lit_by_idx, 7)
+        assert h_ranks == list(range(8))
+        h_colors = {lit_by_idx[idx] for rank in range(8) for idx in get_led_indices(rank, 7) if idx in lit_by_idx}
+        assert COLOR_INT_EVAL_WHITE in h_colors
+        assert COLOR_INT_EVAL_BLACK in h_colors
+
+        # No clock-bar rendering anywhere (a-file stays dark too)
+        assert COLOR_INT_CLOCK_OK not in all_colors
+        assert _lit_ranks_for_file(lit_by_idx, 0) == []
+
+
+def test_board_state_clock_interpolation_side_to_move_drains():
+    """
+    Only the side-to-move clock interpolates forward: with clocks_updated_at 40 s
+    in the past, white's h-file bar drains to ~1/3 (3 ranks incl. breathing edge)
+    while black's static a-file bar stays at half (4 ranks).
+    """
+    import chess
+    from board_hardware import settings
+    from app.lichess_engine import lichess_engine
+    from app.led_helpers import COLOR_INT_CLOCK_OK
+
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "PLAYING"
+    settings["clock_bar_enabled"] = True
+
+    with _ClockStateSnapshot():
+        lichess_engine.board = chess.Board()  # white to move
+        _seed_clock_state(60000, 30000, 60000, 60000, time.time() - 40.0)
+        lichess_engine.opponent_gone = None
+
+        bsm._update_leds()
+
+        lit_by_idx = _lit_colors_by_index(bsm.strip)
+
+        # White remaining ~= 20 s of 60 s -> frac ~0.333 -> ranks 0-2 lit (edge at 2)
+        white_ranks = _lit_ranks_for_file(lit_by_idx, 7)
+        assert white_ranks == [0, 1, 2], f"White stm bar should drain to 3 ranks, got {white_ranks}"
+
+        # Black clock is NOT running -> stays at frac=0.5 -> ranks 0-3 lit
+        black_ranks = _lit_ranks_for_file(lit_by_idx, 0)
+        assert black_ranks == [0, 1, 2, 3], f"Black static bar should hold 4 ranks, got {black_ranks}"
+
+        assert len(white_ranks) < len(black_ranks)
+
+        # Full squares on both bars use the ok urgency band (>0.25 fraction)
+        assert lit_by_idx.get(get_led_indices(0, 7)[0]) == COLOR_INT_CLOCK_OK
+        assert lit_by_idx.get(get_led_indices(0, 0)[0]) == COLOR_INT_CLOCK_OK

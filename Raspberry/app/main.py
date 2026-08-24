@@ -128,6 +128,7 @@ class ThresholdSettings(BaseModel):
     pieces_mode: str | None = None  # "auto" | "pieces" | "empty"
     coach_hints_enabled: bool | None = None
     eval_bar_enabled: bool | None = None
+    clock_bar_enabled: bool | None = None
     coach_ai_only: bool | None = None
     in_loop_calibration: bool | None = None
     led_intensity: int | float | None = None
@@ -256,6 +257,8 @@ def apply_settings(body: ThresholdSettings) -> None:
         settings["coach_hints_enabled"] = bool(body.coach_hints_enabled)
     if body.eval_bar_enabled is not None:
         settings["eval_bar_enabled"] = bool(body.eval_bar_enabled)
+    if body.clock_bar_enabled is not None:
+        settings["clock_bar_enabled"] = bool(body.clock_bar_enabled)
     if body.coach_ai_only is not None:
         settings["coach_ai_only"] = bool(body.coach_ai_only)
     if body.in_loop_calibration is not None:

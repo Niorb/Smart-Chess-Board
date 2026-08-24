@@ -79,6 +79,7 @@ from app.led_animations import (
     render_analysis_computing,
     render_capture_aura,
     render_castle_trace,
+    render_clock_bar,
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
@@ -91,6 +92,9 @@ from app.led_helpers import (
     COLOR_INT_CAPTURE_CONFIRM,
     COLOR_INT_CAPTURE_TRACE,
     COLOR_INT_CHECK,
+    COLOR_INT_CLOCK_CRIT,
+    COLOR_INT_CLOCK_OK,
+    COLOR_INT_CLOCK_WARN,
     COLOR_INT_EVAL_BLACK,
     COLOR_INT_EVAL_WHITE,
     COLOR_INT_GUARDRAIL_MISSING,
@@ -1091,6 +1095,9 @@ class BoardStateManager:
             c_illegal = COLOR_INT_NIGHT_ILLEGAL if night_mode else COLOR_INT_ILLEGAL
             c_eval_white = COLOR_INT_NIGHT_EVAL_WHITE if night_mode else COLOR_INT_EVAL_WHITE
             c_eval_black = COLOR_INT_NIGHT_EVAL_BLACK if night_mode else COLOR_INT_EVAL_BLACK
+            c_clock_ok = COLOR_INT_NIGHT_CLOCK_OK if night_mode else COLOR_INT_CLOCK_OK
+            c_clock_warn = COLOR_INT_NIGHT_CLOCK_WARN if night_mode else COLOR_INT_CLOCK_WARN
+            c_clock_crit = COLOR_INT_NIGHT_CLOCK_CRIT if night_mode else COLOR_INT_CLOCK_CRIT
             c_move_best = COLOR_INT_NIGHT_MOVE_BEST if night_mode else COLOR_INT_MOVE_BEST
             c_move_good = COLOR_INT_NIGHT_MOVE_GOOD if night_mode else COLOR_INT_MOVE_GOOD
             c_move_inacc = COLOR_INT_NIGHT_MOVE_INACCURACY if night_mode else COLOR_INT_MOVE_INACCURACY
@@ -1215,9 +1222,37 @@ class BoardStateManager:
                 coach_ai_only = settings.get("coach_ai_only", True)
                 fair_play_active = coach_ai_only and not is_ai
                 eval_bar_enabled = settings.get("eval_bar_enabled", True)
+                clock_bar_enabled = settings.get("clock_bar_enabled", True)
 
-                # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
-                if eval_bar_enabled and not fair_play_active and getattr(lichess_engine, "board", None):
+                raw_clocks = lichess_engine.raw_clocks_ms
+                updated_at = lichess_engine.clocks_updated_at
+                initial_clocks = lichess_engine.initial_clocks_ms
+                clocks_ready = (
+                    updated_at is not None
+                    and getattr(lichess_engine, "board", None)
+                    and all(
+                        raw_clocks[c] is not None
+                        and initial_clocks[c] is not None
+                        and initial_clocks[c] > 0
+                        for c in ("white", "black")
+                    )
+                )
+
+                # 0. Chess Clock Drain Bars (Files a/h) or Live Perimeter Evaluation Bar (File h)
+                if clock_bar_enabled and clocks_ready:
+                    stm = "white" if lichess_engine.board.turn == chess.WHITE else "black"
+                    elapsed = now - updated_at
+                    white_total_s = initial_clocks["white"] / 1000.0
+                    black_total_s = initial_clocks["black"] / 1000.0
+                    white_remaining_s = (
+                        max(0.0, raw_clocks["white"] / 1000.0 - elapsed) if stm == "white" else raw_clocks["white"] / 1000.0
+                    )
+                    black_remaining_s = (
+                        max(0.0, raw_clocks["black"] / 1000.0 - elapsed) if stm == "black" else raw_clocks["black"] / 1000.0
+                    )
+                    render_clock_bar(now, frame, 0, black_remaining_s, black_total_s, c_clock_ok, c_clock_warn, c_clock_crit)
+                    render_clock_bar(now, frame, 7, white_remaining_s, white_total_s, c_clock_ok, c_clock_warn, c_clock_crit)
+                elif eval_bar_enabled and not fair_play_active and getattr(lichess_engine, "board", None):
                     fen = lichess_engine.board.fen()
                     cached_eval = coach_engine.get_cached_evaluation(fen)
                     win_chance = cached_eval.win_chance if cached_eval else 50.0

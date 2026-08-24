@@ -126,6 +126,7 @@ def get_default_settings() -> dict[str, Any]:
         "pieces_mode": "auto",  # "auto" | "pieces" | "empty"
         "coach_hints_enabled": True,
         "eval_bar_enabled": True,
+        "clock_bar_enabled": True,
         "coach_ai_only": True,
         "in_loop_calibration": True,
         "led_intensity": 100,
