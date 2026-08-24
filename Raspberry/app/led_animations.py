@@ -1275,18 +1275,24 @@ def render_promotion_scepter(
     )
     if root_sq is None:
         to_c = promo_state.get("to_col")
-        to_r = promo_state.get("to_row")
-        if to_c is not None and to_r is not None:
-            root_sq = (int(to_c), int(to_r))
-        elif "to_col" in params and "to_row" in params:
-            root_sq = (int(params["to_col"]), int(params["to_row"]))
+    col_root = COLOR_INT_NIGHT_PROMO_ROOT if is_night else COLOR_INT_PROMO_ROOT
+    power_scale = 0.40 if is_night else 0.48
 
-    if root_sq is not None and len(root_sq) == 2:
+    piece_colors = {
+        "q": COLOR_INT_NIGHT_PROMO_QUEEN if is_night else COLOR_INT_PROMO_QUEEN,
+        "n": COLOR_INT_NIGHT_PROMO_KNIGHT if is_night else COLOR_INT_PROMO_KNIGHT,
+        "r": COLOR_INT_NIGHT_PROMO_ROOK if is_night else COLOR_INT_PROMO_ROOK,
+        "b": COLOR_INT_NIGHT_PROMO_BISHOP if is_night else COLOR_INT_PROMO_BISHOP,
+    }
+
+    # 1. Root Square Halo & Progress Indicator
+    root_sq = promo_state.get("root_square") or promo_state.get("to") or promo_state.get("dest")
+    if root_sq and isinstance(root_sq, (tuple, list)) and len(root_sq) == 2:
         root_c, root_r = int(root_sq[0]), int(root_sq[1])
         if 0 <= root_c < 8 and 0 <= root_r < 8:
             timeout_s = float(
                 promo_state.get("timeout_s")
-                or promo_state.get("timeout")
+                or promo_state.get("duration_s")
                 or promo_state.get("total_time")
                 or 10.0
             )
@@ -1304,7 +1310,7 @@ def render_promotion_scepter(
             # Pulse rate accelerates as countdown expires (2 Hz -> 6 Hz)
             pulse_freq = 2.0 + (1.0 - time_frac) * 4.0
             root_pulse = math.sin(now * pulse_freq * 2.0 * math.pi) * 0.5 + 0.5
-            root_intensity = (0.45 + 0.55 * root_pulse) * power_scale * 0.60
+            root_intensity = (0.40 + 0.60 * root_pulse) * power_scale * 0.50
             set_square_in_frame(frame, root_c, root_r, scale_color(col_root, root_intensity))
 
     # 2. Piece Selection Options Breathing Halos
@@ -1328,7 +1334,7 @@ def render_promotion_scepter(
 
             # Harmonious breathing oscillation (~0.6 Hz)
             breath_wave = math.sin(now * 3.8 + phase) * 0.5 + 0.5
-            opt_intensity = (0.35 + 0.65 * breath_wave) * power_scale * 0.70
+            opt_intensity = (0.35 + 0.65 * breath_wave) * power_scale * 0.55
             set_square_in_frame(frame, opt_c, opt_r, scale_color(opt_col, opt_intensity))
 
 
@@ -1348,16 +1354,16 @@ def render_uncharted_novelty(
     is_night = bool(params.get("night_mode", False))
 
     col_flare = COLOR_INT_NIGHT_NOVELTY_FLARE if is_night else COLOR_INT_NOVELTY_FLARE
-    power_scale = 0.55 if is_night else 0.65
+    power_scale = 0.50 if is_night else 0.60
 
     c0, r0 = int(center_coord[0]), int(center_coord[1])
     if not (0 <= c0 < 8 and 0 <= r0 < 8):
         return
 
-    # Expanding wavefront radius (0.0 to 3.0 squares)
-    wave_radius = p * 3.0
+    # Expanding wavefront radius (0.0 to 2.6 squares)
+    wave_radius = p * 2.6
     # Temporal exponential decay envelope
-    envelope = math.exp(-3.8 * p)
+    envelope = math.exp(-4.2 * p)
 
     min_c = max(0, c0 - 3)
     max_c = min(7, c0 + 3)
@@ -1367,14 +1373,14 @@ def render_uncharted_novelty(
     for c in range(min_c, max_c + 1):
         for r in range(min_r, max_r + 1):
             dist = math.hypot(c - c0, r - r0)
-            if dist > 3.2:
+            if dist > 3.0:
                 continue
 
             dr = dist - wave_radius
-            # Spatial Gaussian ring profile
-            ring_int = math.exp(-4.5 * dr * dr)
+            # Tight spatial Gaussian ring profile
+            ring_int = math.exp(-7.5 * dr * dr)
             sq_int = envelope * ring_int * power_scale
 
-            if sq_int > 0.035:
+            if sq_int > 0.05:
                 clamped_int = min(1.0, sq_int)
                 set_square_in_frame(frame, c, r, scale_color(col_flare, clamped_int))

@@ -495,9 +495,6 @@ def get_opening_info(
                 pass
         book_moves.sort(key=lambda c: (c.weight, c.percentage), reverse=True)
 
-    if not out_of_book and len(book_moves) == 0 and len(moves) > 0:
-        out_of_book = True
-
     return OpeningInfo(
         eco=last_known_node.eco,
         name=last_known_node.name,
