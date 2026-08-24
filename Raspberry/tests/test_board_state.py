@@ -642,9 +642,10 @@ def test_board_state_clock_bars_render_and_suppress_eval_bar():
     bsm.game_status = "PLAYING"
 
     with _ClockStateSnapshot():
-        # White to move; white has full time, black has drained half its clock.
+        # White to move; white has full time (raw > initial clamps to a full,
+        # unscaled bar despite the tiny interpolation elapsed), black half drained.
         lichess_engine.board = chess.Board()
-        _seed_clock_state(60000, 30000, 60000, 60000, time.time())
+        _seed_clock_state(61000, 30000, 60000, 60000, time.time())
         lichess_engine.opponent_gone = None
 
         bsm._update_leds()
@@ -703,6 +704,8 @@ def test_board_state_eval_bar_fallback_when_clock_bar_disabled():
 
     with _ClockStateSnapshot():
         # Clock state is deliberately VALID so only the setting gates the fallback.
+        import chess
+
         lichess_engine.board = chess.Board()
         _seed_clock_state(60000, 30000, 60000, 60000, time.time())
         lichess_engine.opponent_gone = None
@@ -736,7 +739,7 @@ def test_board_state_clock_interpolation_side_to_move_drains():
     import chess
     from board_hardware import settings
     from app.lichess_engine import lichess_engine
-    from app.led_helpers import COLOR_INT_CLOCK_OK
+    from app.led_helpers import COLOR_INT_CLOCK_OK, get_led_indices
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
