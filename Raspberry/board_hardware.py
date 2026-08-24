@@ -131,6 +131,9 @@ def get_default_settings() -> dict[str, Any]:
         "in_loop_calibration": True,
         "led_intensity": 100,
         "night_mode": False,
+        "auto_queen_timeout_s": 5.0,
+        "opening_hints_enabled": True,
+        "max_sideline_hints": 2,
         "last_game_params": None,
     }
 

@@ -316,10 +316,15 @@ export async function startBlunderDrill(index: number = 0) {
   return jsonPost('/analysis/blunder_drill/start', { index });
 }
 
-export async function submitBlunderAttempt(uci: string) {
-  return jsonPost('/analysis/blunder_drill/attempt', { uci });
-}
-
 export async function toggleBlunderHint() {
   return jsonPost('/analysis/blunder_drill/hint');
+}
+
+export async function resolvePromotion(piece: 'q' | 'n' | 'r' | 'b' = 'q') {
+  return jsonPost<{ status: string; piece: string }>('/game/promote', { piece });
+}
+
+export async function lookupOpening(moves: string[] = []) {
+  const query = encodeURIComponent(moves.join(','));
+  return request(`/openings/lookup?moves=${query}`);
 }

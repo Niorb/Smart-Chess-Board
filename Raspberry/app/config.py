@@ -96,6 +96,16 @@ COLOR_MINT_EMERALD = (0, 220, 140)    # Mint Emerald for Best Move in Analysis (
 COLOR_AZURE = (0, 160, 255)           # Cyan Azure for Good Move in Analysis (15 < delta <= 60 cp)
 COLOR_ROYAL_VIOLET = (140, 40, 240)   # Royal Violet for Analysis Divergence Anchor & Corner Beacons
 
+# Royal Promotion Scepter (Day Mode)
+COLOR_PROMO_ROOT = (255, 230, 160)      # Warm Gold halo on promotion square
+COLOR_PROMO_QUEEN = (140, 40, 240)     # Royal Violet
+COLOR_PROMO_KNIGHT = (0, 220, 140)     # Mint Emerald
+COLOR_PROMO_ROOK = (0, 160, 255)       # Azure Cyan
+COLOR_PROMO_BISHOP = (220, 140, 0)     # Warm Sun Amber
+
+# Cartographer's Path / Opening Novelty Flare (Day Mode)
+COLOR_NOVELTY_FLARE = (255, 200, 40)   # Luminous golden solar flare for uncharted novelty moves
+
 # =============================================================================
 # NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
 # (Engineered for crystal-clear contrast and vibrancy against moonlight blue floor)
@@ -165,6 +175,16 @@ COLOR_NIGHT_MINT_EMERALD = (0, 255, 160)  # Vivid neon mint emerald (Night Mode)
 COLOR_NIGHT_AZURE = (0, 210, 255)         # Vivid electric cyan azure (Night Mode)
 COLOR_NIGHT_ROYAL_VIOLET = (170, 50, 255) # Luminous royal violet (Night Mode)
 
+# Royal Promotion Scepter (Night Mode - High-Contrast Palettes)
+COLOR_NIGHT_PROMO_ROOT = (240, 210, 120)    # Radiant Warm Gold
+COLOR_NIGHT_PROMO_QUEEN = (170, 50, 255)   # Luminous Royal Violet
+COLOR_NIGHT_PROMO_KNIGHT = (0, 255, 160)   # Vivid Mint Emerald
+COLOR_NIGHT_PROMO_ROOK = (0, 210, 255)     # Vivid Azure Cyan
+COLOR_NIGHT_PROMO_BISHOP = (255, 160, 20)  # Radiant Sun Amber
+
+# Cartographer's Path / Opening Novelty Flare (Night Mode)
+COLOR_NIGHT_NOVELTY_FLARE = (240, 180, 20)  # Vivid Golden Solar Flare
+
 # =============================================================================
 # ANIMATION & TIMING CONSTANTS
 # =============================================================================
@@ -181,4 +201,5 @@ ANIM_BOARD_READY_DURATION_S = 0.5  # Duration for board setup ready snap-flash
 ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
 ANIM_ANALYSIS_COMPUTING_DURATION_S = 10.0  # Duration for analysis computing animation
+ANIM_UNCHARTED_NOVELTY_DURATION_S = 0.35  # High-speed 350ms outward radial starburst pulse
 

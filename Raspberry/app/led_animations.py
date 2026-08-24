@@ -22,6 +22,7 @@ try:
         ANIM_GAME_WON_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
+        ANIM_UNCHARTED_NOVELTY_DURATION_S,
         MOVE_TRACE_PERIOD_S,
     )
     from app.led_helpers import (
@@ -40,13 +41,85 @@ try:
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
         COLOR_INT_NIGHT_DRAW_BLUE,
         COLOR_INT_NIGHT_MODE,
+        COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PROMO_BISHOP,
+        COLOR_INT_NIGHT_PROMO_KNIGHT,
+        COLOR_INT_NIGHT_PROMO_QUEEN,
+        COLOR_INT_NIGHT_PROMO_ROOK,
+        COLOR_INT_NIGHT_PROMO_ROOT,
         COLOR_INT_NIGHT_SEEKING_BODY,
         COLOR_INT_NIGHT_SEEKING_HEAD,
         COLOR_INT_NIGHT_SEEKING_TAIL,
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
+        COLOR_INT_NOVELTY_FLARE,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
+        COLOR_INT_PROMO_BISHOP,
+        COLOR_INT_PROMO_KNIGHT,
+        COLOR_INT_PROMO_QUEEN,
+        COLOR_INT_PROMO_ROOK,
+        COLOR_INT_PROMO_ROOT,
+        COLOR_INT_SEEKING_BODY,
+        COLOR_INT_SEEKING_HEAD,
+        COLOR_INT_SEEKING_TAIL,
+        COLOR_INT_START_BLACK_PRIMARY,
+        COLOR_INT_START_BLACK_SECONDARY,
+        COLOR_INT_START_WHITE_PRIMARY,
+        COLOR_INT_START_WHITE_SECONDARY,
+        COLOR_INT_VICTORY_GOLD,
+        COLOR_INT_VICTORY_GREEN,
+        get_led_indices,
+    )
+except ImportError:
+    from .config import (
+        ANIM_ANALYSIS_COMPUTING_DURATION_S,
+        ANIM_BOARD_READY_DURATION_S,
+        ANIM_CASTLE_PERIOD_S,
+        ANIM_GAME_DRAWN_DURATION_S,
+        ANIM_GAME_LOST_DURATION_S,
+        ANIM_GAME_START_DURATION_S,
+        ANIM_GAME_WON_DURATION_S,
+        ANIM_SEEKING_DURATION_S,
+        ANIM_SEEKING_PERIOD_S,
+        ANIM_UNCHARTED_NOVELTY_DURATION_S,
+        MOVE_TRACE_PERIOD_S,
+    )
+    from .led_helpers import (
+        COLOR_INT_BOARD_READY_AMBIENT,
+        COLOR_INT_BOARD_READY_PRIMARY,
+        COLOR_INT_BOARD_READY_SECONDARY,
+        COLOR_INT_CAPTURE_AURA_ATTACKER,
+        COLOR_INT_CAPTURE_AURA_TARGET,
+        COLOR_INT_DRAW_BLUE,
+        COLOR_INT_DRAW_WHITE,
+        COLOR_INT_GUARDRAIL_MISSING,
+        COLOR_INT_GUARDRAIL_UNEXPECTED,
+        COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
+        COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
+        COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
+        COLOR_INT_NIGHT_DRAW_BLUE,
+        COLOR_INT_NIGHT_MODE,
+        COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PROMO_BISHOP,
+        COLOR_INT_NIGHT_PROMO_KNIGHT,
+        COLOR_INT_NIGHT_PROMO_QUEEN,
+        COLOR_INT_NIGHT_PROMO_ROOK,
+        COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NIGHT_SEEKING_BODY,
+        COLOR_INT_NIGHT_SEEKING_HEAD,
+        COLOR_INT_NIGHT_SEEKING_TAIL,
+        COLOR_INT_NIGHT_START_BLACK_PRIMARY,
+        COLOR_INT_NIGHT_START_BLACK_SECONDARY,
+        COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_OFF,
+        COLOR_INT_OPPONENT_DISCONNECTED,
+        COLOR_INT_PROMO_BISHOP,
+        COLOR_INT_PROMO_KNIGHT,
+        COLOR_INT_PROMO_QUEEN,
+        COLOR_INT_PROMO_ROOK,
+        COLOR_INT_PROMO_ROOT,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
@@ -1152,3 +1225,156 @@ def render_return_home_guide(
     set_square_in_frame(frame, to_sq[0], to_sq[1], scale_color(color, halo_intensity))
     if from_sq != to_sq:
         set_square_in_frame(frame, from_sq[0], from_sq[1], scale_color(color, 0.35))
+
+
+def render_promotion_scepter(
+    now: float,
+    frame: list[int],
+    promo_state: dict[str, Any],
+    params: dict[str, Any] | None = None,
+) -> None:
+    """
+    Renders the Royal Promotion Scepter visual guide on the physical chessboard:
+    1. Root Square Halo: Luminous pulsating countdown aura on the promotion square (to_col, to_row).
+    2. Piece Selection Options: Distinct breathing pulses on each allocated option square
+       (Queen in Royal Violet, Knight in Mint Emerald, Rook in Azure Cyan, Bishop in Warm Sun Amber).
+
+    Respects Night Mode attenuation and strictly complies with the low-power budget
+    (<= 5 squares / 10 active LEDs, < 120mA peak on 5V rail).
+    """
+    if promo_state is None:
+        return
+
+    params = params or {}
+    is_night = bool(params.get("night_mode") or promo_state.get("night_mode", False))
+
+    if is_night:
+        col_root = COLOR_INT_NIGHT_PROMO_ROOT
+        piece_colors = {
+            "q": COLOR_INT_NIGHT_PROMO_QUEEN,
+            "n": COLOR_INT_NIGHT_PROMO_KNIGHT,
+            "r": COLOR_INT_NIGHT_PROMO_ROOK,
+            "b": COLOR_INT_NIGHT_PROMO_BISHOP,
+        }
+        power_scale = 0.85
+    else:
+        col_root = COLOR_INT_PROMO_ROOT
+        piece_colors = {
+            "q": COLOR_INT_PROMO_QUEEN,
+            "n": COLOR_INT_PROMO_KNIGHT,
+            "r": COLOR_INT_PROMO_ROOK,
+            "b": COLOR_INT_PROMO_BISHOP,
+        }
+        power_scale = 1.0
+
+    # 1. Root Promotion Square Halo with Countdown Progress
+    root_sq = (
+        promo_state.get("root_square")
+        or promo_state.get("to_square")
+        or promo_state.get("to_sq")
+    )
+    if root_sq is None:
+        to_c = promo_state.get("to_col")
+        to_r = promo_state.get("to_row")
+        if to_c is not None and to_r is not None:
+            root_sq = (int(to_c), int(to_r))
+        elif "to_col" in params and "to_row" in params:
+            root_sq = (int(params["to_col"]), int(params["to_row"]))
+
+    if root_sq is not None and len(root_sq) == 2:
+        root_c, root_r = int(root_sq[0]), int(root_sq[1])
+        if 0 <= root_c < 8 and 0 <= root_r < 8:
+            timeout_s = float(
+                promo_state.get("timeout_s")
+                or promo_state.get("timeout")
+                or promo_state.get("total_time")
+                or 10.0
+            )
+            start_time = promo_state.get("start_time") or promo_state.get("started_at")
+            remaining_s = promo_state.get("remaining_s")
+
+            if remaining_s is not None:
+                time_frac = max(0.0, min(1.0, float(remaining_s) / max(0.001, timeout_s)))
+            elif start_time is not None:
+                elapsed = max(0.0, now - float(start_time))
+                time_frac = max(0.0, min(1.0, 1.0 - (elapsed / max(0.001, timeout_s))))
+            else:
+                time_frac = float(promo_state.get("time_frac", 1.0))
+
+            # Pulse rate accelerates as countdown expires (2 Hz -> 6 Hz)
+            pulse_freq = 2.0 + (1.0 - time_frac) * 4.0
+            root_pulse = math.sin(now * pulse_freq * 2.0 * math.pi) * 0.5 + 0.5
+            root_intensity = (0.45 + 0.55 * root_pulse) * power_scale * 0.60
+            set_square_in_frame(frame, root_c, root_r, scale_color(col_root, root_intensity))
+
+    # 2. Piece Selection Options Breathing Halos
+    options = promo_state.get("options", {})
+    if isinstance(options, dict):
+        phase_offsets = {
+            "q": 0.0,
+            "n": 0.5 * math.pi,
+            "r": 1.0 * math.pi,
+            "b": 1.5 * math.pi,
+        }
+        for piece_char, sq_coord in options.items():
+            if not isinstance(sq_coord, (tuple, list)) or len(sq_coord) != 2:
+                continue
+            opt_c, opt_r = int(sq_coord[0]), int(sq_coord[1])
+            if not (0 <= opt_c < 8 and 0 <= opt_r < 8):
+                continue
+            k = str(piece_char).lower()
+            opt_col = piece_colors.get(k, col_root)
+            phase = phase_offsets.get(k, 0.0)
+
+            # Harmonious breathing oscillation (~0.6 Hz)
+            breath_wave = math.sin(now * 3.8 + phase) * 0.5 + 0.5
+            opt_intensity = (0.35 + 0.65 * breath_wave) * power_scale * 0.70
+            set_square_in_frame(frame, opt_c, opt_r, scale_color(opt_col, opt_intensity))
+
+
+def render_uncharted_novelty(
+    progress: float,
+    frame: list[int],
+    center_coord: tuple[int, int],
+    params: dict[str, Any] | None = None,
+) -> None:
+    """
+    Renders Cartographer's Path Uncharted Novelty Flare:
+    A high-speed 350ms outward radial starburst pulse from center_coord with exponential decay.
+    Peak illuminated squares <= 8, peak current < 90mA on 5V rail.
+    """
+    p = max(0.0, min(1.0, float(progress)))
+    params = params or {}
+    is_night = bool(params.get("night_mode", False))
+
+    col_flare = COLOR_INT_NIGHT_NOVELTY_FLARE if is_night else COLOR_INT_NOVELTY_FLARE
+    power_scale = 0.55 if is_night else 0.65
+
+    c0, r0 = int(center_coord[0]), int(center_coord[1])
+    if not (0 <= c0 < 8 and 0 <= r0 < 8):
+        return
+
+    # Expanding wavefront radius (0.0 to 3.0 squares)
+    wave_radius = p * 3.0
+    # Temporal exponential decay envelope
+    envelope = math.exp(-3.8 * p)
+
+    min_c = max(0, c0 - 3)
+    max_c = min(7, c0 + 3)
+    min_r = max(0, r0 - 3)
+    max_r = min(7, r0 + 3)
+
+    for c in range(min_c, max_c + 1):
+        for r in range(min_r, max_r + 1):
+            dist = math.hypot(c - c0, r - r0)
+            if dist > 3.2:
+                continue
+
+            dr = dist - wave_radius
+            # Spatial Gaussian ring profile
+            ring_int = math.exp(-4.5 * dr * dr)
+            sq_int = envelope * ring_int * power_scale
+
+            if sq_int > 0.035:
+                clamped_int = min(1.0, sq_int)
+                set_square_in_frame(frame, c, r, scale_color(col_flare, clamped_int))

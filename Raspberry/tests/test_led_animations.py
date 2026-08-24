@@ -801,3 +801,99 @@ def test_return_home_color_day_night_distinct():
     from app.led_helpers import COLOR_INT_NIGHT_RETURN_HOME, COLOR_INT_RETURN_HOME
 
     assert COLOR_INT_RETURN_HOME != COLOR_INT_NIGHT_RETURN_HOME
+
+
+def _calculate_frame_current_ma(frame: list[int]) -> float:
+    """Calculates total peak current draw (mA) on 5V rail for WS2812B LED array."""
+    total_ma = 0.0
+    for val in frame:
+        if val:
+            r = (val >> 16) & 0xFF
+            g = (val >> 8) & 0xFF
+            b = val & 0xFF
+            total_ma += (r + g + b) / 255.0 * 20.0
+    return total_ma
+
+
+def test_promotion_scepter_palette_distinctness():
+    from app.led_helpers import (
+        COLOR_INT_PROMO_ROOT,
+        COLOR_INT_PROMO_QUEEN,
+        COLOR_INT_PROMO_KNIGHT,
+        COLOR_INT_PROMO_ROOK,
+        COLOR_INT_PROMO_BISHOP,
+        COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NIGHT_PROMO_QUEEN,
+        COLOR_INT_NIGHT_PROMO_KNIGHT,
+        COLOR_INT_NIGHT_PROMO_ROOK,
+        COLOR_INT_NIGHT_PROMO_BISHOP,
+        COLOR_INT_NIGHT_NOVELTY_FLARE,
+    )
+    day_colors = [
+        COLOR_INT_PROMO_ROOT,
+        COLOR_INT_PROMO_QUEEN,
+        COLOR_INT_PROMO_KNIGHT,
+        COLOR_INT_PROMO_ROOK,
+        COLOR_INT_PROMO_BISHOP,
+        COLOR_INT_NOVELTY_FLARE,
+    ]
+    assert len(set(day_colors)) == 6
+
+    night_colors = [
+        COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NIGHT_PROMO_QUEEN,
+        COLOR_INT_NIGHT_PROMO_KNIGHT,
+        COLOR_INT_NIGHT_PROMO_ROOK,
+        COLOR_INT_NIGHT_PROMO_BISHOP,
+        COLOR_INT_NIGHT_NOVELTY_FLARE,
+    ]
+    assert len(set(night_colors)) == 6
+
+
+def test_render_promotion_scepter_power_and_budget():
+    from app.led_animations import render_promotion_scepter
+
+    promo_state = {
+        "root_square": (4, 7),
+        "options": {
+            "q": (3, 7),
+            "n": (5, 7),
+            "r": (2, 7),
+            "b": (6, 7),
+        },
+        "timeout_s": 10.0,
+        "start_time": time.time(),
+    }
+
+    for ts in [0.0, 1.0, 2.5, 5.0, 8.0, 9.5]:
+        frame = [0] * NUM_LEDS
+        render_promotion_scepter(ts, frame, promo_state)
+        assert any(frame)
+
+        active_leds = sum(1 for val in frame if val != 0)
+        assert active_leds <= 10, f"Exceeded 10 active LEDs: {active_leds}"
+
+        current_ma = _calculate_frame_current_ma(frame)
+        assert current_ma < 120.0, f"Exceeded 120mA budget: {current_ma}mA"
+
+
+def test_render_uncharted_novelty_power_and_squares():
+    from app.led_animations import render_uncharted_novelty
+
+    center_sq = (4, 3)
+    for p in [0.0, 0.1, 0.25, 0.35, 0.5, 0.7, 0.85, 1.0]:
+        frame = [0] * NUM_LEDS
+        render_uncharted_novelty(p, frame, center_sq)
+
+        lit_squares = 0
+        for c in range(8):
+            for r in range(8):
+                indices = get_led_indices(r, c)
+                if any(frame[idx] != 0 for idx in indices if idx < NUM_LEDS):
+                    lit_squares += 1
+
+        assert lit_squares <= 8, f"Too many squares lit ({lit_squares}) at progress {p}"
+
+        current_ma = _calculate_frame_current_ma(frame)
+        assert current_ma < 90.0, f"Exceeded 90mA power budget: {current_ma}mA at progress {p}"

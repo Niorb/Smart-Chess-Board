@@ -71,6 +71,43 @@ export interface GMGameSummary {
   annotations?: Record<number, string>;
 }
 
+export interface PendingPromotionState {
+  from: [number, number];
+  to: [number, number];
+  color: 'white' | 'black';
+  start_time: number;
+  timeout_s: number;
+  options: {
+    q: [number, number];
+    n: [number, number];
+    r: [number, number];
+    b: [number, number];
+  };
+  is_capture: boolean;
+}
+
+export interface BookMoveCandidate {
+  uci: string;
+  san: string;
+  weight: number;
+  percentage: number;
+  classification: 'mainline' | 'sideline';
+  from_coord: [number, number];
+  to_coord: [number, number];
+}
+
+export interface OpeningPayload {
+  eco: string;
+  name: string;
+  variation: string | null;
+  ply: number;
+  fen: string;
+  out_of_book: boolean;
+  novelty_ply: number | null;
+  novelty_move: string | null;
+  book_moves: BookMoveCandidate[];
+}
+
 interface AnalysisState {
   active: boolean;
   submode: 'review' | 'blunder_drill' | 'gm_relive';
@@ -197,6 +234,7 @@ export interface BoardState {
     } | null;
     active_animation?: string | null;
     custom_trace_path?: [number, number][] | null;
+    pending_promotion?: PendingPromotionState | null;
     in_flight_move?: {
       uci: string;
       from: [number, number];
@@ -217,6 +255,7 @@ export interface BoardState {
     turn: 'white' | 'black' | null;
   };
   coach?: CoachPayload;
+  opening?: OpeningPayload | null;
   game?: {
     game_id: string | null;
     rated: boolean;

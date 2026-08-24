@@ -66,6 +66,7 @@ from app.coach_engine import (
 )
 from app.config import (
     ANIM_MOVE_CONFIRM_DURATION_S,
+    ANIM_UNCHARTED_NOVELTY_DURATION_S,
     BAUD_RATE,
     MOVE_TRACE_PERIOD_S,
     NUM_LEDS,
@@ -83,8 +84,15 @@ from app.led_animations import (
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
+    render_promotion_scepter,
     render_return_home_guide,
+    render_uncharted_novelty,
     scale_color,
+)
+from app.openings import (
+    OpeningInfo,
+    get_book_moves_for_square,
+    get_opening_info,
 )
 from app.led_helpers import (
     COLOR_INT_AZURE,
@@ -246,6 +254,10 @@ class BoardStateManager:
         self.setup_result: SetupResult = self.setup_validator.validate(self.physical_state)
         self.prev_setup_ready: bool = False
 
+        # Opening book classification and Novelty Flare
+        self.current_opening: OpeningInfo | None = None
+        self.active_novelty_flare: dict[str, Any] | None = None
+
         # Hardware initialization (Serial for board + lgpio for MUX)
         try:
             self.h = lgpio.gpiochip_open(0)
@@ -299,6 +311,42 @@ class BoardStateManager:
             "duration": duration,
             "is_capture": is_capture,
         }
+
+    def resolve_pending_promotion(self, piece: str) -> bool:
+        """
+        Resolves an active pending underpromotion from the Web UI or REST API.
+        Dispatches the chosen promotion piece to Lichess engine or Analysis engine.
+        """
+        if not self.move_tracker or not self.move_tracker.pending_promotion:
+            return False
+
+        from app.lichess_engine import lichess_engine
+
+        move_res = self.move_tracker.resolve_promotion(piece)
+        if not move_res:
+            return False
+
+        from_f, from_r, to_f, to_r, promo = move_res
+        if self.game_status == "PLAYING":
+            async def _dispatch_promo(f_f, f_r, t_f, t_r, p):
+                try:
+                    success = await lichess_engine.make_move(f_f, f_r, t_f, t_r, p)
+                    if not success:
+                        logger.warning("Promotion move rejected by Lichess API. Releasing in-flight lock.")
+                        self.move_tracker.clear_in_flight_move()
+                except Exception as err:
+                    logger.error(f"Unexpected error dispatching promotion: {err}")
+                    self.move_tracker.clear_in_flight_move()
+
+            self._spawn_task(_dispatch_promo(from_f, from_r, to_f, to_r, promo))
+            return True
+        elif self.game_status == "ANALYSIS":
+            from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+            to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+            uci = f"{from_sq}{to_sq}{promo or ''}"
+            self.handle_analysis_move(uci)
+            return True
+        return False
 
     def trigger_animation(self, name: str, params: dict | None = None) -> bool:
         """
@@ -981,6 +1029,7 @@ class BoardStateManager:
             "my_color": lichess_engine.my_color,
             "game": lichess_engine.get_game_payload(),
             "coach": self._build_coach_payload(),
+            "opening": self.current_opening.to_dict() if self.current_opening else None,
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
             "analysis": self.get_analysis_payload(),
             "diagnostics": diag_info,
@@ -1313,6 +1362,15 @@ class BoardStateManager:
                         path = interpolate_move_path(from_c, from_r, to_c, to_r)
                         render_move_trace(path, now, frame, trace_color=trace_color, blend_arrival=True)
 
+                # 1.4. Royal Promotion Scepter (Multi-Piece Underpromotion Selector)
+                if self.move_tracker.pending_promotion:
+                    render_promotion_scepter(
+                        now,
+                        frame,
+                        self.move_tracker.pending_promotion,
+                        {"night_mode": night_mode},
+                    )
+
                 # 1.5. Player Pending Castling Rook Prompt & Animated Trace
                 elif getattr(self.move_tracker, "pending_castling_rook", None):
                     r_from = self.move_tracker.pending_castling_rook["from"]
@@ -1341,11 +1399,12 @@ class BoardStateManager:
                         k_r = chess.square_rank(king_sq)
                         set_square_leds(k_c, k_r, c_check)
 
-                # 3. Lifted Piece & Legal Target Dots (with Coach / Blunder Guard hints)
+                # 3. Lifted Piece & Legal Target Dots (with Coach / Opening / Blunder Guard hints)
                 if self.move_tracker.lifted_square:
                     l_c, l_r = self.move_tracker.lifted_square
                     set_square_leds(l_c, l_r, c_piece_lifted)
                     coach_hints_enabled = settings.get("coach_hints_enabled", True)
+                    opening_hints_enabled = settings.get("opening_hints_enabled", True)
                     coach_active = coach_hints_enabled and not fair_play_active
                     cached_eval = (
                         coach_engine.get_cached_evaluation(lichess_engine.board.fen())
@@ -1353,10 +1412,18 @@ class BoardStateManager:
                         else None
                     )
 
+                    # Cartographer's Path Book Moves lookup for this lifted piece
+                    book_moves_map = {}
+                    if opening_hints_enabled and getattr(lichess_engine, "board", None) and self.current_opening and not self.current_opening.out_of_book:
+                        candidate_book_moves = get_book_moves_for_square(lichess_engine.board, l_c, l_r)
+                        for bm in candidate_book_moves:
+                            book_moves_map[bm.to_coord] = bm
+
                     for t_c, t_r in self.move_tracker.legal_targets:
                         is_cap = (t_c, t_r) in getattr(self.move_tracker, "legal_captures", [])
                         target_col = c_legal_capture if is_cap else c_legal_target
 
+                        # Priority 1: Coach evaluation hints
                         if coach_active and cached_eval and cached_eval.moves_map:
                             from_sq = chess.square_name(chess.square(l_c, l_r))
                             to_sq = chess.square_name(chess.square(t_c, t_r))
@@ -1371,6 +1438,13 @@ class BoardStateManager:
                                     target_col = c_move_inacc
                                 else:
                                     target_col = c_move_blunder
+                        # Priority 2: Cartographer's Path opening book hints
+                        elif opening_hints_enabled and (t_c, t_r) in book_moves_map:
+                            bm = book_moves_map[(t_c, t_r)]
+                            if bm.classification == "mainline":
+                                target_col = c_mint_emerald
+                            elif bm.classification == "sideline":
+                                target_col = c_azure
 
                         set_square_leds(t_c, t_r, target_col)
 
@@ -1596,6 +1670,16 @@ class BoardStateManager:
                         if hasattr(self, "move_tracker") and self.move_tracker.arrival_flash is flash_source:
                             self.move_tracker.arrival_flash = None
 
+            # Layer 2.6: Cartographer's Path Uncharted Novelty Flare
+            if self.active_novelty_flare:
+                elapsed_flare = now - self.active_novelty_flare["start_time"]
+                dur_flare = self.active_novelty_flare.get("duration", ANIM_UNCHARTED_NOVELTY_DURATION_S)
+                if elapsed_flare < dur_flare:
+                    flare_p = elapsed_flare / max(0.001, dur_flare)
+                    render_uncharted_novelty(flare_p, frame, self.active_novelty_flare["coord"], {"night_mode": night_mode})
+                else:
+                    self.active_novelty_flare = None
+
             # Layer 3: Custom Diagnostic Trace Override
             if self.custom_trace_path and len(self.custom_trace_path) >= 2:
                 t_from_c, t_from_r = self.custom_trace_path[0]
@@ -1706,6 +1790,7 @@ class BoardStateManager:
             bool(mt.pending_capture_target),
             bool(mt.invalid_placement),
             bool(mt.in_flight_move),
+            bool(mt.pending_promotion),
             None if mt.arrival_flash is None else mt.arrival_flash["start_time"],
             None if self.arrival_flash is None else self.arrival_flash["start_time"],
             id(self.active_animation) if self.active_animation is not None else None,
@@ -1717,6 +1802,8 @@ class BoardStateManager:
             opp_gone.get("claim_win_in", 0),
             None if eval_res is None else (eval_res.score_cp, eval_res.mate, eval_res.win_chance),
             getattr(self.gesture_engine, "is_active", False) if hasattr(self, "gesture_engine") else False,
+            self.current_opening.name if self.current_opening else "",
+            self.current_opening.out_of_book if self.current_opening else False,
         )
 
     async def update_loop(self, broadcast_callback, clients_provider=None):
@@ -1905,6 +1992,7 @@ class BoardStateManager:
                         }
 
                     # 2. Digital Board Sync with Lichess Engine or Analysis Board
+                    active_chess_board = None
                     if self.game_status == "PLAYING":
                         new_grid = lichess_engine.get_board()
                         if new_grid != self.digital_state:
@@ -1914,6 +2002,7 @@ class BoardStateManager:
                             "white": format_clock_ms(interp["white"]),
                             "black": format_clock_ms(interp["black"]),
                         }
+                        active_chess_board = getattr(lichess_engine, "board", None)
                     elif self.game_status == "ANALYSIS":
                         fen = self.analysis_active_board.fen()
                         if fen != self._analysis_grid_fen:
@@ -1927,9 +2016,30 @@ class BoardStateManager:
                             self.digital_state = board_grid
                             self._analysis_grid_fen = fen
                         self.clocks = ANALYSIS_CLOCKS
+                        active_chess_board = self.analysis_active_board
                     else:
                         self.digital_state = EMPTY_DIGITAL_GRID
                         self.clocks = IDLE_CLOCKS
+                        self.current_opening = None
+
+                    # Update Opening Classification & Detect Out-Of-Book Novelty
+                    if active_chess_board is not None:
+                        new_opening = get_opening_info(active_chess_board)
+                        if (
+                            self.current_opening is not None
+                            and not self.current_opening.out_of_book
+                            and new_opening.out_of_book
+                        ):
+                            if new_opening.novelty_move and len(new_opening.novelty_move) >= 4:
+                                to_c = ord(new_opening.novelty_move[2].lower()) - ord('a')
+                                to_r = int(new_opening.novelty_move[3]) - 1
+                                if 0 <= to_c < 8 and 0 <= to_r < 8:
+                                    self.active_novelty_flare = {
+                                        "coord": (to_c, to_r),
+                                        "start_time": time.time(),
+                                        "duration": ANIM_UNCHARTED_NOVELTY_DURATION_S,
+                                    }
+                        self.current_opening = new_opening
 
                     # 3. Coach engine live analysis (drives the eval cache regardless of clients)
                     is_ai = getattr(lichess_engine, "is_ai_game", False)

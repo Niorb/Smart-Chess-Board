@@ -22,7 +22,7 @@ import pytest
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.physical_tracker import PhysicalMoveTracker
+from app.physical_tracker import PhysicalMoveTracker, compute_promotion_layout
 
 
 @pytest.fixture
@@ -675,6 +675,246 @@ def test_capture_target_lifted_first_direct_placement(initial_physical_state, mo
     assert move_res == (5, 4, 4, 5, None)
     assert tracker.in_flight_move is not None
     assert tracker.in_flight_move["uci"] == "e4d5"
+
+
+# =============================================================================
+# Royal Promotion Scepter & compute_promotion_layout Unit Tests
+# =============================================================================
+
+def test_compute_promotion_layout_standard_white_e8():
+    """Verify standard White promotion at e8 allocates options center-out with fallback for promo square."""
+    state = [[0] * 8 for _ in range(8)]
+    state[4][7] = -1  # White pawn on e8
+
+    layout = compute_promotion_layout(promo_col=4, promo_rank=7, is_white=True, physical_state=state)
+
+    assert set(layout.keys()) == {"q", "n", "r", "b"}
+    # All allocated coordinates must be unique
+    allocated = list(layout.values())
+    assert len(set(allocated)) == 4
+    # Promotion square (4, 7) itself must NOT be in options
+    assert (4, 7) not in allocated
+
+    assert layout["q"] == (4, 6)
+    assert layout["n"] == (3, 7)
+    assert layout["r"] == (5, 7)
+    assert layout["b"] == (2, 7)
+
+
+def test_compute_promotion_layout_standard_black_d1():
+    """Verify standard Black promotion at d1 targets rank 0 with rank 1 fallback."""
+    state = [[0] * 8 for _ in range(8)]
+    state[3][0] = 1  # Black pawn on d1
+
+    layout = compute_promotion_layout(promo_col=3, promo_rank=0, is_white=False, physical_state=state)
+
+    assert set(layout.keys()) == {"q", "n", "r", "b"}
+    allocated = list(layout.values())
+    assert len(set(allocated)) == 4
+    assert (3, 0) not in allocated
+
+    assert layout["q"] == (3, 1)
+    assert layout["n"] == (2, 0)
+    assert layout["r"] == (4, 0)
+    assert layout["b"] == (1, 0)
+
+
+def test_compute_promotion_layout_occupied_back_rank_forces_fallback():
+    """Verify that occupied back-rank squares force fallback to rank 6 (Rank 7) on the same file."""
+    state = [[0] * 8 for _ in range(8)]
+    state[4][7] = -1  # White pawn on e8
+    state[3][7] = 1   # Occupied d8
+    state[5][7] = 1   # Occupied f8
+
+    layout = compute_promotion_layout(promo_col=4, promo_rank=7, is_white=True, physical_state=state)
+
+    assert layout["q"] == (4, 6)  # e8 fallback to e7
+    assert layout["n"] == (3, 6)  # d8 occupied -> fallback to d7 (3, 6)
+    assert layout["r"] == (5, 6)  # f8 occupied -> fallback to f7 (5, 6)
+    assert layout["b"] == (2, 7)  # c8 empty -> (2, 7)
+
+
+def test_compute_promotion_layout_corners():
+    """Verify corner promotions on a8 and h8."""
+    state = [[0] * 8 for _ in range(8)]
+
+    # a8 promotion (col 0, rank 7)
+    state[0][7] = -1
+    layout_a8 = compute_promotion_layout(promo_col=0, promo_rank=7, is_white=True, physical_state=state)
+    assert layout_a8["q"] == (0, 6)
+    assert layout_a8["n"] == (1, 7)
+    assert layout_a8["r"] == (2, 7)
+    assert layout_a8["b"] == (3, 7)
+
+    # h8 promotion (col 7, rank 7)
+    state[7][7] = -1
+    layout_h8 = compute_promotion_layout(promo_col=7, promo_rank=7, is_white=True, physical_state=state)
+    assert layout_h8["q"] == (7, 6)
+    assert layout_h8["n"] == (6, 7)
+    assert layout_h8["r"] == (5, 7)
+    assert layout_h8["b"] == (4, 7)
+
+
+def test_compute_promotion_layout_extreme_crowded_board():
+    """Verify layout generation does not fail even when all back-rank and fallback rank squares are occupied."""
+    state = [[1] * 8 for _ in range(8)]
+    # Clear promo square and 4 random squares elsewhere on board
+    state[4][7] = -1  # promo sq
+    state[0][3] = 0
+    state[1][3] = 0
+    state[2][3] = 0
+    state[3][3] = 0
+
+    layout = compute_promotion_layout(promo_col=4, promo_rank=7, is_white=True, physical_state=state)
+    assert len(set(layout.values())) == 4
+    assert (4, 7) not in layout.values()
+
+
+def test_promotion_detection_initiates_pending_promotion():
+    """Verify reaching 8th rank creates pending_promotion and returns None."""
+    tracker = PhysicalMoveTracker()
+    engine = MagicMock()
+    engine.board = chess.Board("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
+    engine.my_color = "white"
+
+    state = [[0] * 8 for _ in range(8)]
+    state[4][6] = -1  # e7 White pawn
+    state[4][0] = -1  # e1 King
+    state[7][0] = 1   # h1 King
+    tracker.last_physical_state = [row[:] for row in state]
+
+    # 1. Lift e7 pawn
+    lifted = [row[:] for row in state]
+    lifted[4][6] = 0
+    tracker.process_physical_state(lifted, engine)
+    assert tracker.lifted_square == (4, 6)
+
+    # 2. Place on e8 (col 4, rank 7)
+    placed_e8 = [row[:] for row in lifted]
+    placed_e8[4][7] = -1
+    res = tracker.process_physical_state(placed_e8, engine)
+
+    assert res is None  # Promotion is pending piece selection
+    assert tracker.pending_promotion is not None
+    assert tracker.pending_promotion["from"] == (4, 6)
+    assert tracker.pending_promotion["to"] == (4, 7)
+    assert tracker.pending_promotion["color"] == "white"
+    assert "q" in tracker.pending_promotion["options"]
+    assert "n" in tracker.pending_promotion["options"]
+
+
+def test_promotion_physical_selection_knight():
+    """Verify placing piece on Knight slot confirms Knight underpromotion."""
+    tracker = PhysicalMoveTracker()
+    engine = MagicMock()
+    engine.board = chess.Board("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
+    engine.my_color = "white"
+
+    state = [[0] * 8 for _ in range(8)]
+    state[4][6] = -1  # e7 White pawn
+    tracker.last_physical_state = [row[:] for row in state]
+
+    # Lift e7 and place on e8
+    lifted = [row[:] for row in state]
+    lifted[4][6] = 0
+    tracker.process_physical_state(lifted, engine)
+
+    placed_e8 = [row[:] for row in lifted]
+    placed_e8[4][7] = -1
+    tracker.process_physical_state(placed_e8, engine)
+
+    assert tracker.pending_promotion is not None
+    knight_sq = tracker.pending_promotion["options"]["n"]  # (3, 7) -> d8
+
+    # Place a piece on Knight slot (3, 7)
+    selected = [row[:] for row in placed_e8]
+    selected[knight_sq[0]][knight_sq[1]] = -1
+    move_res = tracker.process_physical_state(selected, engine)
+
+    # Must return 1-indexed tuple with promo='n'
+    assert move_res == (5, 7, 5, 8, "n")
+    assert tracker.pending_promotion is None
+    assert tracker.in_flight_move is not None
+    assert tracker.in_flight_move["uci"] == "e7e8n"
+
+
+def test_promotion_auto_queen_timeout():
+    """Verify auto-queen triggers after timeout_s expires."""
+    tracker = PhysicalMoveTracker()
+    engine = MagicMock()
+    engine.board = chess.Board("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
+    engine.my_color = "white"
+
+    state = [[0] * 8 for _ in range(8)]
+    state[4][6] = -1
+    tracker.last_physical_state = [row[:] for row in state]
+
+    lifted = [row[:] for row in state]
+    lifted[4][6] = 0
+    tracker.process_physical_state(lifted, engine)
+
+    placed_e8 = [row[:] for row in lifted]
+    placed_e8[4][7] = -1
+    tracker.process_physical_state(placed_e8, engine)
+
+    # Artificially expire the start_time
+    tracker.pending_promotion["start_time"] = time.time() - 10.0
+    tracker.pending_promotion["timeout_s"] = 5.0
+
+    move_res = tracker.process_physical_state(placed_e8, engine)
+    assert move_res == (5, 7, 5, 8, "q")
+    assert tracker.pending_promotion is None
+    assert tracker.in_flight_move["uci"] == "e7e8q"
+
+
+def test_promotion_cancelled_when_pawn_lifted_back():
+    """Verify lifting promoting pawn off promotion square cancels promotion and restores lifted state."""
+    tracker = PhysicalMoveTracker()
+    engine = MagicMock()
+    engine.board = chess.Board("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
+    engine.my_color = "white"
+
+    state = [[0] * 8 for _ in range(8)]
+    state[4][6] = -1
+    tracker.last_physical_state = [row[:] for row in state]
+
+    lifted = [row[:] for row in state]
+    lifted[4][6] = 0
+    tracker.process_physical_state(lifted, engine)
+
+    placed_e8 = [row[:] for row in lifted]
+    placed_e8[4][7] = -1
+    tracker.process_physical_state(placed_e8, engine)
+    assert tracker.pending_promotion is not None
+
+    # Lift pawn off e8 again
+    pawn_lifted_again = [row[:] for row in placed_e8]
+    pawn_lifted_again[4][7] = 0
+    res = tracker.process_physical_state(pawn_lifted_again, engine)
+
+    assert res is None
+    assert tracker.pending_promotion is None
+    assert tracker.lifted_square == (4, 6)
+    assert (4, 7) in tracker.legal_targets
+
+
+def test_resolve_promotion_external():
+    """Verify external resolve_promotion call (e.g. from Web UI / REST API)."""
+    tracker = PhysicalMoveTracker()
+    tracker.pending_promotion = {
+        "from": (4, 6),
+        "to": (4, 7),
+        "color": "white",
+        "start_time": time.time(),
+        "timeout_s": 5.0,
+        "options": {"q": (4, 6), "n": (3, 7), "r": (5, 7), "b": (2, 7)},
+        "is_capture": False,
+    }
+
+    res = tracker.resolve_promotion("r")
+    assert res == (5, 7, 5, 8, "r")
+    assert tracker.pending_promotion is None
+    assert tracker.in_flight_move["uci"] == "e7e8r"
 
 
 

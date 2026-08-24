@@ -3,7 +3,31 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Agent Fleet Redesign & Domain Specialization (2026-08-24)
+## Latest Change — Feature P1 (Royal Promotion Scepter) & Feature P2 (Cartographer's Path) (2026-08-24)
+Implemented two major cyber-physical intelligence features:
+1. **Feature P1: The Royal Promotion Scepter (Multi-Piece Underpromotion Selector)**:
+   - Dynamic 4-piece slot allocation algorithm (`compute_promotion_layout` in `Raspberry/app/physical_tracker.py`):
+     - Assigns distinct coordinates for Queen (Royal Violet), Knight (Mint Emerald), Rook (Azure Cyan), Bishop (Warm Sun Amber).
+     - Target back-rank is Rank 8 for White, Rank 1 for Black.
+     - Fallback rule: When a backrank square is the promotion arrival square or occupied by a piece or already allocated, it automatically falls back to the **same file 1 row ahead** (Rank 7 for White, Rank 2 for Black).
+     - Center-out file search relative to `promo_col` with robust whole-board fallbacks for crowded positions.
+   - Physical placement detection, pawn return-to-origin cancellation, and auto-queen timer ($5.0\text{s}$).
+   - External resolution via REST API `POST /api/game/promote` and Web UI Royal Promotion Scepter modal.
+   - Low-power WS2812B visual guide (`render_promotion_scepter`) consuming $\le 5$ active squares ($< 120\text{mA}$ on 5V rail).
+
+2. **Feature P2: The Cartographer's Path (Opening Book Trailblazer & ECO Classifier)**:
+   - High-speed embedded Opening Engine (`Raspberry/app/openings.py`):
+     - Full ECO classification taxonomy (A00-E99), opening names, variations, and candidate book moves with weighted probabilities.
+     - Polyglot `.bin` support for custom opening libraries.
+   - In-game LED trailblazer target hints when a piece is lifted:
+     - Mainline book target highlighted in **Mint Emerald**.
+     - Sideline book targets highlighted in **Azure Cyan**.
+   - **Uncharted Novelty Flare** (`render_uncharted_novelty` in `Raspberry/app/led_animations.py`):
+     - 350ms radial Gaussian starburst ripple ($< 90\text{mA}$ peak) triggered when moving out-of-book.
+   - React 19 Frontend opening badges in header and analysis tabs.
+   - Unit test suites in `test_openings.py`, `test_physical_tracker.py`, and `test_led_animations.py`.
+
+## Previous Change — Agent Fleet Redesign & Domain Specialization (2026-08-24)
 Redesigned and optimized the AI Agent Fleet to align with the matured cyber-physical codebase:
 - Decommissioned obsolete Playwright / Chess.com browser automation specialist (`automation.md`).
 - Decomposed monolithic full-stack developer role into 4 dedicated specialists:
@@ -13,6 +37,7 @@ Redesigned and optimized the AI Agent Fleet to align with the matured cyber-phys
   - **Web Frontend & UI/UX Specialist** (`frontend.md`): React 19 / Vite / TypeScript components (`App.tsx`, `AnalysisTab.tsx`), WebSocket client hooks (`useBoardState.ts`), typed REST client (`api.ts`), Tailwind styling.
 - Refined and updated **System Architect** (`arch.md`), **Embedded & Hardware Specialist** (`hardware.md`), **QA & Testing Specialist** (`qa.md`), **Code Explorer** (`explorer.md`), and **Creative Innovator** (`creative.md`).
 - Synchronized `AGENTS.md`, `GEMINI.md`, and `.agents/skills/agentic-orchestrator/SKILL.md` with the new roster and strict SSH Pi deployment protocols.
+
 
 ## Previous Change — Smooth clock ticking + return-home divergence guide (rev 4b13dac, deployed 2026-08-24)
 **Smooth clocks**: Lichess pushes gameState ~1Hz (push stream, no polling possible) — the web UI was the slow surface. `LichessEngine.get_interpolated_clocks()` drains the side-to-move clock locally between events; `update_loop` now recomputes formatted `self.clocks` every tick and `_build_broadcast_payload` gained `clocks_raw` ({white, black, updated_at, turn}). Frontend (`App.tsx`) snapshots raw values on receipt, ticks the turn side every 500 ms client-side (skew-free local elapsed), falls back to strings when absent. LED bars were already smooth.

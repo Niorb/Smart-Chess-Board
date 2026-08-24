@@ -133,6 +133,13 @@ class ThresholdSettings(BaseModel):
     in_loop_calibration: bool | None = None
     led_intensity: int | float | None = None
     night_mode: bool | None = None
+    auto_queen_timeout_s: int | float | None = None
+    opening_hints_enabled: bool | None = None
+    max_sideline_hints: int | None = None
+
+
+class PromoteRequest(BaseModel):
+    piece: str = "q"  # "q" | "n" | "r" | "b"
 
 
 class SaveDefaultsRequest(ThresholdSettings):
@@ -556,6 +563,27 @@ async def make_move_route(body: MoveRequest):
         return {"status": "success"}
     else:
         return {"status": "error", "message": "Move was rejected by Lichess"}
+
+
+@app.post("/api/game/promote")
+async def promote_piece_route(body: PromoteRequest):
+    """Resolves an active pending physical promotion with a chosen piece ('q', 'n', 'r', 'b')."""
+    piece = body.piece.lower()
+    if piece not in ("q", "n", "r", "b"):
+        piece = "q"
+    success = state_manager.resolve_pending_promotion(piece)
+    if success:
+        return {"status": "success", "piece": piece}
+    return {"status": "error", "message": "No active pending promotion or promotion rejected."}
+
+
+@app.get("/api/openings/lookup")
+def lookup_opening_route(moves: str = ""):
+    """Look up opening ECO classification and candidate book moves for a comma-separated list of UCI moves."""
+    from app.openings import lookup_opening_by_moves
+    move_list = [m.strip() for m in moves.split(",") if m.strip()]
+    info = lookup_opening_by_moves(move_list)
+    return info.to_dict()
 
 
 @app.post("/api/game/resign")

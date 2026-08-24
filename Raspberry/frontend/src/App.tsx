@@ -23,7 +23,8 @@ import {
   saveBoardDefaults,
   startAnalysis,
   stopAnalysis,
-  resetAnalysisBranch
+  resetAnalysisBranch,
+  resolvePromotion,
 } from './api'
 import type { LichessAccount, LastGameParams, BoardSettings } from './api'
 import { 
@@ -52,7 +53,9 @@ import {
   BookmarkCheck,
   Sun,
   Moon,
-  Compass
+  Compass,
+  Crown,
+  BookOpen,
 } from 'lucide-react'
 const AnalysisTab = lazy(() => import('./components/AnalysisTab'))
 
@@ -965,6 +968,29 @@ function App() {
               {nightMode ? <Moon size={12} className="text-indigo-400" /> : <Sun size={12} className="text-amber-400" />}
               <span>{nightMode ? 'Night Mode' : 'Day Mode'}</span>
             </button>
+
+            {/* Cartographer's Path Opening Badge */}
+            {state.opening && state.opening.name && (
+              <div
+                title={state.opening.variation ? `${state.opening.name} (${state.opening.variation})` : state.opening.name}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono transition-all duration-300 ${
+                  state.opening.out_of_book
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.15)]'
+                }`}
+              >
+                <BookOpen size={12} className={state.opening.out_of_book ? 'text-amber-400' : 'text-emerald-400'} />
+                <span className="px-1 py-0.2 rounded bg-slate-900 text-emerald-400 text-[9px] font-mono border border-emerald-500/20">
+                  {state.opening.eco || 'A00'}
+                </span>
+                <span className="max-w-[130px] truncate">{state.opening.name}</span>
+                {state.opening.out_of_book && (
+                  <span className="px-1 rounded bg-amber-500/20 text-amber-400 text-[8px] uppercase tracking-wider font-bold">
+                    Novelty
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Server Online Badge */}
             <div className={`flex items-center gap-1 px-2 py-1 rounded-full border text-[9px] font-bold uppercase tracking-wider font-mono ${
@@ -2379,37 +2405,104 @@ function App() {
         </main>
       )}
 
-      {/* Pawn Promotion Modal Dialog */}
-      {pendingPromotion && (
+      {/* Royal Promotion Scepter & Pawn Promotion Modal Dialog */}
+      {(pendingPromotion || state.physical?.pending_promotion) && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border-2 border-yellow-500/50 rounded-2xl p-6 shadow-2xl max-w-sm w-full flex flex-col items-center gap-4 text-center">
-            <h3 className="font-extrabold text-lg text-yellow-400">Pawn Promotion</h3>
-            <p className="text-xs text-slate-300">Choose a piece to promote your pawn:</p>
+          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl p-6 shadow-2xl max-w-md w-full flex flex-col items-center gap-4 text-center">
+            <div className="flex items-center gap-2">
+              <Crown className="text-amber-400" size={24} />
+              <h3 className="font-extrabold text-lg text-amber-400 tracking-tight">Royal Promotion Scepter</h3>
+            </div>
+            
+            {state.physical?.pending_promotion ? (
+              <p className="text-xs text-slate-300">
+                Pawn reached promotion rank! Place a piece on a physical option square or select below:
+              </p>
+            ) : (
+              <p className="text-xs text-slate-300">Choose a piece to promote your pawn:</p>
+            )}
             
             <div className="grid grid-cols-4 gap-3 w-full my-2">
               {[
-                { type: 'q', label: 'Queen', icon: '♕' },
-                { type: 'r', label: 'Rook', icon: '♖' },
-                { type: 'b', label: 'Bishop', icon: '♗' },
-                { type: 'n', label: 'Knight', icon: '♘' },
+                { 
+                  type: 'q' as const, 
+                  label: 'Queen', 
+                  icon: '♕', 
+                  color: 'hover:border-purple-400 hover:bg-purple-500/10 text-purple-200',
+                  badge: 'text-purple-400',
+                  sq: state.physical?.pending_promotion?.options?.q 
+                    ? `${String.fromCharCode(97 + state.physical.pending_promotion.options.q[0])}${state.physical.pending_promotion.options.q[1] + 1}`
+                    : null
+                },
+                { 
+                  type: 'n' as const, 
+                  label: 'Knight', 
+                  icon: '♘', 
+                  color: 'hover:border-emerald-400 hover:bg-emerald-500/10 text-emerald-200',
+                  badge: 'text-emerald-400',
+                  sq: state.physical?.pending_promotion?.options?.n 
+                    ? `${String.fromCharCode(97 + state.physical.pending_promotion.options.n[0])}${state.physical.pending_promotion.options.n[1] + 1}`
+                    : null
+                },
+                { 
+                  type: 'r' as const, 
+                  label: 'Rook', 
+                  icon: '♖', 
+                  color: 'hover:border-cyan-400 hover:bg-cyan-500/10 text-cyan-200',
+                  badge: 'text-cyan-400',
+                  sq: state.physical?.pending_promotion?.options?.r 
+                    ? `${String.fromCharCode(97 + state.physical.pending_promotion.options.r[0])}${state.physical.pending_promotion.options.r[1] + 1}`
+                    : null
+                },
+                { 
+                  type: 'b' as const, 
+                  label: 'Bishop', 
+                  icon: '♗', 
+                  color: 'hover:border-amber-400 hover:bg-amber-500/10 text-amber-200',
+                  badge: 'text-amber-400',
+                  sq: state.physical?.pending_promotion?.options?.b 
+                    ? `${String.fromCharCode(97 + state.physical.pending_promotion.options.b[0])}${state.physical.pending_promotion.options.b[1] + 1}`
+                    : null
+                },
               ].map((p) => (
                 <button
                   key={p.type}
-                  onClick={() => handleExecutePromotion(p.type)}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-yellow-400 hover:bg-yellow-500/10 text-slate-100 transition-all hover:scale-105"
+                  onClick={async () => {
+                    if (state.physical?.pending_promotion) {
+                      try {
+                        await resolvePromotion(p.type);
+                      } catch (e) {
+                        console.error('Error resolving physical promotion:', e);
+                      }
+                    } else {
+                      handleExecutePromotion(p.type);
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl bg-slate-950 border border-slate-800 ${p.color} transition-all hover:scale-105 shadow-md`}
                 >
                   <span className="text-3xl select-none">{p.icon}</span>
-                  <span className="text-[10px] font-bold mt-1 text-slate-400">{p.label}</span>
+                  <span className="text-[10px] font-bold mt-1 text-slate-300">{p.label}</span>
+                  {p.sq && (
+                    <span className={`text-[9px] font-mono font-bold mt-0.5 px-1 rounded bg-slate-900 border border-slate-700 ${p.badge}`}>
+                      [{p.sq}]
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
 
-            <button
-              onClick={() => setPendingPromotion(null)}
-              className="text-xs text-slate-400 hover:text-white underline mt-1"
-            >
-              Cancel Move
-            </button>
+            {state.physical?.pending_promotion ? (
+              <p className="text-[10px] text-slate-400 font-mono">
+                Auto-queen timer active • Lift pawn back to cancel
+              </p>
+            ) : (
+              <button
+                onClick={() => setPendingPromotion(null)}
+                className="text-xs text-slate-400 hover:text-white underline mt-1"
+              >
+                Cancel Move
+              </button>
+            )}
           </div>
         </div>
       )}

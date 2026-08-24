@@ -655,7 +655,28 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             {/* Step Controls & Position Details */}
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Position Navigator</h4>
-              
+
+              {/* Cartographer's Path Opening Information in Analysis */}
+              {boardState.opening && boardState.opening.name && (
+                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Opening Book</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold">
+                      {boardState.opening.eco}
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-white truncate">{boardState.opening.name}</div>
+                  {boardState.opening.variation && (
+                    <div className="text-[11px] text-slate-400 truncate">{boardState.opening.variation}</div>
+                  )}
+                  {boardState.opening.out_of_book && (
+                    <div className="pt-1 flex items-center gap-1 text-[10px] text-amber-400 font-mono">
+                      <span>⚡ Out of book at ply {boardState.opening.novelty_ply ?? boardState.opening.ply}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800">
                 <button
                   onClick={() => handleStep(0)}

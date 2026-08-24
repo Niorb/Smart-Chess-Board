@@ -3,7 +3,8 @@ app/physical_tracker.py
 
 Physical board move tracker for the Smart Chess Board.
 Tracks piece lifting, legal target destinations, invalid piece placements,
-and synchronization of opponent moves between the Lichess/UCI engine and the physical hardware.
+synchronization of opponent moves between the Lichess/UCI engine and the physical hardware,
+and the Royal Promotion Scepter state machine.
 """
 
 import logging
@@ -21,6 +22,102 @@ logger = logging.getLogger("smart-chess-app.tracker")
 def _sensor_polarity(color: int) -> int:
     """Returns the expected sensor polarity for a piece color (White=-1, Black=+1)."""
     return -1 if color == chess.WHITE else 1
+
+
+def compute_promotion_layout(
+    promo_col: int,
+    promo_rank: int,
+    is_white: bool,
+    physical_state: list[list[int]],
+) -> dict[str, tuple[int, int]]:
+    """
+    Computes 4 distinct LED/sensor target coordinates for promotion pieces ['q', 'n', 'r', 'b'].
+
+    Layout Rules:
+      - Assigns 4 distinct board coordinates (0-indexed col, row) for ['q', 'n', 'r', 'b'].
+      - Target back-rank is rank 7 (Rank 8) for White, rank 0 (Rank 1) for Black.
+      - Fallback rank is rank 6 (Rank 7) for White, rank 1 (Rank 2) for Black.
+      - Candidate files are searched center-out relative to promo_col:
+        [promo_col, promo_col-1, promo_col+1, promo_col-2, promo_col+2, ...].
+      - For each file f:
+        - If (f, back_rank) is the promotion square itself or occupied
+          (physical_state[f][back_rank] != 0) or already used:
+          - Fall back to (f, fallback_rank) if it is empty (physical_state[f][fallback_rank] == 0)
+            and unallocated!
+        - If (f, back_rank) is empty and unallocated, allocate (f, back_rank).
+      - Extreme edge case: If still fewer than 4 squares found, scan remaining empty squares
+        on the board without failing.
+
+    Args:
+        promo_col: 0-indexed column of promotion square (0..7).
+        promo_rank: 0-indexed rank of promotion square (0 or 7).
+        is_white: True if White is promoting, False for Black.
+        physical_state: 8x8 matrix of magnetic sensor values (-1, 0, 1).
+
+    Returns:
+        Dictionary mapping piece type ('q', 'n', 'r', 'b') to (col, rank) coordinate tuple.
+    """
+    back_rank = 7 if is_white else 0
+    fallback_rank = 6 if is_white else 1
+
+    candidate_files = [promo_col]
+    for d in range(1, 8):
+        if promo_col - d >= 0:
+            candidate_files.append(promo_col - d)
+        if promo_col + d < 8:
+            candidate_files.append(promo_col + d)
+
+    allocated_squares: list[tuple[int, int]] = []
+
+    for f in candidate_files:
+        if len(allocated_squares) >= 4:
+            break
+
+        sq_back = (f, back_rank)
+        sq_fallback = (f, fallback_rank)
+
+        is_back_unavailable = (
+            sq_back == (promo_col, promo_rank)
+            or physical_state[f][back_rank] != 0
+            or sq_back in allocated_squares
+        )
+
+        if is_back_unavailable:
+            if (
+                physical_state[f][fallback_rank] == 0
+                and sq_fallback not in allocated_squares
+                and sq_fallback != (promo_col, promo_rank)
+            ):
+                allocated_squares.append(sq_fallback)
+        else:
+            allocated_squares.append(sq_back)
+
+    # Extreme edge case: scan remaining empty squares on board
+    if len(allocated_squares) < 4:
+        for r in range(8):
+            for c in range(8):
+                if len(allocated_squares) >= 4:
+                    break
+                sq = (c, r)
+                if (
+                    sq != (promo_col, promo_rank)
+                    and sq not in allocated_squares
+                    and physical_state[c][r] == 0
+                ):
+                    allocated_squares.append(sq)
+
+    # Safety fallback: if board is extremely full, fill any unallocated coordinate
+    if len(allocated_squares) < 4:
+        for r in range(8):
+            for c in range(8):
+                if len(allocated_squares) >= 4:
+                    break
+                sq = (c, r)
+                if sq != (promo_col, promo_rank) and sq not in allocated_squares:
+                    allocated_squares.append(sq)
+
+    pieces = ["q", "n", "r", "b"]
+    return {piece: allocated_squares[i] for i, piece in enumerate(pieces)}
 
 
 class PhysicalMoveTracker:
@@ -46,6 +143,7 @@ class PhysicalMoveTracker:
         self.pending_castling_rook: dict[str, Any] | None = None
         self.pending_capture_target: tuple[int, int] | None = None
         self.capture_candidate_attackers: list[tuple[int, int]] = []
+        self.pending_promotion: dict[str, Any] | None = None
         self.last_physical_state: list[list[int]] | None = None
 
     def set_in_flight_move(
@@ -63,6 +161,16 @@ class PhysicalMoveTracker:
         """Clears the in-flight move lock."""
         self.in_flight_move = None
 
+    def clear_transients(self) -> None:
+        """Clears all transient interactive states (lifted square, invalid placement, pending promotions)."""
+        self.lifted_square = None
+        self.legal_targets = []
+        self.legal_captures = []
+        self.invalid_placement = None
+        self.pending_capture_target = None
+        self.capture_candidate_attackers = []
+        self.pending_promotion = None
+
     def reset(self, initial_state: list[list[int]] | None = None) -> None:
         """Resets all move tracking states."""
         self.lifted_square = None
@@ -76,7 +184,54 @@ class PhysicalMoveTracker:
         self.pending_castling_rook = None
         self.pending_capture_target = None
         self.capture_candidate_attackers = []
+        self.pending_promotion = None
         self.last_physical_state = [row[:] for row in initial_state] if initial_state is not None else None
+
+    def resolve_promotion(
+        self, piece: str
+    ) -> tuple[int, int, int, int, str] | None:
+        """
+        Resolves an active pending promotion externally (e.g. from REST or WebSocket command).
+
+        Args:
+            piece: One of 'q', 'r', 'b', 'n' (case-insensitive).
+
+        Returns:
+            1-indexed tuple (from_file, from_rank, to_file, to_rank, promo_piece) if promotion
+            was active, or None otherwise.
+        """
+        if self.pending_promotion is None:
+            return None
+
+        promo_piece = piece.lower()
+        if promo_piece not in ("q", "n", "r", "b"):
+            promo_piece = "q"
+
+        from_c, from_r = self.pending_promotion["from"]
+        to_c, to_r = self.pending_promotion["to"]
+        is_capture = bool(self.pending_promotion.get("is_capture", False))
+
+        self.pending_promotion = None
+        self.arrival_flash = {
+            "square": (to_c, to_r),
+            "start_time": time.time(),
+            "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+            "is_capture": is_capture,
+        }
+        sq_from = chess.square(from_c, from_r)
+        sq_to = chess.square(to_c, to_r)
+        uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{promo_piece}"
+        self.set_in_flight_move(from_c, from_r, to_c, to_r, uci_move)
+
+        self.lifted_square = None
+        self.legal_targets = []
+        self.legal_captures = []
+        self.invalid_placement = None
+
+        logger.info(
+            f"External promotion resolved with '{promo_piece}': ({from_c},{from_r}) -> ({to_c},{to_r}) uci={uci_move}"
+        )
+        return (from_c + 1, from_r + 1, to_c + 1, to_r + 1, promo_piece)
 
     def sync_game(self, engine: Any) -> None:
         """
@@ -269,7 +424,7 @@ class PhysicalMoveTracker:
         board: chess.Board = engine.board
 
         # ---------------------------------------------------------------------
-        # 2. Handle Player Turn & Piece Lifting
+        # 2. Handle Player Turn & Active Pending Promotion
         # ---------------------------------------------------------------------
         my_color = getattr(engine, "my_color", None)
         if my_color is not None:
@@ -278,6 +433,97 @@ class PhysicalMoveTracker:
                 # It's opponent's turn. Physical piece lift by player is suppressed.
                 self.last_physical_state = [row[:] for row in physical_state]
                 return None
+
+        # ---------------------------------------------------------------------
+        # 2.5 Royal Promotion Scepter State Machine
+        # ---------------------------------------------------------------------
+        if self.pending_promotion is not None:
+            from_c, from_r = self.pending_promotion["from"]
+            to_c, to_r = self.pending_promotion["to"]
+            options = self.pending_promotion.get("options", {})
+            start_time = self.pending_promotion.get("start_time", 0.0)
+            timeout_s = self.pending_promotion.get("timeout_s", 5.0)
+            is_capture = bool(self.pending_promotion.get("is_capture", False))
+
+            # 1. Promoting pawn picked up from `to` square (cancelled / returned)
+            if physical_state[to_c][to_r] == 0:
+                logger.info(
+                    f"Promoting pawn lifted from ({to_c},{to_r}). Promotion cancelled, returning control to ({from_c},{from_r})."
+                )
+                self.pending_promotion = None
+                self.lifted_square = (from_c, from_r)
+                self.invalid_placement = None
+
+                # Recalculate legal targets & captures for from_sq
+                sq_from = chess.square(from_c, from_r)
+                targets = []
+                captures = []
+                for m in board.legal_moves:
+                    if m.from_square == sq_from:
+                        t_file = chess.square_file(m.to_square)
+                        t_rank = chess.square_rank(m.to_square)
+                        if (t_file, t_rank) not in targets:
+                            targets.append((t_file, t_rank))
+                        if board.is_capture(m) and (t_file, t_rank) not in captures:
+                            captures.append((t_file, t_rank))
+                self.legal_targets = targets
+                self.legal_captures = captures
+                self.last_physical_state = [row[:] for row in physical_state]
+                return None
+
+            # 2. Check physical placement on any of options[piece]
+            for piece, (opt_c, opt_r) in options.items():
+                if physical_state[opt_c][opt_r] != 0:
+                    logger.info(
+                        f"Promotion piece '{piece}' physically selected at ({opt_c},{opt_r}) for move ({from_c},{from_r}) -> ({to_c},{to_r})"
+                    )
+                    self.pending_promotion = None
+                    self.arrival_flash = {
+                        "square": (to_c, to_r),
+                        "start_time": time.time(),
+                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                        "is_capture": is_capture,
+                    }
+                    sq_from = chess.square(from_c, from_r)
+                    sq_to = chess.square(to_c, to_r)
+                    uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{piece}"
+                    self.set_in_flight_move(from_c, from_r, to_c, to_r, uci_move)
+
+                    self.lifted_square = None
+                    self.legal_targets = []
+                    self.legal_captures = []
+                    self.invalid_placement = None
+                    self.last_physical_state = [row[:] for row in physical_state]
+                    return (from_c + 1, from_r + 1, to_c + 1, to_r + 1, piece)
+
+            # 3. Check timeout: auto-queen
+            elapsed = time.time() - start_time
+            if elapsed >= timeout_s:
+                logger.info(
+                    f"Promotion timed out after {elapsed:.2f}s (>= {timeout_s}s). Auto-queening."
+                )
+                self.pending_promotion = None
+                self.arrival_flash = {
+                    "square": (to_c, to_r),
+                    "start_time": time.time(),
+                    "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                    "is_capture": is_capture,
+                }
+                sq_from = chess.square(from_c, from_r)
+                sq_to = chess.square(to_c, to_r)
+                uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}q"
+                self.set_in_flight_move(from_c, from_r, to_c, to_r, uci_move)
+
+                self.lifted_square = None
+                self.legal_targets = []
+                self.legal_captures = []
+                self.invalid_placement = None
+                self.last_physical_state = [row[:] for row in physical_state]
+                return (from_c + 1, from_r + 1, to_c + 1, to_r + 1, "q")
+
+            # 4. Promotion still pending physical selection
+            self.last_physical_state = [row[:] for row in physical_state]
+            return None
 
         turn_color = board.turn  # chess.WHITE (True) or chess.BLACK (False)
 
@@ -301,32 +547,56 @@ class PhysicalMoveTracker:
                         sq_to = cap_sq
                         t_c, t_r = cap_c, cap_r
 
-                        self.arrival_flash = {
-                            "square": (t_c, t_r),
-                            "start_time": time.time(),
-                            "duration": ANIM_MOVE_CONFIRM_DURATION_S,
-                            "is_capture": True,
-                        }
-
                         promo_moves = [
                             m for m in board.legal_moves
                             if m.from_square == sq_from and m.to_square == sq_to and m.promotion
                         ]
-                        promo = "q" if promo_moves else None
-                        uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{promo or ''}"
-                        self.set_in_flight_move(from_c, from_r, t_c, t_r, uci_move)
+                        if promo_moves:
+                            is_white = (board.turn == chess.WHITE)
+                            layout = compute_promotion_layout(t_c, t_r, is_white, physical_state)
+                            self.pending_promotion = {
+                                "from": (from_c, from_r),
+                                "to": (t_c, t_r),
+                                "color": "white" if is_white else "black",
+                                "start_time": time.time(),
+                                "timeout_s": 5.0,
+                                "options": layout,
+                                "is_capture": True,
+                            }
+                            logger.info(
+                                f"Physical capture pawn promotion initiated: ({from_c},{from_r}) -> ({t_c},{t_r}). "
+                                f"Layout options: {layout}"
+                            )
+                            self.lifted_square = None
+                            self.legal_targets = []
+                            self.legal_captures = []
+                            self.pending_capture_target = None
+                            self.capture_candidate_attackers = []
+                            self.invalid_placement = None
+                            self.last_physical_state = [row[:] for row in physical_state]
+                            return None
+                        else:
+                            self.arrival_flash = {
+                                "square": (t_c, t_r),
+                                "start_time": time.time(),
+                                "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                                "is_capture": True,
+                            }
+                            promo = None
+                            uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}"
+                            self.set_in_flight_move(from_c, from_r, t_c, t_r, uci_move)
 
-                        move_result = (from_c + 1, from_r + 1, t_c + 1, t_r + 1, promo)
-                        logger.info(f"Physical capture move completed directly: ({from_c},{from_r}) -> ({t_c},{t_r}) uci={uci_move}")
+                            move_result = (from_c + 1, from_r + 1, t_c + 1, t_r + 1, promo)
+                            logger.info(f"Physical capture move completed directly: ({from_c},{from_r}) -> ({t_c},{t_r}) uci={uci_move}")
 
-                        self.lifted_square = None
-                        self.legal_targets = []
-                        self.legal_captures = []
-                        self.pending_capture_target = None
-                        self.capture_candidate_attackers = []
-                        self.invalid_placement = None
-                        self.last_physical_state = [row[:] for row in physical_state]
-                        return move_result
+                            self.lifted_square = None
+                            self.legal_targets = []
+                            self.legal_captures = []
+                            self.pending_capture_target = None
+                            self.capture_candidate_attackers = []
+                            self.invalid_placement = None
+                            self.last_physical_state = [row[:] for row in physical_state]
+                            return move_result
                     else:
                         # 2. Opponent piece returned to capture square -> Cancel capture intent
                         logger.info(f"Opponent piece returned to ({cap_c},{cap_r}). Capture intent cancelled.")
@@ -455,12 +725,6 @@ class PhysicalMoveTracker:
 
                 if is_placed:
                     is_capture = (existing_piece is not None or (t_c, t_r) == self.pending_capture_target)
-                    self.arrival_flash = {
-                        "square": (t_c, t_r),
-                        "start_time": time.time(),
-                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
-                        "is_capture": is_capture,
-                    }
 
                     # Check for castling move to prompt the corresponding Rook movement
                     # (geometric check only: a King moving two files horizontally is castling in standard chess)
@@ -480,9 +744,40 @@ class PhysicalMoveTracker:
                         m for m in board.legal_moves
                         if m.from_square == sq_from and m.to_square == sq_to and m.promotion
                     ]
-                    promo = "q" if promo_moves else None
+                    if promo_moves:
+                        is_white = (board.turn == chess.WHITE)
+                        layout = compute_promotion_layout(t_c, t_r, is_white, physical_state)
+                        self.pending_promotion = {
+                            "from": (from_c, from_r),
+                            "to": (t_c, t_r),
+                            "color": "white" if is_white else "black",
+                            "start_time": time.time(),
+                            "timeout_s": 5.0,
+                            "options": layout,
+                            "is_capture": is_capture,
+                        }
+                        logger.info(
+                            f"Pawn promotion initiated: ({from_c},{from_r}) -> ({t_c},{t_r}). "
+                            f"Layout options: {layout}"
+                        )
+                        self.lifted_square = None
+                        self.legal_targets = []
+                        self.legal_captures = []
+                        self.pending_capture_target = None
+                        self.capture_candidate_attackers = []
+                        self.invalid_placement = None
+                        self.last_physical_state = [row[:] for row in physical_state]
+                        return None
 
-                    uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}{promo or ''}"
+                    # Normal non-promotion move
+                    self.arrival_flash = {
+                        "square": (t_c, t_r),
+                        "start_time": time.time(),
+                        "duration": ANIM_MOVE_CONFIRM_DURATION_S,
+                        "is_capture": is_capture,
+                    }
+                    promo = None
+                    uci_move = f"{chess.square_name(sq_from)}{chess.square_name(sq_to)}"
                     self.set_in_flight_move(from_c, from_r, t_c, t_r, uci_move)
 
                     move_result = (from_c + 1, from_r + 1, t_c + 1, t_r + 1, promo)
@@ -538,6 +833,22 @@ class PhysicalMoveTracker:
                     "start_time": self.pending_castling_rook.get("start_time", 0.0),
                 }
                 if self.pending_castling_rook
+                else None
+            ),
+            "pending_promotion": (
+                {
+                    "from": list(self.pending_promotion["from"]),
+                    "to": list(self.pending_promotion["to"]),
+                    "color": self.pending_promotion["color"],
+                    "start_time": self.pending_promotion.get("start_time", 0.0),
+                    "timeout_s": self.pending_promotion.get("timeout_s", 5.0),
+                    "options": {
+                        k: list(v)
+                        for k, v in self.pending_promotion.get("options", {}).items()
+                    },
+                    "is_capture": self.pending_promotion.get("is_capture", False),
+                }
+                if self.pending_promotion
                 else None
             ),
             "arrival_flash": (
