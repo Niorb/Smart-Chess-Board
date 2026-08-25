@@ -45,6 +45,9 @@ def test_learn_advance_and_reset_gate_enters_recall():
         assert mgr.analysis_current_ply == 0
         assert mgr.analysis_active_board.fen().split()[0] == chess.STARTING_BOARD_FEN
         assert mgr.replay_complete is False
+        # Entering recall fires the visible "Memory Arm" sweep cue
+        assert mgr.active_animation is not None
+        assert mgr.active_animation.name == "RECALL_START"
 
     asyncio.run(_test())
 
@@ -161,6 +164,33 @@ def test_direct_recall_no_previous_game_stays_idle(monkeypatch):
         assert "error" in res
         assert mgr.game_status == "IDLE"
         assert mgr.analysis_submode == "review"
+
+    asyncio.run(_test())
+
+
+def test_learn_finished_game_ignores_extra_moves():
+    async def _test():
+        mgr = BoardStateManager()
+
+        # Inject a short custom learn session
+        mgr.game_status = "ANALYSIS"
+        mgr.analysis_submode = "replay_learn"
+        mgr.analysis_game_moves = ["e2e4", "e7e5"]
+        mgr.analysis_current_ply = 0
+        mgr.analysis_active_board = chess.Board()
+        mgr._reset_replay_session()
+
+        # Play through the entire learn line
+        assert mgr.handle_replay_move("e2e4")["action"] == "advance"
+        assert mgr.handle_replay_move("e7e5")["action"] == "advance"
+        assert mgr.replay_learned_ply == 2
+
+        # Any extra legal move after the game ends must NOT diverge or wedge
+        res = mgr.handle_replay_move("g1f3")
+        assert res["action"] == "learn_complete"
+        assert mgr.analysis_anchor_coord is None
+        assert mgr.analysis_branch_moves == []
+        assert mgr.analysis_current_ply == 2
 
     asyncio.run(_test())
 

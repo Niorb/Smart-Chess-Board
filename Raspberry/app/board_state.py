@@ -946,6 +946,10 @@ class BoardStateManager:
         self._analysis_grid_fen = None
         self.step_analysis(0)
         self.analysis_has_advanced = True
+        self.trigger_animation(
+            "RECALL_START",
+            {"night_mode": bool(settings.get("night_mode", False))},
+        )
         logger.info(
             "Memory recall phase started: replay the first "
             f"{self.replay_learned_ply} plies from memory."
@@ -1187,6 +1191,16 @@ class BoardStateManager:
 
         # ---- Learn phase -------------------------------------------------
         if self.analysis_submode == "replay_learn":
+            if expected is None:
+                # Full game already played in learn phase: ignore further moves
+                # (the user should set the pieces back to start memory recall).
+                self.move_tracker.clear_in_flight_move()
+                return {
+                    "action": "learn_complete",
+                    "phase": "learn",
+                    "ply": ply,
+                    "analysis": self.get_analysis_payload(),
+                }
             if is_match:
                 next_ply = self._replay_advance(uci)
                 self.replay_learned_ply = max(self.replay_learned_ply, next_ply)
@@ -2299,13 +2313,37 @@ class BoardStateManager:
                         turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
                         set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
 
-                    if self.analysis_submode == "replay_learn":
-                        # Learn phase: guide with the next Grandmaster move trace
-                        # (hidden while diverged so the snap-back guide stays readable)
-                        if (
-                            self.analysis_anchor_coord is None
-                            and 0 <= self.analysis_current_ply < len(self.analysis_game_moves)
-                        ):
+                    if self.analysis_anchor_coord is not None:
+                        # Diverged from the game line (learn or recall): violet anchor
+                        # square + "path home" guide for un-playing the wrong move.
+                        set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
+                        if self.analysis_branch_moves:
+                            c_return_home = COLOR_INT_NIGHT_RETURN_HOME if night_mode else COLOR_INT_RETURN_HOME
+                            rh_uci = self.analysis_branch_moves[-1]
+                            try:
+                                if len(rh_uci) >= 4:
+                                    rh_from = (ord(rh_uci[0]) - ord('a'), int(rh_uci[1]) - 1)
+                                    rh_to = (ord(rh_uci[2]) - ord('a'), int(rh_uci[3]) - 1)
+                                    if all(0 <= v < 8 for v in (*rh_from, *rh_to)):
+                                        if rh_from == self.analysis_anchor_coord:
+                                            rh_from = rh_to
+                                        render_return_home_guide(now, frame, rh_from, rh_to, c_return_home)
+                            except (ValueError, TypeError):
+                                pass
+                    elif self.analysis_submode == "replay_learn":
+                        # Learn phase: guide with the next Grandmaster move trace,
+                        # staged like in-game castling (king move first, rook prompt second).
+                        pending_rook = getattr(self.move_tracker, "pending_castling_rook", None)
+                        if pending_rook:
+                            # Stage 2: king placed on its castle destination -> prompt the rook move
+                            r_from = pending_rook.get("from")
+                            r_to = pending_rook.get("to")
+                            if r_from and r_to:
+                                set_square_leds(r_from[0], r_from[1], c_opp_from)
+                                set_square_leds(r_to[0], r_to[1], c_move_trace)
+                                rook_path = interpolate_move_path(r_from[0], r_from[1], r_to[0], r_to[1])
+                                render_move_trace(rook_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
+                        elif 0 <= self.analysis_current_ply < len(self.analysis_game_moves):
                             curr_move = self.analysis_game_moves[self.analysis_current_ply]
                             if len(curr_move) >= 4:
                                 g_f_c = ord(curr_move[0]) - ord('a')
@@ -2313,36 +2351,27 @@ class BoardStateManager:
                                 g_t_c = ord(curr_move[2]) - ord('a')
                                 g_t_r = int(curr_move[3]) - 1
                                 if all(0 <= v < 8 for v in (g_f_c, g_f_r, g_t_c, g_t_r)):
-                                    render_trace(g_f_c, g_f_r, g_t_c, g_t_r, c_move_trace, c_move_trace)
-                    else:
-                        # Recall phase: no move hints.
-                        if self.analysis_anchor_coord is not None:
-                            # Wrong move pending un-play: violet anchor square + "path home" guide
-                            set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
-                            if self.analysis_branch_moves:
-                                c_return_home = COLOR_INT_NIGHT_RETURN_HOME if night_mode else COLOR_INT_RETURN_HOME
-                                rh_uci = self.analysis_branch_moves[-1]
-                                try:
-                                    if len(rh_uci) >= 4:
-                                        rh_from = (ord(rh_uci[0]) - ord('a'), int(rh_uci[1]) - 1)
-                                        rh_to = (ord(rh_uci[2]) - ord('a'), int(rh_uci[3]) - 1)
-                                        if all(0 <= v < 8 for v in (*rh_from, *rh_to)):
-                                            if rh_from == self.analysis_anchor_coord:
-                                                rh_from = rh_to
-                                            render_return_home_guide(now, frame, rh_from, rh_to, c_return_home)
-                                except (ValueError, TypeError):
-                                    pass
-                        elif self.replay_reveal_uci and len(self.replay_reveal_uci) >= 4:
-                            # Reveal the correct continuation after a recall mistake (amber trace)
-                            rv = self.replay_reveal_uci
-                            r_f_c = ord(rv[0]) - ord('a')
-                            r_f_r = int(rv[1]) - 1
-                            r_t_c = ord(rv[2]) - ord('a')
-                            r_t_r = int(rv[3]) - 1
-                            if all(0 <= v < 8 for v in (r_f_c, r_f_r, r_t_c, r_t_r)):
-                                reveal_pulse = math.sin(now * 4.0) * 0.5 + 0.5
-                                reveal_col = scale_color(c_move_inacc, 0.45 + 0.55 * reveal_pulse)
-                                render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col)
+                                    castle_rook = get_castle_rook_move(g_f_c, g_f_r, g_t_c, g_t_r)
+                                    if castle_rook:
+                                        # Stage 1: show ONLY the king's move; the rook prompt
+                                        # appears once the king reaches its castle square.
+                                        set_square_leds(g_f_c, g_f_r, c_move_trace)
+                                        set_square_leds(g_t_c, g_t_r, c_move_trace)
+                                        king_path = interpolate_move_path(g_f_c, g_f_r, g_t_c, g_t_r)
+                                        render_move_trace(king_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
+                                    else:
+                                        render_trace(g_f_c, g_f_r, g_t_c, g_t_r, c_move_trace, c_move_trace)
+                    elif self.replay_reveal_uci and len(self.replay_reveal_uci) >= 4:
+                        # Recall phase reveal: correct continuation after a mistake (amber trace)
+                        rv = self.replay_reveal_uci
+                        r_f_c = ord(rv[0]) - ord('a')
+                        r_f_r = int(rv[1]) - 1
+                        r_t_c = ord(rv[2]) - ord('a')
+                        r_t_r = int(rv[3]) - 1
+                        if all(0 <= v < 8 for v in (r_f_c, r_f_r, r_t_c, r_t_r)):
+                            reveal_pulse = math.sin(now * 4.0) * 0.5 + 0.5
+                            reveal_col = scale_color(c_move_inacc, 0.45 + 0.55 * reveal_pulse)
+                            render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col)
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):

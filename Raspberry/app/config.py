@@ -235,6 +235,7 @@ ANIM_GAME_LOST_DURATION_S = 2.8  # Duration for defeat Sovereign's Eclipse seque
 ANIM_GAME_DRAWN_DURATION_S = 2.6  # Duration for draw Celestial Equilibrium sequence
 ANIM_BOARD_READY_DURATION_S = 0.5  # Duration for board setup ready snap-flash
 ANIM_RECALL_COMPLETE_DURATION_S = 2.2  # Duration for memory recall completion celebration
+ANIM_RECALL_START_DURATION_S = 1.4  # Duration for memory recall phase start sweep
 ANIM_SEEKING_PERIOD_S = 2.8  # Full perimeter orbital period during matchmaking
 ANIM_SEEKING_DURATION_S = 5.6  # Duration for one-shot seeking test animation
 ANIM_ANALYSIS_COMPUTING_DURATION_S = 10.0  # Duration for analysis computing animation

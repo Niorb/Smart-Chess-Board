@@ -21,6 +21,7 @@ try:
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
         ANIM_RECALL_COMPLETE_DURATION_S,
+        ANIM_RECALL_START_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
@@ -32,6 +33,7 @@ try:
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
+        COLOR_INT_AZURE,
         COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_EQUILIBRIUM,
         COLOR_INT_DRAW_PEARL,
@@ -48,6 +50,7 @@ try:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
@@ -64,6 +67,7 @@ try:
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
         COLOR_INT_NIGHT_PROMO_QUEEN,
@@ -77,6 +81,7 @@ try:
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PROMO_BISHOP,
@@ -107,6 +112,7 @@ except ImportError:
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
         ANIM_RECALL_COMPLETE_DURATION_S,
+        ANIM_RECALL_START_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
@@ -118,6 +124,7 @@ except ImportError:
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
+        COLOR_INT_AZURE,
         COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_EQUILIBRIUM,
         COLOR_INT_DRAW_PEARL,
@@ -134,6 +141,7 @@ except ImportError:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
@@ -150,6 +158,7 @@ except ImportError:
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
         COLOR_INT_NIGHT_PROMO_QUEEN,
@@ -163,6 +172,7 @@ except ImportError:
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PROMO_BISHOP,
@@ -207,6 +217,7 @@ except ImportError:
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
         COLOR_INT_MOVE_TRACE,
+        COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
@@ -1120,6 +1131,38 @@ def render_recall_complete(progress: float, frame: list[int], params: dict[str, 
 
 
 @dataclass
+def render_recall_start(progress: float, frame: list[int], params: dict[str, Any]) -> None:
+    """
+    "Memory Arm" sweep announcing the recall phase start.
+
+    A rising Royal Violet wave sweeps from White's home ranks toward Black's,
+    trailed by a soft Azure shimmer, then dissolves. Peak active squares
+    <= 16 (~125mA day, ~55mA night) - within power budget.
+    """
+    night = bool(params.get("night_mode", False))
+    violet = COLOR_INT_NIGHT_ROYAL_VIOLET if night else COLOR_INT_ROYAL_VIOLET
+    azure = COLOR_INT_NIGHT_AZURE if night else COLOR_INT_AZURE
+
+    wave_row = progress * 10.0 - 1.0  # -1 .. 9 (enters/exits gracefully)
+
+    for r in range(8):
+        d = r - wave_row  # rows below the crest have negative d
+        if -1.2 < d <= 0:
+            # Crest: bright royal violet with breathing shimmer
+            intensity = (1.0 + d / 1.2) * (0.75 + 0.25 * math.sin(time.time() * 18.0))
+            col = scale_color(violet, max(0.0, intensity))
+        elif 0 < d <= 1.6:
+            # Trailing azure shimmer above the crest
+            fade = 1.0 - d / 1.6
+            col = scale_color(azure, 0.45 * fade)
+        else:
+            continue
+        for c in range(8):
+            for idx in get_led_indices(r, c):
+                if 0 <= idx < len(frame):
+                    frame[idx] = col
+
+
 class LifecycleAnimation:
     """State and rendering coordinator for a procedural LED lifecycle animation."""
     name: str
@@ -1150,6 +1193,8 @@ class LifecycleAnimation:
             render_game_started(progress, frame, self.params)
         elif anim_name == "RECALL_COMPLETE":
             render_recall_complete(progress, frame, self.params)
+        elif anim_name == "RECALL_START":
+            render_recall_start(progress, frame, self.params)
         elif anim_name == "GAME_WON":
             render_game_won(progress, frame, self.params, now=now)
         elif anim_name == "GAME_LOST":
@@ -1181,6 +1226,7 @@ def create_animation(
     durations = {
         "GAME_STARTED": ANIM_GAME_START_DURATION_S,
         "RECALL_COMPLETE": ANIM_RECALL_COMPLETE_DURATION_S,
+        "RECALL_START": ANIM_RECALL_START_DURATION_S,
         "GAME_WON": ANIM_GAME_WON_DURATION_S,
         "GAME_LOST": ANIM_GAME_LOST_DURATION_S,
         "GAME_DRAWN": ANIM_GAME_DRAWN_DURATION_S,
