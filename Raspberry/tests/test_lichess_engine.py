@@ -863,6 +863,12 @@ def test_seek_retries_once_after_stale_http2_connection():
             class _StreamOK:
                 status_code = 200
 
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *args):
+                    return False
+
                 async def aread(self):
                     return b""
 
