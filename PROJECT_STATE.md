@@ -3,7 +3,29 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Seek Match Grace Window (Event-Stream Fallback Fix) (2026-08-25)
+## Latest Change — Web-Only Analysis Navigation (2026-08-25)
+1. **Keyboard-driven analysis in the webapp (board fully passive)**:
+   - **Navigation endpoint** (`POST /api/analysis/nav {"direction": ...}` →
+     `BoardStateManager.navigate_analysis()`): "back"/"forward" step the mainline;
+     while in a variation sandbox "back" un-plays exactly ONE branch move and
+     rebuilds the position; "start"/"end" jump to first/last mainline ply exiting
+     any branch. Responses carry an explicit `on_mainline` flag.
+   - **Keyboard bindings** (`AnalysisTab.tsx`): `← →` / `h l` step moves,
+     `Home End` / `g G` jump start/end (ignored while typing in inputs).
+   - **Back-on-mainline indicator**: green toast "Back on the main game line"
+     fires exactly on the false→true `on_mainline` transition.
+   - **Web move playback**: Top Candidates chips are clickable and a free-text
+     field accepts SAN (`Nf3`, `exd5`, `O-O`) or UCI; `/api/analysis/move` now uses
+     `source="web"` which skips LED arrival flashes and tracker interaction so the
+     physical board stays completely dark during web-only analysis.
+   - Variation banner now shows the full off-line move sequence.
+2. **Bug fixed**: `navigate_analysis("back")` clears divergence anchors when the
+   last branch move is un-played (previously left stale violet anchor state).
+3. **Automated Verification**: 5 new tests (branch pop-one-at-a-time FEN
+   reconstruction, forward-no-op while branched, start/end branch exit, board-passive
+   web moves, SAN input incl. castling); 353/353 passing on physical Raspberry Pi.
+
+## Previous Change — Seek Match Grace Window (Event-Stream Fallback Fix) (2026-08-25)
 1. **Regression fixed (`lichess_engine.py`)**: The previous stale-connection fix snapped status
    back to IDLE the instant the seek NDJSON stream closed without a match — but Lichess often
    delivers the matched `gameStart` via the persistent event stream instead, milliseconds later.
