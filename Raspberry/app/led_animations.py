@@ -1070,7 +1070,6 @@ def render_analysis_computing(
 # LIFECYCLE ANIMATION CLASS & FACTORY
 # =============================================================================
 
-@dataclass
 def render_recall_complete(progress: float, frame: list[int], params: dict[str, Any]) -> None:
     """
     "Memory Bloom" celebration for a completed Replay Trainer recall session.
@@ -1120,6 +1119,7 @@ def render_recall_complete(progress: float, frame: list[int], params: dict[str, 
         set_sq(4, 4, center_col)
 
 
+@dataclass
 class LifecycleAnimation:
     """State and rendering coordinator for a procedural LED lifecycle animation."""
     name: str
