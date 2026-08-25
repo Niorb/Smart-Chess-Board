@@ -1130,7 +1130,6 @@ def render_recall_complete(progress: float, frame: list[int], params: dict[str, 
         set_sq(4, 4, center_col)
 
 
-@dataclass
 def render_recall_start(progress: float, frame: list[int], params: dict[str, Any]) -> None:
     """
     "Memory Arm" sweep announcing the recall phase start.
@@ -1163,6 +1162,7 @@ def render_recall_start(progress: float, frame: list[int], params: dict[str, Any
                     frame[idx] = col
 
 
+@dataclass
 class LifecycleAnimation:
     """State and rendering coordinator for a procedural LED lifecycle animation."""
     name: str
