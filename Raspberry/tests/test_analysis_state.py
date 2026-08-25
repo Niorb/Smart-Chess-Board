@@ -873,7 +873,8 @@ def test_web_moves_are_board_passive():
         res = mgr.handle_analysis_move("e7e5", source="web")
         assert res["action"] == "advance"
 
-        res = mgr.handle_analysis_move("g8f6", source="web")
+        # White to move: d2d4 is legal but off the stored line -> branch
+        res = mgr.handle_analysis_move("d2d4", source="web")
         assert res["action"] == "branch"
         assert mgr.arrival_flash is before
 
@@ -882,8 +883,10 @@ def test_web_moves_are_board_passive():
 
 def test_web_move_accepts_san_input():
     async def _test():
+        # Mainline whose final ply is white castling (stored as UCI e1g1)
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "e1g1"]
         mgr = BoardStateManager()
-        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"])
+        await mgr.start_analysis_mode(moves_uci=moves)
         mgr.step_analysis(2)  # position after 1.e4 e5, white to move
 
         # SAN knight move advances the mainline (expected ply is g1f3)
@@ -895,11 +898,11 @@ def test_web_move_accepts_san_input():
         res = mgr.handle_analysis_move("Nh6", source="web")
         assert res["action"] == "branch"
 
-        # Castling SAN also accepted as an alternative line
+        # Castling SAN advances the mainline when it matches the stored UCI move
         mgr.navigate_analysis("back")  # un-play Nh6, back on mainline
-        mgr.step_analysis(5)  # after 3.Bc4, black to move (f8/g8 free -> O-O legal)
+        mgr.step_analysis(6)  # before white castles
         res = mgr.handle_analysis_move("O-O", source="web")
-        assert res["action"] == "branch"
-        assert mgr.analysis_branch_moves == ["e8g8"]
+        assert res["action"] == "advance"
+        assert mgr.analysis_current_ply == 7
 
     asyncio.run(_test())

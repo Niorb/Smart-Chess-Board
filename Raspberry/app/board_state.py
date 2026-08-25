@@ -871,6 +871,10 @@ class BoardStateManager:
                         pass
                 self._last_restoration_sig = None
                 action = "branch_back"
+                if not self.analysis_branch_moves:
+                    # Variation fully un-played: back on the main timeline.
+                    self.analysis_anchor_ply = None
+                    self.analysis_anchor_coord = None
             else:
                 self.step_analysis(max(0, self.analysis_current_ply - 1))
         elif direction == "forward":
