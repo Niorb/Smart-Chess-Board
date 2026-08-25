@@ -3,7 +3,25 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Lichess-Style Interactive Web Board (2026-08-25)
+## Latest Change — Smoother Web Board, Always-On Eval Bar & Color-Coded Moves (2026-08-25)
+1. **Click-to-move fixed**: first click on a piece selected AND instantly deselected it
+   (pointerup treated every quick release as a toggle). Selection now persists on the first
+   click; only a second click on the same piece deselects — click-piece-then-square works.
+2. **Smoother animations (`WebAnalysisBoard.tsx`)**:
+   - Drag ghost no longer re-renders the 64-square grid per mousemove — it follows the
+     pointer via direct DOM `transform` writes (single React render per grab).
+   - Arriving pieces glide from their origin square with a 140 ms cubic-bezier CSS
+     transition on every navigation step / played move.
+3. **Always-on eval bar**: vertical win-chance bar rendered beside the web board regardless
+   of the play-section `eval_bar_enabled` setting; shows the numeric eval (+x.x / M#) at the
+   boundary line, animated height transitions.
+4. **Chess.com-style color coding**: mainline notation tiles tinted by classification
+   (emerald BEST / teal GOOD / yellow INACC / orange MISTAKE / red BLUNDER) with an inline
+   legend; the web-board last-move highlight is tinted by the played move's classification
+   too. Variation moves keep the violet sandbox tint.
+5. **Automated Verification**: frontend build clean; 357/357 passing on physical Raspberry Pi.
+
+## Previous Change — Lichess-Style Interactive Web Board (2026-08-25)
 1. **Full redesign (`WebAnalysisBoard.tsx`)**:
    - **Geometry fixed**: explicit `grid-template-rows: repeat(8, minmax(0,1fr))` inside an
      `aspect-square` container — perfectly square cells on every row (empty rows no longer
