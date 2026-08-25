@@ -958,13 +958,16 @@ def test_analysis_payload_exposes_legal_moves_and_check():
     async def _test():
         mgr = BoardStateManager()
         await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5", "g1f3"])
-        mgr.step_analysis(2)  # start position, white to move
+        mgr.step_analysis(0)  # start position, white to move
 
         payload = mgr.get_analysis_payload()
         assert "e2e4" in payload["legal_moves"]
         assert "g1f3" in payload["legal_moves"]
         assert "e7e5" not in payload["legal_moves"]  # black move while white to move
         assert payload["in_check"] is False
+
+        mgr.step_analysis(2)  # after 1.e4 e5
+        assert "g1f3" in mgr.get_analysis_payload()["legal_moves"]
 
     asyncio.run(_test())
 
