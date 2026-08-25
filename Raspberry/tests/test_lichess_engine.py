@@ -888,7 +888,15 @@ def test_seek_retries_once_after_stale_http2_connection():
         assert attempts["n"] == 2, "seek must retry exactly once on stale h2 connection"
         mock_rec.assert_awaited_once()
         assert recreated["n"] == 1, "client must be recreated between attempts"
-        assert mock_state_mgr.game_status == "IDLE"
+        # Grace window: stream closed without delivering the match, so the board
+        # must stay SEEKING for the event-stream fallback instead of snapping to IDLE.
+        assert mock_state_mgr.game_status == "SEEKING"
+
+        # The matched gameStart arrives via the event stream moments later
+        with patch.object(engine, "stream_game", new_callable=AsyncMock):
+            accepted = engine._handle_game_start_event({"id": "graceGame1"}, mock_state_mgr)
+        assert accepted is True, "event-stream match must be accepted during seek grace"
+        assert mock_state_mgr.game_status == "PLAYING"
 
     asyncio.run(_test())
 

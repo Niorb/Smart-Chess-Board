@@ -160,6 +160,9 @@ class LichessEngine:
         self._seek_task: asyncio.Task | None = None
         self._stream_task: asyncio.Task | None = None
         self._event_stream_task: asyncio.Task | None = None
+        self._seek_grace_task: asyncio.Task | None = None
+        # Incremented per seek; lets stale grace timers detect they are obsolete
+        self._seek_generation: int = 0
         self._cancel_event = asyncio.Event()
 
     @property
@@ -724,10 +727,40 @@ class LichessEngine:
         if self._seek_task and not self._seek_task.done():
             self._seek_task.cancel()
 
+        self._seek_generation += 1
         self._seek_task = asyncio.create_task(
             self._seek_and_stream(state_manager, time_mins, inc_secs, rated, color, rating_range=rating_range)
         )
         return True
+
+    def _schedule_seek_grace_end(self, state_manager, delay_s: float = 10.0) -> None:
+        """
+        Keeps SEEKING briefly after the seek NDJSON stream closes without a match.
+
+        Lichess frequently closes the seek stream and delivers the matched gameStart
+        through the persistent event stream instead. Flipping straight back to IDLE
+        would make the event-stream fallback reject our own match. After the grace
+        window expires with no match, the board returns to IDLE. A newer seek
+        invalidates any pending grace timer via the generation counter.
+        """
+        gen = self._seek_generation
+
+        async def _grace():
+            await asyncio.sleep(delay_s)
+            if (
+                gen == self._seek_generation
+                and state_manager
+                and getattr(state_manager, "game_status", None) == "SEEKING"
+            ):
+                logger.info("Seek grace window elapsed without a match. Returning to IDLE.")
+                state_manager.game_status = "IDLE"
+
+        if self._seek_grace_task and not self._seek_grace_task.done():
+            self._seek_grace_task.cancel()
+        try:
+            self._seek_grace_task = asyncio.create_task(_grace())
+        except RuntimeError:
+            pass
 
     async def _seek_and_stream(
         self,
@@ -799,9 +832,14 @@ class LichessEngine:
                                 self.stream_game(game_id, state_manager)
                             )
                             return
-                # Stream ended without a match (server closed the seek)
-                logger.info("Seek stream closed without a match.")
-                state_manager.game_status = "IDLE"
+                # Stream ended without a match — Lichess often notifies via the
+                # event stream instead. Hold SEEKING for a short grace window
+                # so the event-stream fallback can still accept the match.
+                logger.info(
+                    "Seek stream closed without a match; holding SEEKING briefly "
+                    "for event-stream match fallback."
+                )
+                self._schedule_seek_grace_end(state_manager)
                 return
             except asyncio.CancelledError:
                 logger.info("Seek task cancelled.")
