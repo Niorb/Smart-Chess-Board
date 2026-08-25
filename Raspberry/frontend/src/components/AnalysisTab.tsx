@@ -177,15 +177,12 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   // Dedicated webapp-only analysis: runs the same engine but the physical board
   // is never used; opens the interactive web board when done.
-  const handleStartWebAnalysis = async () => {
+  const handleStartWebAnalysis = async (opts?: { moves_uci?: string[] }) => {
     setWebBoardOpen(true);
-    if (analysis?.active && analysis.submode === 'review') {
-      // Analysis already running: just reveal the board.
-      return;
-    }
     setFeedbackMsg({ text: 'Analyzing game with Stockfish (webapp only)...', type: 'info' });
     try {
-      await startAnalysis();
+      await startAnalysis({ ...opts, web_only: true });
+      prevOnMainlineRef.current = true;
       setFeedbackMsg({ text: 'Analysis ready — use ← → / h l on the board below.', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3500);
     } catch {
@@ -195,20 +192,13 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   const handleLoadRecentGame = async (game: LichessRecentGame) => {
     setSelectedGameId(game.id);
+    // Loads the selected online match into a webapp-only analysis session
+    await handleStartWebAnalysis({ moves_uci: game.moves_uci });
     setFeedbackMsg({
-      text: `Loading & analyzing match vs ${game.opponent.username} (${game.opening.name})...`,
-      type: 'info',
+      text: `Match vs ${game.opponent.username} loaded into the web board! (${game.moves_count} moves)`,
+      type: 'success',
     });
-    try {
-      await startAnalysis({ moves_uci: game.moves_uci });
-      setFeedbackMsg({
-        text: `Analysis ready for match vs ${game.opponent.username}! (${game.moves_count} moves)`,
-        type: 'success',
-      });
-      setTimeout(() => setFeedbackMsg(null), 3500);
-    } catch {
-      setFeedbackMsg({ text: 'Failed to load game for analysis.', type: 'error' });
-    }
+    setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
   const handleStep = async (ply: number) => {
@@ -481,14 +471,10 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               </div>
             </div>
             <button
-              onClick={handleStartWebAnalysis}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0 ${
-                analysis?.active
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-              }`}
+              onClick={() => handleStartWebAnalysis()}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0"
             >
-              {analysis?.active ? 'Show Web Board' : 'Analyse in Webapp'}
+              {analysis?.active ? 'Restart in Webapp' : 'Analyse in Webapp'}
             </button>
           </div>
 
@@ -531,7 +517,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Select any of your last 10 online matches to load into full Stockfish review and physical board playback.
+                    Select any of your last 10 online matches to load it into the interactive web board (Stockfish review, keyboard navigation).
                   </p>
                 </div>
               </div>
@@ -658,7 +644,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                               className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow transition-all hover:scale-105 active:scale-95"
                             >
                               <PlayCircle className="w-3.5 h-3.5" />
-                              Analyze
+                              Analyse Web
                             </button>
                           </div>
                         </div>

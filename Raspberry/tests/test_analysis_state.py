@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from types import SimpleNamespace
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -904,5 +905,50 @@ def test_web_move_accepts_san_input():
         res = mgr.handle_analysis_move("O-O", source="web")
         assert res["action"] == "advance"
         assert mgr.analysis_current_ply == 7
+
+    asyncio.run(_test())
+
+
+def test_web_only_session_ignores_physical_board_reset_gate():
+    async def _test():
+        mgr = BoardStateManager()
+        # Simulate the physical board sitting at the full starting position
+        for c in range(8):
+            mgr.physical_state[c][1] = 1
+            mgr.physical_state[c][6] = 1
+            mgr.physical_state[c][0] = 1
+            mgr.physical_state[c][7] = 1
+
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"], source="web")
+        assert mgr.analysis_web_only is True
+
+        # Advance a ply (web navigation) -> has_advanced becomes True
+        res = await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"], source="web")
+        assert res["active"] is True
+        mgr.handle_analysis_move("e2e4", source="web")
+        assert mgr.analysis_has_advanced is True
+
+        # The board-reset gate must NOT conclude a web-only session
+        setup_res = SimpleNamespace(is_setup_ready=True)
+        assert mgr._try_conclude_analysis_on_board_reset(setup_res) is False
+        assert mgr.game_status == "ANALYSIS"
+
+        # Board-sourced sessions still conclude as before
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"], source="board")
+        assert mgr.analysis_web_only is False
+        mgr.step_analysis(1)
+        assert mgr._try_conclude_analysis_on_board_reset(setup_res) is True
+        assert mgr.game_status == "IDLE"
+
+    asyncio.run(_test())
+
+
+def test_stop_analysis_clears_web_only_flag():
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4"], source="web")
+        assert mgr.analysis_web_only is True
+        mgr.stop_analysis_mode()
+        assert mgr.analysis_web_only is False
 
     asyncio.run(_test())

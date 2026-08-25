@@ -296,7 +296,7 @@ export async function restartPreviousGame() {
 
 // --- Post-Game Analysis & Training API ---
 
-export async function startAnalysis(options?: { moves_uci?: string[]; game_id?: string }) {
+export async function startAnalysis(options?: { moves_uci?: string[]; game_id?: string; web_only?: boolean }) {
   return jsonPost('/analysis/start', options || {}, 120000);
 }
 

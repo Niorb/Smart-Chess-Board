@@ -202,6 +202,7 @@ class StopLocalGameRequest(BaseModel):
 class StartAnalysisRequest(BaseModel):
     moves_uci: list[str] | None = None
     game_id: str | None = None
+    web_only: bool = False
 
 
 class StepAnalysisRequest(BaseModel):
@@ -688,10 +689,16 @@ async def set_game_mode_route(body: ModeRequest):
 
 @app.post("/api/analysis/start")
 async def start_analysis_route(body: StartAnalysisRequest | None = None):
-    """Activates post-game analysis on the last game or custom moves / GM game."""
+    """Activates post-game analysis on the last game or custom moves / GM game.
+
+    web_only=true runs a webapp-only session (physical board fully ignored).
+    """
     moves = body.moves_uci if body else None
     game_id = body.game_id if body else None
-    return await state_manager.start_analysis_mode(moves_uci=moves, game_id=game_id)
+    web_only = bool(body.web_only) if body else False
+    return await state_manager.start_analysis_mode(
+        moves_uci=moves, game_id=game_id, source="web" if web_only else "board"
+    )
 
 
 @app.post("/api/analysis/step")

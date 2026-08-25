@@ -430,6 +430,9 @@ class BoardStateManager:
         self.replay_mistakes: int = 0
         self.replay_reveal_uci: str | None = None
         self.replay_complete: bool = False
+        # Web-only analysis: the physical board is unused; reset gates, move
+        # tracking, and LED guidance are all suppressed for this session.
+        self.analysis_web_only: bool = False
         self.analysis_is_loading: bool = False
         self.analysis_error: str | None = None
         self.analysis_has_advanced: bool = False
@@ -712,13 +715,20 @@ class BoardStateManager:
             logger.warning(f"Could not persist last_game_moves from local game: {e}")
 
     async def start_analysis_mode(
-        self, moves_uci: list[str] | None = None, game_id: str | None = None
+        self,
+        moves_uci: list[str] | None = None,
+        game_id: str | None = None,
+        source: str = "board",
     ) -> dict[str, Any]:
         """
         Activates Post-Game Analysis mode on the board and starts asynchronous batch evaluation.
+
+        source="web" starts a webapp-only session: the physical board is ignored
+        (no reset-to-IDLE gate, no move tracking, no LED guidance).
         """
         self.game_status = "ANALYSIS"
         self.analysis_submode = "review"
+        self.analysis_web_only = source == "web"
         self.analysis_is_loading = True
         self.analysis_has_advanced = False
         self.analysis_error = None
@@ -902,6 +912,7 @@ class BoardStateManager:
         """Exits analysis mode and returns to IDLE."""
         self.game_status = "IDLE"
         self.analysis_submode = "review"
+        self.analysis_web_only = False
         self.analysis_branch_moves = []
         self.analysis_anchor_ply = None
         self.analysis_anchor_coord = None
@@ -954,6 +965,7 @@ class BoardStateManager:
         """
         if (
             getattr(self, "analysis_is_loading", False)
+            or getattr(self, "analysis_web_only", False)
             or not setup_res.is_setup_ready
         ):
             return False
@@ -2221,7 +2233,8 @@ class BoardStateManager:
                     )
 
             # Layer 2.2: Analysis & Training State Highlights
-            elif self.game_status == "ANALYSIS":
+            # (web-only sessions keep the physical board completely dark)
+            elif self.game_status == "ANALYSIS" and not getattr(self, "analysis_web_only", False):
                 eval_bar_enabled = settings.get("eval_bar_enabled", True)
                 # 0. Live Perimeter Evaluation Bar (File h, Strip 2)
                 if eval_bar_enabled and self.analysis_evaluations:
@@ -2753,42 +2766,47 @@ class BoardStateManager:
                                     else:
                                         self.guardrail_result = None
                             elif self.game_status == "ANALYSIS":
-                                # Check physical starting position setup readiness
-                                setup_res = self.setup_validator.validate(self.physical_state)
-                                self.setup_result = setup_res
+                                # Web-only sessions ignore the physical board entirely:
+                                # no reset gate, no move tracking, no guardrail noise.
+                                if getattr(self, "analysis_web_only", False):
+                                    self.guardrail_result = None
+                                else:
+                                    # Check physical starting position setup readiness
+                                    setup_res = self.setup_validator.validate(self.physical_state)
+                                    self.setup_result = setup_res
 
-                                # If the user puts all pieces back into the standard initial
-                                # starting position after reviewing, conclude Analysis mode.
-                                if not self._try_conclude_analysis_on_board_reset(setup_res):
-                                    if not getattr(self, "analysis_is_loading", False):
-                                        if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
-                                            self.analysis_has_advanced = True
+                                    # If the user puts all pieces back into the standard initial
+                                    # starting position after reviewing, conclude Analysis mode.
+                                    if not self._try_conclude_analysis_on_board_reset(setup_res):
+                                        if not getattr(self, "analysis_is_loading", False):
+                                            if self.analysis_current_ply > 0 or len(self.analysis_branch_moves) > 0:
+                                                self.analysis_has_advanced = True
 
-                                    # Auto-detect if physical board was restored to anchor position or earlier branch step
-                                    if self.analysis_anchor_coord is not None:
-                                        self._check_analysis_board_restoration()
+                                        # Auto-detect if physical board was restored to anchor position or earlier branch step
+                                        if self.analysis_anchor_coord is not None:
+                                            self._check_analysis_board_restoration()
 
-                                    # Physical Move Tracking during ANALYSIS mode
-                                    adapter = AnalysisEngineAdapter(self.analysis_active_board)
-                                    move_result = self.move_tracker.process_physical_state(
-                                        self.physical_state, adapter
-                                    )
-                                    if move_result:
-                                        from_f, from_r, to_f, to_r, promo = move_result
-                                        from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                        to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                        uci = f"{from_sq}{to_sq}{promo or ''}"
-                                        logger.info(f"Physical analysis move detected: {uci}")
-                                        self.handle_analysis_move(uci)
-
-                                    if getattr(self, "analysis_active_board", None):
-                                        self.guardrail_result = self.setup_validator.validate_game_state(
-                                            self.physical_state,
-                                            self.analysis_active_board,
-                                            self.move_tracker,
+                                        # Physical Move Tracking during ANALYSIS mode
+                                        adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                                        move_result = self.move_tracker.process_physical_state(
+                                            self.physical_state, adapter
                                         )
-                                    else:
-                                        self.guardrail_result = None
+                                        if move_result:
+                                            from_f, from_r, to_f, to_r, promo = move_result
+                                            from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                            to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                            uci = f"{from_sq}{to_sq}{promo or ''}"
+                                            logger.info(f"Physical analysis move detected: {uci}")
+                                            self.handle_analysis_move(uci)
+
+                                        if getattr(self, "analysis_active_board", None):
+                                            self.guardrail_result = self.setup_validator.validate_game_state(
+                                                self.physical_state,
+                                                self.analysis_active_board,
+                                                self.move_tracker,
+                                            )
+                                        else:
+                                            self.guardrail_result = None
                             else:
                                 self.setup_result = self.setup_validator.validate(self.physical_state)
 
