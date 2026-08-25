@@ -320,11 +320,12 @@ class RestartPreviousGameGesture(BaseGesture):
       - Initial setup: Full standard chess starting position.
       - Step 1: Lift h2 pawn (column 7, row 1).
                 LEDs: Amber on h2 + four option squares lit on White's kingside back rank:
-                  - e1 King   (Royal Violet)    -> 15+10 time control
-                  - f1 Bishop (Cyan Azure)      -> 10+0 time control
-                  - g1 Knight (Mint Emerald)    -> 3+2 time control
+                  - e1 King   -> 15+10 time control
+                  - f1 Bishop -> 10+0 time control
+                  - g1 Knight -> 3+2 time control
+                  (all three share the same Cyan Azure; the currently selected
+                   time control glows in Royal Violet with a breathing pulse)
                   - h1 Rook   (Magenta=AI / Gold=Human) -> toggles AI vs Human opponent
-                The currently-selected time control square breathes brighter.
       - Step 2: Lift an option piece:
                   - Time-control pieces register their choice when placed back down
                     (confirmed with an arrival flash on that square).
@@ -354,9 +355,8 @@ class RestartPreviousGameGesture(BaseGesture):
         KNIGHT_COORD: "3+2",
     }
 
-    COLOR_INT_KING_OPTION = COLOR_INT_ROYAL_VIOLET
-    COLOR_INT_BISHOP_OPTION = COLOR_INT_AZURE
-    COLOR_INT_KNIGHT_OPTION = COLOR_INT_MINT_EMERALD
+    COLOR_INT_TC_OPTION = COLOR_INT_AZURE          # Shared hue for all time-control options
+    COLOR_INT_TC_SELECTED = COLOR_INT_ROYAL_VIOLET  # Distinct hue for the active selection
     COLOR_INT_AI_MODE = Color(255, 40, 180)  # Hot Magenta - Stockfish AI opponent selected
     COLOR_INT_HUMAN_MODE = Color(255, 200, 0)  # Golden Amber - Human opponent selected
 
@@ -504,13 +504,12 @@ class RestartPreviousGameGesture(BaseGesture):
         pulse = math.sin(now * 6.0) * 0.5 + 0.5
 
         def _option_color(coord: tuple[int, int]) -> int:
-            if coord == self.KING_COORD:
-                return self.COLOR_INT_KING_OPTION
-            if coord == self.BISHOP_COORD:
-                return self.COLOR_INT_BISHOP_OPTION
-            if coord == self.KNIGHT_COORD:
-                return self.COLOR_INT_KNIGHT_OPTION
-            return self.COLOR_INT_AI_MODE if self.opponent_mode == "ai" else self.COLOR_INT_HUMAN_MODE
+            if coord == self.ROOK_COORD:
+                return self.COLOR_INT_AI_MODE if self.opponent_mode == "ai" else self.COLOR_INT_HUMAN_MODE
+            # All time-control options share one hue; the active selection stands out
+            if self.TC_SELECTIONS.get(coord) == self.selected_tc:
+                return self.COLOR_INT_TC_SELECTED
+            return self.COLOR_INT_TC_OPTION
 
         options = [*self.TC_SELECTIONS, self.ROOK_COORD]
         for coord in options:

@@ -198,6 +198,36 @@ class LichessEngine:
             if owns:
                 await client.aclose()
 
+    async def _recreate_client(self) -> None:
+        """
+        Replaces the pooled HTTP/2 client with a fresh one.
+
+        Recovers from server-closed idle connections that poison the pool:
+        httpx only reports `client.is_closed` for explicit local closes, so a
+        stale pooled connection surfaces as h2 protocol errors on the next
+        request (e.g. ConnectionInputs.RECV_HEADERS in ConnectionState.CLOSED).
+        """
+        try:
+            if self.client and not self.client.is_closed:
+                await self.client.aclose()
+        except Exception:
+            pass
+        self.client = httpx.AsyncClient(
+            base_url=LICHESS_BASE_URL,
+            headers=self._get_headers(),
+            timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0),
+            http2=True,
+        )
+        logger.info("Lichess HTTP/2 client recreated (stale connection recovery).")
+
+    @staticmethod
+    def _is_stale_connection_error(e: Exception) -> bool:
+        """Detects transport/h2 failures caused by a dead pooled connection."""
+        if isinstance(e, httpx.TransportError):
+            return True
+        msg = str(e)
+        return "ConnectionState" in msg or "ConnectionInputs" in msg
+
 
     def _save_settings_off_loop(self, save_fn) -> None:
         """Persists settings without blocking the event loop when one is running."""
@@ -721,10 +751,12 @@ class LichessEngine:
         headers = self._get_headers()
         headers["Accept"] = "application/x-ndjson"
 
-        try:
-            async with self._request_client(headers, None) as client, client.stream(
-                "POST", "/api/board/seek", data=form_data
-            ) as response:
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                async with self._request_client(headers, None) as client, client.stream(
+                    "POST", "/api/board/seek", data=form_data
+                ) as response:
                     if response.status_code != 200:
                         err_text = await response.aread()
                         logger.error(f"Lichess seek failed (HTTP {response.status_code}): {err_text.decode('utf-8')}")
@@ -767,14 +799,36 @@ class LichessEngine:
                                 self.stream_game(game_id, state_manager)
                             )
                             return
-        except asyncio.CancelledError:
-            logger.info("Seek task cancelled.")
-            if state_manager and state_manager.game_status == "SEEKING":
+                # Stream ended without a match (server closed the seek)
+                logger.info("Seek stream closed without a match.")
                 state_manager.game_status = "IDLE"
-        except Exception as e:
-            logger.error(f"Error during seek streaming: {e}")
-            if state_manager and state_manager.game_status == "SEEKING":
-                state_manager.game_status = "IDLE"
+                return
+            except asyncio.CancelledError:
+                logger.info("Seek task cancelled.")
+                if state_manager and state_manager.game_status == "SEEKING":
+                    state_manager.game_status = "IDLE"
+                raise
+            except Exception as e:
+                last_error = e
+                if attempt == 0 and self._is_stale_connection_error(e):
+                    logger.warning(
+                        f"Stale HTTP/2 connection during seek ({e}); "
+                        "recreating client and retrying once."
+                    )
+                    await self._recreate_client()
+                    continue
+                break
+
+        logger.error(f"Error during seek streaming: {last_error}")
+        if state_manager and state_manager.game_status == "SEEKING":
+            state_manager.game_status = "IDLE"
+        # Visible failure cue: crimson flash on the gesture gate squares (g1/h1)
+        try:
+            state_manager.trigger_arrival_flash(
+                6, 0, is_capture=True, duration=1.2, extra_squares=[(7, 0)]
+            )
+        except Exception:
+            pass
 
     async def stream_game(self, game_id: str, state_manager):
         """Streams game state events from GET /api/board/game/stream/{game_id}."""

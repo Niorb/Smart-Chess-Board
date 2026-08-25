@@ -836,3 +836,80 @@ def test_get_interpolated_clocks_passthrough_without_board():
 
     result = engine.get_interpolated_clocks()
     assert result == {"white": 60000, "black": 30000}
+
+
+def test_seek_retries_once_after_stale_http2_connection():
+    """A server-closed pooled HTTP/2 connection must trigger one client-recreate retry."""
+    async def _test():
+        attempts = {"n": 0}
+        recreated = {"n": 0}
+        engine = LichessEngine()
+        engine.is_running = True
+        mock_state_mgr = MagicMock()
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def patched_client(headers, timeout):
+            class _C:
+                def stream(self, method, url, **kwargs):
+                    attempts["n"] += 1
+                    if attempts["n"] == 1:
+                        raise RuntimeError(
+                            "Invalid input ConnectionInputs.RECV_HEADERS in state ConnectionState.CLOSED"
+                        )
+                    return _StreamOK()
+
+            class _StreamOK:
+                status_code = 200
+
+                async def aread(self):
+                    return b""
+
+                async def aiter_lines(self):
+                    yield ""
+
+            yield _C()
+
+        async def fake_recreate():
+            recreated["n"] += 1
+
+        with patch.object(engine, "_request_client", patched_client), \
+             patch.object(engine, "_recreate_client", new_callable=AsyncMock, side_effect=fake_recreate) as mock_rec:
+            await engine._seek_and_stream(mock_state_mgr, 10, 0, False, "random")
+
+        assert attempts["n"] == 2, "seek must retry exactly once on stale h2 connection"
+        mock_rec.assert_awaited_once()
+        assert recreated["n"] == 1, "client must be recreated between attempts"
+        assert mock_state_mgr.game_status == "IDLE"
+
+    asyncio.run(_test())
+
+
+def test_seek_does_not_retry_on_permanent_error():
+    async def _test():
+        attempts = {"n": 0}
+        engine = LichessEngine()
+        engine.is_running = True
+        mock_state_mgr = MagicMock()
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def patched_client(headers, timeout):
+            class _C:
+                def stream(self, method, url, **kwargs):
+                    attempts["n"] += 1
+                    raise ValueError("totally unrelated permanent failure")
+
+            yield _C()
+
+        with patch.object(engine, "_request_client", patched_client), \
+             patch.object(engine, "_recreate_client", new_callable=AsyncMock) as mock_rec:
+            await engine._seek_and_stream(mock_state_mgr, 10, 0, False, "random")
+
+        assert attempts["n"] == 1, "non-transport errors must not be retried"
+        mock_rec.assert_not_called()
+        assert mock_state_mgr.game_status == "IDLE"
+
+    asyncio.run(_test())
