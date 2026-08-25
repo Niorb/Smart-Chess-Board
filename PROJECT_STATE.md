@@ -3,7 +3,23 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Replay Trainer (Memory Training) & Memory Replay Gesture (2026-08-25)
+## Latest Change — Seek Stale-Connection Recovery & Unified Replay-Menu Colors (2026-08-25)
+1. **Intermittent "gesture completes but never enters queue" fixed (`lichess_engine.py`)**:
+   - **Root Cause**: Lichess closes idle HTTP/2 pooled connections server-side; httpx does not
+     report these as `client.is_closed`, so the next seek POST on the stale connection threw
+     `ConnectionInputs.RECV_HEADERS in ConnectionState.CLOSED`, silently aborting matchmaking
+     (status snapped back to IDLE → only BOARD_READY visible).
+   - **Fix**: `_recreate_client()` helper + one-shot retry in `_seek_and_stream` when a
+     transport/stale-h2 error occurs (`_is_stale_connection_error`). On final failure a crimson
+     error flash fires on g1/h1 so the user is never left without feedback.
+   - Natural seek-stream end now also returns status to IDLE.
+2. **Replay menu option colors unified (`gesture_engine.py`)**: all three time-control options
+   (e1/f1/g1) share Cyan Azure; the currently selected time control glows Royal Violet with a
+   breathing pulse. Rook AI/Human indicator unchanged (Magenta=AI / Gold=Human).
+3. **Automated Verification**: 2 new regression tests (retry-once + no-retry paths); 348/348
+   tests passing on physical Raspberry Pi.
+
+## Previous Change — Replay Trainer (Memory Training) & Memory Replay Gesture (2026-08-25)
 1. **Replay Trainer replaces GM Guess-the-Move ("GM Time Machine")**:
    - **Phase 1 — Learn (`replay_learn`)**: Pick a curated GM masterpiece and physically play it
      move-by-move; the board shows the next Grandmaster move as an azure LED trace. Correct moves
