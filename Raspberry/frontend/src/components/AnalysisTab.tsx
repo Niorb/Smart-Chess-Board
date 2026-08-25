@@ -22,6 +22,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
+import WebAnalysisBoard from './WebAnalysisBoard';
 import { 
   startAnalysis, 
   stepAnalysis, 
@@ -71,6 +72,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [onMainlineToast, setOnMainlineToast] = useState<boolean>(false);
   const prevOnMainlineRef = useRef<boolean>(true);
   const toastTimerRef = useRef<number | null>(null);
+  const [webBoardOpen, setWebBoardOpen] = useState<boolean>(false);
 
   // Recent Lichess Games State
   const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);
@@ -168,6 +170,24 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       await startAnalysis();
       setFeedbackMsg({ text: 'Game analysis ready!', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch {
+      setFeedbackMsg({ text: 'Failed to start analysis.', type: 'error' });
+    }
+  };
+
+  // Dedicated webapp-only analysis: runs the same engine but the physical board
+  // is never used; opens the interactive web board when done.
+  const handleStartWebAnalysis = async () => {
+    setWebBoardOpen(true);
+    if (analysis?.active && analysis.submode === 'review') {
+      // Analysis already running: just reveal the board.
+      return;
+    }
+    setFeedbackMsg({ text: 'Analyzing game with Stockfish (webapp only)...', type: 'info' });
+    try {
+      await startAnalysis();
+      setFeedbackMsg({ text: 'Analysis ready — use ← → / h l on the board below.', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3500);
     } catch {
       setFeedbackMsg({ text: 'Failed to start analysis.', type: 'error' });
     }
@@ -447,6 +467,55 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       {/* SUB-VIEW 1: GAME REVIEW ("The Grandmaster's Lens") */}
       {subMode === 'review' && (
         <div className="space-y-6">
+          {/* Webapp-Only Analysis Launcher & Interactive Board */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-600/20 border border-emerald-500/30 rounded-xl text-emerald-400">
+                <Brain className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Analyse in Webapp</h3>
+                <p className="text-xs text-slate-400">
+                  Same Stockfish engine, fully virtual — navigate with your keyboard, the physical board stays untouched.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleStartWebAnalysis}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0 ${
+                analysis?.active
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
+            >
+              {analysis?.active ? 'Show Web Board' : 'Analyse in Webapp'}
+            </button>
+          </div>
+
+          {/* Interactive web board (keyboard navigation lives here) */}
+          {webBoardOpen &&
+            (analysis?.active ? (
+              (() => {
+                const isBranching = !!analysis?.is_branching;
+                const lastMoveUci = isBranching
+                  ? analysis?.branch_moves?.[analysis.branch_moves.length - 1] ?? null
+                  : currentPly > 0
+                  ? analysis?.game_moves?.[currentPly - 1] ?? null
+                  : null;
+                return (
+                  <WebAnalysisBoard
+                    fen={analysis?.fen ?? ''}
+                    lastMoveUci={lastMoveUci}
+                    isBranching={isBranching}
+                  />
+                );
+              })()
+            ) : (
+              <div className="bg-slate-900/60 border border-dashed border-slate-700 rounded-2xl p-6 text-center text-xs text-slate-400">
+                No analysis running yet — click "Analyse in Webapp" to load your last game.
+              </div>
+            ))}
+
           {/* Lichess Recent Games Selector (Last 10 Matches) */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="p-4 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
