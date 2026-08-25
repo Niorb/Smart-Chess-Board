@@ -3,7 +3,29 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Web-Only Sessions Fully Isolate the Physical Board (2026-08-25)
+## Latest Change — Lichess-Style Interactive Web Board (2026-08-25)
+1. **Full redesign (`WebAnalysisBoard.tsx`)**:
+   - **Geometry fixed**: explicit `grid-template-rows: repeat(8, minmax(0,1fr))` inside an
+     `aspect-square` container — perfectly square cells on every row (empty rows no longer
+     collapse).
+   - **SVG pieces**: bundled cburnett set (lichess default, 12 files, ~7 KB) replaces
+     Unicode glyphs — crisp and consistent across devices.
+   - **Three themes with toggle** (persisted in localStorage): Lichess Green, Wood Brown,
+     Dark Slate; framed board with layered shadow.
+   - **Overlays**: amber last-move tint, blue selection halo, legal-move dots + capture
+     rings, red inset glow on a checked king.
+2. **Drag & drop + click-to-move (pointer events, mouse & touch)**:
+   - Press/drag with floating ghost piece; click piece → click destination also plays;
+     re-click selected piece deselects; illegal drops snap back.
+   - Legality from new backend payload fields `legal_moves` (UCI list) and `in_check`
+     added to `get_analysis_payload()` — no client chess library needed.
+   - Promotion picker overlay (Q/R/B/N) on the destination file for pawn last-rank moves.
+   - Moves dispatch through the passive web endpoint `/api/analysis/move`; keyboard
+     navigation unchanged and coexists.
+3. **Automated Verification**: payload tests (legal move filtering by side-to-move,
+   check reporting); frontend build clean; 357/357 passing on physical Raspberry Pi.
+
+## Previous Change — Web-Only Sessions Fully Isolate the Physical Board (2026-08-25)
 1. **Critical fix**: Webapp analysis sessions were being silently concluded by the
    physical board-reset gate (board sitting at the start position + `analysis_has_advanced`
    ⇒ instant IDLE), which made the web board vanish on the first keyboard step.
