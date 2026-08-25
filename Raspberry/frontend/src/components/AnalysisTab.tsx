@@ -254,7 +254,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     if (!mv || !analysis?.active || analysis.submode !== 'review') return;
     try {
       const res = await sendAnalysisMove(mv);
-      const result = res?.result ?? res;
+      const result = (res as { result?: { action?: string; analysis?: { is_branching?: boolean } } })?.result
+        ?? (res as { action?: string; analysis?: { is_branching?: boolean } });
       if (!result || result.action === 'illegal' || result.action === 'error') {
         setFeedbackMsg({ text: `Illegal or unparsable move: "${mv}"`, type: 'error' });
         setTimeout(() => setFeedbackMsg(null), 3000);
