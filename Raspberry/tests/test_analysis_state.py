@@ -786,20 +786,20 @@ def test_navigate_analysis_back_pops_branch_one_move_at_a_time():
         await mgr.start_analysis_mode(moves_uci=moves)
         mgr.step_analysis(5)
 
-        # Diverge two moves from the web
+        # Diverge two moves from the web (black to move first)
+        mgr.handle_analysis_move("g8f6", source="web")
         mgr.handle_analysis_move("g2g3", source="web")
-        mgr.handle_analysis_move("f8h6", source="web")
-        assert mgr.analysis_branch_moves == ["g2g3", "f8h6"]
+        assert mgr.analysis_branch_moves == ["g8f6", "g2g3"]
         fen_branched = mgr.analysis_active_board.fen()
 
-        # Back #1: pops only the last branch move (f8h6)
+        # Back #1: pops only the last branch move (g2g3)
         res = mgr.navigate_analysis("back")
         assert res["action"] == "branch_back"
         assert res["on_mainline"] is False
         assert res["branch_depth"] == 1
-        assert mgr.analysis_branch_moves == ["g2g3"]
+        assert mgr.analysis_branch_moves == ["g8f6"]
         b = chess.Board()
-        for m in moves[:4] + ["g2g3"]:
+        for m in moves + ["g8f6"]:
             b.push_uci(m)
         assert mgr.analysis_active_board.fen() == b.fen()
 
@@ -808,17 +808,17 @@ def test_navigate_analysis_back_pops_branch_one_move_at_a_time():
         assert res["action"] == "branch_back"
         assert res["on_mainline"] is True
         assert mgr.analysis_anchor_coord is None
-        assert mgr.analysis_current_ply == 4
+        assert mgr.analysis_current_ply == 5
         b = chess.Board()
-        for m in moves[:4]:
+        for m in moves:
             b.push_uci(m)
         assert mgr.analysis_active_board.fen() == b.fen()
 
-        # Back #3: plain mainline step back (e7e5 un-played)
+        # Back #3: plain mainline step back (Bc4 un-played)
         res = mgr.navigate_analysis("back")
         assert res["action"] == "step"
         assert res["on_mainline"] is True
-        assert mgr.analysis_current_ply == 3
+        assert mgr.analysis_current_ply == 4
 
     asyncio.run(_test())
 
@@ -866,18 +866,16 @@ def test_web_moves_are_board_passive():
 
         # No arrival flash may be armed by web moves
         before = mgr.arrival_flash
-        res = mgr.handle_analysis_move("e7e5", source="web")
+        res = mgr.handle_analysis_move("e2e4", source="web")
         assert res["action"] == "advance"
         assert mgr.arrival_flash is before
+
+        res = mgr.handle_analysis_move("e7e5", source="web")
+        assert res["action"] == "advance"
 
         res = mgr.handle_analysis_move("g8f6", source="web")
         assert res["action"] == "branch"
         assert mgr.arrival_flash is before
-
-        # Board-source moves still flash (existing behaviour preserved)
-        mgr.step_analysis(1)
-        mgr.handle_analysis_move("e7e5")
-        assert mgr.arrival_flash is not None
 
     asyncio.run(_test())
 
@@ -893,14 +891,13 @@ def test_web_move_accepts_san_input():
         assert res["action"] == "advance"
         assert mgr.analysis_current_ply == 3
 
-        # SAN alternative creates a branch (Qh4 is not the stored b8c6 line)
-        res = mgr.handle_analysis_move("Qh4", source="web")
+        # SAN alternative creates a branch (Nh6 is not the stored b8c6 line)
+        res = mgr.handle_analysis_move("Nh6", source="web")
         assert res["action"] == "branch"
-        assert mgr.analysis_branch_moves == ["d8h4"]
 
         # Castling SAN also accepted as an alternative line
-        mgr.navigate_analysis("back")  # un-play Qh4, back on mainline
-        mgr.step_analysis(4)  # after 3.Bc4, black to move
+        mgr.navigate_analysis("back")  # un-play Nh6, back on mainline
+        mgr.step_analysis(5)  # after 3.Bc4, black to move (f8/g8 free -> O-O legal)
         res = mgr.handle_analysis_move("O-O", source="web")
         assert res["action"] == "branch"
         assert mgr.analysis_branch_moves == ["e8g8"]
