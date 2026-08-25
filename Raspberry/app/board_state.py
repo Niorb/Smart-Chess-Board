@@ -837,6 +837,63 @@ class BoardStateManager:
         restore_ply = self.analysis_anchor_ply if self.analysis_anchor_ply is not None else self.analysis_current_ply
         return self.step_analysis(restore_ply)
 
+    def navigate_analysis(self, direction: str) -> dict[str, Any]:
+        """
+        Web-only navigation for Game Review (keyboard arrows / vim keys).
+
+        - "back": while branched, un-plays exactly ONE branch move; on the mainline,
+          steps one ply back.
+        - "forward": steps one ply forward along the mainline (no-op while branched).
+        - "start" / "end": jump to the first/last mainline ply, leaving any branch.
+
+        Purely virtual: never touches LEDs or the physical move tracker. The response
+        always carries "on_mainline" so the UI can flag the exact transition back to
+        the game line.
+        """
+        payload = self.get_analysis_payload()
+        if self.game_status != "ANALYSIS" or self.analysis_submode != "review":
+            return {"action": "inactive", "on_mainline": True, "analysis": payload}
+
+        direction = (direction or "").lower().strip()
+        branched = bool(self.analysis_branch_moves)
+        action = "step"
+
+        if direction == "back":
+            if branched:
+                # Un-play exactly one branch move and rebuild the position.
+                self.analysis_branch_moves.pop()
+                anchor_board = self._get_anchor_board()
+                self.analysis_active_board = anchor_board
+                for b_move in self.analysis_branch_moves:
+                    try:
+                        self.analysis_active_board.push_uci(b_move)
+                    except Exception:
+                        pass
+                self._last_restoration_sig = None
+                action = "branch_back"
+            else:
+                self.step_analysis(max(0, self.analysis_current_ply - 1))
+        elif direction == "forward":
+            if not branched:
+                self.step_analysis(self.analysis_current_ply + 1)
+            else:
+                action = "noop"
+        elif direction in ("start", "end"):
+            # Jumps operate on the main timeline: exit any variation sandbox.
+            self.step_analysis(0 if direction == "start" else len(self.analysis_game_moves))
+        else:
+            return {"action": "invalid_direction", "on_mainline": True, "analysis": payload}
+
+        on_mainline = self.analysis_anchor_coord is None and not self.analysis_branch_moves
+        return {
+            "action": action,
+            "direction": direction,
+            "ply": self.analysis_current_ply,
+            "branch_depth": len(self.analysis_branch_moves),
+            "on_mainline": on_mainline,
+            "analysis": self.get_analysis_payload(),
+        }
+
     def stop_analysis_mode(self) -> dict[str, Any]:
         """Exits analysis mode and returns to IDLE."""
         self.game_status = "IDLE"
@@ -1294,16 +1351,21 @@ class BoardStateManager:
             logger.error(f"Error handling replay recall move {uci}: {e}")
             return {"action": "error", "error": str(e)}
 
-    def handle_analysis_move(self, uci: str) -> dict[str, Any]:
+    def handle_analysis_move(self, uci: str, source: str = "board") -> dict[str, Any]:
         """
         Handles a move played on the board (physical move or web UI action) during ANALYSIS mode.
         If playing the move matching the current game ply, automatically advances to the next ply!
         If playing an alternative move, creates or extends a virtual exploration branch.
+
+        source="board" (physical play) triggers arrival-flash LED feedback; source="web"
+        keeps the physical board fully passive. Web input additionally accepts SAN
+        (e.g. 'Nf3', 'exd5', 'O-O') in the review submode.
         """
         if self.game_status != "ANALYSIS":
             return {"error": "Not in analysis mode"}
 
-        uci = uci.lower().strip()
+        raw_text = uci.strip()
+        uci = raw_text.lower()
 
         # 1. Blunder Drill submode
         if self.analysis_submode == "blunder_drill":
@@ -1314,6 +1376,17 @@ class BoardStateManager:
             return self.handle_replay_move(uci)
 
         # 3. Game Review submode
+        web = source == "web"
+        if web:
+            # Accept SAN input by normalizing to UCI against the active position.
+            try:
+                uci = chess.Move.from_uci(uci).uci()
+            except Exception:
+                try:
+                    uci = self.analysis_active_board.parse_san(raw_text).uci()
+                except Exception:
+                    pass  # left unparseable; reported as illegal below
+
         # If on main game timeline and played the move matching current ply:
         if (
             not self.analysis_anchor_coord
@@ -1348,11 +1421,12 @@ class BoardStateManager:
                 next_ply = self.analysis_current_ply + 1
                 self.step_analysis(next_ply)
                 self.analysis_has_advanced = True
-                self.move_tracker.clear_in_flight_move()
-                if len(uci) >= 4:
-                    to_c = ord(uci[2]) - ord('a')
-                    to_r = int(uci[3]) - 1
-                    self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
+                if not web:
+                    self.move_tracker.clear_in_flight_move()
+                    if len(uci) >= 4:
+                        to_c = ord(uci[2]) - ord('a')
+                        to_r = int(uci[3]) - 1
+                        self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)
                 logger.info(f"Analysis auto-advanced to ply {self.analysis_current_ply} on move {uci}")
                 return {
                     "action": "advance",
@@ -1371,10 +1445,11 @@ class BoardStateManager:
                 self.analysis_active_board.push(move)
                 self.analysis_branch_moves.append(uci)
                 self.analysis_has_advanced = True
-                self.move_tracker.clear_in_flight_move()
+                if not web:
+                    self.move_tracker.clear_in_flight_move()
                 self._last_restoration_sig = None
                 coach_engine.request_analysis(self.analysis_active_board)
-                if len(uci) >= 4:
+                if not web and len(uci) >= 4:
                     to_c = ord(uci[2]) - ord('a')
                     to_r = int(uci[3]) - 1
                     self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.6)

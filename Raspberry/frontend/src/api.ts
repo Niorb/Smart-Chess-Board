@@ -304,6 +304,14 @@ export async function stepAnalysis(ply: number) {
   return jsonPost('/analysis/step', { ply });
 }
 
+export async function navAnalysis(direction: 'back' | 'forward' | 'start' | 'end') {
+  return jsonPost('/analysis/nav', { direction });
+}
+
+export async function sendAnalysisMove(uci: string) {
+  return jsonPost('/analysis/move', { uci });
+}
+
 export async function resetAnalysisBranch() {
   return jsonPost('/analysis/branch_reset');
 }

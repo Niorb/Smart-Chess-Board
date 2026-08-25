@@ -208,6 +208,10 @@ class StepAnalysisRequest(BaseModel):
     ply: int
 
 
+class AnalysisNavRequest(BaseModel):
+    direction: str
+
+
 class StartBlunderDrillRequest(BaseModel):
     index: int = 0
 
@@ -696,6 +700,12 @@ async def step_analysis_route(body: StepAnalysisRequest):
     return state_manager.step_analysis(body.ply)
 
 
+@app.post("/api/analysis/nav")
+async def navigate_analysis_route(body: AnalysisNavRequest):
+    """Keyboard navigation for web-only analysis: back/forward/start/end (branch-aware)."""
+    return state_manager.navigate_analysis(body.direction)
+
+
 @app.post("/api/analysis/branch_reset")
 async def reset_analysis_branch_route():
     """Snaps back from a virtual analysis branch to the main game timeline."""
@@ -754,8 +764,8 @@ async def toggle_blunder_hint_route():
 
 @app.post("/api/analysis/move")
 async def analysis_move_route(body: AnalysisMoveRequest):
-    """Executes a move in Analysis mode, auto-advancing on game moves or branching on alternatives."""
-    res = state_manager.handle_analysis_move(body.uci)
+    """Executes a web move in Analysis mode (passive board): auto-advances on game moves or branches on alternatives."""
+    res = state_manager.handle_analysis_move(body.uci, source="web")
     return {"status": "success", "result": res}
 
 

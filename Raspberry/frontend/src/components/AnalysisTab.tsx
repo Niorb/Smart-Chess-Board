@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Sparkles, 
   Trophy, 
@@ -25,6 +25,8 @@ import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
 import { 
   startAnalysis, 
   stepAnalysis, 
+  navAnalysis,
+  sendAnalysisMove,
   resetAnalysisBranch, 
   stopAnalysis, 
   getGMGames, 
@@ -65,6 +67,10 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
+  const [webMoveInput, setWebMoveInput] = useState<string>('');
+  const [onMainlineToast, setOnMainlineToast] = useState<boolean>(false);
+  const prevOnMainlineRef = useRef<boolean>(true);
+  const toastTimerRef = useRef<number | null>(null);
 
   // Recent Lichess Games State
   const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);
@@ -192,6 +198,78 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       console.error('Error stepping analysis:', err);
     }
   };
+
+  // --- Web-only keyboard navigation (arrows + vim keys) ---
+  const handleNav = useCallback(async (direction: 'back' | 'forward' | 'start' | 'end') => {
+    if (!analysis?.active || analysis.submode !== 'review') return;
+    try {
+      const res = await navAnalysis(direction);
+      const onMainline = !!res?.on_mainline;
+      if (onMainline && !prevOnMainlineRef.current) {
+        setOnMainlineToast(true);
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => setOnMainlineToast(false), 2500);
+      }
+      prevOnMainlineRef.current = onMainline;
+    } catch (err) {
+      console.error('Error navigating analysis:', err);
+    }
+  }, [analysis?.active, analysis?.submode]);
+
+  useEffect(() => {
+    if (subMode !== 'review' || !analysis?.active) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'l':
+          e.preventDefault();
+          handleNav('forward');
+          break;
+        case 'ArrowLeft':
+        case 'h':
+          e.preventDefault();
+          handleNav('back');
+          break;
+        case 'Home':
+        case 'g':
+          e.preventDefault();
+          handleNav('start');
+          break;
+        case 'End':
+        case 'G':
+          e.preventDefault();
+          handleNav('end');
+          break;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [subMode, analysis?.active, handleNav]);
+
+  // --- Web move playback (diverge from the main line without the board) ---
+  const handleWebMove = useCallback(async (moveText: string) => {
+    const mv = moveText.trim();
+    if (!mv || !analysis?.active || analysis.submode !== 'review') return;
+    try {
+      const res = await sendAnalysisMove(mv);
+      const result = res?.result ?? res;
+      if (!result || result.action === 'illegal' || result.action === 'error') {
+        setFeedbackMsg({ text: `Illegal or unparsable move: "${mv}"`, type: 'error' });
+        setTimeout(() => setFeedbackMsg(null), 3000);
+        return;
+      }
+      prevOnMainlineRef.current = !result.analysis?.is_branching;
+      setWebMoveInput('');
+      if (result.action === 'branch') {
+        setFeedbackMsg({ text: '⚡ Variation sandbox active — ← / h steps back one move.', type: 'info' });
+        setTimeout(() => setFeedbackMsg(null), 3000);
+      }
+    } catch (err) {
+      console.error('Error playing web analysis move:', err);
+    }
+  }, [analysis?.active, analysis?.submode]);
 
   const handleResetBranch = async () => {
     try {
@@ -354,6 +432,14 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         }`}>
           <span>{feedbackMsg.text}</span>
           <button onClick={() => setFeedbackMsg(null)} className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* Back-on-Mainline Confirmation Toast */}
+      {onMainlineToast && (
+        <div className="p-3.5 rounded-xl bg-emerald-600/90 border border-emerald-400/60 text-white text-xs font-bold flex items-center gap-2 shadow-lg animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4" />
+          Back on the main game line
         </div>
       )}
 
@@ -660,6 +746,11 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                   <div className="text-xs text-violet-400 mt-0.5">
                     Anchor square {analysis.anchor_coord ? `(${String.fromCharCode(97 + analysis.anchor_coord[0])}${analysis.anchor_coord[1] + 1})` : ''} & 4 corner rooks (a1, h1, a8, h8) are glowing in Royal Violet on the board.
                   </div>
+                  {analysis.branch_moves && analysis.branch_moves.length > 0 && (
+                    <div className="mt-1 px-2 py-1 bg-slate-950/70 border border-violet-500/30 rounded-lg text-[10px] font-mono text-violet-300">
+                      Variation: {analysis.branch_moves.join(' → ')}
+                    </div>
+                  )}
                 </div>
               </div>
               <button
@@ -762,12 +853,16 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                 </div>
               )}
 
-              {/* Top Engine Candidates */}
+              {/* Top Engine Candidates (click to play a variation from the webapp) */}
               <div className="space-y-2 pt-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Candidates</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Candidates — click to explore</span>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {analysis?.current_eval?.top_moves?.slice(0, 3).map((m: { uci?: string; score_cp?: number | null; mate?: number | null; classification?: string }, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-950/50 rounded-lg text-xs border border-slate-800/60">
+                    <div
+                      key={idx}
+                      onClick={() => m.uci && handleWebMove(m.uci)}
+                      className="flex items-center justify-between p-2 bg-slate-950/50 rounded-lg text-xs border border-slate-800/60 cursor-pointer hover:border-violet-500/60 hover:bg-slate-900 transition-all"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-slate-500 font-bold">{idx + 1}.</span>
                         <span className="font-mono font-bold text-slate-200">{m.uci}</span>
@@ -780,6 +875,38 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       </span>
                     </div>
                   ))}
+                </div>
+
+                {/* Free-form web move input (SAN or UCI) */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleWebMove(webMoveInput);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="Play a move: Nf3, exd5, O-O, e2e4..."
+                    value={webMoveInput}
+                    onChange={(e) => setWebMoveInput(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold transition-all shrink-0"
+                  >
+                    Play
+                  </button>
+                </form>
+
+                {/* Keyboard navigation hint */}
+                <div className="text-[10px] text-slate-500 leading-relaxed pt-1">
+                  <span className="font-mono text-slate-400">← →</span> or{' '}
+                  <span className="font-mono text-slate-400">h l</span> step moves ·{' '}
+                  <span className="font-mono text-slate-400">Home End</span> or{' '}
+                  <span className="font-mono text-slate-400">g G</span> jump start/end ·{' '}
+                  <span className="font-mono text-slate-400">←</span> un-plays one variation move
                 </div>
               </div>
             </div>

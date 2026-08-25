@@ -777,3 +777,132 @@ def test_analysis_return_home_guide_renders_on_last_branch_move():
         assert COLOR_INT_RETURN_HOME not in set(lit.values())
     finally:
         settings["night_mode"] = orig_nm
+
+
+def test_navigate_analysis_back_pops_branch_one_move_at_a_time():
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+        mgr.step_analysis(5)
+
+        # Diverge two moves from the web
+        mgr.handle_analysis_move("g2g3", source="web")
+        mgr.handle_analysis_move("f8h6", source="web")
+        assert mgr.analysis_branch_moves == ["g2g3", "f8h6"]
+        fen_branched = mgr.analysis_active_board.fen()
+
+        # Back #1: pops only the last branch move (f8h6)
+        res = mgr.navigate_analysis("back")
+        assert res["action"] == "branch_back"
+        assert res["on_mainline"] is False
+        assert res["branch_depth"] == 1
+        assert mgr.analysis_branch_moves == ["g2g3"]
+        b = chess.Board()
+        for m in moves[:4] + ["g2g3"]:
+            b.push_uci(m)
+        assert mgr.analysis_active_board.fen() == b.fen()
+
+        # Back #2: last branch move popped -> back on mainline at anchor ply
+        res = mgr.navigate_analysis("back")
+        assert res["action"] == "branch_back"
+        assert res["on_mainline"] is True
+        assert mgr.analysis_anchor_coord is None
+        assert mgr.analysis_current_ply == 4
+        b = chess.Board()
+        for m in moves[:4]:
+            b.push_uci(m)
+        assert mgr.analysis_active_board.fen() == b.fen()
+
+        # Back #3: plain mainline step back (e7e5 un-played)
+        res = mgr.navigate_analysis("back")
+        assert res["action"] == "step"
+        assert res["on_mainline"] is True
+        assert mgr.analysis_current_ply == 3
+
+    asyncio.run(_test())
+
+
+def test_navigate_analysis_forward_noop_while_branched():
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        mgr.step_analysis(1)
+        mgr.handle_analysis_move("g8f6", source="web")
+
+        res = mgr.navigate_analysis("forward")
+        assert res["action"] == "noop"
+        assert len(mgr.analysis_branch_moves) == 1
+
+    asyncio.run(_test())
+
+
+def test_navigate_analysis_start_end_exit_branch():
+    async def _test():
+        mgr = BoardStateManager()
+        moves = ["e2e4", "e7e5", "g1f3"]
+        await mgr.start_analysis_mode(moves_uci=moves)
+        mgr.step_analysis(3)
+        mgr.handle_analysis_move("b8c6", source="web")
+
+        res = mgr.navigate_analysis("end")
+        assert res["on_mainline"] is True
+        assert mgr.analysis_current_ply == 3
+        assert mgr.analysis_branch_moves == []
+
+        mgr.handle_analysis_move("g8f6", source="web")  # branch again at end
+        res = mgr.navigate_analysis("start")
+        assert res["on_mainline"] is True
+        assert mgr.analysis_current_ply == 0
+        assert mgr.analysis_active_board.fen().split()[0] == chess.STARTING_BOARD_FEN
+
+    asyncio.run(_test())
+
+
+def test_web_moves_are_board_passive():
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+
+        # No arrival flash may be armed by web moves
+        before = mgr.arrival_flash
+        res = mgr.handle_analysis_move("e7e5", source="web")
+        assert res["action"] == "advance"
+        assert mgr.arrival_flash is before
+
+        res = mgr.handle_analysis_move("g8f6", source="web")
+        assert res["action"] == "branch"
+        assert mgr.arrival_flash is before
+
+        # Board-source moves still flash (existing behaviour preserved)
+        mgr.step_analysis(1)
+        mgr.handle_analysis_move("e7e5")
+        assert mgr.arrival_flash is not None
+
+    asyncio.run(_test())
+
+
+def test_web_move_accepts_san_input():
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"])
+        mgr.step_analysis(2)  # position after 1.e4 e5, white to move
+
+        # SAN knight move advances the mainline (expected ply is g1f3)
+        res = mgr.handle_analysis_move("Nf3", source="web")
+        assert res["action"] == "advance"
+        assert mgr.analysis_current_ply == 3
+
+        # SAN alternative creates a branch (Qh4 is not the stored b8c6 line)
+        res = mgr.handle_analysis_move("Qh4", source="web")
+        assert res["action"] == "branch"
+        assert mgr.analysis_branch_moves == ["d8h4"]
+
+        # Castling SAN also accepted as an alternative line
+        mgr.navigate_analysis("back")  # un-play Qh4, back on mainline
+        mgr.step_analysis(4)  # after 3.Bc4, black to move
+        res = mgr.handle_analysis_move("O-O", source="web")
+        assert res["action"] == "branch"
+        assert mgr.analysis_branch_moves == ["e8g8"]
+
+    asyncio.run(_test())
