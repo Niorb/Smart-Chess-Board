@@ -952,3 +952,36 @@ def test_stop_analysis_clears_web_only_flag():
         assert mgr.analysis_web_only is False
 
     asyncio.run(_test())
+
+
+def test_analysis_payload_exposes_legal_moves_and_check():
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5", "g1f3"])
+        mgr.step_analysis(2)  # start position, white to move
+
+        payload = mgr.get_analysis_payload()
+        assert "e2e4" in payload["legal_moves"]
+        assert "g1f3" in payload["legal_moves"]
+        assert "e7e5" not in payload["legal_moves"]  # black move while white to move
+        assert payload["in_check"] is False
+
+    asyncio.run(_test())
+
+
+def test_analysis_payload_reports_check():
+    async def _test():
+        mgr = BoardStateManager()
+        # Fool's mate setup: after these moves black king is NOT in check yet,
+        # so step into a position where the side to move is checked.
+        await mgr.start_analysis_mode(
+            moves_uci=["f2f3", "e7e5", "g2g4", "d8h4"]
+        )
+        mgr.step_analysis(3)  # after 1.f3 e5 2.g4 -> black to move, not in check
+        assert mgr.get_analysis_payload()["in_check"] is False
+
+        mgr.step_analysis(4)  # after Qh4# white to move and in check
+        payload = mgr.get_analysis_payload()
+        assert payload["in_check"] is True
+
+    asyncio.run(_test())

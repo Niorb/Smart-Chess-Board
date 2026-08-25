@@ -491,8 +491,11 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                 return (
                   <WebAnalysisBoard
                     fen={analysis?.fen ?? ''}
+                    legalMoves={analysis?.legal_moves ?? []}
+                    inCheck={!!analysis?.in_check}
                     lastMoveUci={lastMoveUci}
                     isBranching={isBranching}
+                    onMovePlayed={handleWebMove}
                   />
                 );
               })()

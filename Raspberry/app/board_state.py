@@ -1627,6 +1627,9 @@ class BoardStateManager:
                 "complete": self.replay_complete,
             },
             "fen": self.analysis_active_board.fen(),
+            # Web-board interaction data (drag & drop legality, check indicator)
+            "legal_moves": [m.uci() for m in self.analysis_active_board.legal_moves],
+            "in_check": self.analysis_active_board.is_check(),
         }
 
     def _build_coach_payload(self) -> dict[str, Any]:

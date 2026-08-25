@@ -158,6 +158,8 @@ interface AnalysisState {
   gm_game?: GMGameSummary | null;
   replay: ReplayState;
   fen: string;
+  legal_moves?: string[];
+  in_check?: boolean;
 }
 
 interface GestureItem {
