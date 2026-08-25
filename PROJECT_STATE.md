@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Dedicated "Analyse in Webapp" Board (2026-08-25)
+## Latest Change — Web-Only Sessions Fully Isolate the Physical Board (2026-08-25)
+1. **Critical fix**: Webapp analysis sessions were being silently concluded by the
+   physical board-reset gate (board sitting at the start position + `analysis_has_advanced`
+   ⇒ instant IDLE), which made the web board vanish on the first keyboard step.
+2. **`analysis_web_only` session flag (`board_state.py`)**: `start_analysis_mode(source="web")`
+   (exposed via `POST /api/analysis/start {"web_only": true}`) now suppresses the reset-to-IDLE
+   gate, physical move tracking/anchor restoration, guardrail noise, and ALL analysis LED layers —
+   the board stays completely dark for the whole session.
+3. **Frontend**: Recent Lichess matches now load straight into the interactive web board
+   ("Analyse Web" button); the "Analyse in Webapp" launcher restarts the webapp-only session.
+4. **Automated Verification**: 2 new tests (web-only gate immunity incl. board-source parity,
+   flag cleared on stop); 355/355 passing on physical Raspberry Pi.
+
+## Previous Change — Dedicated "Analyse in Webapp" Board (2026-08-25)
 1. **Explicit webapp-only analysis entry point (`AnalysisTab.tsx`)**:
    - New "Analyse in Webapp" card at the top of Game Review: starts the Stockfish
      analysis without touching the physical board, then opens an interactive web
