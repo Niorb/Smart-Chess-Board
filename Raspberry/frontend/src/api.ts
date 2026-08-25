@@ -320,8 +320,8 @@ export async function startGMGame(gameId: string) {
   return jsonPost('/analysis/gm/start', { game_id: gameId });
 }
 
-export async function submitGMGuess(uci: string) {
-  return jsonPost('/analysis/gm/guess', { uci });
+export async function startReplayRecall(movesUci?: string[]) {
+  return jsonPost('/analysis/replay/recall', movesUci ? { moves_uci: movesUci } : {});
 }
 
 export async function startBlunderDrill(index: number = 0) {

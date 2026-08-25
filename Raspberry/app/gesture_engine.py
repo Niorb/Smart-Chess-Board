@@ -49,6 +49,7 @@ logger = logging.getLogger("smart-chess-app.gesture")
 
 # Dedicated Gesture LED Colors (unique to gestures; shared palettes come from led_helpers)
 COLOR_INT_EMERALD = Color(0, 220, 90)     # Radiant emerald pulse for completion gate
+COLOR_INT_MEMORY_GOLD = Color(255, 190, 40)  # Warm radiant gold for Memory Replay gate
 
 # Strong references to fire-and-forget tasks so they cannot be GC'd mid-flight
 _pending_tasks: set[asyncio.Task] = set()
@@ -696,6 +697,62 @@ class CenterRoyalGateGesture(CornerGateGesture):
             _schedule_task(self.state_manager.start_analysis_mode())
 
 
+class MemoryReplayGateGesture(CornerGateGesture):
+    """
+    Memory Replay Gate gesture (mirror of the Analysis gate, disambiguated by lift order):
+      - Initial setup: Full standard chess starting position.
+      - Step 1: Lift d2 pawn (column 3, row 1) FIRST.
+                LEDs: Solid Radiant Gold on d2, pulsing Mint Emerald on e2.
+      - Step 2: Lift e2 pawn (column 4, row 1) while d2 remains lifted.
+                LEDs: Dual synchronous Gold/Emerald rapid pulse on d2 and e2.
+      - Step 3 (Completion): Replace both d2 and e2 pawns back into starting setup.
+      - Result: Starts a memory recall session replaying the last played game from
+                memory (no learn phase, no move hints).
+
+    Lifting e2 alone first still arms the Post-Game Analysis gesture instead,
+    so the two center gates never collide.
+    """
+
+    E2_COORD: tuple[int, int] = (4, 1)  # File e (c=4), Rank 2 (r=1)
+    D2_COORD: tuple[int, int] = (3, 1)  # File d (c=3), Rank 2 (r=1)
+    starter_coord: tuple[int, int] = (3, 1)
+    starter_color: int = COLOR_INT_MEMORY_GOLD
+
+    def __init__(self, state_manager: Any = None, timeout: float = 5.0):
+        super().__init__(
+            name="memory_replay",
+            description="Memory Replay Gate: lift d2 -> lift e2 -> replace both to replay your last game from memory",
+            state_manager=state_manager,
+            timeout=timeout,
+        )
+        self.first_coord = self.D2_COORD
+        self.second_coord = self.E2_COORD
+        self.log_prefix = "Memory Replay gesture"
+        self.flash_primary = "first"
+
+    @property
+    def hint(self) -> str | None:
+        if self.step == 1:
+            return "Lift e2 (King Pawn) to arm Memory Replay"
+        elif self.step == 2:
+            return "Replace d2 and e2 to replay your last game from memory"
+        return None
+
+    def _overlay_palette(self, now: float) -> tuple[int, int, int, int]:
+        return (
+            COLOR_INT_MEMORY_GOLD,
+            COLOR_INT_MINT_EMERALD,
+            COLOR_INT_MEMORY_GOLD,
+            COLOR_INT_EMERALD,
+        )
+
+    def execute_completion(self) -> None:
+        """Triggers arrival confirmation flare on d2/e2 and starts memory recall."""
+        self._flash_completion_squares()
+        if self.state_manager:
+            _schedule_task(self.state_manager.start_replay_recall())
+
+
 class PhysicalGestureEngine:
     """
     Subsystem manager for physical board gestures.
@@ -710,6 +767,7 @@ class PhysicalGestureEngine:
         self.register_gesture(RestartPreviousGameGesture(state_manager=state_manager))
         self.register_gesture(ToggleNightModeGesture(state_manager=state_manager))
         self.register_gesture(CenterRoyalGateGesture(state_manager=state_manager))
+        self.register_gesture(MemoryReplayGateGesture(state_manager=state_manager))
 
     def register_gesture(self, gesture: BaseGesture) -> None:
         """Registers a new gesture in the evaluation pipeline."""

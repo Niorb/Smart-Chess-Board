@@ -39,24 +39,30 @@ def test_blunder_drill_flow():
     asyncio.run(_test())
 
 
-def test_gm_relive_flow():
+def test_gm_replay_learn_flow():
     async def _test():
         mgr = BoardStateManager()
         payload = mgr.start_gm_game("morphy_opera_1858")
-        assert payload["submode"] == "gm_relive"
+        assert payload["submode"] == "replay_learn"
         assert payload["gm_game"]["title"] == "Morphy's Opera Game"
         assert payload["current_ply"] == 0
+        assert payload["replay"]["phase"] == "learn"
+        assert payload["replay"]["learned_ply"] == 0
 
         # Correct first move: e2e4
-        res1 = mgr.submit_gm_guess("e2e4")
-        assert res1["match"] == "exact"
-        assert res1["points"] == 100
+        res1 = mgr.handle_replay_move("e2e4")
+        assert res1["action"] == "advance"
         assert mgr.analysis_current_ply == 1
+        assert mgr.replay_learned_ply == 1
 
-        # Incorrect guess for move 2
-        res2 = mgr.submit_gm_guess("a7a6")
-        assert res2["match"] == "incorrect"
-        assert res2["points"] == 0
-        assert mgr.analysis_current_ply == 1  # Does not advance on incorrect guess
+        # Incorrect move for ply 1 -> divergence, does not advance
+        expected_second = mgr.analysis_game_moves[1]
+        wrong = "a7a6" if expected_second != "a7a6" else "b2b3"
+        res2 = mgr.handle_replay_move(wrong)
+        assert res2["action"] == "incorrect"
+        assert res2["gm_move"] == expected_second
+        assert mgr.analysis_current_ply == 1
+        assert mgr.analysis_anchor_coord is not None
+        assert len(mgr.analysis_branch_moves) == 1
 
     asyncio.run(_test())

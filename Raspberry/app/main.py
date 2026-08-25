@@ -220,8 +220,8 @@ class StartGMRequest(BaseModel):
     game_id: str
 
 
-class GMGuessRequest(BaseModel):
-    uci: str
+class StartReplayRecallRequest(BaseModel):
+    moves_uci: list[str] | None = None
 
 
 class AnalysisMoveRequest(BaseModel):
@@ -722,14 +722,15 @@ async def get_gm_games_route():
 
 @app.post("/api/analysis/gm/start")
 async def start_gm_game_route(body: StartGMRequest):
-    """Starts Guess-the-Move training mode for a specific GM game."""
+    """Starts a Replay Trainer learn session for a specific GM game."""
     return state_manager.start_gm_game(body.game_id)
 
 
-@app.post("/api/analysis/gm/guess")
-async def submit_gm_guess_route(body: GMGuessRequest):
-    """Validates a move guess in GM Relive mode."""
-    return state_manager.submit_gm_guess(body.uci)
+@app.post("/api/analysis/replay/recall")
+async def start_replay_recall_route(body: StartReplayRecallRequest | None = None):
+    """Starts a memory recall session directly (no learn phase) on the last played game."""
+    moves = body.moves_uci if body else None
+    return await state_manager.start_replay_recall(moves)
 
 
 @app.post("/api/analysis/blunder_drill/start")

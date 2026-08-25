@@ -408,7 +408,7 @@ class BoardStateManager:
         self._analysis_grid_fen = None
 
         # Analysis & Training Mode State
-        self.analysis_submode: str = "review"  # "review" | "blunder_drill" | "gm_relive"
+        self.analysis_submode: str = "review"  # "review" | "blunder_drill" | "replay_learn" | "replay_recall"
         self.analysis_game_moves: list[str] = []
         self.analysis_current_ply: int = 0
         self.analysis_evaluations: list[dict] = []
@@ -424,8 +424,12 @@ class BoardStateManager:
         self.analysis_blunder_attempts: int = 3
         self.analysis_blunder_hint_active: bool = False
         self.analysis_gm_game_id: str | None = None
-        self.analysis_gm_score: int = 0
-        self.analysis_gm_guesses: list[dict] = []
+        # Replay Trainer (memory training) state
+        self.replay_learned_ply: int = 0
+        self.replay_results: list[dict] = []
+        self.replay_mistakes: int = 0
+        self.replay_reveal_uci: str | None = None
+        self.replay_complete: bool = False
         self.analysis_is_loading: bool = False
         self.analysis_error: str | None = None
         self.analysis_has_advanced: bool = False
@@ -842,25 +846,19 @@ class BoardStateManager:
         self.analysis_anchor_coord = None
         self.analysis_error = None
         self._last_restoration_sig = None
+        self._reset_replay_session()
         return self.get_analysis_payload()
 
-    def _try_conclude_analysis_on_board_reset(self, setup_res: SetupResult) -> bool:
-        """
-        Detects when the physical board has been fully restored to the standard
-        starting position during Analysis mode and transitions back to IDLE.
+    def _reset_replay_session(self) -> None:
+        """Clears all Replay Trainer (memory training) session state."""
+        self.replay_learned_ply = 0
+        self.replay_results = []
+        self.replay_mistakes = 0
+        self.replay_reveal_uci = None
+        self.replay_complete = False
 
-        A complete 32-piece starting layout proves no piece is genuinely in hand,
-        so any lingering move-tracker transients (e.g. lifted_square wedged by
-        illegal free-form placements while the user restored captured pieces)
-        are discarded rather than allowed to block the transition.
-        """
-        if (
-            getattr(self, "analysis_is_loading", False)
-            or not getattr(self, "analysis_has_advanced", False)
-            or not setup_res.is_setup_ready
-        ):
-            return False
-
+    def _conclude_analysis_to_idle(self) -> None:
+        """Shared teardown: analysis mode -> IDLE with tracker reset and BOARD_READY animation."""
         self.move_tracker.reset(self.physical_state)
         logger.info(
             "Physical board fully reset to standard starting position after analysis. "
@@ -875,7 +873,83 @@ class BoardStateManager:
             {"night_mode": bool(settings.get("night_mode", False))},
         )
         self.guardrail_result = None
+
+    def _try_conclude_analysis_on_board_reset(self, setup_res: SetupResult) -> bool:
+        """
+        Detects when the physical board has been fully restored to the standard
+        starting position during Analysis mode.
+
+        In Review mode this transitions back to IDLE. In Replay Trainer submodes
+        it drives the phase machine instead:
+          - replay_learn: restoring all 32 pieces ends the learn phase and
+            enters memory recall scoped to the plies just learned.
+          - replay_recall: restoring the board after a completed (or clearly
+            abandoned) recall concludes the session back to IDLE.
+
+        A complete 32-piece starting layout proves no piece is genuinely in hand,
+        so any lingering move-tracker transients (e.g. lifted_square wedged by
+        illegal free-form placements while the user restored captured pieces)
+        are discarded rather than allowed to block the transition.
+        """
+        if (
+            getattr(self, "analysis_is_loading", False)
+            or not setup_res.is_setup_ready
+        ):
+            return False
+
+        if self.analysis_submode in ("replay_learn", "replay_recall"):
+            return self._handle_replay_board_reset()
+
+        if not getattr(self, "analysis_has_advanced", False):
+            return False
+
+        self._conclude_analysis_to_idle()
         return True
+
+    def _handle_replay_board_reset(self) -> bool:
+        """Replay Trainer board-reset gate: learn -> recall, completed recall -> IDLE."""
+        if self.analysis_submode == "replay_learn":
+            if self.replay_learned_ply < 1:
+                # Nothing learned yet (session just armed): keep waiting.
+                return False
+            logger.info(
+                f"Replay learn phase concluded after {self.replay_learned_ply} plies "
+                "(board reset to start position detected). Entering memory recall phase."
+            )
+            self._enter_recall_phase()
+            return True
+
+        if not self.replay_complete:
+            if not self.replay_results:
+                # Recall just armed (no attempts yet): keep waiting.
+                return False
+            # Abandoned incomplete recall (at least one attempt recorded):
+            # let the user out to IDLE instead of trapping them.
+            logger.info(
+                "Replay recall abandoned (board reset before completion). "
+                "Concluding Replay Trainer."
+            )
+        else:
+            logger.info("Replay recall complete and board restored. Concluding Replay Trainer.")
+        self._conclude_analysis_to_idle()
+        return True
+
+    def _enter_recall_phase(self) -> None:
+        """Transitions the active Replay Trainer session from learn into memory recall."""
+        self.move_tracker.reset(self.physical_state)
+        self.analysis_submode = "replay_recall"
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        self.analysis_error = None
+        self._last_restoration_sig = None
+        self._analysis_grid_fen = None
+        self.step_analysis(0)
+        self.analysis_has_advanced = True
+        logger.info(
+            "Memory recall phase started: replay the first "
+            f"{self.replay_learned_ply} plies from memory."
+        )
 
     def start_blunder_drill(self, index: int = 0) -> dict[str, Any]:
         """Starts Blunder Blitz Drill mode for an extracted blunder."""
@@ -925,76 +999,286 @@ class BoardStateManager:
         return self.analysis_blunder_hint_active
 
     def start_gm_game(self, game_id: str) -> dict[str, Any]:
-        """Starts Guess-the-Move session for a curated Grandmaster masterpiece."""
+        """
+        Starts a Replay Trainer learn session for a curated Grandmaster masterpiece.
+        The user physically plays through the famous game with LED guidance; when
+        they set the board back to the starting position, memory recall begins.
+        """
         game = get_gm_game(game_id)
         if not game:
             return {"error": f"GM game '{game_id}' not found."}
 
         self.game_status = "ANALYSIS"
-        self.analysis_submode = "gm_relive"
-        self.analysis_has_advanced = True
+        self.analysis_submode = "replay_learn"
         self.analysis_gm_game_id = game_id
         self.analysis_game_moves = list(game.moves)
         self.analysis_current_ply = 0
-        self.analysis_gm_score = 0
-        self.analysis_gm_guesses = []
         self.analysis_active_board = chess.Board()
+        self.analysis_evaluations = []
+        self.analysis_played_analyses = []
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        self.analysis_error = None
+        self.analysis_is_loading = False
+        self.analysis_has_advanced = False
+        self._analysis_grid_fen = None
+        self._last_restoration_sig = None
+        self.move_tracker.reset(self.physical_state)
+        self._reset_replay_session()
 
         return self.get_analysis_payload()
 
-    def submit_gm_guess(self, uci: str) -> dict[str, Any]:
-        """Validates the user's guess against the historical Grandmaster move."""
-        if not self.analysis_gm_game_id or self.analysis_current_ply >= len(self.analysis_game_moves):
-            return {"error": "No active GM game session."}
+    async def start_replay_recall(self, moves_uci: list[str] | None = None) -> dict[str, Any]:
+        """
+        Starts a Replay Trainer session directly in memory recall phase (no learn phase),
+        replaying the last played game from memory. Used by the Memory Replay gesture.
+        Returns an error (and stays in IDLE) if no previous game is available.
+        """
+        resolved: list[str] = []
+        if moves_uci is not None and len(moves_uci) > 0:
+            resolved = list(moves_uci)
+        elif self.last_game_moves and len(self.last_game_moves) > 0:
+            resolved = list(self.last_game_moves)
+        elif getattr(lichess_engine, "last_game_moves", None) and len(lichess_engine.last_game_moves) > 0:
+            resolved = list(lichess_engine.last_game_moves)
+        elif (
+            getattr(lichess_engine, "board", None)
+            and getattr(lichess_engine.board, "move_stack", None)
+            and len(lichess_engine.board.move_stack) > 0
+        ):
+            resolved = [m.uci() for m in lichess_engine.board.move_stack]
+        else:
+            try:
+                settings_moves = settings.get("last_game_moves", [])
+                if settings_moves and len(settings_moves) > 0:
+                    resolved = list(settings_moves)
+            except Exception:
+                resolved = []
 
-        game = get_gm_game(self.analysis_gm_game_id)
-        gm_move = self.analysis_game_moves[self.analysis_current_ply]
-        ply = self.analysis_current_ply
-
-        if uci.lower() == gm_move.lower():
-            points = 100
-            commentary = (
-                (game.annotations.get(ply) if game else None)
-                or "Matched Grandmaster move!"
+        if not resolved:
+            logger.warning(
+                "Memory recall requested but no previous game is stored. Staying IDLE."
             )
-            self.analysis_gm_score += points
-            self.analysis_gm_guesses.append({
-                "ply": ply,
-                "guess": uci,
-                "gm_move": gm_move,
-                "match": "exact",
-                "points": points,
-            })
+            # Error cue: crimson flash on the gesture gate squares (d2/e2)
+            self.trigger_arrival_flash(
+                3, 1, is_capture=True, duration=1.4, extra_squares=[(4, 1)]
+            )
+            return {"error": "No previous game stored to replay from memory."}
+
+        self.game_status = "ANALYSIS"
+        self.analysis_submode = "replay_recall"
+        self.analysis_gm_game_id = None
+        self.analysis_game_moves = resolved
+        self.analysis_current_ply = 0
+        self.analysis_active_board = chess.Board()
+        self.analysis_evaluations = []
+        self.analysis_played_analyses = []
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        self.analysis_error = None
+        self.analysis_is_loading = False
+        self.analysis_has_advanced = True
+        self._analysis_grid_fen = None
+        self._last_restoration_sig = None
+        self.move_tracker.reset(self.physical_state)
+        self.replay_learned_ply = len(resolved)
+        self.replay_results = []
+        self.replay_mistakes = 0
+        self.replay_reveal_uci = None
+        self.replay_complete = False
+
+        logger.info(
+            f"Memory recall session started directly on last game ({len(resolved)} plies)."
+        )
+        return self.get_analysis_payload()
+
+    def _replay_move_matches(self, expected: str, uci: str) -> bool:
+        """Compares a physical UCI move against the stored game move (handles SAN castling)."""
+        if not expected or not uci:
+            return False
+        if uci == expected.strip().lower():
+            return True
+
+        # Handle SAN castling vs UCI castling (e.g. O-O / O-O-O vs e1g1 / e1c1 / e8g8 / e8c8)
+        norm_san = expected.upper().replace("0", "O")
+        if norm_san in ("O-O", "O-O-O"):
+            turn = self.analysis_active_board.turn
+            expected_uci = (
+                ("e1g1" if turn == chess.WHITE else "e8g8")
+                if norm_san == "O-O"
+                else ("e1c1" if turn == chess.WHITE else "e8c8")
+            )
+            return uci == expected_uci
+
+        try:
+            m_expected = (
+                self.analysis_active_board.parse_san(expected)
+                if not (len(expected) in (4, 5) and expected[:2].isalnum())
+                else chess.Move.from_uci(expected)
+            )
+            m_actual = chess.Move.from_uci(uci)
+            return m_expected == m_actual
+        except Exception:
+            return False
+
+    def _replay_diverge(self, uci: str) -> None:
+        """
+        Registers a divergence from the game line (wrong move): anchors the position
+        so the restoration machinery guides the user to un-play the wrong move.
+        """
+        if not self.analysis_anchor_coord:
+            self.analysis_anchor_ply = self.analysis_current_ply
+            self.analysis_anchor_coord = (ord(uci[0]) - ord('a'), int(uci[1]) - 1)
+        self.analysis_active_board.push(chess.Move.from_uci(uci))
+        self.analysis_branch_moves.append(uci)
+        self.analysis_has_advanced = True
+        self.move_tracker.clear_in_flight_move()
+        self._last_restoration_sig = None
+
+    def _replay_advance(self, uci: str, duration: float = 0.6) -> int:
+        """Advances to the next ply after a correct physical move; flashes arrival square."""
+        next_ply = self.analysis_current_ply + 1
+        self.step_analysis(next_ply)
+        self.analysis_has_advanced = True
+        self.move_tracker.clear_in_flight_move()
+        self._check_replay_completion()
+        if len(uci) >= 4:
+            to_c = ord(uci[2]) - ord('a')
+            to_r = int(uci[3]) - 1
+            self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=duration)
+        return next_ply
+
+    def _check_replay_completion(self) -> None:
+        """Fires victory celebration once the recall target depth has been reached."""
+        if (
+            self.analysis_submode == "replay_recall"
+            and not self.replay_complete
+            and self.analysis_current_ply >= self.replay_learned_ply
+        ):
+            self.replay_complete = True
+            self.trigger_animation(
+                "RECALL_COMPLETE",
+                {"night_mode": bool(settings.get("night_mode", False))},
+            )
+            correct = sum(1 for r in self.replay_results if r.get("correct"))
+            logger.info(
+                f"Replay recall complete: {correct}/{self.replay_learned_ply} plies "
+                f"remembered correctly ({self.replay_mistakes} mistakes)."
+            )
+
+    def handle_replay_move(self, uci: str) -> dict[str, Any]:
+        """
+        Handles a physical/UI move during Replay Trainer submodes.
+
+        Learn phase: matching moves advance with green confirmation; diverging moves
+        anchor for snap-back. Recall phase: no hints — matches confirm in green,
+        wrong legal moves flash red, reveal the grandmaster continuation, and must
+        be un-played before following the revealed move (free of charge).
+        """
+        ply = self.analysis_current_ply
+        expected = (
+            self.analysis_game_moves[ply].strip()
+            if 0 <= ply < len(self.analysis_game_moves)
+            else None
+        )
+        is_match = bool(expected) and self._replay_move_matches(expected, uci)
+
+        # ---- Learn phase -------------------------------------------------
+        if self.analysis_submode == "replay_learn":
+            if is_match:
+                next_ply = self._replay_advance(uci)
+                self.replay_learned_ply = max(self.replay_learned_ply, next_ply)
+                logger.info(f"Replay learn advanced to ply {next_ply} on move {uci}")
+                return {
+                    "action": "advance",
+                    "phase": "learn",
+                    "ply": next_ply,
+                    "learned_ply": self.replay_learned_ply,
+                    "analysis": self.get_analysis_payload(),
+                }
+            # Wrong move during learning: crimson flash + guided snap-back to the line
+            try:
+                move = chess.Move.from_uci(uci)
+                if move not in self.analysis_active_board.legal_moves:
+                    return {"action": "illegal", "uci": uci}
+                self._replay_diverge(uci)
+                if len(uci) >= 4:
+                    to_c = ord(uci[2]) - ord('a')
+                    to_r = int(uci[3]) - 1
+                    self.trigger_arrival_flash(to_c, to_r, is_capture=True, duration=0.9)
+                logger.info(f"Replay learn divergence on move {uci} (expected {expected})")
+                return {
+                    "action": "incorrect",
+                    "phase": "learn",
+                    "ply": ply,
+                    "gm_move": expected,
+                    "analysis": self.get_analysis_payload(),
+                }
+            except Exception as e:
+                logger.error(f"Error handling replay learn move {uci}: {e}")
+                return {"action": "error", "error": str(e)}
+
+        # ---- Recall phase ------------------------------------------------
+        if self.replay_complete:
+            self.move_tracker.clear_in_flight_move()
+            return {"action": "complete", "phase": "recall"}
+
+        if is_match and self.replay_reveal_uci:
+            # User followed the revealed correction: advance free of charge.
+            self.replay_reveal_uci = None
+            next_ply = self._replay_advance(uci, duration=0.45)
+            logger.info(f"Replay recall followed reveal at ply {ply}; advanced to {next_ply}")
+            return {
+                "action": "revealed_advance",
+                "phase": "recall",
+                "ply": next_ply,
+                "complete": self.replay_complete,
+                "analysis": self.get_analysis_payload(),
+            }
+
+        if is_match:
+            self.replay_results.append({"ply": ply, "correct": True})
+            next_ply = self._replay_advance(uci, duration=0.8)
+            logger.info(f"Replay recall correct at ply {ply}: remembered {uci}")
+            return {
+                "action": "correct",
+                "phase": "recall",
+                "ply": next_ply,
+                "mistakes": self.replay_mistakes,
+                "complete": self.replay_complete,
+                "analysis": self.get_analysis_payload(),
+            }
+
+        # Wrong move during recall
+        try:
+            move = chess.Move.from_uci(uci)
+            if move not in self.analysis_active_board.legal_moves:
+                return {"action": "illegal", "uci": uci}
+            self.replay_results.append({"ply": ply, "correct": False})
+            self.replay_mistakes += 1
+            self.replay_reveal_uci = expected.lower() if expected else None
+            self._replay_diverge(uci)
             if len(uci) >= 4:
                 to_c = ord(uci[2]) - ord('a')
                 to_r = int(uci[3]) - 1
-                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.8)
-
-            # Advance move
-            self.step_analysis(self.analysis_current_ply + 1)
+                self.trigger_arrival_flash(to_c, to_r, is_capture=True, duration=0.9)
+            logger.info(
+                f"Replay recall mistake at ply {ply} ({uci}); revealing {expected}"
+            )
             return {
-                "match": "exact",
-                "points": points,
-                "total_score": self.analysis_gm_score,
-                "commentary": commentary,
-                "advance": True,
-            }
-        else:
-            self.analysis_gm_guesses.append({
+                "action": "incorrect",
+                "phase": "recall",
                 "ply": ply,
-                "guess": uci,
-                "gm_move": gm_move,
-                "match": "incorrect",
-                "points": 0,
-            })
-            return {
-                "match": "incorrect",
-                "points": 0,
-                "total_score": self.analysis_gm_score,
-                "gm_move": gm_move,
-                "commentary": f"The Grandmaster played {gm_move}.",
-                "advance": False,
+                "gm_move": expected,
+                "mistakes": self.replay_mistakes,
+                "reveal_uci": self.replay_reveal_uci,
+                "analysis": self.get_analysis_payload(),
             }
+        except Exception as e:
+            logger.error(f"Error handling replay recall move {uci}: {e}")
+            return {"action": "error", "error": str(e)}
 
     def handle_analysis_move(self, uci: str) -> dict[str, Any]:
         """
@@ -1011,9 +1295,9 @@ class BoardStateManager:
         if self.analysis_submode == "blunder_drill":
             return self.submit_blunder_attempt(uci)
 
-        # 2. GM Relive submode
-        if self.analysis_submode == "gm_relive":
-            return self.submit_gm_guess(uci)
+        # 2. Replay Trainer submodes (learn / memory recall)
+        if self.analysis_submode in ("replay_learn", "replay_recall"):
+            return self.handle_replay_move(uci)
 
         # 3. Game Review submode
         # If on main game timeline and played the move matching current ply:
@@ -1225,8 +1509,18 @@ class BoardStateManager:
             "blunder_attempts": self.analysis_blunder_attempts,
             "blunder_hint_active": self.analysis_blunder_hint_active,
             "gm_game": gm_game.to_dict() if gm_game else None,
-            "gm_score": self.analysis_gm_score,
-            "gm_guesses": self.analysis_gm_guesses,
+            "replay": {
+                "phase": (
+                    self.analysis_submode.replace("replay_", "")
+                    if self.analysis_submode.startswith("replay_")
+                    else None
+                ),
+                "learned_ply": self.replay_learned_ply,
+                "results": self.replay_results,
+                "mistakes": self.replay_mistakes,
+                "reveal_uci": self.replay_reveal_uci,
+                "complete": self.replay_complete,
+            },
             "fen": self.analysis_active_board.fen(),
         }
 
@@ -1995,7 +2289,8 @@ class BoardStateManager:
                                 bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
                                 set_square_leds(bm_f[0], bm_f[1], c_mint_emerald)
 
-                elif self.analysis_submode == "gm_relive":
+                elif self.analysis_submode in ("replay_learn", "replay_recall"):
+                    # Side-to-move indicator: gentle pulse on the King square
                     active_turn = self.analysis_active_board.turn
                     k_sq = self.analysis_active_board.king(active_turn)
                     if k_sq is not None:
@@ -2003,6 +2298,51 @@ class BoardStateManager:
                         turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
                         turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
                         set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
+
+                    if self.analysis_submode == "replay_learn":
+                        # Learn phase: guide with the next Grandmaster move trace
+                        # (hidden while diverged so the snap-back guide stays readable)
+                        if (
+                            self.analysis_anchor_coord is None
+                            and 0 <= self.analysis_current_ply < len(self.analysis_game_moves)
+                        ):
+                            curr_move = self.analysis_game_moves[self.analysis_current_ply]
+                            if len(curr_move) >= 4:
+                                g_f_c = ord(curr_move[0]) - ord('a')
+                                g_f_r = int(curr_move[1]) - 1
+                                g_t_c = ord(curr_move[2]) - ord('a')
+                                g_t_r = int(curr_move[3]) - 1
+                                if all(0 <= v < 8 for v in (g_f_c, g_f_r, g_t_c, g_t_r)):
+                                    render_trace(g_f_c, g_f_r, g_t_c, g_t_r, c_move_trace, c_move_trace)
+                    else:
+                        # Recall phase: no move hints.
+                        if self.analysis_anchor_coord is not None:
+                            # Wrong move pending un-play: violet anchor square + "path home" guide
+                            set_square_leds(self.analysis_anchor_coord[0], self.analysis_anchor_coord[1], c_royal_violet)
+                            if self.analysis_branch_moves:
+                                c_return_home = COLOR_INT_NIGHT_RETURN_HOME if night_mode else COLOR_INT_RETURN_HOME
+                                rh_uci = self.analysis_branch_moves[-1]
+                                try:
+                                    if len(rh_uci) >= 4:
+                                        rh_from = (ord(rh_uci[0]) - ord('a'), int(rh_uci[1]) - 1)
+                                        rh_to = (ord(rh_uci[2]) - ord('a'), int(rh_uci[3]) - 1)
+                                        if all(0 <= v < 8 for v in (*rh_from, *rh_to)):
+                                            if rh_from == self.analysis_anchor_coord:
+                                                rh_from = rh_to
+                                            render_return_home_guide(now, frame, rh_from, rh_to, c_return_home)
+                                except (ValueError, TypeError):
+                                    pass
+                        elif self.replay_reveal_uci and len(self.replay_reveal_uci) >= 4:
+                            # Reveal the correct continuation after a recall mistake (amber trace)
+                            rv = self.replay_reveal_uci
+                            r_f_c = ord(rv[0]) - ord('a')
+                            r_f_r = int(rv[1]) - 1
+                            r_t_c = ord(rv[2]) - ord('a')
+                            r_t_r = int(rv[3]) - 1
+                            if all(0 <= v < 8 for v in (r_f_c, r_f_r, r_t_c, r_t_r)):
+                                reveal_pulse = math.sin(now * 4.0) * 0.5 + 0.5
+                                reveal_col = scale_color(c_move_inacc, 0.45 + 0.55 * reveal_pulse)
+                                render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col)
 
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):

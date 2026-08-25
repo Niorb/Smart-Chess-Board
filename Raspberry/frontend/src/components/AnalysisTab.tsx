@@ -14,7 +14,8 @@ import {
   Lightbulb, 
   Flame, 
   TrendingUp,
-  History,
+  Brain,
+  Eye,
   Globe,
   ExternalLink,
   Clock,
@@ -28,7 +29,7 @@ import {
   stopAnalysis, 
   getGMGames, 
   startGMGame, 
-  submitGMGuess, 
+  startReplayRecall, 
   startBlunderDrill, 
   submitBlunderAttempt, 
   toggleBlunderHint,
@@ -42,8 +43,13 @@ interface AnalysisTabProps {
 
 const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const analysis = boardState.analysis;
-  type SubMode = 'review' | 'blunder_drill' | 'gm_relive';
-  const serverSubMode: SubMode = analysis?.submode ?? 'review';
+  type SubMode = 'review' | 'blunder_drill' | 'replay';
+  const serverSubMode: SubMode =
+    analysis?.submode === 'blunder_drill'
+      ? 'blunder_drill'
+      : analysis?.submode?.startsWith('replay')
+      ? 'replay'
+      : 'review';
   // Local tab navigation with follow-the-server semantics: when the backend
   // submode changes (e.g. drill started via board gesture), the view follows.
   const [uiView, setUiView] = useState<{ server: SubMode; view: SubMode }>({
@@ -124,6 +130,20 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const activeBlunderIndex = analysis?.blunder_index ?? 0;
   const currentBlunder = blunders[activeBlunderIndex];
 
+  // Replay Trainer state
+  const replay = analysis?.replay;
+  const replayPhase = replay?.phase ?? null;
+  const learnedPly = replay?.learned_ply ?? 0;
+  const replayResults = replay?.results ?? [];
+  const replayMistakes = replay?.mistakes ?? 0;
+  const replayComplete = replay?.complete ?? false;
+  const correctRecalls = replayResults.filter((r) => r.correct).length;
+  const resultByPly = useMemo(() => {
+    const map: Record<number, boolean> = {};
+    for (const r of replayResults) map[r.ply] = r.correct;
+    return map;
+  }, [replayResults]);
+
   // SVG Evaluation Curve calculations
   const evalPoints = useMemo(() => {
     if (!evaluations.length) return [];
@@ -187,26 +207,26 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     setFeedbackMsg({ text: 'Loading Grandmaster masterpiece...', type: 'info' });
     try {
       await startGMGame(gameId);
-      setFeedbackMsg({ text: 'GM game loaded! Guess the first move.', type: 'success' });
-      setTimeout(() => setFeedbackMsg(null), 3000);
+      setFeedbackMsg({ text: 'Learn phase started! Play the highlighted moves on the board.', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3500);
     } catch {
       setFeedbackMsg({ text: 'Failed to load GM game.', type: 'error' });
     }
   };
 
-  const handleGMGuessSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!guessInput.trim()) return;
+  const handleStartReplayRecall = async () => {
+    setFeedbackMsg({ text: 'Starting memory recall of your last game...', type: 'info' });
     try {
-      const res = await submitGMGuess(guessInput.trim());
-      if (res.match === 'exact') {
-        setFeedbackMsg({ text: `🌟 ${res.commentary || 'Brilliant! You matched the Grandmaster!'} (+${res.points} pts)`, type: 'success' });
+      const res = await startReplayRecall();
+      if (res && res.error) {
+        setFeedbackMsg({ text: res.error, type: 'error' });
+        setTimeout(() => setFeedbackMsg(null), 4000);
       } else {
-        setFeedbackMsg({ text: `❌ ${res.commentary || 'Incorrect guess.'}`, type: 'error' });
+        setFeedbackMsg({ text: 'Memory recall started — replay your last game from memory!', type: 'success' });
+        setTimeout(() => setFeedbackMsg(null), 3500);
       }
-      setGuessInput('');
     } catch {
-      setFeedbackMsg({ text: 'Error submitting guess.', type: 'error' });
+      setFeedbackMsg({ text: 'Failed to start memory recall.', type: 'error' });
     }
   };
 
@@ -270,7 +290,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Interactive post-game review, blunder rehabilitation drills, and historical Grandmaster guess-the-move.
+              Interactive post-game review, blunder rehabilitation drills, and memory-training game replays.
             </p>
             {analysis?.error && (
               <div className="mt-3 px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-700/60 text-xs text-rose-300">
@@ -308,15 +328,15 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             Blunder Blitz ({blunders.length})
           </button>
           <button
-            onClick={() => setSubMode('gm_relive')}
+            onClick={() => setSubMode('replay')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              subMode === 'gm_relive'
+              subMode === 'replay'
                 ? 'bg-amber-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            GM Time Machine
+            <Brain className="w-3.5 h-3.5" />
+            Replay Trainer
           </button>
         </div>
       </div>
@@ -916,94 +936,319 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         </div>
       )}
 
-      {/* SUB-VIEW 3: MASTER GAME TIME MACHINE */}
-      {subMode === 'gm_relive' && (
+      {/* SUB-VIEW 3: REPLAY TRAINER (Memory Training) */}
+      {subMode === 'replay' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Curated GM Games Carousel */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Historical GM Masterpieces</h4>
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {gmGamesList.map((g) => (
-                  <div
-                    key={g.id}
-                    onClick={() => handleStartGM(g.id)}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                      selectedGMId === g.id
-                        ? 'bg-amber-950/60 border-amber-500 text-white shadow-md'
-                        : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs font-bold mb-1">
-                      <span>{g.title}</span>
-                      <span className="text-amber-400 font-mono">{g.year}</span>
-                    </div>
-                    <div className="text-xs text-slate-300 font-medium">{g.white} vs. {g.black}</div>
-                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                      <span>{g.opening}</span>
-                      <span>•</span>
-                      <span>{g.moves_count} moves</span>
-                    </div>
+          {/* ===== LEARN PHASE ===== */}
+          {analysis?.active && replayPhase === 'learn' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Progress & Instructions */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-sky-400" />
+                  <h3 className="text-base font-bold text-white">Learn Phase</h3>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="text-slate-400 uppercase font-bold tracking-wider">Progress</span>
+                    <span className="font-mono font-bold text-sky-300">
+                      Ply {currentPly} / {totalPlys}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-sky-500 to-emerald-400 rounded-full transition-all duration-500"
+                      style={{ width: `${totalPlys ? (currentPly / totalPlys) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500">
+                    {learnedPly} {learnedPly === 1 ? 'ply' : 'plies'} memorized so far
+                  </div>
+                </div>
 
-            {/* Guess-the-Move Interactive Board Card */}
-            <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="p-3.5 bg-sky-950/50 border border-sky-500/30 rounded-xl space-y-1.5">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-sky-300 flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5" /> How it works
+                  </div>
+                  <ul className="text-xs text-sky-200/90 space-y-1 list-disc list-inside leading-relaxed">
+                    <li>The board shows the next move as an azure LED trace — play it physically.</li>
+                    <li>Wrong moves flash red and guide you back to the game line.</li>
+                    <li>Stop anytime: set <span className="font-bold">all 32 pieces</span> back to the starting position.</li>
+                    <li>Memory recall then begins — covering exactly the plies you just played.</li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={stopAnalysis}
+                  className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                >
+                  Exit Replay Trainer
+                </button>
+              </div>
+
+              {/* Game Card & Revealed Move List */}
+              <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Trophy className="w-5 h-5 text-amber-400" />
                     <div>
                       <h3 className="text-base font-bold text-white">
-                        {analysis?.gm_game?.title || 'Guess the Grandmaster Move'}
+                        {analysis?.gm_game?.title || 'Grandmaster Masterpiece'}
                       </h3>
                       <div className="text-xs text-slate-400">
-                        {analysis?.gm_game?.event} ({analysis?.gm_game?.year})
+                        {analysis?.gm_game?.event} ({analysis?.gm_game?.year}) — {analysis?.gm_game?.white} vs. {analysis?.gm_game?.black}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs text-slate-400 uppercase font-semibold">Your Score</div>
-                    <div className="text-lg font-bold text-amber-400">{analysis?.gm_score ?? 0} pts</div>
-                  </div>
                 </div>
 
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                  <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">Historical Context</div>
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    {analysis?.gm_game?.description || 'Relive this legendary match move-by-move on your real wooden board.'}
+                    {analysis?.gm_game?.description}
                   </p>
                 </div>
 
-                {/* Key annotations callout */}
                 {analysis?.gm_game?.annotations?.[currentPly] && (
-                  <div className="mt-3 p-3.5 bg-amber-950/40 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2.5">
+                  <div className="p-3.5 bg-amber-950/40 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2.5">
                     <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <span>{analysis.gm_game.annotations[currentPly]}</span>
                   </div>
                 )}
+
+                {/* Move list revealing as played */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Game Line</h4>
+                  <div className="max-h-64 overflow-y-auto pr-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {(analysis?.game_moves ?? []).map((uci, idx) => {
+                      const played = idx < currentPly;
+                      const isNext = idx === currentPly;
+                      return (
+                        <div
+                          key={idx}
+                          className={`px-2 py-1.5 rounded-lg text-xs font-mono border transition-all ${
+                            isNext
+                              ? 'bg-sky-600/30 border-sky-500/60 text-white font-bold animate-pulse'
+                              : played
+                              ? 'bg-slate-950/70 border-slate-800 text-slate-300'
+                              : 'bg-slate-950/30 border-slate-900 text-slate-700'
+                          }`}
+                        >
+                          <span className="text-slate-600 mr-1.5">{idx + 1}.</span>
+                          {played || isNext ? uci : '· · ·'}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===== RECALL PHASE ===== */}
+          {analysis?.active && replayPhase === 'recall' && (
+            <div className="space-y-6">
+              {replayComplete ? (
+                /* Victory Summary */
+                <div className="bg-slate-900/90 border border-emerald-500/50 rounded-2xl p-8 text-center space-y-4 shadow-xl ring-1 ring-emerald-500/30">
+                  <Trophy className="w-14 h-14 text-amber-400 mx-auto" />
+                  <h3 className="text-xl font-bold text-white">Recall Complete!</h3>
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-emerald-400">{correctRecalls}/{learnedPly}</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Moves Remembered</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-rose-400">{replayMistakes}</div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Mistakes</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-sky-400">
+                        {learnedPly ? Math.round((correctRecalls / learnedPly) * 100) : 0}%
+                      </div>
+                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Memory Score</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Set all pieces back to the starting position to finish the session, or exit below.
+                  </p>
+                  <button
+                    onClick={stopAnalysis}
+                    className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                  >
+                    Exit Replay Trainer
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Recall Status */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Brain className="w-5 h-5 text-violet-400" />
+                      <h3 className="text-base font-bold text-white">Memory Recall</h3>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <div className="flex items-center justify-between text-xs mb-2">
+                        <span className="text-slate-400 uppercase font-bold tracking-wider">Target</span>
+                        <span className="font-mono font-bold text-violet-300">
+                          Ply {currentPly} / {learnedPly}
+                        </span>
+                      </div>
+                      <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-400 rounded-full transition-all duration-500"
+                          style={{ width: `${learnedPly ? (currentPly / learnedPly) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-emerald-400">{correctRecalls}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Correct</div>
+                      </div>
+                      <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-3 text-center">
+                        <div className="text-xl font-bold text-rose-400">{replayMistakes}</div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider">Mistakes</div>
+                      </div>
+                    </div>
+
+                    {analysis.reveal_uci && (
+                      <div className="p-3 bg-amber-950/50 border border-amber-500/40 rounded-xl text-xs text-amber-300 space-y-1">
+                        <div className="font-bold flex items-center gap-1.5">
+                          <Lightbulb className="w-3.5 h-3.5" /> Wrong move — correction revealed
+                        </div>
+                        <div className="text-amber-200/90 leading-relaxed">
+                          Take your piece back to its original square, then follow the amber trace on the board.
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3.5 bg-violet-950/50 border border-violet-500/30 rounded-xl">
+                      <ul className="text-xs text-violet-200/90 space-y-1 list-disc list-inside leading-relaxed">
+                        <li>No hints — replay the line purely from memory.</li>
+                        <li>Green flash = correct, red flash = wrong move.</li>
+                        <li>The side-to-move King glows on the board.</li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={stopAnalysis}
+                      className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                    >
+                      Exit Replay Trainer
+                    </button>
+                  </div>
+
+                  {/* Per-Ply Result Chips (hidden notation!) */}
+                  <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-bold text-white">Recall Progress</h3>
+                      <span className="text-xs text-slate-500">Notation hidden — no peeking!</span>
+                    </div>
+                    <div className="grid grid-cols-8 sm:grid-cols-12 gap-2">
+                      {Array.from({ length: learnedPly }).map((_, ply) => {
+                        const res = resultByPly[ply];
+                        const isCurrent = ply === currentPly;
+                        return (
+                          <div
+                            key={ply}
+                            className={`aspect-square rounded-lg flex items-center justify-center text-[10px] font-bold border transition-all ${
+                              res === true
+                                ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
+                                : res === false
+                                ? 'bg-rose-600/30 border-rose-500/60 text-rose-300'
+                                : isCurrent
+                                ? 'bg-violet-600/30 border-violet-500/60 text-white animate-pulse'
+                                : 'bg-slate-950/50 border-slate-800 text-slate-700'
+                            }`}
+                          >
+                            {res === true ? '✓' : res === false ? '✕' : ply + 1}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== PICKER (no active session) ===== */}
+          {!analysis?.active && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Curated GM Games Carousel */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Historical GM Masterpieces</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {gmGamesList.map((g) => (
+                    <div
+                      key={g.id}
+                      onClick={() => handleStartGM(g.id)}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                        selectedGMId === g.id
+                          ? 'bg-amber-950/60 border-amber-500 text-white shadow-md'
+                          : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold mb-1">
+                        <span>{g.title}</span>
+                        <span className="text-amber-400 font-mono">{g.year}</span>
+                      </div>
+                      <div className="text-xs text-slate-300 font-medium">{g.white} vs. {g.black}</div>
+                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                        <span>{g.opening}</span>
+                        <span>•</span>
+                        <span>{g.moves_count} moves</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Move Guess Form */}
-              <form onSubmit={handleGMGuessSubmit} className="flex items-center gap-3">
-                <input
-                  type="text"
-                  placeholder="Guess the next GM move (e.g. e2e4 or Rxd4)..."
-                  value={guessInput}
-                  onChange={(e) => setGuessInput(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-bold transition-all shadow-md"
-                >
-                  Guess Move
-                </button>
-              </form>
+              {/* Session Starter Card */}
+              <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-5">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-base font-bold text-white">Train Your Chess Memory</h3>
+                </div>
+
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">Two-Phase Training</div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-sky-300">Phase 1 — Learn:</span> pick a famous game and play it
+                    move-by-move on the board with LED guidance. Stop whenever you like and set the pieces back.
+                    <br />
+                    <span className="font-semibold text-violet-300">Phase 2 — Recall:</span> with the board reset and no
+                    hints, replay everything you just learned from memory. Green flashes confirm correct moves; red
+                    flashes reveal mistakes with the grandmaster continuation.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => handleStartGM(selectedGMId)}
+                    className="flex-1 px-5 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    <PlayCircle className="w-4.5 h-4.5" />
+                    Start Learning Selected Game
+                  </button>
+                  <button
+                    onClick={handleStartReplayRecall}
+                    className="flex-1 px-5 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    <Brain className="w-4.5 h-4.5" />
+                    Instant Recall: My Last Game
+                  </button>
+                </div>
+
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-400 leading-relaxed">
+                  <span className="font-bold text-slate-300">Board gesture:</span> lift the{' '}
+                  <span className="font-mono text-amber-300">d2</span> pawn, then{' '}
+                  <span className="font-mono text-amber-300">e2</span>, then replace both — instantly starts memory
+                  recall of your last played game. (Lift e2 first for normal analysis.)
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

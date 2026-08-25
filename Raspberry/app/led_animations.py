@@ -20,6 +20,7 @@ try:
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
+        ANIM_RECALL_COMPLETE_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
@@ -105,6 +106,7 @@ except ImportError:
         ANIM_GAME_LOST_DURATION_S,
         ANIM_GAME_START_DURATION_S,
         ANIM_GAME_WON_DURATION_S,
+        ANIM_RECALL_COMPLETE_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
@@ -1069,6 +1071,55 @@ def render_analysis_computing(
 # =============================================================================
 
 @dataclass
+def render_recall_complete(progress: float, frame: list[int], params: dict[str, Any]) -> None:
+    """
+    "Memory Bloom" celebration for a completed Replay Trainer recall session.
+
+    Phase A (p < 0.55): Expanding golden memory-bloom diamond ring radiating from
+    the board center (Manhattan-distance ring), shimmering with a subtle flicker.
+    Phase B (p >= 0.40): Four corner rook squares breathe in Mint Emerald while
+    the central royal thrones pulse in Victory Gold, all dissolving to stillness.
+    Peak active squares <= ~22 (~170mA day, ~75mA night) - within power budget.
+    """
+    night = bool(params.get("night_mode", False))
+    gold = COLOR_INT_VICTORY_GOLD
+    green = COLOR_INT_VICTORY_GREEN
+
+    def set_sq(c: int, r: int, color_val: int) -> None:
+        for idx in get_led_indices(r, c):
+            if 0 <= idx < len(frame):
+                frame[idx] = color_val
+
+    if progress < 0.55:
+        # Expanding Manhattan ring from center (3.5, 3.5)
+        ring_p = progress / 0.55
+        radius = ring_p * 7.5
+        intensity = (1.0 - ring_p) * (0.85 + 0.15 * math.sin(time.time() * 20.0))
+        col = scale_color(gold, max(0.0, intensity))
+        for c in range(8):
+            for r in range(8):
+                dist = abs(c - 3.5) + abs(r - 3.5)
+                if abs(dist * 2.0 - radius) < 1.1:  # ring band (dist*2 spans 1..14)
+                    set_sq(c, r, col)
+
+    if progress >= 0.40:
+        # Corner emerald breathing + central royal gold pulse, fading out
+        fade = 1.0 - max(0.0, (progress - 0.40) / 0.60)
+        now = time.time()
+        corner_pulse = math.sin(now * 6.0) * 0.5 + 0.5
+        corner_col = scale_color(green, 0.35 + 0.65 * corner_pulse)
+        corner_col = scale_color(corner_col, fade)
+        for c_c, c_r in [(0, 0), (7, 0), (0, 7), (7, 7)]:
+            set_sq(c_c, c_r, corner_col)
+
+        center_pulse = math.sin(now * 5.0) * 0.5 + 0.5
+        center_col = scale_color(scale_color(gold, 0.5 + 0.5 * center_pulse), fade)
+        set_sq(3, 3, center_col)
+        set_sq(4, 3, center_col)
+        set_sq(3, 4, center_col)
+        set_sq(4, 4, center_col)
+
+
 class LifecycleAnimation:
     """State and rendering coordinator for a procedural LED lifecycle animation."""
     name: str
@@ -1097,6 +1148,8 @@ class LifecycleAnimation:
 
         if anim_name == "GAME_STARTED":
             render_game_started(progress, frame, self.params)
+        elif anim_name == "RECALL_COMPLETE":
+            render_recall_complete(progress, frame, self.params)
         elif anim_name == "GAME_WON":
             render_game_won(progress, frame, self.params, now=now)
         elif anim_name == "GAME_LOST":
@@ -1127,6 +1180,7 @@ def create_animation(
     clean_name = name.strip().upper()
     durations = {
         "GAME_STARTED": ANIM_GAME_START_DURATION_S,
+        "RECALL_COMPLETE": ANIM_RECALL_COMPLETE_DURATION_S,
         "GAME_WON": ANIM_GAME_WON_DURATION_S,
         "GAME_LOST": ANIM_GAME_LOST_DURATION_S,
         "GAME_DRAWN": ANIM_GAME_DRAWN_DURATION_S,

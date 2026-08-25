@@ -3,7 +3,40 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Fast Game Start Animation & Persistent First-Move Color Anchor (2026-08-25)
+## Latest Change — Replay Trainer (Memory Training) & Memory Replay Gesture (2026-08-25)
+1. **Replay Trainer replaces GM Guess-the-Move ("GM Time Machine")**:
+   - **Phase 1 — Learn (`replay_learn`)**: Pick a curated GM masterpiece and physically play it
+     move-by-move; the board shows the next Grandmaster move as an azure LED trace. Correct moves
+     auto-advance with a green confirmation flash; diverging moves flash crimson and anchor for
+     guided snap-back to the game line.
+   - **Phase 2 — Recall (`replay_recall`)**: Setting all 32 pieces back to the starting position
+     ends the learn phase and starts memory recall scoped to *exactly the plies just learned*.
+     No move hints — only side-to-move King pulse. Green flash = correct move remembered
+     (mint arrival flash); wrong legal move = crimson flash + amber LED reveal of the grandmaster
+     continuation; the user un-plays their piece (violet anchor + return-home guide) then follows
+     the revealed move free of charge.
+   - **Completion**: Reaching the learned depth fires the new golden "Memory Bloom"
+     `RECALL_COMPLETE` celebration animation plus a UI summary (correct/total, mistakes,
+     memory score). Restoring the start position afterwards concludes to IDLE.
+   - **Accessibility**: Stopping mid-game is first-class — partial learning yields a shorter
+     recall target. Abandoned incomplete recalls exit cleanly on board reset.
+   - Direct-recall entry point `start_replay_recall()` replays the last played game with no learn
+     phase (move-source hierarchy identical to analysis mode).
+2. **Memory Replay Gate gesture (`gesture_engine.py`)**:
+   - Lift **d2** first → lift **e2** → replace both = instant memory replay of the last played game.
+   - Disambiguated from the Analysis gate purely by lift order (e2-first still arms Analysis only).
+   - Radiant Gold starter glow on d2 (vs. Royal Violet on e2); error cue (crimson d2/e2 flash +
+     stay IDLE) when no previous game is stored.
+3. **API**: `POST /api/analysis/gm/guess` removed; `POST /api/analysis/replay/recall` added;
+   `/api/analysis/gm/start` now begins a learn session. WS payload: `gm_score`/`gm_guesses`
+   replaced by `replay: {phase, learned_ply, results[], mistakes, reveal_uci, complete}`.
+4. **Frontend**: New Replay Trainer view in `AnalysisTab.tsx` (learn progress + revealing move list,
+   hidden-notation per-ply ✓/✕ chips during recall, victory summary), types in `useBoardState.ts`,
+   client in `api.ts`.
+5. **Automated Verification**: New `tests/test_gm_replay.py` (learn/gate/recall/reveal/completion/
+   direct-recall/gesture disambiguation); updated `test_blunder_drill.py`.
+
+## Previous Change — Fast Game Start Animation & Persistent First-Move Color Anchor (2026-08-25)
 1. **Snappy `GAME_STARTED` Lifecycle Animation (`led_animations.py`, `config.py`)**:
    - **Reduced Duration**: Shortened from $2.2\text{s}$ to $1.2\text{s}$ for a fast, punchy color proclamation.
    - **Choreography**:

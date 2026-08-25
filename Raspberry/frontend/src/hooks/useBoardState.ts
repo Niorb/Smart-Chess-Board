@@ -108,9 +108,18 @@ export interface OpeningPayload {
   book_moves: BookMoveCandidate[];
 }
 
+interface ReplayState {
+  phase: 'learn' | 'recall' | null;
+  learned_ply: number;
+  results: Array<{ ply: number; correct: boolean }>;
+  mistakes: number;
+  reveal_uci?: string | null;
+  complete: boolean;
+}
+
 interface AnalysisState {
   active: boolean;
-  submode: 'review' | 'blunder_drill' | 'gm_relive';
+  submode: 'review' | 'blunder_drill' | 'replay_learn' | 'replay_recall';
   is_loading: boolean;
   error?: string | null;
   current_ply: number;
@@ -147,14 +156,7 @@ interface AnalysisState {
   blunder_attempts: number;
   blunder_hint_active: boolean;
   gm_game?: GMGameSummary | null;
-  gm_score: number;
-  gm_guesses: Array<{
-    ply: number;
-    guess: string;
-    gm_move: string;
-    match: string;
-    points: number;
-  }>;
+  replay: ReplayState;
   fen: string;
 }
 
