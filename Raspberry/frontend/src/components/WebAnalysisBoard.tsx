@@ -20,8 +20,14 @@ interface WebAnalysisBoardProps {
   inCheck?: boolean;
   /** UCI of the most recent move to highlight (mainline or branch). */
   lastMoveUci?: string | null;
+  /** Classification of the last MAINLINE move (colors the highlight tint). */
+  lastMoveClass?: string | null;
   /** True while the position is off the main game line (variation sandbox). */
   isBranching?: boolean;
+  /** Live evaluation for the always-on eval bar. */
+  winChance?: number | null;
+  scoreCp?: number | null;
+  mate?: number | null;
   /** Called with the full UCI (incl. promotion suffix) when a move is played. */
   onMovePlayed: (uci: string) => void;
 }
@@ -29,6 +35,16 @@ interface WebAnalysisBoardProps {
 const PIECE_IMAGES: Record<string, string> = {
   K: wK, Q: wQ, R: wR, B: wB, N: wN, P: wP,
   k: bK, q: bQ, r: bR, b: bB, n: bN, p: bP,
+};
+
+/** Chess.com-style classification tint for the last-move highlight. */
+export const CLASS_TINTS: Record<string, string> = {
+  best: 'rgba(16, 185, 129, 0.55)',       // emerald
+  good: 'rgba(52, 211, 153, 0.45)',       // light emerald
+  book: 'rgba(148, 163, 184, 0.45)',      // gray
+  inaccuracy: 'rgba(250, 204, 21, 0.55)', // yellow
+  mistake: 'rgba(249, 115, 22, 0.58)',    // orange
+  blunder: 'rgba(239, 68, 68, 0.6)',      // red
 };
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -50,6 +66,7 @@ const THEMES: Theme[] = [
 ];
 
 const THEME_STORAGE_KEY = 'webboard-theme';
+const MOVE_ANIM_MS = 140;
 
 function parseFenPlacement(fen: string): string[][] {
   const rows = (fen.split(' ')[0] || '').split('/');
@@ -85,7 +102,8 @@ function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
 /**
  * Interactive lichess-style analysis board: SVG pieces, themed squares,
  * drag & drop + click-to-move (pointer events, mouse and touch), legal-move
- * dots/capture rings, check glow, and a promotion picker.
+ * dots/capture rings, check glow, promotion picker, smooth move animation,
+ * and an always-on evaluation bar.
  * Fully virtual: moves are dispatched through the web-only analysis endpoint.
  */
 const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
@@ -93,7 +111,11 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   legalMoves,
   inCheck,
   lastMoveUci,
+  lastMoveClass,
   isBranching,
+  winChance,
+  scoreCp,
+  mate,
   onMovePlayed,
 }) => {
   const grid = useMemo(() => parseFenPlacement(fen), [fen]);
@@ -111,10 +133,16 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const theme = THEMES[themeIdx];
 
   const [selected, setSelected] = useState<Coord | null>(null);
-  const [drag, setDrag] = useState<{ from: Coord; piece: string; x: number; y: number; moved: boolean } | null>(null);
+  // Only {from, piece} live in state (one render per grab, NOT per mousemove);
+  // the ghost follows the pointer via direct DOM writes for buttery smoothness.
+  const [drag, setDrag] = useState<{ from: Coord; piece: string } | null>(null);
   const [promotion, setPromotion] = useState<{ from: Coord; to: Coord; color: 'white' | 'black' } | null>(null);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const ghostRef = useRef<HTMLDivElement | null>(null);
+  const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
+  const draggedFarRef = useRef<boolean>(false);
+  const ghostSizeRef = useRef<number>(60);
 
   useEffect(() => {
     try {
@@ -156,13 +184,12 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const isOwnTurnPiece = (glyph: string): boolean =>
     !!glyph && (whiteToMove ? glyph === glyph.toUpperCase() : glyph === glyph.toLowerCase());
 
-  const tryPlay = (from: Coord, to: Coord) => {
+  const tryPlay = (from: Coord, to: Coord): boolean => {
     const fromStr = coordToSquareName(from);
     const toStr = coordToSquareName(to);
     const candidates = legalMoves.filter((lm) => lm.startsWith(fromStr + toStr));
     if (candidates.length === 0) return false;
     if (candidates[0].length > 4) {
-      // Promotion required -> open the picker
       const glyph = pieceAt(from);
       setPromotion({
         from,
@@ -188,6 +215,13 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     return [f, r];
   };
 
+  const positionGhost = (clientX: number, clientY: number) => {
+    const el = ghostRef.current;
+    if (!el || !boardRef.current) return;
+    const sq = boardRef.current.getBoundingClientRect().width / 8;
+    el.style.transform = `translate(${clientX - sq / 2}px, ${clientY - sq / 2}px)`;
+  };
+
   const handlePointerDown = (e: React.PointerEvent, c: Coord) => {
     if (promotion) return;
 
@@ -203,47 +237,92 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
       return;
     }
 
-    // Select (and prepare a potential drag)
+    // Select (and prepare a potential drag). wasSelected lets a SECOND click
+    // on the same piece toggle the selection off (lichess behaviour).
+    const wasSelected = !!selected && selected[0] === c[0] && selected[1] === c[1];
     setSelected(c);
-    setDrag({ from: c, piece: glyph, x: e.clientX, y: e.clientY, moved: false });
+    pressRef.current = { coord: c, startX: e.clientX, startY: e.clientY, wasSelected };
+    draggedFarRef.current = false;
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (rect) ghostSizeRef.current = rect.width / 8;
+    setDrag({ from: c, piece: glyph });
+    // Position the ghost immediately at the grab point
+    requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
   };
 
   // Global pointer tracking while a piece is held
   useEffect(() => {
     if (!drag) return;
+
     const onMove = (e: PointerEvent) => {
-      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY, moved: true } : d));
+      const press = pressRef.current;
+      if (!press) return;
+      if (
+        Math.abs(e.clientX - press.startX) > 5 ||
+        Math.abs(e.clientY - press.startY) > 5
+      ) {
+        draggedFarRef.current = true;
+      }
+      if (draggedFarRef.current) {
+        positionGhost(e.clientX, e.clientY);
+      }
     };
+
     const onUp = (e: PointerEvent) => {
-      const target = squareFromPoint(e.clientX, e.clientY);
-      const origin = drag.from;
-      const wasDragged =
-        Math.abs(e.clientX - drag.x) > 4 || Math.abs(e.clientY - drag.y) > 4 || drag.moved;
+      const press = pressRef.current;
+      pressRef.current = null;
       setDrag(null);
-      if (target && wasDragged && !(target[0] === origin[0] && target[1] === origin[1])) {
-        if (!tryPlay(origin, target)) {
-          setSelected(null); // illegal drop: snap back & deselect
+      if (!press) return;
+
+      const target = squareFromPoint(e.clientX, e.clientY);
+
+      if (draggedFarRef.current) {
+        // Drag release: play if dropped on a legal square, otherwise snap back.
+        if (
+          target &&
+          !(target[0] === press.coord[0] && target[1] === press.coord[1]) &&
+          tryPlay(press.coord, target)
+        ) {
+          return;
         }
-      } else if (!wasDragged && selected && target &&
-        target[0] === origin[0] && target[1] === origin[1]) {
-        // Simple click on the already-selected piece toggles it off
+        setSelected(null);
+        return;
+      }
+
+      // Plain click: second click on the same selected piece toggles it off.
+      if (press.wasSelected && target &&
+        target[0] === press.coord[0] && target[1] === press.coord[1]) {
         setSelected(null);
       }
     };
-    window.addEventListener('pointermove', onMove);
+
+    window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerup', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag, selected, legalMoves]);
+  }, [drag !== null, selected, legalMoves]);
 
   const cycleTheme = () => setThemeIdx((i) => (i + 1) % THEMES.length);
 
-  // Board geometry for the floating drag ghost
-  const boardRect = boardRef.current?.getBoundingClientRect();
-  const squarePx = boardRect ? boardRect.width / 8 : 60;
+  // Last-move highlight tint color-coded by move classification (chess.com style)
+  const lastTint =
+    lastMoveClass && CLASS_TINTS[lastMoveClass]
+      ? CLASS_TINTS[lastMoveClass]
+      : isBranching
+      ? 'rgba(139, 92, 246, 0.45)'
+      : 'rgba(255, 213, 79, 0.42)';
+
+  // Eval bar geometry (always rendered, independent of play-section settings)
+  const wc = Math.max(2, Math.min(98, winChance ?? 50));
+  let evalText = '0.0';
+  if (mate !== null && mate !== undefined) {
+    evalText = `M${Math.abs(mate)}`;
+  } else if (scoreCp !== null && scoreCp !== undefined) {
+    evalText = `${scoreCp >= 0 ? '+' : ''}${(scoreCp / 100).toFixed(1)}`;
+  }
 
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
@@ -270,19 +349,43 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         </div>
       </div>
 
-      {/* Board */}
-      <div className="mx-auto relative" style={{ maxWidth: '520px' }}>
-        <div
-          ref={boardRef}
-          className="grid w-full aspect-square rounded-md overflow-hidden select-none"
-          style={{
-            gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
-            gridTemplateRows: 'repeat(8, minmax(0, 1fr))',
-            touchAction: 'none',
-            boxShadow: `0 10px 30px -8px rgba(0,0,0,0.65), 0 0 0 6px ${theme.frame}, 0 0 0 7px rgba(255,255,255,0.06)`,
-          }}
-          onContextMenu={(e) => e.preventDefault()}
-        >
+      {/* Eval bar + board */}
+      <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: '545px' }}>
+        {/* Always-on evaluation bar */}
+        <div className="relative self-stretch w-5 rounded-full overflow-hidden bg-slate-800 ring-1 ring-slate-700 shadow-inner">
+          <div
+            className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-100 to-white transition-[height] duration-300 ease-out"
+            style={{ height: `${wc}%` }}
+          />
+          <div
+            className="absolute inset-x-0 h-px bg-violet-400/70"
+            style={{ bottom: `${wc}%` }}
+          />
+          <div
+            className="absolute inset-x-0 text-center text-[9px] font-mono font-bold pointer-events-none"
+            style={{
+              bottom: `calc(${wc}% + 2px)`,
+              color: wc > 45 ? '#0f172a' : '#e2e8f0',
+              transform: wc > 92 || wc < 8 ? 'translateY(-14px)' : 'none',
+            }}
+          >
+            {evalText}
+          </div>
+        </div>
+
+        {/* Board */}
+        <div className="relative flex-1">
+          <div
+            ref={boardRef}
+            className="grid w-full aspect-square rounded-md overflow-hidden select-none"
+            style={{
+              gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
+              gridTemplateRows: 'repeat(8, minmax(0, 1fr))',
+              touchAction: 'none',
+              boxShadow: `0 10px 30px -8px rgba(0,0,0,0.65), 0 0 0 6px ${theme.frame}, 0 0 0 7px rgba(255,255,255,0.06)`,
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
           {Array.from({ length: 64 }).map((_, idx) => {
             const rowFromTop = Math.floor(idx / 8); // 0..7 top->bottom
             const file = idx % 8;
@@ -313,9 +416,9 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     : undefined,
                 }}
               >
-                {/* Last move tint (under everything else) */}
+                {/* Last move tint, color-coded by classification */}
                 {(isLastFrom || isLastTo) && (
-                  <div className="absolute inset-0" style={{ backgroundColor: 'rgba(255, 213, 79, 0.42)' }} />
+                  <div className="absolute inset-0 transition-colors duration-200" style={{ backgroundColor: lastTint }} />
                 )}
                 {/* Selected square halo */}
                 {isSelected && (
@@ -340,8 +443,18 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                   </span>
                 )}
 
-                {/* Piece (dimmed while being dragged away) */}
-                {piece && !isDragOrigin && (
+                {/* Smoothly animated arriving piece */}
+                {piece && isLastTo && lastHighlight && !isDragOrigin && (
+                  <MovingPiece
+                    key={`${lastMoveUci}-${fen.length}`}
+                    src={PIECE_IMAGES[piece]}
+                    from={lastHighlight.from}
+                    to={[file, rank]}
+                  />
+                )}
+
+                {/* Static piece */}
+                {piece && !isLastTo && !isDragOrigin && (
                   <img
                     src={PIECE_IMAGES[piece]}
                     alt={piece}
@@ -376,62 +489,63 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
               </div>
             );
           })}
-        </div>
+          </div>
 
-        {/* Floating dragged piece */}
-        {drag && drag.moved && boardRect && (
+          {/* Promotion picker */}
+          {promotion && (
+            <div
+              className="absolute inset-0 z-40 bg-slate-950/50 backdrop-blur-[1px]"
+              onClick={() => setPromotion(null)}
+            >
+              <div
+                className="absolute bg-slate-900 border border-slate-600 rounded-xl shadow-2xl overflow-hidden"
+                style={{
+                  left: `${(promotion.to[0] / 8) * 100}%`,
+                  top: promotion.color === 'white' ? 0 : 'auto',
+                  bottom: promotion.color === 'black' ? 0 : 'auto',
+                  width: '12.5%',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {['q', 'r', 'b', 'n'].map((p) => {
+                  const glyphKey = promotion.color === 'white' ? p.toUpperCase() : p;
+                  const uci = `${coordToSquareName(promotion.from)}${coordToSquareName(promotion.to)}${p}`;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        onMovePlayed(uci);
+                        setPromotion(null);
+                      }}
+                      className="w-full aspect-square flex items-center justify-center hover:bg-violet-600/40 transition-colors"
+                      title={`Promote to ${p.toUpperCase()}`}
+                    >
+                      <img src={PIECE_IMAGES[glyphKey]} alt={p} className="w-[80%] h-[80%]" draggable={false} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Floating dragged piece (positioned via direct DOM writes — no re-renders) */}
+      {drag && (
+        <div
+          ref={ghostRef}
+          className="fixed left-0 top-0 z-50 pointer-events-none"
+          style={{ width: ghostSizeRef.current, height: ghostSizeRef.current }}
+        >
           <img
             src={PIECE_IMAGES[drag.piece]}
             alt=""
             draggable={false}
-            className="fixed z-50 pointer-events-none"
-            style={{
-              width: squarePx * 0.92,
-              height: squarePx * 0.92,
-              left: drag.x - squarePx * 0.46,
-              top: drag.y - squarePx * 0.46,
-              filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.5))',
-            }}
+            className="block w-full h-full"
+            style={{ filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.5))' }}
           />
-        )}
-
-        {/* Promotion picker */}
-        {promotion && (
-          <div
-            className="absolute inset-0 z-40 bg-slate-950/50 backdrop-blur-[1px]"
-            onClick={() => setPromotion(null)}
-          >
-            <div
-              className="absolute bg-slate-900 border border-slate-600 rounded-xl shadow-2xl overflow-hidden"
-              style={{
-                left: `${(promotion.to[0] / 8) * 100}%`,
-                top: promotion.color === 'white' ? 0 : 'auto',
-                bottom: promotion.color === 'black' ? 0 : 'auto',
-                width: '12.5%',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {(promotion.color === 'white' ? ['q', 'r', 'b', 'n'] : ['q', 'r', 'b', 'n']).map((p) => {
-                const glyphKey = promotion.color === 'white' ? p.toUpperCase() : p;
-                const uci = `${coordToSquareName(promotion.from)}${coordToSquareName(promotion.to)}${p}`;
-                return (
-                  <button
-                    key={p}
-                    onClick={() => {
-                      onMovePlayed(uci);
-                      setPromotion(null);
-                    }}
-                    className="w-full aspect-square flex items-center justify-center hover:bg-violet-600/40 transition-colors"
-                    title={`Promote to ${p.toUpperCase()}`}
-                  >
-                    <img src={PIECE_IMAGES[glyphKey]} alt={p} className="w-[80%] h-[80%]" draggable={false} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="mt-3 text-center text-[10px] text-slate-500 leading-relaxed">
         Drag a piece or click piece then square ·{' '}
@@ -441,6 +555,46 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         <span className="font-mono text-slate-400">g G</span> jump
       </div>
     </div>
+  );
+};
+
+/**
+ * Piece that slides in from its origin square on mount (CSS transform
+ * transition) — gives every navigation step a smooth glide.
+ */
+const MovingPiece: React.FC<{
+  src: string;
+  from: Coord;
+  to: Coord;
+}> = ({ src, from, to }) => {
+  const ref = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Screen-space square deltas (rows are rendered top->bottom, ranks inverted)
+    const dFile = from[0] - to[0];
+    const dRow = 7 - from[1] - (7 - to[1]);
+    el.style.transition = 'none';
+    el.style.transform = `translate(${dFile * 100}%, ${dRow * 100}%)`;
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${MOVE_ANIM_MS}ms cubic-bezier(0.25, 0.9, 0.35, 1)`;
+        el.style.transform = 'translate(0, 0)';
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <img
+      ref={ref}
+      src={src}
+      alt=""
+      draggable={false}
+      className="relative z-[5] pointer-events-none will-change-transform"
+      style={{ width: '88%', height: '88%', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))' }}
+    />
   );
 };
 

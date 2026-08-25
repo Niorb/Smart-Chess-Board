@@ -353,15 +353,33 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const getQualityBadge = (tier?: string) => {
     switch (tier) {
       case 'best':
-        return <span title="Best Move (Δ ≤ 15 cp) — Animated in Mint Emerald" className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm">BEST</span>;
+        return <span title="Best Move (Δ ≤ 15 cp)" className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 shadow-sm">BEST</span>;
       case 'good':
-        return <span title="Good Move (15 < Δ ≤ 60 cp) — Animated in Cyan Azure" className="px-2 py-0.5 text-xs font-bold rounded bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 shadow-sm">GOOD</span>;
+        return <span title="Good Move (15 < Δ ≤ 60 cp)" className="px-2 py-0.5 text-xs font-bold rounded bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 shadow-sm">GOOD</span>;
       case 'inaccuracy':
-        return <span title="Inaccuracy (60 < Δ ≤ 150 cp) — Animated in Warm Amber" className="px-2 py-0.5 text-xs font-bold rounded bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm">INACC</span>;
+        return <span title="Inaccuracy (60 < Δ ≤ 150 cp)" className="px-2 py-0.5 text-xs font-bold rounded bg-amber-950/90 text-amber-300 border border-amber-500/40 shadow-sm">INACC</span>;
       case 'blunder':
-        return <span title="Blunder (Δ > 150 cp) — Animated in Laser Crimson" className="px-2 py-0.5 text-xs font-bold rounded bg-rose-950/90 text-rose-300 border border-rose-500/40 shadow-sm">BLUNDER</span>;
+        return <span title="Blunder (Δ > 150 cp)" className="px-2 py-0.5 text-xs font-bold rounded bg-rose-950/90 text-rose-300 border border-rose-500/40 shadow-sm">BLUNDER</span>;
       default:
         return <span className="px-2 py-0.5 text-xs font-bold rounded bg-slate-800 text-slate-400">MOVE</span>;
+    }
+  };
+
+  // Chess.com-style color coding for played moves in notation lists
+  const getMoveTileStyle = (tier?: string): string => {
+    switch (tier) {
+      case 'best':
+        return 'bg-emerald-600/80 text-white border-emerald-400/50';
+      case 'good':
+        return 'bg-teal-500/50 text-teal-100 border-teal-300/40';
+      case 'inaccuracy':
+        return 'bg-yellow-500/60 text-yellow-950 border-yellow-300/50';
+      case 'mistake':
+        return 'bg-orange-500/70 text-white border-orange-300/50';
+      case 'blunder':
+        return 'bg-red-600/80 text-white border-red-400/50';
+      default:
+        return 'bg-slate-800/80 text-slate-200 border-slate-700';
     }
   };
 
@@ -488,13 +506,26 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                   : currentPly > 0
                   ? analysis?.game_moves?.[currentPly - 1] ?? null
                   : null;
+                // Always-on eval bar data (independent of play-section settings)
+                const posEval = analysis?.evaluations?.[currentPly];
+                const winChance = posEval?.win_chance ?? analysis?.current_eval?.win_chance ?? 50;
+                const scoreCp = posEval?.score_cp ?? analysis?.current_eval?.score_cp ?? null;
+                const mate = posEval?.mate ?? analysis?.current_eval?.mate ?? null;
+                // Classification of the last mainline move (colors the highlight)
+                const lastMoveClass = !isBranching && currentPly > 0
+                  ? playedAnalyses[currentPly - 1]?.classification ?? null
+                  : null;
                 return (
                   <WebAnalysisBoard
                     fen={analysis?.fen ?? ''}
                     legalMoves={analysis?.legal_moves ?? []}
                     inCheck={!!analysis?.in_check}
                     lastMoveUci={lastMoveUci}
+                    lastMoveClass={lastMoveClass}
                     isBranching={isBranching}
+                    winChance={winChance}
+                    scoreCp={scoreCp}
+                    mate={mate}
                     onMovePlayed={handleWebMove}
                   />
                 );
@@ -973,7 +1004,16 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             {/* Move History List */}
             <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
               <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Game Notation & Evaluation Breakdown</h4>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Game Notation & Evaluation Breakdown</h4>
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold">
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-600/80 text-white">BEST</span>
+                    <span className="px-1.5 py-0.5 rounded bg-teal-500/50 text-teal-100">GOOD</span>
+                    <span className="px-1.5 py-0.5 rounded bg-yellow-500/60 text-yellow-950">INACC</span>
+                    <span className="px-1.5 py-0.5 rounded bg-orange-500/70 text-white">MISTAKE</span>
+                    <span className="px-1.5 py-0.5 rounded bg-red-600/80 text-white">BLUNDER</span>
+                  </div>
+                </div>
                 <div className="max-h-72 overflow-y-auto pr-2 space-y-1">
                   {Array.from({ length: Math.ceil(playedAnalyses.length / 2) }).map((_, moveIdx) => {
                     const whitePly = moveIdx * 2;
@@ -985,15 +1025,16 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       <div key={moveIdx} className="grid grid-cols-11 gap-2 p-1.5 rounded-lg text-xs hover:bg-slate-800/40 transition-colors">
                         <span className="col-span-1 text-slate-500 font-bold">{moveIdx + 1}.</span>
                         
-                        {/* White Move */}
+                        {/* White Move — color-coded by quality */}
                         <div
                           onClick={() => handleStep(whitePly + 1)}
                           className={`col-span-5 flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
-                            currentPly === whitePly + 1 ? 'bg-violet-600/30 border border-violet-500/50 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'
+                            currentPly === whitePly + 1 ? 'ring-2 ring-violet-400/70' : ''
                           }`}
                         >
-                          <span>{wMove?.san || wMove?.uci}</span>
-                          {wMove && getQualityBadge(wMove.classification)}
+                          <span className={`w-full text-center text-xs font-bold rounded border px-2 py-1 ${getMoveTileStyle(wMove?.classification)}`}>
+                            {wMove?.san || wMove?.uci || '...'}
+                          </span>
                         </div>
 
                         {/* Black Move */}
@@ -1001,11 +1042,12 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                           <div
                             onClick={() => handleStep(blackPly + 1)}
                             className={`col-span-5 flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
-                              currentPly === blackPly + 1 ? 'bg-violet-600/30 border border-violet-500/50 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'
+                              currentPly === blackPly + 1 ? 'ring-2 ring-violet-400/70' : ''
                             }`}
                           >
-                            <span>{bMove.san || bMove.uci}</span>
-                            {getQualityBadge(bMove.classification)}
+                            <span className={`w-full text-center text-xs font-bold rounded border px-2 py-1 ${getMoveTileStyle(bMove.classification)}`}>
+                              {bMove.san || bMove.uci}
+                            </span>
                           </div>
                         ) : (
                           <div className="col-span-5"></div>
