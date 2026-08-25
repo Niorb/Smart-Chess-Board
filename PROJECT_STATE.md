@@ -3,7 +3,22 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Web-Only Analysis Navigation (2026-08-25)
+## Latest Change — Dedicated "Analyse in Webapp" Board (2026-08-25)
+1. **Explicit webapp-only analysis entry point (`AnalysisTab.tsx`)**:
+   - New "Analyse in Webapp" card at the top of Game Review: starts the Stockfish
+     analysis without touching the physical board, then opens an interactive web
+     board panel where keyboard navigation lives.
+   - **New `WebAnalysisBoard.tsx` component**: renders the analysis-engine FEN as a
+     Unicode-piece 8x8 board with rank/file labels, highlights the latest move
+     (sky on mainline / violet while in a variation), and badges MAIN GAME LINE vs
+     VARIATION SANDBOX state.
+   - Keyboard hints printed under the board; `← →` / `h l` stepping and
+     `Home End` / `g G` jumping work whenever the Game Review view is open with a
+     running analysis; Top-Candidate chips + free-text move input explore variations.
+2. **Automated Verification**: frontend build clean; 353/353 tests passing on
+   physical Raspberry Pi.
+
+## Previous Change — Web-Only Analysis Navigation (2026-08-25)
 1. **Keyboard-driven analysis in the webapp (board fully passive)**:
    - **Navigation endpoint** (`POST /api/analysis/nav {"direction": ...}` →
      `BoardStateManager.navigate_analysis()`): "back"/"forward" step the mainline;
