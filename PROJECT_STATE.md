@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Seek Stale-Connection Recovery & Unified Replay-Menu Colors (2026-08-25)
+## Latest Change — Seek Match Grace Window (Event-Stream Fallback Fix) (2026-08-25)
+1. **Regression fixed (`lichess_engine.py`)**: The previous stale-connection fix snapped status
+   back to IDLE the instant the seek NDJSON stream closed without a match — but Lichess often
+   delivers the matched `gameStart` via the persistent event stream instead, milliseconds later.
+   With status already IDLE, the seek-stream fallback rejected our own match ("ignoring
+   gameStart ... not initiated by this session"), leaving orphaned games on Lichess and a board
+   that reset without starting a game.
+2. **Fix**: On seek-stream close without a match, `_schedule_seek_grace_end()` holds SEEKING for
+   10 s so the event-stream fallback can accept the match; a generation counter invalidates the
+   grace timer when a newer seek starts. Regression test covers stream-close → event-stream
+   gameStart → PLAYING.
+3. **Automated Verification**: 348/348 tests passing on physical Raspberry Pi.
+
+## Previous Change — Seek Stale-Connection Recovery & Unified Replay-Menu Colors (2026-08-25)
 1. **Intermittent "gesture completes but never enters queue" fixed (`lichess_engine.py`)**:
    - **Root Cause**: Lichess closes idle HTTP/2 pooled connections server-side; httpx does not
      report these as `client.is_closed`, so the next seek POST on the stale connection threw
