@@ -137,6 +137,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const replayResults = replay?.results ?? [];
   const replayMistakes = replay?.mistakes ?? 0;
   const replayComplete = replay?.complete ?? false;
+  const replayReveal = replay?.reveal_uci ?? null;
   const correctRecalls = replayResults.filter((r) => r.correct).length;
   const resultByPly = useMemo(() => {
     const map: Record<number, boolean> = {};
@@ -218,8 +219,9 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     setFeedbackMsg({ text: 'Starting memory recall of your last game...', type: 'info' });
     try {
       const res = await startReplayRecall();
-      if (res && res.error) {
-        setFeedbackMsg({ text: res.error, type: 'error' });
+      const errText = (res as { error?: string })?.error;
+      if (errText) {
+        setFeedbackMsg({ text: errText, type: 'error' });
         setTimeout(() => setFeedbackMsg(null), 4000);
       } else {
         setFeedbackMsg({ text: 'Memory recall started — replay your last game from memory!', type: 'success' });
@@ -1111,7 +1113,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       </div>
                     </div>
 
-                    {analysis.reveal_uci && (
+                    {replayReveal && (
                       <div className="p-3 bg-amber-950/50 border border-amber-500/40 rounded-xl text-xs text-amber-300 space-y-1">
                         <div className="font-bold flex items-center gap-1.5">
                           <Lightbulb className="w-3.5 h-3.5" /> Wrong move — correction revealed
