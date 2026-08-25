@@ -846,6 +846,7 @@ def test_seek_retries_once_after_stale_http2_connection():
         engine = LichessEngine()
         engine.is_running = True
         mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "SEEKING"
 
         from contextlib import asynccontextmanager
 
@@ -898,6 +899,7 @@ def test_seek_does_not_retry_on_permanent_error():
         engine = LichessEngine()
         engine.is_running = True
         mock_state_mgr = MagicMock()
+        mock_state_mgr.game_status = "SEEKING"
 
         from contextlib import asynccontextmanager
 
