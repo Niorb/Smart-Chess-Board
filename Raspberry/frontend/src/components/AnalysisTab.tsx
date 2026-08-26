@@ -613,6 +613,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   const handleStartBlunderDrill = async (idx: number) => {
     setPuzzleResult(null);
+    setShowBlunderSolution(false);
     setGuessInput('');
     try {
       await startBlunderDrill(idx);
@@ -662,6 +663,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   const handleStartEndgame = async (drillId?: string) => {
     setIsLoadingEndgame(true);
+    setShowEndgameSolution(false);
     setFeedbackMsg({ text: 'Starting Endgame Tablebase drill...', type: 'info' });
     try {
       await startEndgameDrill({ drill_id: drillId });
@@ -676,6 +678,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   };
 
   const handleStopEndgame = async () => {
+    setShowEndgameSolution(false);
     try {
       await stopEndgameDrill();
       setFeedbackMsg({ text: 'Endgame drill stopped. Board returned to IDLE.', type: 'info' });
@@ -1613,8 +1616,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                         </div>
                       )}
 
-                      {/* Full Grandmaster Solution Line if Solved or Requested */}
-                      {(showBlunderSolution || puzzleResult?.puzzle_complete || currentBlunder?.solution_line_san) && (
+                      {/* Full Grandmaster Solution Line ONLY if Solved or Requested */}
+                      {(showBlunderSolution || puzzleResult?.puzzle_complete) && (
                         <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5">
                           <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
@@ -2205,7 +2208,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       )}
 
                       {/* Theoretical Solution & Technique Card */}
-                      {(showEndgameSolution || eg.solution_line?.length) && showEndgameSolution && (
+                      {showEndgameSolution && (
                         <div className="bg-amber-950/30 border border-amber-500/40 rounded-2xl p-5 space-y-3 shadow-lg">
                           <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
                             <Lightbulb className="w-4 h-4 text-amber-400" />
