@@ -529,11 +529,18 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                   : currentPly > 0
                   ? analysis?.game_moves?.[currentPly - 1] ?? null
                   : null;
-                // Always-on eval bar data (independent of play-section settings)
+                // Always-on eval bar data (independent of play-section settings).
+                // While in a variation sandbox, current_eval carries the LIVE
+                // Stockfish evaluation of the branch position and must take
+                // precedence over the mainline evaluation at the anchor ply.
                 const posEval = analysis?.evaluations?.[currentPly];
-                const winChance = posEval?.win_chance ?? analysis?.current_eval?.win_chance ?? 50;
-                const scoreCp = posEval?.score_cp ?? analysis?.current_eval?.score_cp ?? null;
-                const mate = posEval?.mate ?? analysis?.current_eval?.mate ?? null;
+                const liveEval = analysis?.current_eval;
+                const evalSource = (isBranching && liveEval ? liveEval : null)
+                  ?? posEval
+                  ?? liveEval;
+                const winChance = evalSource?.win_chance ?? 50;
+                const scoreCp = evalSource?.score_cp ?? null;
+                const mate = evalSource?.mate ?? null;
                 // Classification of the last mainline move (colors the highlight)
                 const lastMoveClass = !isBranching && currentPly > 0
                   ? playedAnalyses[currentPly - 1]?.classification ?? null
