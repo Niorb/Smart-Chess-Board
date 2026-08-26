@@ -110,6 +110,14 @@ COLOR_NOVELTY_FLARE = (255, 200, 40)   # Luminous golden solar flare for unchart
 COLOR_RESIGN_PRIMARY = (220, 24, 40)    # Laser Crimson for King's Bow resignation origin square
 COLOR_RESIGN_HALO = (140, 10, 25)       # Radiant Garnet for resignation aura cross-halo
 
+# Piece Type LED Colors (Harmonized Setup & Endgame Visuals)
+COLOR_PIECE_KING = (255, 215, 0)        # Royal Gold
+COLOR_PIECE_QUEEN = (140, 40, 240)      # Royal Violet
+COLOR_PIECE_ROOK = (0, 160, 255)        # Azure Cyan
+COLOR_PIECE_BISHOP = (220, 140, 0)      # Warm Sun Amber
+COLOR_PIECE_KNIGHT = (0, 220, 140)      # Mint Emerald
+COLOR_PIECE_PAWN = (220, 220, 240)      # Starlight Pearl White
+
 # =============================================================================
 # NIGHT MODE DEDICATED HIGH-CONTRAST PALETTE — (R, G, B) tuples
 # (Engineered for crystal-clear contrast and vibrancy against moonlight blue floor)
@@ -193,6 +201,14 @@ COLOR_NIGHT_NOVELTY_FLARE = (240, 180, 20)  # Vivid Golden Solar Flare
 COLOR_NIGHT_RESIGN_PRIMARY = (160, 16, 36) # Velvet Ruby
 COLOR_NIGHT_RESIGN_HALO = (80, 8, 18)      # Midnight Crimson
 
+# Piece Type LED Colors (Night Mode)
+COLOR_NIGHT_PIECE_KING = (240, 210, 120)    # Radiant Warm Gold
+COLOR_NIGHT_PIECE_QUEEN = (170, 50, 255)   # Luminous Royal Violet
+COLOR_NIGHT_PIECE_ROOK = (0, 210, 255)     # Vivid Azure Cyan
+COLOR_NIGHT_PIECE_BISHOP = (255, 160, 20)  # Radiant Sun Amber
+COLOR_NIGHT_PIECE_KNIGHT = (0, 255, 160)   # Vivid Mint Emerald
+COLOR_NIGHT_PIECE_PAWN = (240, 242, 255)   # Luminous Pearl White
+
 # "The Sovereign's Eclipse" (GAME_LOST Palette)
 COLOR_ECLIPSE_FLASH = (255, 245, 235)  # White-hot fractured crown detonation
 COLOR_ECLIPSE_GOLD = (255, 175, 25)    # Flying molten crown shards
@@ -242,3 +258,4 @@ ANIM_ANALYSIS_COMPUTING_DURATION_S = 10.0  # Duration for analysis computing ani
 ANIM_UNCHARTED_NOVELTY_DURATION_S = 0.35  # High-speed 350ms outward radial starburst pulse
 RESIGNATION_HOLD_DURATION_S = 3.0  # Holding King for 3.0s arms King's Bow resignation
 RESIGNATION_ABANDON_DURATION_S = 5.0  # Leaving King off board for 5.0s auto-resigns
+ANIM_WHITE_SETUP_COMPLETE_DURATION_S = 0.8  # Duration for white setup complete wave

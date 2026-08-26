@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from .board_state import state_manager
 from .coach_engine import coach_engine
+from .endgame_db import progress_manager
 from .gm_games import get_all_gm_games
 from .lichess_engine import lichess_engine
 
@@ -802,6 +803,74 @@ async def analysis_lines_route(body: AnalysisLinesRequest | None = None):
         coach_engine.request_lines(sm.analysis_active_board)
         return {"lines": []}
     return {"lines": lines}
+
+
+# --- Endgame Tablebase Trainer Endpoints ---
+
+class StartEndgameRequest(BaseModel):
+    drill_id: str | None = None
+    custom_fen: str | None = None
+    custom_params: dict | None = None
+
+
+class CustomEndgameRequest(BaseModel):
+    fen: str
+    title: str = "Custom Endgame"
+    player_color: str = "white"
+    target_goal: str = "win"
+    difficulty: int = 2
+    description: str = ""
+    hint: str = ""
+
+
+@app.get("/api/endgame/drills")
+async def get_endgame_drills_route():
+    """Returns the complete Endgame Academy drill curriculum with player progress."""
+    return progress_manager.get_all_drills()
+
+
+@app.post("/api/endgame/start")
+async def start_endgame_drill_route(body: StartEndgameRequest | None = None):
+    """Starts an endgame tablebase drill session."""
+    drill_id = body.drill_id if body else None
+    custom_fen = body.custom_fen if body else None
+    custom_params = body.custom_params if body else None
+    res = await state_manager.start_endgame_drill(drill_id=drill_id, custom_fen=custom_fen, custom_params=custom_params)
+    return {"status": "success", "analysis": res}
+
+
+@app.post("/api/endgame/stop")
+async def stop_endgame_drill_route():
+    """Stops the active endgame drill session and returns board to IDLE."""
+    return state_manager.stop_endgame_drill()
+
+
+@app.post("/api/endgame/hint")
+async def get_endgame_hint_route():
+    """Requests an optimal move hint for the current endgame drill."""
+    return state_manager.request_endgame_hint()
+
+
+@app.post("/api/endgame/custom")
+async def create_custom_endgame_route(body: CustomEndgameRequest):
+    """Creates and initiates a custom endgame training drill from a user-provided FEN."""
+    params = {
+        "title": body.title,
+        "player_color": body.player_color,
+        "target_goal": body.target_goal,
+        "difficulty": body.difficulty,
+        "description": body.description,
+        "hint": body.hint,
+    }
+    res = await state_manager.start_endgame_drill(custom_fen=body.fen, custom_params=params)
+    return {"status": "success", "analysis": res}
+
+
+@app.post("/api/endgame/reset-progress")
+async def reset_endgame_progress_route():
+    """Clears all saved completion progress and stars."""
+    progress_manager.reset_progress()
+    return {"status": "success", "message": "Endgame progress reset"}
 
 
 # --- WebSocket Stream ---

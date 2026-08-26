@@ -3,7 +3,43 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Gesture Arming Requires Full Board Reset (`is_setup_ready`) (2026-08-26)
+## Latest Change — Endgame Tablebase Trainer ("Endgame Academy") (2026-08-26)
+1. **Curriculum & Tablebase Database (`endgame_db.py`)**:
+   - Implemented 12-drill theoretical endgame curriculum across 4 core categories:
+     - **Pawn Endgames**: Pawn Opposition & Key Squares, Rook Pawn Draw Fortress, Square of the Pawn Rule.
+     - **Rook Endgames**: Lucena Position (Bridge Building), Philidor Defense (Passive 6th Rank Cutoff), Short Side Defense.
+     - **Minor Piece Endgames**: King + Bishop + Knight Mate (W-Manouevre), King + Two Bishops Mate, Knight vs Outside Passed Pawn.
+     - **Queen Endgames**: Queen vs Pawn on 7th (c/a-pawn stalemate trap), Queen vs Rook (Philidor Triangle).
+   - Added persistence manager (`endgame_progress.json`, git-ignored) tracking 3-star rating, moves played vs par, accuracy %, and custom FEN user drills.
+2. **Two-Phase Physical Piece Setup & Piece-Type LED Color Coding (`config.py`, `led_helpers.py`, `led_animations.py`, `board_state.py`)**:
+   - Universal Piece-Type Color Palette (identical for White & Black):
+     - ♔ King: Royal Gold (`#FFD700`)
+     - ♕ Queen: Royal Violet (`#8C28F0`)
+     - ♖ Rook: Azure Cyan (`#00A0FF`)
+     - ♗ Bishop: Warm Sun Amber (`#DC8C00`)
+     - ♘ Knight: Mint Emerald (`#00DC8C`)
+     - ♙ Pawn: Pearl White (`#DCDCF0`)
+   - Phase 1 (White Setup): Target squares glow in piece colors; misplaced pieces glow warning amber; correctly placed South-pole pieces lock in.
+   - Transition: 0.8s warm Ivory wave (`render_white_setup_complete_wave`) sweeps across ranks 1–2 confirming White pieces.
+   - Phase 2 (Black Setup): Target squares glow in same piece colors; placed North-pole pieces lock in.
+   - Readiness: 0.5s emerald snap-flash (`BOARD_READY`) begins drill.
+3. **Move Grading & Defense Reply Engine (`board_state.py`, `coach_engine.py`)**:
+   - Optimal moves ($\le 10$ cp): Emerald Green confirmation flash (`COLOR_INT_MOVE_CONFIRM`).
+   - Sub-optimal winning moves ($10 < \Delta \le 100$ cp): Amber flash (`COLOR_INT_MOVE_INACCURACY`).
+   - Blunders ($\Delta > 100$ cp or loss of win): Crimson flash (`COLOR_INT_ILLEGAL`) + Royal Violet return-home undo anchor to retry.
+   - Defense Reply: Stockfish 17.1 automatically computes best defensive resistance and queues move for physical execution.
+4. **Physical Gesture Engine (`c2` Pawn) (`gesture_engine.py`)**:
+   - Lifting `c2` starter pawn opens Endgame Academy directly on board.
+   - Rank 1 lights category selectors (`a1`: Pawns, `b1`: Rooks, `c1`: Minors, `d1`: Queens).
+   - Lifting category piece cycles drills with live piece previews on ranks 2–7.
+   - Replacing `c2` confirms selection and begins two-phase setup.
+5. **REST API & React Web UI (`main.py`, `api.ts`, `useBoardState.ts`, `AnalysisTab.tsx`)**:
+   - Added REST endpoints: `GET /api/endgame/drills`, `POST /api/endgame/start`, `POST /api/endgame/stop`, `POST /api/endgame/hint`, `POST /api/endgame/custom`, `POST /api/endgame/reset-progress`.
+   - Added dedicated "Endgame Academy" sub-tab in `AnalysisTab.tsx` with curriculum browser, category filtering, live two-phase setup guidance, move history, mistake counter, and custom FEN creator modal.
+6. **Automated Verification (`test_endgame_trainer.py`, `test_gesture_starters.py`)**:
+   - Comprehensive test suite verifying core curriculum integrity, two-phase setup validation, moves and hints execution, LED piece color palettes, and `c2` gesture lifecycle.
+
+## Previous Change — Gesture Arming Requires Full Board Reset (`is_setup_ready`) (2026-08-26)
 1. **Gesture Setup-Readiness Prerequisite (`gesture_engine.py`, `board_state.py`)**:
    - Gestures (e.g. `h2` Replay Menu, `e2` Analysis Gate, `d2` Memory Replay Gate, `a2` Night Mode Toggle) can now ONLY start when the physical board was already fully reset in the standard 32-piece starting position (`is_setup_ready == True`).
    - When setting up the board piece by piece, placing `h2` (or any other gesture pawn) as the 32nd piece will no longer prematurely arm or light up as a gesture.

@@ -19,13 +19,19 @@ try:
         BOARD_COLS,
         BOARD_ROWS,
     )
-    from app.led_animations import scale_color
+    from app.led_animations import get_piece_type_color, scale_color
     from app.led_helpers import (
         COLOR_INT_AZURE,
         COLOR_INT_DAY_INDICATOR,
         COLOR_INT_MINT_EMERALD,
         COLOR_INT_NIGHT_INDICATOR,
+        COLOR_INT_PIECE_BISHOP,
+        COLOR_INT_PIECE_KING,
+        COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_LIFTED,
+        COLOR_INT_PIECE_PAWN,
+        COLOR_INT_PIECE_QUEEN,
+        COLOR_INT_PIECE_ROOK,
         COLOR_INT_ROYAL_VIOLET,
         Color,
     )
@@ -34,13 +40,19 @@ except ImportError:
         BOARD_COLS,
         BOARD_ROWS,
     )
-    from .led_animations import scale_color
+    from .led_animations import get_piece_type_color, scale_color
     from .led_helpers import (
         COLOR_INT_AZURE,
         COLOR_INT_DAY_INDICATOR,
         COLOR_INT_MINT_EMERALD,
         COLOR_INT_NIGHT_INDICATOR,
+        COLOR_INT_PIECE_BISHOP,
+        COLOR_INT_PIECE_KING,
+        COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_LIFTED,
+        COLOR_INT_PIECE_PAWN,
+        COLOR_INT_PIECE_QUEEN,
+        COLOR_INT_PIECE_ROOK,
         COLOR_INT_ROYAL_VIOLET,
         Color,
     )
@@ -771,6 +783,210 @@ class MemoryReplayGateGesture(CornerGateGesture):
             _schedule_task(self.state_manager.start_replay_recall())
 
 
+class EndgameMenuGesture(BaseGesture):
+    """
+    Physical Endgame Tablebase Trainer ("Endgame Academy") selection menu:
+      - Lift c2 (Bishop's Pawn) to open the Endgame Catalog menu.
+      - Rank 1 illuminates the 4 category options:
+          a1 (0, 0) = Pawn Endgames (Pearl White)
+          b1 (1, 0) = Rook Endgames (Azure Cyan)
+          c1 (2, 0) = Minor Piece Endgames (Mint Emerald)
+          d1 (3, 0) = Queen Endgames (Royal Violet)
+      - Lifting / tapping a category piece switches category and cycles drills in that category.
+        The selected drill's target pieces preview on ranks 2-7 in their piece-type colors!
+      - Replacing c2 confirms the selected drill and initiates two-phase setup!
+      - Replacing c2 without lifting any option cancels back to IDLE.
+    """
+
+    C2_COORD: tuple[int, int] = (2, 1)  # File c (c=2), Rank 2 (r=1)
+    PAWN_COORD: tuple[int, int] = (0, 0)   # a1
+    ROOK_COORD: tuple[int, int] = (1, 0)   # b1
+    MINOR_COORD: tuple[int, int] = (2, 0)  # c1
+    QUEEN_COORD: tuple[int, int] = (3, 0)  # d1
+
+    starter_coord: tuple[int, int] = (2, 1)
+    starter_color: int = Color(220, 140, 0)  # Warm Sun Amber
+
+    CATEGORY_MAP: dict[tuple[int, int], str] = {
+        (0, 0): "pawn",
+        (1, 0): "rook",
+        (2, 0): "minor",
+        (3, 0): "queen",
+    }
+
+    CATEGORY_COLORS: dict[str, int] = {
+        "pawn": COLOR_INT_PIECE_PAWN,
+        "rook": COLOR_INT_PIECE_ROOK,
+        "minor": COLOR_INT_PIECE_KNIGHT,
+        "queen": COLOR_INT_PIECE_QUEEN,
+    }
+
+    def __init__(self, state_manager: Any = None, timeout: float = 30.0):
+        super().__init__(
+            name="endgame_menu",
+            description="Endgame Academy menu: lift c2 -> pick Pawn(a1)/Rook(b1)/Minor(c1)/Queen(d1) -> preview drill -> replace c2 to train",
+            state_manager=state_manager,
+            timeout=timeout,
+        )
+        self.selected_category: str = "pawn"
+        self.category_drill_index: dict[str, int] = {
+            "pawn": 0,
+            "rook": 0,
+            "minor": 0,
+            "queen": 0,
+        }
+        self._held_option: tuple[int, int] | None = None
+        self._holdoff: bool = False
+        self.log_prefix = "Endgame gesture"
+
+    @property
+    def hint(self) -> str | None:
+        if self.step != 1:
+            return None
+        drill = self.get_active_drill()
+        title = drill.title if drill else "Selected Drill"
+        return f"Pick category: a1=Pawn · b1=Rook · c1=Minor · d1=Queen — Active: {title} — Replace c2 to start"
+
+    def get_active_drill(self) -> Any | None:
+        try:
+            from app.endgame_db import CORE_CURRICULUM
+        except ImportError:
+            from .endgame_db import CORE_CURRICULUM
+        cat_drills = [d for d in CORE_CURRICULUM if d.category.value == self.selected_category]
+        if not cat_drills:
+            return CORE_CURRICULUM[0] if CORE_CURRICULUM else None
+        idx = self.category_drill_index.get(self.selected_category, 0) % len(cat_drills)
+        return cat_drills[idx]
+
+    def reset(self) -> None:
+        super().reset()
+        self._held_option = None
+
+    def _soft_cancel(self, reason: str) -> None:
+        logger.debug(f"{self.log_prefix} cancelled: {reason}")
+        self.reset()
+        self._holdoff = True
+
+    def evaluate(
+        self,
+        physical_state: list[list[int]],
+        now: float,
+        is_armed: bool = True,
+    ) -> bool:
+        lifted_starting, extra_occupied = self._get_board_anomalies(physical_state)
+
+        if len(extra_occupied) > 0:
+            if self.is_active:
+                self._soft_cancel(f"center pieces occupied: {extra_occupied}")
+            return False
+
+        if self._holdoff:
+            if len(lifted_starting) == 0:
+                self._holdoff = False
+            return False
+
+        if self.step == 0:
+            if not is_armed:
+                return False
+            if lifted_starting == {self.C2_COORD}:
+                self.step = 1
+                self.start_time = now
+                logger.info(f"{self.log_prefix}: c2 lifted alone -> Endgame menu open")
+            return False
+
+        if self.step == 1:
+            if self.time_remaining(now) <= 0.0:
+                self._soft_cancel("timeout")
+                return False
+
+            if self.C2_COORD not in lifted_starting:
+                # c2 replaced back on board
+                if len(lifted_starting) == 0:
+                    logger.info(f"{self.log_prefix}: c2 replaced with all options settled -> starting drill")
+                    self.reset()
+                    return True
+                else:
+                    self._soft_cancel("c2 dropped while an option was still lifted")
+                    return False
+
+            option_lifts = lifted_starting - {self.C2_COORD}
+
+            if len(option_lifts) > 1:
+                self._soft_cancel(f"multiple options lifted simultaneously: {option_lifts}")
+                return False
+
+            if len(option_lifts) == 1:
+                coord = next(iter(option_lifts))
+                if coord in self.CATEGORY_MAP:
+                    if self._held_option != coord:
+                        self._held_option = coord
+                        cat = self.CATEGORY_MAP[coord]
+                        if self.selected_category == cat:
+                            # Tapping the same category cycles to next drill
+                            self.category_drill_index[cat] = (self.category_drill_index.get(cat, 0) + 1)
+                        else:
+                            self.selected_category = cat
+                        self.start_time = now
+                        logger.info(f"{self.log_prefix}: category selected={self.selected_category}, drill_idx={self.category_drill_index.get(cat, 0)}")
+                else:
+                    self._soft_cancel(f"invalid piece lifted: {coord}")
+                    return False
+            else:
+                if self._held_option is not None:
+                    if self.state_manager:
+                        self.state_manager.trigger_arrival_flash(self._held_option[0], self._held_option[1], duration=0.5)
+                    self._held_option = None
+
+            return False
+
+        return False
+
+    def get_led_overlay(self, now: float) -> dict[tuple[int, int], int]:
+        if self.step != 1:
+            return {}
+
+        is_night = _read_night_mode()
+        overlay: dict[tuple[int, int], int] = {}
+        pulse = 0.5 + 0.5 * math.sin(now * 3.5)
+
+        # 1. c2 origin glows starter color
+        overlay[self.C2_COORD] = scale_color(self.starter_color, 0.4 + 0.5 * pulse)
+
+        # 2. Rank 1 category indicators
+        for coord, cat in self.CATEGORY_MAP.items():
+            base_col = self.CATEGORY_COLORS.get(cat, COLOR_INT_AZURE)
+            if self.selected_category == cat:
+                # Active category: vibrant pulse
+                overlay[coord] = scale_color(base_col, 0.75 + 0.25 * pulse)
+            else:
+                # Inactive category: dim steady
+                overlay[coord] = scale_color(base_col, 0.25)
+
+        # 3. Preview target pieces of active drill
+        drill = self.get_active_drill()
+        if drill and drill.fen:
+            import chess
+            try:
+                board = chess.Board(drill.fen)
+                for sq, piece in board.piece_map().items():
+                    c = chess.square_file(sq)
+                    r = chess.square_rank(sq)
+                    if (c, r) not in overlay:
+                        piece_col = get_piece_type_color(piece.piece_type, is_night)
+                        overlay[(c, r)] = scale_color(piece_col, 0.45 + 0.30 * pulse)
+            except Exception:
+                pass
+
+        return overlay
+
+    def execute_completion(self) -> None:
+        drill = self.get_active_drill()
+        drill_id = drill.id if drill else "pawn_opposition"
+        logger.info(f"{self.log_prefix} completed! Starting drill: {drill_id}")
+        if self.state_manager:
+            _schedule_task(self.state_manager.start_endgame_drill(drill_id=drill_id))
+
+
 class PhysicalGestureEngine:
     """
     Subsystem manager for physical board gestures.
@@ -787,6 +1003,7 @@ class PhysicalGestureEngine:
         self.register_gesture(ToggleNightModeGesture(state_manager=state_manager))
         self.register_gesture(CenterRoyalGateGesture(state_manager=state_manager))
         self.register_gesture(MemoryReplayGateGesture(state_manager=state_manager))
+        self.register_gesture(EndgameMenuGesture(state_manager=state_manager))
 
     def register_gesture(self, gesture: BaseGesture) -> None:
         """Registers a new gesture in the evaluation pipeline."""

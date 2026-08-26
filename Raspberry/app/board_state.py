@@ -67,6 +67,7 @@ from app.coach_engine import (
 from app.config import (
     ANIM_MOVE_CONFIRM_DURATION_S,
     ANIM_UNCHARTED_NOVELTY_DURATION_S,
+    ANIM_WHITE_SETUP_COMPLETE_DURATION_S,
     BAUD_RATE,
     MOVE_TRACE_PERIOD_S,
     NUM_LEDS,
@@ -81,6 +82,7 @@ from app.led_animations import (
     render_capture_aura,
     render_castle_trace,
     render_clock_bar,
+    render_endgame_setup,
     render_guardrail_mismatch,
     render_move_trace,
     render_opponent_disconnected,
@@ -88,6 +90,7 @@ from app.led_animations import (
     render_resignation_aura,
     render_return_home_guide,
     render_uncharted_novelty,
+    render_white_setup_complete_wave,
     scale_color,
 )
 from app.openings import (
@@ -430,6 +433,23 @@ class BoardStateManager:
         self.replay_mistakes: int = 0
         self.replay_reveal_uci: str | None = None
         self.replay_complete: bool = False
+        # Endgame Tablebase Trainer ("Endgame Academy") state
+        self.endgame_active: bool = False
+        self.endgame_drill_id: str | None = None
+        self.endgame_drill: Any | None = None
+        self.endgame_phase: str = "idle"  # "setup_white" | "setup_black" | "playing" | "complete"
+        self.endgame_board: chess.Board | None = None
+        self.endgame_moves_played: int = 0
+        self.endgame_mistakes: int = 0
+        self.endgame_history: list[str] = []
+        self.endgame_eval_cp: int | None = None
+        self.endgame_mate: int | None = None
+        self.endgame_hint_uci: str | None = None
+        self.endgame_complete_summary: dict[str, Any] | None = None
+        self._endgame_white_wave_start: float = 0.0
+        self._endgame_computing_reply: bool = False
+        self._endgame_undo_anchor_sq: tuple[int, int] | None = None
+        self._endgame_undo_origin_sq: tuple[int, int] | None = None
         # Web-only analysis: the physical board is unused; reset gates, move
         # tracking, and LED guidance are all suppressed for this session.
         self.analysis_web_only: bool = False
@@ -1375,6 +1395,389 @@ class BoardStateManager:
             logger.error(f"Error handling replay recall move {uci}: {e}")
             return {"action": "error", "error": str(e)}
 
+    # =========================================================================
+    # ENDGAME TABLEBASE TRAINER ("ENDGAME ACADEMY")
+    # =========================================================================
+
+    async def start_endgame_drill(
+        self,
+        drill_id: str | None = None,
+        custom_fen: str | None = None,
+        custom_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Initiates an Endgame Tablebase Trainer session:
+        - Sets game_status="ANALYSIS", analysis_submode="endgame".
+        - Loads drill from endgame_db (core curriculum or custom FEN).
+        - Sets endgame_phase="setup_white".
+        - Resets moves, mistakes, and history.
+        - Guides two-phase piece setup on the board with piece-type color guidance.
+        """
+        try:
+            from app.endgame_db import progress_manager
+        except ImportError:
+            from .endgame_db import progress_manager
+
+        drill = None
+        if custom_fen:
+            title = (custom_params or {}).get("title", "Custom Endgame")
+            goal = (custom_params or {}).get("target_goal", "win")
+            color = (custom_params or {}).get("player_color", "white")
+            diff = (custom_params or {}).get("difficulty", 2)
+            desc = (custom_params or {}).get("description", "")
+            hint = (custom_params or {}).get("hint", "")
+            drill = progress_manager.add_custom_drill(
+                title=title,
+                fen=custom_fen,
+                player_color=color,
+                target_goal=goal,
+                difficulty=diff,
+                description=desc,
+                hint=hint,
+            )
+        elif drill_id:
+            drill = progress_manager.get_drill_by_id(drill_id)
+
+        if not drill:
+            drills = progress_manager.get_all_drills()
+            drill = progress_manager.get_drill_by_id(drills[0]["id"]) if drills else None
+
+        if not drill:
+            return {"error": "No endgame drill found."}
+
+        # Validate FEN
+        try:
+            board = chess.Board(drill.fen)
+        except Exception as e:
+            logger.error(f"Invalid FEN for drill {drill.id}: {drill.fen} ({e})")
+            return {"error": f"Invalid FEN: {e}"}
+
+        self.game_status = "ANALYSIS"
+        self.analysis_submode = "endgame"
+        self.analysis_is_loading = False
+        self.analysis_error = None
+        self.analysis_has_advanced = True
+        self.analysis_current_ply = 0
+        self.analysis_game_moves = []
+        self.analysis_evaluations = []
+        self.analysis_played_analyses = []
+        self.analysis_branch_moves = []
+        self.analysis_anchor_ply = None
+        self.analysis_anchor_coord = None
+        self.analysis_active_board = board.copy()
+
+        self.endgame_active = True
+        self.endgame_drill_id = drill.id
+        self.endgame_drill = drill
+        self.endgame_phase = "setup_white"
+        self.endgame_board = board.copy()
+        self.endgame_moves_played = 0
+        self.endgame_mistakes = 0
+        self.endgame_history = []
+        self.endgame_eval_cp = None
+        self.endgame_mate = None
+        self.endgame_hint_uci = None
+        self.endgame_complete_summary = None
+        self._endgame_white_wave_start = 0.0
+        self._endgame_computing_reply = False
+        self._endgame_undo_anchor_sq = None
+        self._endgame_undo_origin_sq = None
+
+        self.move_tracker.reset(self.physical_state)
+
+        logger.info(f"Endgame drill '{drill.title}' started. Phase 1: White setup.")
+
+        # Async pre-evaluate position
+        try:
+            coach_engine.request_analysis(board.fen())
+        except Exception:
+            pass
+
+        return self.get_analysis_payload()
+
+    def stop_endgame_drill(self) -> dict[str, Any]:
+        """Stops active endgame drill and returns to IDLE."""
+        self.endgame_active = False
+        self.endgame_phase = "idle"
+        self.endgame_drill = None
+        self.game_status = "IDLE"
+        self.analysis_submode = "review"
+        self.move_tracker.reset(self.physical_state)
+        if hasattr(self, "gesture_engine"):
+            self.gesture_engine.reset()
+        logger.info("Endgame drill stopped. Board returned to IDLE.")
+        return {"status": "IDLE"}
+
+    def request_endgame_hint(self) -> dict[str, Any]:
+        """Provides an optimal move hint for the current endgame position."""
+        if not self.endgame_board:
+            return {"error": "No active endgame position."}
+
+        cached = coach_engine.get_cached_evaluation(self.endgame_board.fen())
+        if cached and cached.best_move:
+            self.endgame_hint_uci = cached.best_move
+            return {"hint_uci": self.endgame_hint_uci}
+        elif self.endgame_drill and self.endgame_drill.hint:
+            return {"hint_text": self.endgame_drill.hint}
+        return {"hint_text": "Find the most active move for your pieces."}
+
+    def _validate_endgame_sparse_setup(
+        self, physical_state: list[list[int]]
+    ) -> tuple[bool, list[tuple[int, int]], list[tuple[int, int]], list[tuple[int, int]]]:
+        """
+        Validates sparse piece setup for active endgame drill against physical sensor matrix.
+        Returns (is_ready, missing_white, missing_black, misplaced_squares).
+        """
+        if not self.endgame_drill:
+            return False, [], [], []
+
+        try:
+            initial_board = chess.Board(self.endgame_drill.fen)
+        except Exception:
+            return False, [], [], []
+
+        target_pieces: dict[tuple[int, int], tuple[int, bool]] = {}
+        for sq, piece in initial_board.piece_map().items():
+            c = chess.square_file(sq)
+            r = chess.square_rank(sq)
+            target_pieces[(c, r)] = (piece.piece_type, piece.color == chess.WHITE)
+
+        missing_white: list[tuple[int, int]] = []
+        missing_black: list[tuple[int, int]] = []
+        misplaced: list[tuple[int, int]] = []
+
+        for (c, r), (ptype, is_white) in target_pieces.items():
+            val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+            if is_white:
+                if val == 0:
+                    missing_white.append((c, r))
+                elif val != -1:
+                    misplaced.append((c, r))
+                    missing_white.append((c, r))
+            else:
+                if val == 0:
+                    missing_black.append((c, r))
+                elif val != 1:
+                    misplaced.append((c, r))
+                    missing_black.append((c, r))
+
+        # Check for extraneous occupied squares that should be empty
+        for c in range(8):
+            for r in range(8):
+                if (c, r) not in target_pieces:
+                    val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                    if val != 0:
+                        misplaced.append((c, r))
+
+        if self.endgame_phase == "setup_white":
+            is_ready = len(missing_white) == 0 and len(misplaced) == 0
+        else:
+            is_ready = len(missing_white) == 0 and len(missing_black) == 0 and len(misplaced) == 0
+
+        return is_ready, missing_white, missing_black, misplaced
+
+    def handle_endgame_move_sync(self, uci: str, source: str = "board") -> dict[str, Any]:
+        """Synchronous wrapper for endgame moves dispatched from REST or physical tracker."""
+        raw_text = uci.strip()
+        uci = raw_text.lower()
+        if source == "web":
+            try:
+                uci = chess.Move.from_uci(uci).uci()
+            except Exception:
+                try:
+                    uci = self.endgame_board.parse_san(raw_text).uci()
+                except Exception:
+                    pass
+
+        if not self.endgame_board or self.endgame_phase != "playing":
+            return {"error": "Endgame drill not in playing phase"}
+
+        try:
+            move = chess.Move.from_uci(uci)
+        except Exception:
+            return {"error": f"Invalid move: {uci}"}
+
+        if move not in self.endgame_board.legal_moves:
+            logger.warning(f"Illegal endgame move: {uci}")
+            if source == "board":
+                f_c = chess.square_file(move.from_square)
+                f_r = chess.square_rank(move.from_square)
+                self.trigger_arrival_flash(f_c, f_r, is_capture=True, duration=0.8)
+            return {"error": f"Illegal move: {uci}"}
+
+        board_before = self.endgame_board.copy()
+        san = board_before.san(move)
+        f_c = chess.square_file(move.from_square)
+        f_r = chess.square_rank(move.from_square)
+        t_c = chess.square_file(move.to_square)
+        t_r = chess.square_rank(move.to_square)
+        is_cap = board_before.is_capture(move)
+
+        self.endgame_board.push(move)
+        self.endgame_history.append(san)
+        self.endgame_moves_played += 1
+        self.analysis_active_board = self.endgame_board.copy()
+        self.endgame_hint_uci = None
+
+        if source == "board":
+            self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.6)
+
+        # Check goal completion
+        if self._check_endgame_goal_achieved():
+            self._spawn_task(self._record_endgame_completion(won=True))
+            return {
+                "result": "complete",
+                "won": True,
+                "moves": self.endgame_moves_played,
+                "analysis": self.get_analysis_payload(),
+            }
+
+        # Trigger AI defense reply
+        if not self.endgame_board.is_game_over():
+            self._spawn_task(self._calculate_and_apply_endgame_engine_reply())
+
+        return {
+            "result": "ok",
+            "fen": self.endgame_board.fen(),
+            "moves": self.endgame_moves_played,
+            "analysis": self.get_analysis_payload(),
+        }
+
+    async def _calculate_and_apply_endgame_engine_reply(self) -> None:
+        """Calculates best defensive reply using Stockfish 17.1 and prompts physical movement."""
+        if not self.endgame_board or self.endgame_board.is_game_over():
+            return
+
+        self._endgame_computing_reply = True
+        try:
+            res = await coach_engine.evaluate_position(self.endgame_board.fen())
+            if res and res.best_move and len(res.best_move) >= 4:
+                reply_uci = res.best_move
+                move = chess.Move.from_uci(reply_uci)
+                if move in self.endgame_board.legal_moves:
+                    f_c = chess.square_file(move.from_square)
+                    f_r = chess.square_rank(move.from_square)
+                    t_c = chess.square_file(move.to_square)
+                    t_r = chess.square_rank(move.to_square)
+                    is_cap = self.endgame_board.is_capture(move)
+
+                    # Queue opponent move in physical tracker
+                    self.move_tracker.set_opponent_move(
+                        (f_c, f_r), (t_c, t_r), is_capture=is_cap
+                    )
+                    logger.info(f"Endgame AI defense reply queued: {reply_uci}")
+        except Exception as e:
+            logger.error(f"Failed to calculate endgame AI reply: {e}")
+        finally:
+            self._endgame_computing_reply = False
+
+    def _check_endgame_goal_achieved(self) -> bool:
+        """Checks if active endgame drill goal has been achieved."""
+        if not self.endgame_board or not self.endgame_drill:
+            return False
+
+        goal = self.endgame_drill.target_goal
+        if goal == "mate":
+            return self.endgame_board.is_checkmate()
+        elif goal == "win":
+            if self.endgame_board.is_checkmate():
+                return True
+            # Material dominance victory condition
+            pieces = self.endgame_board.piece_map()
+            opp_color = chess.BLACK if self.endgame_drill.player_color == "white" else chess.WHITE
+            opp_pieces = [p for p in pieces.values() if p.color == opp_color]
+            my_pieces = [p for p in pieces.values() if p.color != opp_color]
+            if len(opp_pieces) == 1 and opp_pieces[0].piece_type == chess.KING:
+                has_major = any(p.piece_type in (chess.QUEEN, chess.ROOK) for p in my_pieces)
+                if has_major and self.endgame_moves_played >= 1:
+                    return True
+            return False
+        elif goal == "draw":
+            if (
+                self.endgame_board.is_stalemate()
+                or self.endgame_board.is_insufficient_material()
+                or self.endgame_board.can_claim_fifty_moves()
+            ):
+                return True
+            if self.endgame_moves_played >= 10:
+                return True
+            return False
+        return False
+
+    async def _record_endgame_completion(self, won: bool = True) -> None:
+        """Records completion in database, calculates accuracy, and triggers victory celebration."""
+        try:
+            from app.endgame_db import progress_manager
+        except ImportError:
+            from .endgame_db import progress_manager
+
+        mistakes = self.endgame_mistakes
+        moves = self.endgame_moves_played
+        accuracy = max(0.0, 100.0 - (mistakes * 15.0))
+        stars = progress_manager.record_completion(
+            drill_id=self.endgame_drill.id,
+            mistakes=mistakes,
+            moves_count=moves,
+            accuracy=accuracy,
+        )
+
+        self.endgame_complete_summary = {
+            "won": won,
+            "stars": stars,
+            "mistakes": mistakes,
+            "moves_count": moves,
+            "accuracy": round(accuracy, 1),
+        }
+        self.endgame_phase = "complete"
+
+        logger.info(f"Endgame drill '{self.endgame_drill.title}' completed! Stars: {stars}, Mistakes: {mistakes}, Moves: {moves}")
+
+        if won:
+            self.trigger_animation("GAME_WON", {"night_mode": bool(settings.get("night_mode", False))})
+
+    def get_endgame_payload(self) -> dict[str, Any]:
+        """Serializes Endgame Tablebase Trainer status for WebSocket broadcasts."""
+        if self.analysis_submode != "endgame" or not self.endgame_drill:
+            return {
+                "active": False,
+                "phase": "idle",
+                "drill": None,
+                "setup_status": {
+                    "missing_white": [],
+                    "missing_black": [],
+                    "misplaced": [],
+                    "is_ready": False,
+                },
+                "moves_played": 0,
+                "mistakes": 0,
+                "eval_cp": self.endgame_eval_cp,
+                "mate": self.endgame_mate,
+                "hint_uci": self.endgame_hint_uci,
+                "history": [],
+                "complete_summary": None,
+            }
+
+        is_ready, missing_w, missing_b, misplaced = self._validate_endgame_sparse_setup(self.physical_state)
+
+        return {
+            "active": True,
+            "phase": self.endgame_phase,
+            "drill": self.endgame_drill.to_dict() if self.endgame_drill else None,
+            "setup_status": {
+                "missing_white": [list(sq) for sq in missing_w],
+                "missing_black": [list(sq) for sq in missing_b],
+                "misplaced": [list(sq) for sq in misplaced],
+                "is_ready": is_ready,
+            },
+            "moves_played": self.endgame_moves_played,
+            "mistakes": self.endgame_mistakes,
+            "eval_cp": self.endgame_eval_cp,
+            "mate": self.endgame_mate,
+            "hint_uci": self.endgame_hint_uci,
+            "history": list(self.endgame_history),
+            "complete_summary": self.endgame_complete_summary,
+        }
+
     def handle_analysis_move(self, uci: str, source: str = "board") -> dict[str, Any]:
         """
         Handles a move played on the board (physical move or web UI action) during ANALYSIS mode.
@@ -1390,6 +1793,10 @@ class BoardStateManager:
 
         raw_text = uci.strip()
         uci = raw_text.lower()
+
+        # 0. Endgame Trainer submode
+        if self.analysis_submode == "endgame":
+            return self.handle_endgame_move_sync(uci, source=source)
 
         # 1. Blunder Drill submode
         if self.analysis_submode == "blunder_drill":
@@ -1654,6 +2061,7 @@ class BoardStateManager:
             "legal_moves": [m.uci() for m in self.analysis_active_board.legal_moves],
             "in_check": self.analysis_active_board.is_check(),
             "top_lines": top_lines,
+            "endgame": self.get_endgame_payload(),
         }
 
     def _build_coach_payload(self) -> dict[str, Any]:
@@ -2496,6 +2904,85 @@ class BoardStateManager:
                             reveal_col = scale_color(c_move_inacc, 0.45 + 0.55 * reveal_pulse)
                             render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col)
 
+                elif self.analysis_submode == "endgame":
+                    if self.endgame_phase in ("setup_white", "setup_black"):
+                        # Target pieces dictionary (c, r) -> (piece_type, is_white)
+                        if self.endgame_drill:
+                            try:
+                                b_init = chess.Board(self.endgame_drill.fen)
+                                target_pcs = {
+                                    (chess.square_file(sq), chess.square_rank(sq)): (p.piece_type, p.color == chess.WHITE)
+                                    for sq, p in b_init.piece_map().items()
+                                }
+                                render_endgame_setup(
+                                    now,
+                                    frame,
+                                    target_pcs,
+                                    self.physical_state,
+                                    self.endgame_phase,
+                                    {"night_mode": night_mode},
+                                )
+                            except Exception:
+                                pass
+
+                        if self._endgame_white_wave_start > 0:
+                            elapsed_wave = now - self._endgame_white_wave_start
+                            if elapsed_wave < ANIM_WHITE_SETUP_COMPLETE_DURATION_S:
+                                wave_p = elapsed_wave / ANIM_WHITE_SETUP_COMPLETE_DURATION_S
+                                render_white_setup_complete_wave(wave_p, frame, {"night_mode": night_mode})
+                            else:
+                                self._endgame_white_wave_start = 0.0
+
+                    elif self.endgame_phase == "playing" and self.endgame_board:
+                        # 1. Opponent reply movement trace
+                        if self.move_tracker.pending_opponent_move:
+                            opp_from = self.move_tracker.pending_opponent_move["from"]
+                            opp_to = self.move_tracker.pending_opponent_move["to"]
+                            is_cap = bool(self.move_tracker.pending_opponent_move.get("is_capture", False))
+                            trace_col = c_capture_trace if is_cap else c_move_trace
+                            set_square_leds(opp_from[0], opp_from[1], c_opp_from)
+                            set_square_leds(opp_to[0], opp_to[1], trace_col)
+                            path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
+                            render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+
+                        # 2. Lifted piece and legal moves
+                        if self.move_tracker.lifted_square:
+                            l_c, l_r = self.move_tracker.lifted_square
+                            set_square_leds(l_c, l_r, c_piece_lifted)
+                            for t_c, t_r in self.move_tracker.legal_targets:
+                                is_cap = (t_c, t_r) in getattr(self.move_tracker, "legal_captures", [])
+                                set_square_leds(t_c, t_r, c_legal_capture if is_cap else c_legal_target)
+
+                        # 3. King breathing halo for side to move
+                        active_turn = self.endgame_board.turn
+                        k_sq = self.endgame_board.king(active_turn)
+                        if k_sq is not None and self.move_tracker.lifted_square != (chess.square_file(k_sq), chess.square_rank(k_sq)):
+                            k_c, k_r = chess.square_file(k_sq), chess.square_rank(k_sq)
+                            turn_col = c_turn_white if active_turn == chess.WHITE else c_turn_black
+                            turn_pulse = math.sin(now * 3.0) * 0.5 + 0.5
+                            set_square_leds(k_c, k_r, scale_color(turn_col, 0.25 + 0.25 * turn_pulse))
+
+                        # 4. On-demand hint trace
+                        if self.endgame_hint_uci and len(self.endgame_hint_uci) >= 4:
+                            h_f_c = ord(self.endgame_hint_uci[0]) - ord('a')
+                            h_f_r = int(self.endgame_hint_uci[1]) - 1
+                            h_t_c = ord(self.endgame_hint_uci[2]) - ord('a')
+                            h_t_r = int(self.endgame_hint_uci[3]) - 1
+                            if all(0 <= v < 8 for v in (h_f_c, h_f_r, h_t_c, h_t_r)):
+                                h_pulse = math.sin(now * 4.0) * 0.5 + 0.5
+                                h_col = scale_color(c_mint_emerald, 0.40 + 0.60 * h_pulse)
+                                set_square_leds(h_f_c, h_f_r, h_col)
+                                set_square_leds(h_t_c, h_t_r, h_col)
+                                h_path = interpolate_move_path(h_f_c, h_f_r, h_t_c, h_t_r)
+                                render_move_trace(h_path, now, frame, trace_color=c_mint_emerald, blend_arrival=True)
+
+                    elif self.endgame_phase == "complete":
+                        # Soft ambient golden glow on board rooks & kings while awaiting piece reset
+                        comp_pulse = math.sin(now * 2.0) * 0.5 + 0.5
+                        comp_col = scale_color(COLOR_INT_VICTORY_GOLD if not night_mode else COLOR_INT_NIGHT_PROMO_ROOT, 0.25 + 0.25 * comp_pulse)
+                        for c_sq in [(0, 0), (7, 0), (0, 7), (7, 7), (4, 0), (4, 7)]:
+                            set_square_leds(c_sq[0], c_sq[1], comp_col)
+
             # Layer 2.5: Active Arrival Confirmation Flash (snappy exponential decay on arrival square(s))
             for flash_source in (self.arrival_flash, getattr(self.move_tracker, "arrival_flash", None)):
                 if flash_source:
@@ -2803,6 +3290,42 @@ class BoardStateManager:
                                 # Web-only sessions ignore the physical board entirely:
                                 # no reset gate, no move tracking, no guardrail noise.
                                 if getattr(self, "analysis_web_only", False):
+                                    self.guardrail_result = None
+                                elif self.analysis_submode == "endgame":
+                                    is_ready, missing_w, missing_b, misplaced = self._validate_endgame_sparse_setup(self.physical_state)
+                                    if self.endgame_phase == "setup_white":
+                                        if is_ready:
+                                            logger.info("Endgame Phase 1 (White setup) complete! Triggering transition wave.")
+                                            self._endgame_white_wave_start = now_ts
+                                            self.endgame_phase = "setup_black"
+                                    elif self.endgame_phase == "setup_black":
+                                        if is_ready:
+                                            logger.info("Endgame Phase 2 (Black setup) complete! Starting drill.")
+                                            self.trigger_animation("BOARD_READY", {"night_mode": bool(settings.get("night_mode", False))})
+                                            self.endgame_phase = "playing"
+                                            self.move_tracker.reset(self.physical_state)
+                                            if self.endgame_board and (
+                                                (self.endgame_drill.player_color == "white" and self.endgame_board.turn == chess.BLACK)
+                                                or (self.endgame_drill.player_color == "black" and self.endgame_board.turn == chess.WHITE)
+                                            ):
+                                                self._spawn_task(self._calculate_and_apply_endgame_engine_reply())
+                                    elif self.endgame_phase == "playing":
+                                        if self.endgame_board:
+                                            adapter = AnalysisEngineAdapter(self.endgame_board)
+                                            move_result = self.move_tracker.process_physical_state(
+                                                self.physical_state, adapter
+                                            )
+                                            if move_result:
+                                                from_f, from_r, to_f, to_r, promo = move_result
+                                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                                uci = f"{from_sq}{to_sq}{promo or ''}"
+                                                logger.info(f"Physical endgame move detected: {uci}")
+                                                self.handle_endgame_move_sync(uci, source="board")
+                                    elif self.endgame_phase == "complete":
+                                        setup_res = self.setup_validator.validate(self.physical_state)
+                                        if setup_res.is_setup_ready:
+                                            self._try_conclude_analysis_on_board_reset(setup_res)
                                     self.guardrail_result = None
                                 else:
                                     # Check physical starting position setup readiness

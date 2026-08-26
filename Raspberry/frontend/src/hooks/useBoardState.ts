@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { EndgameDrillItem } from '../api';
 
 interface SetupStatus {
   is_setup_ready: boolean;
@@ -117,9 +118,38 @@ interface ReplayState {
   complete: boolean;
 }
 
+export interface EndgameSetupStatus {
+  missing_white: Array<[number, number]>;
+  missing_black: Array<[number, number]>;
+  misplaced: Array<[number, number]>;
+  is_ready: boolean;
+}
+
+export interface EndgameCompleteSummary {
+  won: boolean;
+  stars: number;
+  mistakes: number;
+  moves_count: number;
+  accuracy: number;
+}
+
+export interface EndgameDrillState {
+  active: boolean;
+  phase: 'idle' | 'setup_white' | 'setup_black' | 'playing' | 'complete';
+  drill: EndgameDrillItem | null;
+  setup_status: EndgameSetupStatus;
+  moves_played: number;
+  mistakes: number;
+  eval_cp?: number | null;
+  mate?: number | null;
+  hint_uci?: string | null;
+  history: string[];
+  complete_summary?: EndgameCompleteSummary | null;
+}
+
 interface AnalysisState {
   active: boolean;
-  submode: 'review' | 'blunder_drill' | 'replay_learn' | 'replay_recall';
+  submode: 'review' | 'blunder_drill' | 'replay_learn' | 'replay_recall' | 'endgame';
   is_loading: boolean;
   error?: string | null;
   current_ply: number;
@@ -157,6 +187,7 @@ interface AnalysisState {
   blunder_hint_active: boolean;
   gm_game?: GMGameSummary | null;
   replay: ReplayState;
+  endgame?: EndgameDrillState | null;
   fen: string;
   legal_moves?: string[];
   in_check?: boolean;

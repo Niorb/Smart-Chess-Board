@@ -25,6 +25,7 @@ try:
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
+        ANIM_WHITE_SETUP_COMPLETE_DURATION_S,
         MOVE_TRACE_PERIOD_S,
     )
     from app.led_helpers import (
@@ -49,6 +50,7 @@ try:
         COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
+        COLOR_INT_MOVE_CONFIRM,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
@@ -67,6 +69,12 @@ try:
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PIECE_BISHOP,
+        COLOR_INT_NIGHT_PIECE_KING,
+        COLOR_INT_NIGHT_PIECE_KNIGHT,
+        COLOR_INT_NIGHT_PIECE_PAWN,
+        COLOR_INT_NIGHT_PIECE_QUEEN,
+        COLOR_INT_NIGHT_PIECE_ROOK,
         COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
@@ -81,6 +89,12 @@ try:
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_PIECE_BISHOP,
+        COLOR_INT_PIECE_KING,
+        COLOR_INT_PIECE_KNIGHT,
+        COLOR_INT_PIECE_PAWN,
+        COLOR_INT_PIECE_QUEEN,
+        COLOR_INT_PIECE_ROOK,
         COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
@@ -116,6 +130,7 @@ except ImportError:
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
         ANIM_UNCHARTED_NOVELTY_DURATION_S,
+        ANIM_WHITE_SETUP_COMPLETE_DURATION_S,
         MOVE_TRACE_PERIOD_S,
     )
     from .led_helpers import (
@@ -140,6 +155,7 @@ except ImportError:
         COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
+        COLOR_INT_MOVE_CONFIRM,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
@@ -158,6 +174,12 @@ except ImportError:
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PIECE_BISHOP,
+        COLOR_INT_NIGHT_PIECE_KING,
+        COLOR_INT_NIGHT_PIECE_KNIGHT,
+        COLOR_INT_NIGHT_PIECE_PAWN,
+        COLOR_INT_NIGHT_PIECE_QUEEN,
+        COLOR_INT_NIGHT_PIECE_ROOK,
         COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
@@ -172,6 +194,12 @@ except ImportError:
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_PIECE_BISHOP,
+        COLOR_INT_PIECE_KING,
+        COLOR_INT_PIECE_KNIGHT,
+        COLOR_INT_PIECE_PAWN,
+        COLOR_INT_PIECE_QUEEN,
+        COLOR_INT_PIECE_ROOK,
         COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_OFF,
         COLOR_INT_OPPONENT_DISCONNECTED,
@@ -1610,3 +1638,136 @@ def render_resignation_aura(
         nc, nr = k_c + dc, k_r + dr
         if 0 <= nc < 8 and 0 <= nr < 8:
             set_square_in_frame(frame, nc, nr, scale_color(col_halo, halo_int))
+
+
+# =============================================================================
+# ENDGAME TRAINER SETUP & LIFECYCLE RENDERERS
+# =============================================================================
+
+def get_piece_type_color(piece_type: int, is_night: bool = False) -> int:
+    """Returns the harmonized WS2812B LED Color for a given chess piece type."""
+    if is_night:
+        if piece_type == 6:  # KING
+            return COLOR_INT_NIGHT_PIECE_KING
+        elif piece_type == 5:  # QUEEN
+            return COLOR_INT_NIGHT_PIECE_QUEEN
+        elif piece_type == 4:  # ROOK
+            return COLOR_INT_NIGHT_PIECE_ROOK
+        elif piece_type == 3:  # BISHOP
+            return COLOR_INT_NIGHT_PIECE_BISHOP
+        elif piece_type == 2:  # KNIGHT
+            return COLOR_INT_NIGHT_PIECE_KNIGHT
+        else:  # PAWN (1)
+            return COLOR_INT_NIGHT_PIECE_PAWN
+    else:
+        if piece_type == 6:  # KING
+            return COLOR_INT_PIECE_KING
+        elif piece_type == 5:  # QUEEN
+            return COLOR_INT_PIECE_QUEEN
+        elif piece_type == 4:  # ROOK
+            return COLOR_INT_PIECE_ROOK
+        elif piece_type == 3:  # BISHOP
+            return COLOR_INT_PIECE_BISHOP
+        elif piece_type == 2:  # KNIGHT
+            return COLOR_INT_PIECE_KNIGHT
+        else:  # PAWN (1)
+            return COLOR_INT_PIECE_PAWN
+
+
+def render_endgame_setup(
+    now: float,
+    frame: list[int],
+    target_pieces: dict[tuple[int, int], tuple[int, bool]],  # (c, r) -> (piece_type, is_white)
+    physical_state: list[list[int]],
+    phase: str,  # "setup_white" | "setup_black" | "preview"
+    params: dict[str, Any] | None = None,
+) -> None:
+    """
+    Renders layered LED guidance for Endgame sparse piece setup:
+    - Target squares glow in piece-type colors (breathing pulse if missing, locked-in steady if placed).
+    - Extraneous / misplaced physical pieces glow in Misplaced Amber / Red.
+    - Low power budgeting (<= 10 active squares).
+    """
+    params = params or {}
+    is_night = bool(params.get("night_mode", False))
+    col_misplaced = COLOR_INT_NIGHT_SETUP_MISPLACED if is_night else COLOR_INT_SETUP_MISPLACED
+    col_unexpected = COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED if is_night else COLOR_INT_GUARDRAIL_UNEXPECTED
+
+    pulse = 0.55 + 0.40 * math.sin(4.0 * now)
+    base_int = 0.45 if is_night else 0.65
+
+    # 1. Render target pieces according to phase
+    for (c, r), (ptype, is_white) in target_pieces.items():
+        if not (0 <= c < 8 and 0 <= r < 8):
+            continue
+
+        val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+        piece_col = get_piece_type_color(ptype, is_night)
+
+        if phase == "preview":
+            # In preview mode, all target squares glow in their piece colors
+            set_square_in_frame(frame, c, r, scale_color(piece_col, (0.50 + 0.35 * pulse) * base_int))
+        elif phase == "setup_white":
+            if is_white:
+                if val == -1:
+                    # Correct White piece placed: locked-in steady glow
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, 0.85 * base_int))
+                elif val == 0:
+                    # Missing White piece: breathing pulse to guide placement
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, pulse * base_int))
+                else:
+                    # Misplaced polarity (Black piece on White target square)
+                    set_square_in_frame(frame, c, r, scale_color(col_misplaced, pulse))
+        elif phase == "setup_black":
+            if is_white:
+                # White pieces already placed stay dim/steady
+                if val == -1:
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, 0.35 * base_int))
+                else:
+                    # White piece was removed or disturbed!
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, pulse * base_int))
+            else:
+                if val == 1:
+                    # Correct Black piece placed: locked-in steady glow
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, 0.85 * base_int))
+                elif val == 0:
+                    # Missing Black piece: breathing pulse to guide placement
+                    set_square_in_frame(frame, c, r, scale_color(piece_col, pulse * base_int))
+                else:
+                    # Misplaced polarity (White piece on Black target square)
+                    set_square_in_frame(frame, c, r, scale_color(col_misplaced, pulse))
+
+    # 2. Highlight extraneous pieces currently on non-target squares
+    if phase in ("setup_white", "setup_black"):
+        for c in range(8):
+            for r in range(8):
+                val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                if val != 0 and (c, r) not in target_pieces:
+                    # Non-target square is occupied: warn player to remove it
+                    warn_pulse = 0.40 + 0.35 * math.sin(6.0 * now)
+                    set_square_in_frame(frame, c, r, scale_color(col_unexpected, warn_pulse))
+
+
+def render_white_setup_complete_wave(
+    progress: float,
+    frame: list[int],
+    params: dict[str, Any] | None = None,
+) -> None:
+    """
+    Renders the transition wave when all White pieces are placed:
+    - A smooth warm Ivory wave sweeps across ranks 1-2 from file a to h (0.0 <= progress <= 1.0).
+    """
+    params = params or {}
+    is_night = bool(params.get("night_mode", False))
+    col_wave = COLOR_INT_NIGHT_TURN_WHITE if is_night else COLOR_INT_START_WHITE_PRIMARY
+
+    p = max(0.0, min(1.0, progress))
+    sweep_col = p * 8.0  # Travels from file 0 to file 7
+
+    for c in range(8):
+        dist = abs(c - sweep_col)
+        wave_int = math.exp(-2.5 * dist * dist)
+        if wave_int > 0.05:
+            # Highlight ranks 1 and 2
+            set_square_in_frame(frame, c, 0, scale_color(col_wave, wave_int * 0.8))
+            set_square_in_frame(frame, c, 1, scale_color(col_wave, wave_int * 0.8))

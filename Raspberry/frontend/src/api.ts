@@ -363,3 +363,60 @@ export async function lookupOpening(moves: string[] = []) {
   const query = encodeURIComponent(moves.join(','));
   return request(`/openings/lookup?moves=${query}`);
 }
+
+// --- Endgame Tablebase Trainer ("Endgame Academy") API ---
+
+export interface EndgameDrillItem {
+  id: string;
+  title: string;
+  category: 'pawns' | 'rooks' | 'minors' | 'queens' | 'custom';
+  category_title: string;
+  fen: string;
+  player_color: 'white' | 'black';
+  target_goal: 'win' | 'draw' | 'mate';
+  difficulty: number;
+  description: string;
+  hint: string;
+  target_moves_par: number;
+  completed: boolean;
+  stars: number;
+  best_accuracy: number;
+  best_moves: number;
+  attempts_count: number;
+}
+
+export async function getEndgameDrills(): Promise<EndgameDrillItem[]> {
+  return request<EndgameDrillItem[]>('/endgame/drills');
+}
+
+export async function startEndgameDrill(options?: {
+  drill_id?: string;
+  custom_fen?: string;
+  custom_params?: Record<string, unknown>;
+}) {
+  return jsonPost('/endgame/start', options || {});
+}
+
+export async function stopEndgameDrill() {
+  return jsonPost('/endgame/stop');
+}
+
+export async function requestEndgameHint() {
+  return jsonPost<{ hint_uci?: string; hint_text?: string }>('/endgame/hint');
+}
+
+export async function createCustomEndgame(params: {
+  fen: string;
+  title?: string;
+  player_color?: 'white' | 'black';
+  target_goal?: 'win' | 'draw' | 'mate';
+  difficulty?: number;
+  description?: string;
+  hint?: string;
+}) {
+  return jsonPost('/endgame/custom', params);
+}
+
+export async function resetEndgameProgress() {
+  return jsonPost('/endgame/reset-progress');
+}

@@ -13,11 +13,13 @@ def test_gesture_starter_indicators():
 
     indicators = engine.get_starter_indicators(now)
     assert isinstance(indicators, dict)
-    # Must contain starter coordinates for the 3 registered gestures:
+    # Must contain starter coordinates for the 4 registered gestures:
     # a2 (0, 1) -> Night Mode
+    # c2 (2, 1) -> Endgame Academy
     # e2 (4, 1) -> Analysis Mode
     # h2 (7, 1) -> Restart Game
     assert (0, 1) in indicators
+    assert (2, 1) in indicators
     assert (4, 1) in indicators
     assert (7, 1) in indicators
 
@@ -32,5 +34,6 @@ def test_starter_coords_in_state_payload():
     assert "gestures" in payload
     starter_coords = [g.get("starter_coord") for g in payload["gestures"] if g.get("starter_coord")]
     assert [0, 1] in starter_coords
+    assert [2, 1] in starter_coords
     assert [4, 1] in starter_coords
     assert [7, 1] in starter_coords
