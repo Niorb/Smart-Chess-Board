@@ -201,6 +201,24 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
+  // Loads the selected online match onto the PHYSICAL board (LED traces,
+  // piece-by-piece stepping) instead of the webapp-only sandbox.
+  const handleLoadRecentGameOnBoard = async (game: LichessRecentGame) => {
+    setSelectedGameId(game.id);
+    setWebBoardOpen(false);
+    setFeedbackMsg({ text: `Loading match vs ${game.opponent.username} onto the physical board...`, type: 'info' });
+    try {
+      await startAnalysis({ moves_uci: game.moves_uci });
+      setFeedbackMsg({
+        text: `Match vs ${game.opponent.username} loaded on the physical board — step with ← → or follow the LED cues.`,
+        type: 'success',
+      });
+    } catch {
+      setFeedbackMsg({ text: 'Failed to start board analysis.', type: 'error' });
+    }
+    setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
   const handleStep = async (ply: number) => {
     try {
       await stepAnalysis(ply);
@@ -706,13 +724,23 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                               <span>{game.moves_count} moves</span>
                             </div>
 
-                            <button
-                              onClick={() => handleLoadRecentGame(game)}
-                              className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow transition-all hover:scale-105 active:scale-95"
-                            >
-                              <PlayCircle className="w-3.5 h-3.5" />
-                              Analyse Web
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleLoadRecentGameOnBoard(game)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow transition-all hover:scale-105 active:scale-95"
+                                title="Start the analysis on the physical board (LED traces & stepping)"
+                              >
+                                <PlayCircle className="w-3.5 h-3.5" />
+                                Analyse on Board
+                              </button>
+                              <button
+                                onClick={() => handleLoadRecentGame(game)}
+                                className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow transition-all hover:scale-105 active:scale-95"
+                              >
+                                <PlayCircle className="w-3.5 h-3.5" />
+                                Analyse Web
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
