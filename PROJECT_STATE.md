@@ -3,7 +3,17 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Lines Panel Beside Board, Toast Banners Removed (2026-08-26)
+## Latest Change — Staged Lines Compute (2026-08-26)
+1. **Best line first**: the PV-lines background job is now two-stage — stage 1
+   computes only the BEST line (MultiPV=1) and publishes it to the UI immediately;
+   stage 2 then computes all three lines and replaces them. On-device: mainline
+   visible ~1.5 s sooner than before; side lines follow a few seconds later.
+2. Refactor: `compute_top_lines()` (pure compute, no cache) + `_store_lines()`;
+   `get_top_lines()` keeps its cached API for the REST endpoint.
+3. **Automated Verification**: staged timing confirmed on device (1 line → 3 lines);
+   359/359 passing on Pi.
+
+## Previous Change — Lines Panel Beside Board, Toast Banners Removed (2026-08-26)
 1. **Engine Lines panel moved beside the board**: the panel now sits as a sibling
    column in the eval-bar + board flex row (right of the board) instead of stacking
    underneath it; layout container widened accordingly.
