@@ -2321,16 +2321,26 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                 )}
 
                 {eg.phase === 'complete' && eg.complete_summary && (
-                  <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/60 border border-emerald-500/50 rounded-2xl p-8 shadow-2xl text-center space-y-6">
-                    <div className="inline-flex p-4 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
+                  <div className={`border rounded-2xl p-8 shadow-2xl text-center space-y-6 ${
+                    eg.complete_summary.won
+                      ? 'bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/60 border-emerald-500/50'
+                      : 'bg-gradient-to-r from-rose-950/60 via-slate-900 to-rose-950/60 border-rose-500/50'
+                  }`}>
+                    <div className={`inline-flex p-4 rounded-2xl ${
+                      eg.complete_summary.won
+                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-rose-500/20 border border-rose-500/30 text-rose-400'
+                    }`}>
                       <Trophy className="w-10 h-10" />
                     </div>
                     <div>
                       <h3 className="text-2xl font-black text-white">
-                        Theoretical Objective Achieved!
+                        {eg.complete_summary.won ? 'Theoretical Objective Achieved!' : 'Objective Not Achieved'}
                       </h3>
                       <p className="text-sm text-slate-300 mt-1">
-                        {eg.drill.title} mastered.
+                        {eg.complete_summary.won
+                          ? `${eg.drill.title} mastered.`
+                          : 'Position reached checkmate or draw before achieving the objective. Try again!'}
                       </p>
                     </div>
 
@@ -2350,7 +2360,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     <div className="grid grid-cols-3 max-w-md mx-auto gap-3">
                       <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                         <div className="text-[10px] text-slate-400 uppercase font-semibold">Accuracy</div>
-                        <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                        <div className={`text-lg font-bold mt-0.5 ${eg.complete_summary.won ? 'text-emerald-400' : 'text-slate-400'}`}>
                           {eg.complete_summary.accuracy}%
                         </div>
                       </div>
@@ -2371,7 +2381,11 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     <div className="flex justify-center gap-3 pt-2">
                       <button
                         onClick={() => handleStartEndgame(eg.drill?.id)}
-                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg transition-all"
+                        className={`px-6 py-2.5 text-white rounded-xl text-sm font-bold shadow-lg transition-all ${
+                          eg.complete_summary.won
+                            ? 'bg-emerald-600 hover:bg-emerald-500'
+                            : 'bg-rose-600 hover:bg-rose-500'
+                        }`}
                       >
                         Retry Drill
                       </button>

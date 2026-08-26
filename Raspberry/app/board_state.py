@@ -1130,9 +1130,11 @@ class BoardStateManager:
         expected_move = player_moves[step_idx]
 
         uci_clean = uci.strip().lower()
+        expected_move_uci = expected_move.strip().lower()
+
         if self.analysis_active_board:
             try:
-                # Accept SAN input as well as UCI
+                # Accept SAN input as well as UCI for user attempt
                 legal_ucis = [m.uci() for m in self.analysis_active_board.legal_moves]
                 if uci_clean not in legal_ucis:
                     m_parsed = self.analysis_active_board.parse_san(uci.strip())
@@ -1140,13 +1142,26 @@ class BoardStateManager:
             except Exception:
                 pass
 
-        if uci_clean == expected_move.lower() or (
-            len(expected_move) == 5
-            and expected_move.endswith("q")
-            and f"{uci_clean}q" == expected_move.lower()
-        ):
-            expected_move_clean = expected_move.lower()
-            player_move_obj = chess.Move.from_uci(expected_move_clean)
+            try:
+                # Normalize expected move to UCI if stored as SAN
+                legal_ucis = [m.uci() for m in self.analysis_active_board.legal_moves]
+                if expected_move_uci not in legal_ucis:
+                    m_exp = self.analysis_active_board.parse_san(expected_move.strip())
+                    expected_move_uci = m_exp.uci()
+            except Exception:
+                pass
+
+        is_match = (
+            uci_clean == expected_move_uci
+            or (
+                len(expected_move_uci) == 5
+                and expected_move_uci.endswith("q")
+                and f"{uci_clean}q" == expected_move_uci
+            )
+        )
+
+        if is_match:
+            player_move_obj = chess.Move.from_uci(expected_move_uci)
             player_san = expected_move
             is_capture = False
             if self.analysis_active_board and player_move_obj in self.analysis_active_board.legal_moves:
@@ -1154,11 +1169,11 @@ class BoardStateManager:
                 player_san = self.analysis_active_board.san(player_move_obj)
                 self.analysis_active_board.push(player_move_obj)
 
-            if len(expected_move) >= 4:
-                to_c = ord(expected_move[2]) - ord('a')
-                to_r = int(expected_move[3]) - 1
-                from_c = ord(expected_move[0]) - ord('a')
-                from_r = int(expected_move[1]) - 1
+            if len(expected_move_uci) >= 4:
+                to_c = ord(expected_move_uci[2]) - ord('a')
+                to_r = int(expected_move_uci[3]) - 1
+                from_c = ord(expected_move_uci[0]) - ord('a')
+                from_r = int(expected_move_uci[1]) - 1
                 self.trigger_arrival_flash(to_c, to_r, is_capture=is_capture, duration=0.6)
                 self.last_move = ((from_c, from_r), (to_c, to_r))
 
@@ -1302,12 +1317,14 @@ class BoardStateManager:
                 player_moves = blunder.get("player_moves") or ([blunder.get("best_move")] if blunder.get("best_move") else [])
 
                 is_complete = self.analysis_blunder_step >= len(player_moves)
+                solution_line = blunder.get("solution_line_san", []) if is_complete else []
                 return {
                     "result": "ok",
                     "step_complete": True,
                     "puzzle_complete": is_complete,
                     "current_step": self.analysis_blunder_step,
                     "total_steps": len(player_moves),
+                    "solution_line": solution_line if is_complete else None,
                     "analysis": self.get_analysis_payload(),
                 }
         except Exception as e:
@@ -1862,6 +1879,7 @@ class BoardStateManager:
         self.endgame_moves_played += 1
         self.analysis_active_board = self.endgame_board.copy()
         self.endgame_hint_uci = None
+        self.last_move = ((f_c, f_r), (t_c, t_r))
 
         if source == "board":
             self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.6)
@@ -1872,6 +1890,14 @@ class BoardStateManager:
             return {
                 "result": "complete",
                 "won": True,
+                "moves": self.endgame_moves_played,
+                "analysis": self.get_analysis_payload(),
+            }
+        elif self.endgame_board.is_game_over():
+            self._spawn_task(self._record_endgame_completion(won=False))
+            return {
+                "result": "complete",
+                "won": False,
                 "moves": self.endgame_moves_played,
                 "analysis": self.get_analysis_payload(),
             }
@@ -1954,6 +1980,8 @@ class BoardStateManager:
 
                             if self._check_endgame_goal_achieved():
                                 await self._record_endgame_completion(won=True)
+                            elif self.endgame_board.is_game_over():
+                                await self._record_endgame_completion(won=False)
         except Exception as e:
             logger.error(f"Failed to calculate endgame AI reply: {e}")
         finally:
@@ -1988,6 +2016,8 @@ class BoardStateManager:
 
                 if self._check_endgame_goal_achieved():
                     self._spawn_task(self._record_endgame_completion(won=True))
+                elif self.endgame_board.is_game_over():
+                    self._spawn_task(self._record_endgame_completion(won=False))
 
                 return {"result": "ok", "analysis": self.get_analysis_payload()}
         except Exception as e:
@@ -2000,14 +2030,17 @@ class BoardStateManager:
             return False
 
         goal = self.endgame_drill.target_goal
+        my_col = chess.WHITE if self.endgame_drill.player_color == "white" else chess.BLACK
+        opp_col = chess.BLACK if my_col == chess.WHITE else chess.WHITE
+
         if goal == "mate":
-            return self.endgame_board.is_checkmate()
+            return self.endgame_board.is_checkmate() and self.endgame_board.turn == opp_col
         elif goal == "win":
-            if self.endgame_board.is_checkmate():
+            if self.endgame_board.is_checkmate() and self.endgame_board.turn == opp_col:
                 return True
+            if self.endgame_board.is_stalemate():
+                return False
             # Material dominance victory condition
-            my_col = chess.WHITE if self.endgame_drill.player_color == "white" else chess.BLACK
-            opp_col = chess.BLACK if my_col == chess.WHITE else chess.WHITE
             my_q = len(self.endgame_board.pieces(chess.QUEEN, my_col))
             opp_q = len(self.endgame_board.pieces(chess.QUEEN, opp_col))
             opp_r = len(self.endgame_board.pieces(chess.ROOK, opp_col))
@@ -2041,23 +2074,28 @@ class BoardStateManager:
         mistakes = self.endgame_mistakes
         accuracy = max(0.0, 100.0 - (mistakes * 15.0))
 
-        stars = progress_manager.record_completion(
-            drill_id=drill_id,
-            mistakes=mistakes,
-            moves_count=moves,
-            accuracy=accuracy,
-        )
+        if won:
+            stars = progress_manager.record_completion(
+                drill_id=drill_id,
+                mistakes=mistakes,
+                moves_count=moves,
+                accuracy=accuracy,
+            )
+        else:
+            stars = 0
 
         self.endgame_complete_summary = {
             "won": won,
             "stars": stars,
             "mistakes": mistakes,
             "moves_count": moves,
-            "accuracy": round(accuracy, 1),
+            "accuracy": round(accuracy, 1) if won else 0.0,
         }
         self.endgame_phase = "complete"
         if won:
             self.trigger_animation("GAME_WON", {"night_mode": bool(settings.get("night_mode", False))})
+        else:
+            self.trigger_animation("GAME_LOST", {"night_mode": bool(settings.get("night_mode", False))})
 
     def get_endgame_payload(self) -> dict[str, Any]:
         """Serializes Endgame Tablebase Trainer status for WebSocket broadcasts."""
@@ -3172,11 +3210,28 @@ class BoardStateManager:
                             opp_from = self.move_tracker.pending_opponent_move["from"]
                             opp_to = self.move_tracker.pending_opponent_move["to"]
                             is_cap = bool(self.move_tracker.pending_opponent_move.get("is_capture", False))
+                            is_castling = bool(self.move_tracker.pending_opponent_move.get("is_castling", False))
+                            rook_from = self.move_tracker.pending_opponent_move.get("rook_from")
+                            rook_to = self.move_tracker.pending_opponent_move.get("rook_to")
                             trace_col = c_capture_trace if is_cap else c_move_trace
-                            set_square_leds(opp_from[0], opp_from[1], c_opp_from)
-                            set_square_leds(opp_to[0], opp_to[1], trace_col)
-                            path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
-                            render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+
+                            if is_castling and rook_from and rook_to:
+                                phase = self.move_tracker.pending_opponent_move.get("phase", "king")
+                                if phase == "king":
+                                    set_square_leds(opp_from[0], opp_from[1], c_opp_from)
+                                    set_square_leds(opp_to[0], opp_to[1], trace_col)
+                                    path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
+                                    render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                else:
+                                    set_square_leds(rook_from[0], rook_from[1], c_opp_from)
+                                    set_square_leds(rook_to[0], rook_to[1], trace_col)
+                                    path = interpolate_move_path(rook_from[0], rook_from[1], rook_to[0], rook_to[1])
+                                    render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                            else:
+                                set_square_leds(opp_from[0], opp_from[1], c_opp_from)
+                                set_square_leds(opp_to[0], opp_to[1], trace_col)
+                                path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
+                                render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
 
                         # 2. Lifted piece and legal moves
                         if self.move_tracker.lifted_square:
@@ -3321,11 +3376,28 @@ class BoardStateManager:
                             opp_from = self.move_tracker.pending_opponent_move["from"]
                             opp_to = self.move_tracker.pending_opponent_move["to"]
                             is_cap = bool(self.move_tracker.pending_opponent_move.get("is_capture", False))
+                            is_castling = bool(self.move_tracker.pending_opponent_move.get("is_castling", False))
+                            rook_from = self.move_tracker.pending_opponent_move.get("rook_from")
+                            rook_to = self.move_tracker.pending_opponent_move.get("rook_to")
                             trace_col = c_capture_trace if is_cap else c_move_trace
-                            set_square_leds(opp_from[0], opp_from[1], c_opp_from)
-                            set_square_leds(opp_to[0], opp_to[1], trace_col)
-                            path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
-                            render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+
+                            if is_castling and rook_from and rook_to:
+                                phase = self.move_tracker.pending_opponent_move.get("phase", "king")
+                                if phase == "king":
+                                    set_square_leds(opp_from[0], opp_from[1], c_opp_from)
+                                    set_square_leds(opp_to[0], opp_to[1], trace_col)
+                                    path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
+                                    render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                                else:
+                                    set_square_leds(rook_from[0], rook_from[1], c_opp_from)
+                                    set_square_leds(rook_to[0], rook_to[1], trace_col)
+                                    path = interpolate_move_path(rook_from[0], rook_from[1], rook_to[0], rook_to[1])
+                                    render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
+                            else:
+                                set_square_leds(opp_from[0], opp_from[1], c_opp_from)
+                                set_square_leds(opp_to[0], opp_to[1], trace_col)
+                                path = interpolate_move_path(opp_from[0], opp_from[1], opp_to[0], opp_to[1])
+                                render_move_trace(path, now, frame, trace_color=trace_col, blend_arrival=True)
 
                         # 2. Lifted piece and legal moves
                         if self.move_tracker.lifted_square:

@@ -663,3 +663,180 @@ def test_adversarial_endgame_pending_opponent_move_lockout():
     assert mgr.endgame_moves_played == 0
 
 
+def test_adversarial_blunder_san_expected_moves_and_annotations():
+    """Tests blunder puzzles when expected moves are stored in SAN format or with annotations."""
+    mgr = BoardStateManager()
+    # Blunder puzzle with SAN expected moves e.g. "Qe7+" and "Nf6"
+    blunder_san = {
+        "ply_index": 5,
+        "fen_before": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        "best_move": "Qe7",
+        "player_color": "black",
+        "player_moves": ["Qe7", "Nf6"],
+        "opponent_replies": ["Nf3"],
+        "solution_line_san": ["3... Qe7", "4. Nf3", "4... Nf6"],
+    }
+    mgr.analysis_blunders = [blunder_san]
+    mgr.start_blunder_drill(0)
+
+    # 1. User submits UCI 'd8e7' -> matches SAN 'Qe7'
+    res1 = mgr.submit_blunder_attempt("d8e7", source="web")
+    assert res1["correct"] is True
+    assert res1["step_complete"] is True
+    assert res1["puzzle_complete"] is False
+
+    # 2. User submits SAN 'Nf6' for step 2 -> matches SAN 'Nf6'
+    res2 = mgr.submit_blunder_attempt("Nf6", source="web")
+    assert res2["correct"] is True
+    assert res2["puzzle_complete"] is True
+    assert "solution_line" in res2
+
+
+def test_adversarial_endgame_checkmate_direction_and_game_over_transitions():
+    """Tests that opponent checkmating player does not award win and transitions to complete (won=False)."""
+    async def _test():
+        mgr = BoardStateManager()
+        mate_drill = EndgameDrill(
+            id="test_mate_dir_drill",
+            category=EndgameCategory.MINORS,
+            title="Mate Direction Test",
+            fen="8/8/8/8/8/8/8/4K2k w - - 0 1",
+            player_color="white",
+            target_goal="mate",
+        )
+        mgr.endgame_drill = mate_drill
+        mgr.endgame_active = True
+        mgr.endgame_phase = "playing"
+
+        # Case A: White checkmates Black (turn becomes BLACK, in checkmate) -> Player (White) WON
+        mgr.endgame_board = chess.Board("r1bqkb1r/pppp1Qpp/2n5/4p3/2B1n3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4")
+        assert mgr.endgame_board.turn == chess.BLACK
+        assert mgr.endgame_board.is_checkmate() is True
+        assert mgr._check_endgame_goal_achieved() is True
+
+        # Case B: Black checkmates White (turn becomes WHITE, in checkmate) -> Player (White) LOST!
+        mgr.endgame_board = chess.Board("rnb1k1nr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
+        assert mgr.endgame_board.turn == chess.WHITE
+        assert mgr.endgame_board.is_checkmate() is True
+        # Player is White, White is checkmated -> Goal NOT achieved!
+        assert mgr._check_endgame_goal_achieved() is False
+
+        # Case C: Game over (player lost) in handle_endgame_move_sync triggers completion with won=False
+        win_drill = EndgameDrill(
+            id="test_stalemate_lose_drill",
+            category=EndgameCategory.PAWNS,
+            title="Win Goal Test",
+            fen="8/8/8/8/8/5K2/7Q/7k w - - 0 1",
+            player_color="white",
+            target_goal="win",
+        )
+        mgr.endgame_drill = win_drill
+        mgr.endgame_board = chess.Board(win_drill.fen)
+        mgr.endgame_phase = "playing"
+        mgr.endgame_active = True
+
+        # White plays Qg2# (checkmate) -> Won!
+        # Reset and play Qh3 (stalemate!) -> Black has no moves, but not in checkmate -> won=False
+        mgr.endgame_board = chess.Board("8/8/8/8/8/5K2/7Q/7k w - - 0 1")
+        res_stale = mgr.handle_endgame_move_sync("h2h3", source="web")
+        assert mgr.endgame_board.is_stalemate() is True
+        assert res_stale["result"] == "complete"
+        assert res_stale["won"] is False
+        assert mgr.endgame_phase == "complete"
+        assert mgr.endgame_complete_summary is not None
+        assert mgr.endgame_complete_summary["won"] is False
+        assert mgr.endgame_complete_summary["stars"] == 0
+
+    asyncio.run(_test())
+
+
+def test_adversarial_opponent_capture_midair_safety_in_tracker():
+    """Verifies that lifting attacking piece from origin does NOT confirm capture while target is still occupied."""
+    from app.physical_tracker import PhysicalPieceTracker
+    tracker = PhysicalPieceTracker()
+
+    # Initial physical board: White pawn on e4 (-1), Black pawn on d5 (+1)
+    state = [[0] * 8 for _ in range(8)]
+    state[4][3] = -1  # e4
+    state[3][4] = 1   # d5
+    tracker.last_physical_state = [col[:] for col in state]
+
+    # Queue opponent move: exd5 (capture of d5 by e4)
+    tracker.set_opponent_move(
+        from_coord=(4, 3),  # e4
+        to_coord=(3, 4),    # d5
+        is_capture=True,
+        uci="e4d5",
+    )
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["is_capture"] is True
+
+    # Step 1: User lifts piece from e4 (e4 becomes 0, d5 is STILL 1)
+    state_step1 = [col[:] for col in state]
+    state_step1[4][3] = 0  # e4 lifted
+    dummy_engine = MagicMock()
+    dummy_engine.board = chess.Board()
+
+    tracker.process_physical_state(state_step1, dummy_engine)
+    # Move must NOT be confirmed yet because d5 was not vacated / captured
+    assert tracker.pending_opponent_move is not None
+    assert tracker.arrival_flash is None
+
+    # Step 2: User lifts captured piece on d5 (d5 becomes 0)
+    state_step2 = [col[:] for col in state_step1]
+    state_step2[3][4] = 0  # d5 vacated
+    tracker.process_physical_state(state_step2, dummy_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["target_vacated"] is True
+
+    # Step 3: User places capturing piece on d5 (d5 becomes -1)
+    state_step3 = [col[:] for col in state_step2]
+    state_step3[3][4] = -1  # capturing piece placed on d5
+    tracker.process_physical_state(state_step3, dummy_engine)
+    # Now opponent move is cleanly confirmed!
+    assert tracker.pending_opponent_move is None
+    assert tracker.arrival_flash is not None
+    assert tracker.arrival_flash["square"] == (3, 4)
+    assert tracker.arrival_flash["is_capture"] is True
+
+
+def test_adversarial_two_phase_opponent_castling_led_rendering():
+    """Verifies that physical LED rendering branches in blunder and endgame modes handle both castling phases."""
+    mgr = BoardStateManager()
+    # Setup blunder with opponent castling
+    blunder = {
+        "ply_index": 12,
+        "fen_before": "r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 4 4",
+        "best_move": "d2d3",
+        "player_color": "white",
+        "player_moves": ["d2d3"],
+        "opponent_replies": ["e8g8"],
+    }
+    mgr.analysis_blunders = [blunder]
+    mgr.start_blunder_drill(0)
+
+    # Queue opponent castling move
+    mgr.move_tracker.set_opponent_move(
+        from_coord=(4, 7),  # e8
+        to_coord=(6, 7),    # g8
+        is_capture=False,
+        is_castling=True,
+        rook_from=(7, 7),   # h8
+        rook_to=(5, 7),     # f8
+        uci="e8g8",
+    )
+
+    # Phase 1: King time -> LED frame must light e8 and g8
+    frame = [0] * 64
+    mgr.get_led_frame(frame)
+    # Origin square e8 (col 4, row 7) -> index in frame
+    assert mgr.move_tracker.pending_opponent_move["phase"] == "king"
+
+    # Transition to Phase 2: Rook time
+    mgr.move_tracker.pending_opponent_move["phase"] = "rook"
+    frame2 = [0] * 64
+    mgr.get_led_frame(frame2)
+    assert mgr.move_tracker.pending_opponent_move["phase"] == "rook"
+
+
+

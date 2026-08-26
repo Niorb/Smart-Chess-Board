@@ -264,6 +264,10 @@ class PhysicalMoveTracker:
         from_sq = f"{chr(ord('a') + from_coord[0])}{from_coord[1] + 1}"
         to_sq = f"{chr(ord('a') + to_coord[0])}{to_coord[1] + 1}"
         move_uci = uci or f"{from_sq}{to_sq}"
+        target_initial_val = 0
+        if self.last_physical_state and to_coord[0] < len(self.last_physical_state) and to_coord[1] < len(self.last_physical_state[to_coord[0]]):
+            target_initial_val = self.last_physical_state[to_coord[0]][to_coord[1]]
+
         self.pending_opponent_move = {
             "uci": move_uci,
             "from": from_coord,
@@ -273,6 +277,8 @@ class PhysicalMoveTracker:
             "rook_from": rook_from,
             "rook_to": rook_to,
             "phase": "king" if is_castling else "standard",
+            "initial_target_val": target_initial_val,
+            "target_vacated": False,
         }
         logger.info(
             f"Opponent move explicitly queued in tracker: {move_uci} "
@@ -341,6 +347,10 @@ class PhysicalMoveTracker:
                         is_castling = True
                         rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
 
+                    target_initial_val = 0
+                    if self.last_physical_state and to_c < len(self.last_physical_state) and to_r < len(self.last_physical_state[to_c]):
+                        target_initial_val = self.last_physical_state[to_c][to_r]
+
                     self.pending_opponent_move = {
                         "uci": last_move_uci,
                         "from": (from_c, from_r),
@@ -350,6 +360,8 @@ class PhysicalMoveTracker:
                         "rook_from": rook_coords[0] if rook_coords else None,
                         "rook_to": rook_coords[1] if rook_coords else None,
                         "phase": "king" if is_castling else "standard",
+                        "initial_target_val": target_initial_val,
+                        "target_vacated": False,
                     }
                     logger.info(
                         f"Opponent move pending physical mirroring: {last_move_uci} "
@@ -383,6 +395,7 @@ class PhysicalMoveTracker:
             opp_to = self.pending_opponent_move["to"]
             from_c, from_r = opp_from
             to_c, to_r = opp_to
+            is_capture = bool(self.pending_opponent_move.get("is_capture", False))
             is_castling = bool(self.pending_opponent_move.get("is_castling", False))
             rook_from = self.pending_opponent_move.get("rook_from")
             rook_to = self.pending_opponent_move.get("rook_to")
@@ -438,7 +451,25 @@ class PhysicalMoveTracker:
                 origin_empty = (physical_state[from_c][from_r] == 0)
                 target_occupied = (physical_state[to_c][to_r] != 0)
 
-                if origin_empty and target_occupied:
+                if is_capture:
+                    if physical_state[to_c][to_r] == 0:
+                        self.pending_opponent_move["target_vacated"] = True
+
+                    initial_val = self.pending_opponent_move.get("initial_target_val", 0)
+                    polarity_flipped = (
+                        initial_val != 0
+                        and physical_state[to_c][to_r] != 0
+                        and physical_state[to_c][to_r] != initial_val
+                    )
+                    target_confirmed = (
+                        self.pending_opponent_move.get("target_vacated", False)
+                        or polarity_flipped
+                        or initial_val == 0
+                    )
+                else:
+                    target_confirmed = True
+
+                if origin_empty and target_occupied and target_confirmed:
                     logger.info(f"Physical board confirmed opponent move: {self.pending_opponent_move['uci']}")
                     self.arrival_flash = {
                         "square": (to_c, to_r),
