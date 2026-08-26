@@ -648,7 +648,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     try {
       const res = await toggleBlunderHint();
       setFeedbackMsg({ 
-        text: res.hint_active ? '💡 Move origin highlighted in Mint Emerald on the board.' : 'Hint turned off.', 
+        text: res.active ? '💡 Move origin highlighted in Mint Emerald on the board.' : 'Hint turned off.', 
         type: 'info' 
       });
       setTimeout(() => setFeedbackMsg(null), 3000);
@@ -1563,13 +1563,9 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       fen={analysis?.fen || currentBlunder?.fen_before || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
                       legalMoves={analysis?.legal_moves ?? []}
                       inCheck={!!analysis?.in_check}
-                      lastMoveUci={
-                        (analysis?.last_move && typeof analysis.last_move === 'object' && 'from' in analysis.last_move)
-                          ? `${analysis.last_move.from}${analysis.last_move.to}`
-                          : (currentBlunder?.opponent_prev_move_uci || undefined)
-                      }
+                      lastMoveUci={currentBlunder?.opponent_prev_move_uci || undefined}
                       myColor={currentBlunder?.player_color === 'black' ? 'black' : 'white'}
-                      onMovePlayed={(from, to, promo) => handlePuzzleMove(`${from}${to}${promo || ''}`)}
+                      onMovePlayed={(uci: string) => { void handlePuzzleMove(uci); }}
                     />
                   </div>
 
