@@ -325,9 +325,10 @@ class CoachEngine:
     def request_lines(self, board: chess.Board) -> None:
         """Dispatches a non-blocking async computation of the top PV lines.
 
-        Never cancels an in-flight lines job (same policy as request_analysis):
-        jobs are skipped while one is running; results land in _lines_cache and
-        reach clients via the next broadcast.
+        Two-stage pipeline: the BEST line is computed and published first so the
+        UI can show it right away, then the full MultiPV=3 pass replaces it.
+        Never cancels an in-flight lines job (same policy as request_analysis);
+        results land in _lines_cache and reach clients via the next broadcast.
         """
         clean_fen = " ".join(board.fen().split()[:4])
         if clean_fen in self._lines_cache:
@@ -336,7 +337,7 @@ class CoachEngine:
         if task is not None and not task.done():
             return
         try:
-            lines_task = asyncio.create_task(self.get_top_lines(board.fen()))
+            lines_task = asyncio.create_task(self._staged_lines_job(clean_fen))
         except RuntimeError:
             return
         self._lines_task = lines_task
@@ -347,7 +348,21 @@ class CoachEngine:
 
         lines_task.add_done_callback(_done)
 
-    async def get_top_lines(
+    async def _staged_lines_job(self, clean_fen: str) -> None:
+        """Stage 1: best line only (fast publish). Stage 2: all three lines."""
+        quick = await self.compute_top_lines(clean_fen, num_lines=1)
+        if quick:
+            self._store_lines(clean_fen, quick)
+        full = await self.compute_top_lines(clean_fen, num_lines=3)
+        self._store_lines(clean_fen, full)
+
+    def _store_lines(self, clean_fen: str, lines: list[dict[str, Any]]) -> None:
+        if len(self._lines_cache) >= self._max_cache_entries:
+            oldest_key = next(iter(self._lines_cache))
+            del self._lines_cache[oldest_key]
+        self._lines_cache[clean_fen] = lines
+
+    async def compute_top_lines(
         self,
         fen: str,
         num_lines: int = 3,
@@ -358,13 +373,8 @@ class CoachEngine:
 
         Returns [{uci: [move_uci...], san: [move_san...], score_cp, mate}] sorted
         best-first from the side-to-move's perspective (score_cp positive = good
-        for the side to move). Cached per position.
+        for the side to move). No caching — callers decide what to publish.
         """
-        clean_fen = " ".join(fen.split()[:4])
-        cached = self._lines_cache.get(clean_fen)
-        if cached is not None:
-            return cached
-
         try:
             board = chess.Board(fen)
         except Exception:
@@ -418,10 +428,22 @@ class CoachEngine:
                 "mate": mate,
             })
 
-        if len(self._lines_cache) >= self._max_cache_entries:
-            oldest_key = next(iter(self._lines_cache))
-            del self._lines_cache[oldest_key]
-        self._lines_cache[clean_fen] = lines
+        return lines
+
+    async def get_top_lines(
+        self,
+        fen: str,
+        num_lines: int = 3,
+        depth: int = 10,
+        max_plies: int = 12,
+    ) -> list[dict[str, Any]]:
+        """Computes (and caches) the top-N principal variations for a position."""
+        clean_fen = " ".join(fen.split()[:4])
+        cached = self._lines_cache.get(clean_fen)
+        if cached is not None:
+            return cached
+        lines = await self.compute_top_lines(fen, num_lines=num_lines, depth=depth, max_plies=max_plies)
+        self._store_lines(clean_fen, lines)
         return lines
 
     def request_analysis(self, board: chess.Board):
