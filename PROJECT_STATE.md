@@ -3,7 +3,18 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Staged Lines Compute (2026-08-26)
+## Latest Change — Optimistic UI: Instant Moves & Navigation (2026-08-26)
+1. **Client-side instant application (`AnalysisTab.tsx` + `chess.js`)**: keyboard
+   navigation (← → Home End / h l g G) and web moves now apply LOCALLY the instant
+   they happen — FEN, last-move highlight, legal-move dots and check state are
+   computed client-side with chess.js — so the piece moves with zero perceived
+   latency. The backend remains the source of truth: its response/WS payload
+   reconciles the overlay as soon as it arrives (~100 ms), illegal moves roll back,
+   and a 2.5 s safety net clears stale overlays.
+2. **Automated Verification**: frontend build clean; 359/359 passing on Pi; service
+   restarted healthy.
+
+## Previous Change — Staged Lines Compute (2026-08-26)
 1. **Best line first**: the PV-lines background job is now two-stage — stage 1
    computes only the BEST line (MultiPV=1) and publishes it to the UI immediately;
    stage 2 then computes all three lines and replaces them. On-device: mainline
