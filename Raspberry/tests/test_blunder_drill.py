@@ -64,7 +64,7 @@ def test_puzzle_opponent_moves_and_continuation():
         {"fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3"},
         {"fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3"},
         {
-            "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+            "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
             "score_cp": 500,
             "best_move": "d8e7",
             "top_moves": [{"pv": ["d8e7", "g1f3", "g8f6"], "score_cp": 0}],
