@@ -220,11 +220,11 @@ def test_endgame_opponent_reply_and_solution():
 
         # Verify pending reply application helper
         mgr.endgame_pending_reply = {
-            "uci": "d7e7",
+            "uci": "d8e7",
             "san": "Ke7",
-            "from": [3, 6],
+            "from": [3, 7],
             "to": [4, 6],
-            "from_sq": "d7",
+            "from_sq": "d8",
             "to_sq": "e7",
             "is_capture": False,
         }

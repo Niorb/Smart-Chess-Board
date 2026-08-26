@@ -250,6 +250,35 @@ class PhysicalMoveTracker:
         )
         return (from_c + 1, from_r + 1, to_c + 1, to_r + 1, promo_piece)
 
+    def set_opponent_move(
+        self,
+        from_coord: tuple[int, int],
+        to_coord: tuple[int, int],
+        is_capture: bool = False,
+        is_castling: bool = False,
+        rook_from: tuple[int, int] | None = None,
+        rook_to: tuple[int, int] | None = None,
+        uci: str = "",
+    ) -> None:
+        """Explicitly queues a pending opponent move for physical board execution guidance."""
+        from_sq = f"{chr(ord('a') + from_coord[0])}{from_coord[1] + 1}"
+        to_sq = f"{chr(ord('a') + to_coord[0])}{to_coord[1] + 1}"
+        move_uci = uci or f"{from_sq}{to_sq}"
+        self.pending_opponent_move = {
+            "uci": move_uci,
+            "from": from_coord,
+            "to": to_coord,
+            "is_capture": is_capture,
+            "is_castling": is_castling,
+            "rook_from": rook_from,
+            "rook_to": rook_to,
+            "phase": "king" if is_castling else "standard",
+        }
+        logger.info(
+            f"Opponent move explicitly queued in tracker: {move_uci} "
+            f"({from_coord} -> {to_coord}) capture={is_capture}"
+        )
+
     def sync_game(self, engine: Any) -> None:
         """
         Detects when opponent makes a move online and sets pending_opponent_move.
