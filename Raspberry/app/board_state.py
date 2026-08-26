@@ -840,11 +840,11 @@ class BoardStateManager:
                 logger.warning(f"Error stepping move at ply {idx}: {e}")
                 break
 
-            # Keep the engine lines panel warm for the freshly reached position
-            # (async, non-blocking; cached results are served instantly).
-            coach_engine.request_lines(self.analysis_active_board)
+        # Keep the engine lines panel warm for the freshly reached position
+        # (async, non-blocking; cached results are served instantly).
+        coach_engine.request_lines(self.analysis_active_board)
 
-            return self.get_analysis_payload()
+        return self.get_analysis_payload()
 
     def reset_analysis_branch(self) -> dict[str, Any]:
         """Snaps back to original game timeline from a virtual branch."""
