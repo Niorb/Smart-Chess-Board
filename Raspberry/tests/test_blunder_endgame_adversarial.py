@@ -557,3 +557,109 @@ def test_adversarial_endgame_pending_opponent_and_draw_repetitions():
 
     asyncio.run(_test())
 
+
+def test_adversarial_opponent_castling_in_blunder_and_endgame():
+    """Tests opponent castling mechanics (two-phase King/Rook guidance) in drills."""
+    mgr = BoardStateManager()
+    # Blunder puzzle where opponent's reply is Kingside Castling: e8g8
+    blunder_castle = {
+        "ply_index": 12,
+        "fen_before": "r1bqk2r/pppp1ppp/2n5/4p3/2B1n3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+        "best_move": "c4f7",
+        "player_color": "white",
+        "player_moves": ["c4f7", "d1e2"],
+        "opponent_replies": ["e8g8"],
+        "solution_line_san": ["5. Bxf7+", "5... O-O", "6. Qe2"],
+    }
+    mgr.analysis_blunders = [blunder_castle]
+    mgr.start_blunder_drill(0)
+
+    # 1. Player plays Bxf7 on physical board
+    res1 = mgr.submit_blunder_attempt("c4f7", source="board")
+    assert res1["correct"] is True
+    assert mgr.analysis_blunder_pending_reply is not None
+    assert mgr.analysis_blunder_pending_reply["is_castling"] is True
+
+    # 2. Check move tracker received castling parameters
+    pending = mgr.move_tracker.pending_opponent_move
+    assert pending is not None
+    assert pending["is_castling"] is True
+    assert pending["from"] == (4, 7)  # e8
+    assert pending["to"] == (6, 7)    # g8
+    assert pending["rook_from"] == (7, 7)  # h8
+    assert pending["rook_to"] == (5, 7)    # f8
+
+    # 3. Apply opponent castling move
+    apply_res = mgr.apply_blunder_pending_opponent_move()
+    assert apply_res["result"] == "ok"
+    assert mgr.analysis_blunder_step == 1
+    assert mgr.analysis_active_board.piece_at(chess.G8).piece_type == chess.KING
+    assert mgr.analysis_active_board.piece_at(chess.F8).piece_type == chess.ROOK
+    assert mgr.move_tracker.pending_opponent_move is None
+
+
+def test_adversarial_strict_solution_concealment_in_progress():
+    """Verifies that in-progress blunder payloads never leak upcoming solution moves."""
+    mgr = BoardStateManager()
+    multi_ply = {
+        "ply_index": 5,
+        "fen_before": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        "best_move": "d8e7",
+        "player_color": "black",
+        "player_moves": ["d8e7", "g8f6"],
+        "opponent_replies": ["g1f3"],
+        "solution_line_san": ["3... Qe7", "4. Nf3", "4... Nf6"],
+    }
+    mgr.analysis_blunders = [multi_ply]
+    mgr.start_blunder_drill(0)
+
+    # Step 1 attempt
+    res = mgr.submit_blunder_attempt("d8e7", source="web")
+    assert res["correct"] is True
+    assert res["puzzle_complete"] is False
+    # Strict concealment: neither solution_line nor next_expected_move in intermediate payload
+    assert "solution_line" not in res
+    assert "next_expected_move" not in res
+
+    # Step 2 attempt (finishing puzzle)
+    res2 = mgr.submit_blunder_attempt("g8f6", source="web")
+    assert res2["correct"] is True
+    assert res2["puzzle_complete"] is True
+    # Upon completion, solution_line is permitted as summary
+    assert "solution_line" in res2
+
+
+def test_adversarial_endgame_pending_opponent_move_lockout():
+    """Verifies that submitting moves during pending opponent replies in Endgame is blocked."""
+    mgr = BoardStateManager()
+    drill = EndgameDrill(
+        id="test_lockout_drill",
+        category=EndgameCategory.PAWNS,
+        title="Lockout Drill",
+        fen="8/8/8/4k3/8/4K3/4P3/8 w - - 0 1",
+        player_color="white",
+        target_goal="win",
+    )
+    mgr.endgame_drill = drill
+    mgr.endgame_board = chess.Board(drill.fen)
+    mgr.endgame_phase = "playing"
+    mgr.endgame_active = True
+
+    # Simulate pending opponent reply
+    mgr.endgame_pending_reply = {
+        "uci": "e5d5",
+        "san": "Kd5",
+        "from": [4, 4],
+        "to": [3, 4],
+        "from_sq": "e5",
+        "to_sq": "d5",
+        "is_capture": False,
+    }
+
+    # Attempt to play while opponent move is pending
+    res = mgr.handle_endgame_move_sync("e3d3", source="web")
+    assert "error" in res
+    assert "Waiting for opponent reply" in res["error"]
+    assert mgr.endgame_moves_played == 0
+
+

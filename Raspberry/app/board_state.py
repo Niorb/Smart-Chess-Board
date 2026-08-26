@@ -1178,8 +1178,16 @@ class BoardStateManager:
                         opp_fr = int(opp_move_uci[1]) - 1
                         opp_tc = ord(opp_move_uci[2]) - ord('a')
                         opp_tr = int(opp_move_uci[3]) - 1
+                        opp_is_castle = self.analysis_active_board.is_castling(opp_move_obj)
+                        rook_coords = get_castle_rook_move(opp_fc, opp_fr, opp_tc, opp_tr) if opp_is_castle else None
                         self.move_tracker.set_opponent_move(
-                            (opp_fc, opp_fr), (opp_tc, opp_tr), is_capture=opp_is_cap, uci=opp_move_uci
+                            (opp_fc, opp_fr),
+                            (opp_tc, opp_tr),
+                            is_capture=opp_is_cap,
+                            is_castling=opp_is_castle,
+                            rook_from=rook_coords[0] if rook_coords else None,
+                            rook_to=rook_coords[1] if rook_coords else None,
+                            uci=opp_move_uci,
                         )
                         self.analysis_blunder_pending_reply = {
                             "uci": opp_move_uci,
@@ -1189,6 +1197,7 @@ class BoardStateManager:
                             "from_sq": opp_move_uci[:2],
                             "to_sq": opp_move_uci[2:4],
                             "is_capture": opp_is_cap,
+                            "is_castling": opp_is_castle,
                         }
                     else:
                         # Web play: auto-apply opponent reply immediately
@@ -1205,7 +1214,6 @@ class BoardStateManager:
                 self.analysis_blunder_step = step_idx + 1
 
             if self.analysis_blunder_step < len(player_moves):
-                next_expected = player_moves[self.analysis_blunder_step]
                 msg = (
                     f"Good move ({player_san})! Opponent responded with {opp_san}. Find the follow-up move!"
                     if opp_san
@@ -1222,7 +1230,6 @@ class BoardStateManager:
                     "current_step": self.analysis_blunder_step,
                     "total_steps": len(player_moves),
                     "best_move": expected_move,
-                    "next_expected_move": next_expected,
                     "active_fen": self.analysis_active_board.fen() if self.analysis_active_board else None,
                 }
             else:
@@ -1284,6 +1291,7 @@ class BoardStateManager:
                 self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.8)
                 self.move_tracker.pending_opponent_move = None
                 self.analysis_blunder_pending_reply = None
+                self.move_tracker.reset(self.physical_state)
                 self.analysis_blunder_step = getattr(self, "analysis_blunder_step", 0) + 1
 
                 blunder = (
@@ -1806,6 +1814,12 @@ class BoardStateManager:
         if not self.endgame_board or self.endgame_phase != "playing":
             return {"error": "Endgame drill not in playing phase"}
 
+        if getattr(self, "endgame_pending_reply", None):
+            return {
+                "error": "Waiting for opponent reply: pending on board",
+                "message": "Opponent reply is pending. Please play the opponent's move first.",
+            }
+
         if getattr(self, "_endgame_computing_reply", False):
             return {"error": "Stockfish is computing opponent defense reply"}
 
@@ -1891,6 +1905,8 @@ class BoardStateManager:
                     t_r = chess.square_rank(move.to_square)
                     is_cap = self.endgame_board.is_capture(move)
                     opp_san = self.endgame_board.san(move)
+                    is_castling = self.endgame_board.is_castling(move)
+                    rook_coords = get_castle_rook_move(f_c, f_r, t_c, t_r) if is_castling else None
 
                     # Store pending reply for UI display
                     self.endgame_pending_reply = {
@@ -1901,11 +1917,18 @@ class BoardStateManager:
                         "from_sq": chess.square_name(move.from_square),
                         "to_sq": chess.square_name(move.to_square),
                         "is_capture": is_cap,
+                        "is_castling": is_castling,
                     }
 
                     # Queue opponent move in physical tracker for LED lighting
                     self.move_tracker.set_opponent_move(
-                        (f_c, f_r), (t_c, t_r), is_capture=is_cap, uci=reply_uci
+                        (f_c, f_r),
+                        (t_c, t_r),
+                        is_capture=is_cap,
+                        is_castling=is_castling,
+                        rook_from=rook_coords[0] if rook_coords else None,
+                        rook_to=rook_coords[1] if rook_coords else None,
+                        uci=reply_uci,
                     )
                     logger.info(f"Endgame AI defense reply queued: {reply_uci} ({opp_san})")
 
@@ -1926,6 +1949,7 @@ class BoardStateManager:
                             self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.8)
                             self.move_tracker.pending_opponent_move = None
                             self.endgame_pending_reply = None
+                            self.move_tracker.reset(self.physical_state)
                             logger.info(f"Endgame AI defense reply auto-applied on web: {reply_uci}")
 
                             if self._check_endgame_goal_achieved():
@@ -1960,6 +1984,7 @@ class BoardStateManager:
                 self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.8)
                 self.move_tracker.pending_opponent_move = None
                 self.endgame_pending_reply = None
+                self.move_tracker.reset(self.physical_state)
 
                 if self._check_endgame_goal_achieved():
                     self._spawn_task(self._record_endgame_completion(won=True))
@@ -3668,31 +3693,21 @@ class BoardStateManager:
                                                 self._spawn_task(self._calculate_and_apply_endgame_engine_reply())
                                     elif self.endgame_phase == "playing":
                                         if self.endgame_board:
-                                            # Check if active pending opponent reply was physically placed
-                                            if getattr(self, "endgame_pending_reply", None):
-                                                opp_rep = self.endgame_pending_reply
-                                                o_from = opp_rep["from"]
-                                                o_to = opp_rep["to"]
-                                                if (
-                                                    self.physical_state[o_from[0]][o_from[1]] == 0
-                                                    and self.physical_state[o_to[0]][o_to[1]] != 0
-                                                ):
-                                                    logger.info(
-                                                        f"Physical board confirmed endgame opponent reply: {opp_rep['uci']}"
-                                                    )
-                                                    self.apply_endgame_pending_opponent_move()
-                                            else:
-                                                adapter = AnalysisEngineAdapter(self.endgame_board)
-                                                move_result = self.move_tracker.process_physical_state(
-                                                    self.physical_state, adapter
-                                                )
-                                                if move_result:
-                                                    from_f, from_r, to_f, to_r, promo = move_result
-                                                    from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                                    to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                                    uci = f"{from_sq}{to_sq}{promo or ''}"
-                                                    logger.info(f"Physical endgame move detected: {uci}")
-                                                    self.handle_endgame_move_sync(uci, source="board")
+                                            adapter = AnalysisEngineAdapter(self.endgame_board)
+                                            had_pending = (self.move_tracker.pending_opponent_move is not None)
+                                            move_result = self.move_tracker.process_physical_state(
+                                                self.physical_state, adapter
+                                            )
+                                            if had_pending and self.move_tracker.pending_opponent_move is None and getattr(self, "endgame_pending_reply", None):
+                                                logger.info("Physical board confirmed endgame opponent reply via tracker")
+                                                self.apply_endgame_pending_opponent_move()
+                                            elif move_result:
+                                                from_f, from_r, to_f, to_r, promo = move_result
+                                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                                uci = f"{from_sq}{to_sq}{promo or ''}"
+                                                logger.info(f"Physical endgame move detected: {uci}")
+                                                self.handle_endgame_move_sync(uci, source="board")
                                     elif self.endgame_phase == "complete":
                                         setup_res = self.setup_validator.validate(self.physical_state)
                                         if setup_res.is_setup_ready:
@@ -3716,21 +3731,22 @@ class BoardStateManager:
 
                                         # Physical Move Tracking during ANALYSIS mode (skipped when replay is complete and user is resetting pieces)
                                         if not getattr(self, "replay_complete", False):
-                                            if (
-                                                self.analysis_submode == "blunder_drill"
-                                                and getattr(self, "analysis_blunder_pending_reply", None)
-                                            ):
-                                                opp_rep = self.analysis_blunder_pending_reply
-                                                o_from = opp_rep["from"]
-                                                o_to = opp_rep["to"]
-                                                if (
-                                                    self.physical_state[o_from[0]][o_from[1]] == 0
-                                                    and self.physical_state[o_to[0]][o_to[1]] != 0
-                                                ):
-                                                    logger.info(
-                                                        f"Physical board confirmed blunder opponent reply: {opp_rep['uci']}"
-                                                    )
+                                            if self.analysis_submode == "blunder_drill":
+                                                adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                                                had_pending = (self.move_tracker.pending_opponent_move is not None)
+                                                move_result = self.move_tracker.process_physical_state(
+                                                    self.physical_state, adapter
+                                                )
+                                                if had_pending and self.move_tracker.pending_opponent_move is None and getattr(self, "analysis_blunder_pending_reply", None):
+                                                    logger.info("Physical board confirmed blunder opponent reply via tracker")
                                                     self.apply_blunder_pending_opponent_move()
+                                                elif move_result:
+                                                    from_f, from_r, to_f, to_r, promo = move_result
+                                                    from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                                    to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                                    uci = f"{from_sq}{to_sq}{promo or ''}"
+                                                    logger.info(f"Physical analysis move detected: {uci}")
+                                                    self.handle_analysis_move(uci, source="board")
                                             else:
                                                 adapter = AnalysisEngineAdapter(self.analysis_active_board)
                                                 move_result = self.move_tracker.process_physical_state(
