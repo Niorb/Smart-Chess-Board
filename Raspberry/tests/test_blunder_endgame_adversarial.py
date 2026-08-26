@@ -374,8 +374,8 @@ def test_adversarial_endgame_goal_achievements_and_progress_metrics(tmp_path):
         target_goal="draw",
     )
     mgr.endgame_drill = draw_drill
-    # Stalemate position
-    mgr.endgame_board = chess.Board("k7/8/1K6/8/8/8/8/8 b - - 0 1")
+    # Stalemate position: White Q on f7, King on g6, Black King on h8 (no legal moves, not in check)
+    mgr.endgame_board = chess.Board("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")
     assert mgr.endgame_board.is_stalemate() is True
     assert mgr._check_endgame_goal_achieved() is True
 
@@ -392,30 +392,33 @@ def test_adversarial_endgame_goal_achievements_and_progress_metrics(tmp_path):
 
 def test_adversarial_endgame_stop_and_reset_board_to_idle():
     """Tests stopping active endgame drills and concluding on 32-piece board reset."""
-    mgr = BoardStateManager()
-    mgr.start_endgame_drill("rook_lucena")
-    assert mgr.game_status == "ANALYSIS"
-    assert mgr.analysis_submode == "endgame"
-    assert mgr.endgame_active is True
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_endgame_drill("rook_lucena")
+        assert mgr.game_status == "ANALYSIS"
+        assert mgr.analysis_submode == "endgame"
+        assert mgr.endgame_active is True
 
-    # 1. Stop drill explicitly
-    stop_res = mgr.stop_endgame_drill()
-    assert stop_res["status"] == "IDLE"
-    assert mgr.game_status == "IDLE"
-    assert mgr.endgame_active is False
+        # 1. Stop drill explicitly
+        stop_res = mgr.stop_endgame_drill()
+        assert stop_res["status"] == "IDLE"
+        assert mgr.game_status == "IDLE"
+        assert mgr.endgame_active is False
 
-    # 2. Start drill, reach complete phase, and simulate restoring 32 starting pieces
-    mgr.start_endgame_drill("rook_lucena")
-    mgr.endgame_phase = "complete"
+        # 2. Start drill, reach complete phase, and simulate restoring 32 starting pieces
+        await mgr.start_endgame_drill("rook_lucena")
+        mgr.endgame_phase = "complete"
 
-    # SetupResult with 32 pieces ready
-    setup_ready = SetupResult(
-        is_setup_ready=True,
-        missing_white=[],
-        missing_black=[],
-        misplaced_pieces=[],
-        is_empty=False,
-    )
-    concluded = mgr._try_conclude_analysis_on_board_reset(setup_ready)
-    assert concluded is True
-    assert mgr.game_status == "IDLE"
+        # SetupResult with 32 pieces ready
+        setup_ready = SetupResult(
+            is_setup_ready=True,
+            missing_white=[],
+            missing_black=[],
+            misplaced_pieces=[],
+            is_empty=False,
+        )
+        concluded = mgr._try_conclude_analysis_on_board_reset(setup_ready)
+        assert concluded is True
+        assert mgr.game_status == "IDLE"
+
+    asyncio.run(_test())
