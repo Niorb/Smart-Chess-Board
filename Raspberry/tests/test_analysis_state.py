@@ -992,6 +992,7 @@ def test_analysis_payload_reports_check():
 
 def test_branch_position_serves_live_engine_evaluation(monkeypatch):
     async def _test():
+        import app.board_state as board_state_module
         from app.coach_engine import PositionEvaluation
 
         mgr = BoardStateManager()
@@ -1025,6 +1026,8 @@ def test_branch_position_serves_live_engine_evaluation(monkeypatch):
 
 def test_branch_step_back_reengages_engine(monkeypatch):
     async def _test():
+        import app.board_state as board_state_module
+
         calls = {"n": 0}
         real_req = board_state_module.coach_engine.request_analysis
         monkeypatch.setattr(
