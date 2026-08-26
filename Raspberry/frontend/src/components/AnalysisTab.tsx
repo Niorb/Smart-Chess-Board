@@ -390,8 +390,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     try {
       const res = await navAnalysis(direction);
       prevOnMainlineRef.current = !!res?.on_mainline;
-      const serverFen = (res as { analysis?: { fen?: string } })?.analysis?.fen
-        ?? res?.analysis?.fen ?? null;
+      const serverFen = (res as { analysis?: { fen?: string } } | null)?.analysis?.fen ?? null;
       reconcileOptimistic(serverFen);
     } catch (err) {
       console.error('Error navigating analysis:', err);
@@ -479,7 +478,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       }
       prevOnMainlineRef.current = !result.analysis?.is_branching;
       setWebMoveInput('');
-      reconcileOptimistic(result.analysis?.fen ?? null);
+      reconcileOptimistic((result.analysis as { fen?: string } | null | undefined)?.fen ?? null);
     } catch (err) {
       console.error('Error playing web analysis move:', err);
       clearOptimistic();
