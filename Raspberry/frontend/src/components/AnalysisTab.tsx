@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { 
+import { Chess } from 'chess.js';
+import {
   Sparkles, 
   Trophy, 
   RotateCcw, 
@@ -130,6 +131,69 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   const currentPly = analysis?.current_ply ?? 0;
   const totalPlys = analysis?.total_plys ?? 0;
+
+  // --- Optimistic UI: apply navigation/moves locally for instant feedback ---
+  // The backend remains the source of truth; the server payload simply
+  // overwrites this overlay whenever it arrives (typically within ~100 ms).
+  const [optimistic, setOptimistic] = useState<{
+    fen: string | null;
+    lastMoveUci: string | null;
+    ply: number | null;
+    branching: boolean | null;
+    branchMoves: string[] | null;
+    legalMoves: string[] | null;
+    inCheck: boolean | null;
+  }>({
+    fen: null, lastMoveUci: null, ply: null,
+    branching: null, branchMoves: null, legalMoves: null, inCheck: null,
+  });
+  const optimisticTimerRef = useRef<number | null>(null);
+  const clearOptimistic = useCallback(() => {
+    if (optimisticTimerRef.current) window.clearTimeout(optimisticTimerRef.current);
+    optimisticTimerRef.current = null;
+    setOptimistic({ fen: null, lastMoveUci: null, ply: null, branching: null, branchMoves: null, legalMoves: null, inCheck: null });
+  }, []);
+  // Safety net: never let a stale overlay linger if the WS is slow
+  useEffect(() => {
+    if (optimistic.fen === null) return;
+    const t = window.setTimeout(clearOptimistic, 2500);
+    return () => window.clearTimeout(t);
+  }, [optimistic.fen, clearOptimistic]);
+
+  /** Applies a UCI move to the given FEN locally with chess.js. */
+  const applyUciLocally = useCallback((fen: string, uci: string): {
+    fen: string; san: string | null; ok: boolean;
+  } => {
+    try {
+      const g = new Chess(fen);
+      const mv = g.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? uci[4] : undefined,
+      });
+      if (!mv) return { fen, san: null, ok: false };
+      return { fen: g.fen(), san: mv.san, ok: true };
+    } catch {
+      return { fen, san: null, ok: false };
+    }
+  }, []);
+
+  /** Rebuilds the position after `ply` mainline moves from the start. */
+  const boardAtPly = useCallback((moves: string[], ply: number): string => {
+    const g = new Chess();
+    for (let i = 0; i < ply && i < moves.length; i++) {
+      try { g.move(moves[i]); } catch { break; }
+    }
+    return g.fen();
+  }, []);
+
+  // Merge the optimistic overlay over the server analysis payload
+  const effFen = optimistic.fen ?? analysis?.fen ?? '';
+  const effLastMove = optimistic.lastMoveUci
+    ?? (analysis?.is_branching
+      ? analysis?.branch_moves?.[analysis.branch_moves.length - 1] ?? null
+      : currentPly > 0 ? analysis?.game_moves?.[currentPly - 1] ?? null : null);
+  const effBranching = optimistic.branching ?? !!analysis?.is_branching;
   const playedAnalyses = analysis?.played_analyses ?? [];
   const evaluations = useMemo(() => analysis?.evaluations ?? [], [analysis]);
   const blunders = analysis?.blunders ?? [];
@@ -228,13 +292,85 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   // --- Web-only keyboard navigation (arrows + vim keys) ---
   const handleNav = useCallback(async (direction: 'back' | 'forward' | 'start' | 'end') => {
     if (!analysis?.active || analysis.submode !== 'review') return;
+    const gameMoves = analysis.game_moves ?? [];
+    const branched = !!analysis.is_branching;
+
+    // --- Optimistic local application (instant visual feedback) ---
+    try {
+      if (direction === 'back') {
+        if (branched) {
+          // Un-play one branch move locally
+          const anchorPly = analysis.anchor_ply ?? currentPly;
+          const rebuilt = boardAtPly(gameMoves, anchorPly);
+          const branchMoves = analysis.branch_moves ?? [];
+          let f = rebuilt;
+          for (let i = 0; i < branchMoves.length - 1; i++) {
+            f = applyUciLocally(f, branchMoves[i]).fen;
+          }
+          setOptimistic((o) => ({
+            ...o,
+            fen: f,
+            lastMoveUci: branchMoves.length > 1 ? branchMoves[branchMoves.length - 2] : null,
+            branching: branchMoves.length > 1,
+            legalMoves: new Chess(f).moves(),
+            inCheck: new Chess(f).in_check(),
+          }));
+        } else if (currentPly > 0) {
+          const np = currentPly - 1;
+          const f = boardAtPly(gameMoves, np);
+          setOptimistic((o) => ({
+            ...o,
+            fen: f,
+            ply: np,
+            lastMoveUci: np > 0 ? gameMoves[np - 1] : null,
+            branching: false,
+            legalMoves: new Chess(f).moves(),
+            inCheck: new Chess(f).in_check(),
+          }));
+        }
+      } else if (direction === 'forward' && !branched && currentPly < totalPlys) {
+        const res = applyUciLocally(
+          optimistic.fen ?? boardAtPly(gameMoves, currentPly),
+          gameMoves[currentPly],
+        );
+        if (res.ok) {
+          setOptimistic((o) => ({
+            ...o,
+            fen: res.fen,
+            ply: currentPly + 1,
+            lastMoveUci: gameMoves[currentPly],
+            branching: false,
+            legalMoves: new Chess(res.fen).moves(),
+            inCheck: new Chess(res.fen).in_check(),
+          }));
+        }
+      } else if (direction === 'start' || direction === 'end') {
+        const np = direction === 'start' ? 0 : totalPlys;
+        const f = boardAtPly(gameMoves, np);
+        setOptimistic((o) => ({
+          ...o,
+          fen: f,
+          ply: np,
+          lastMoveUci: np > 0 ? gameMoves[np - 1] : null,
+          branching: false,
+          legalMoves: new Chess(f).moves(),
+          inCheck: new Chess(f).in_check(),
+        }));
+      }
+    } catch {
+      // Optimistic application is best-effort only
+    }
+
+    // --- Backend dispatch (source of truth; WS payload reconciles) ---
     try {
       const res = await navAnalysis(direction);
       prevOnMainlineRef.current = !!res?.on_mainline;
+      clearOptimistic();
     } catch (err) {
       console.error('Error navigating analysis:', err);
+      clearOptimistic();
     }
-  }, [analysis?.active, analysis?.submode]);
+  }, [analysis, currentPly, totalPlys, optimistic.fen, applyUciLocally, boardAtPly, clearOptimistic]);
 
   useEffect(() => {
     if (subMode !== 'review' || !analysis?.active) return;
@@ -272,25 +408,56 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const handleWebMove = useCallback(async (moveText: string) => {
     const mv = moveText.trim();
     if (!mv || !analysis?.active || analysis.submode !== 'review') return;
+
+    // --- Optimistic local application (instant visual feedback) ---
+    try {
+      const baseFen = optimistic.fen ?? analysis.fen ?? '';
+      // Normalize SAN to UCI against the current position
+      let uci: string | null = null;
+      try {
+        uci = new Chess(baseFen).move(mv).lan;
+      } catch { /* not legal */ }
+      if (!uci && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(mv)) {
+        const probe = applyUciLocally(baseFen, mv);
+        if (probe.ok) { uci = mv; }
+      }
+      if (uci) {
+        const res = applyUciLocally(baseFen, uci);
+        if (res.ok) {
+          setOptimistic((o) => ({
+            ...o,
+            fen: res.fen,
+            lastMoveUci: uci,
+            branching: true,
+            branchMoves: [...(analysis.branch_moves ?? []), uci!],
+            legalMoves: new Chess(res.fen).moves(),
+            inCheck: new Chess(res.fen).in_check(),
+          }));
+        }
+      }
+    } catch {
+      // best-effort
+    }
+
+    // --- Backend dispatch (source of truth; WS payload reconciles) ---
     try {
       const res = await sendAnalysisMove(mv);
       const result = (res as { result?: { action?: string; analysis?: { is_branching?: boolean } } })?.result
         ?? (res as { action?: string; analysis?: { is_branching?: boolean } });
       if (!result || result.action === 'illegal' || result.action === 'error') {
+        clearOptimistic();  // roll back the optimistic move
         setFeedbackMsg({ text: `Illegal or unparsable move: "${mv}"`, type: 'error' });
         setTimeout(() => setFeedbackMsg(null), 3000);
         return;
       }
       prevOnMainlineRef.current = !result.analysis?.is_branching;
       setWebMoveInput('');
-      if (result.action === 'branch') {
-        setFeedbackMsg({ text: '⚡ Variation sandbox active — Stockfish is computing candidate moves for this line.', type: 'info' });
-        setTimeout(() => setFeedbackMsg(null), 3000);
-      }
+      clearOptimistic();
     } catch (err) {
       console.error('Error playing web analysis move:', err);
+      clearOptimistic();
     }
-  }, [analysis?.active, analysis?.submode]);
+  }, [analysis, optimistic.fen, applyUciLocally, clearOptimistic]);
 
   // Suggested better move after a suboptimal mainline move (arrow on board).
   // Clicking it steps back and plays the engine's suggestion as a variation,
@@ -531,12 +698,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           {webBoardOpen &&
             (analysis?.active ? (
               (() => {
-                const isBranching = !!analysis?.is_branching;
-                const lastMoveUci = isBranching
-                  ? analysis?.branch_moves?.[analysis.branch_moves.length - 1] ?? null
-                  : currentPly > 0
-                  ? analysis?.game_moves?.[currentPly - 1] ?? null
-                  : null;
+                const isBranching = effBranching;
+                const lastMoveUci = effLastMove;
                 // Always-on eval bar data (independent of play-section settings).
                 // While in a variation sandbox, current_eval carries the LIVE
                 // Stockfish evaluation of the branch position and must take
@@ -555,9 +718,9 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                   : null;
                 return (
                   <WebAnalysisBoard
-                    fen={analysis?.fen ?? ''}
-                    legalMoves={analysis?.legal_moves ?? []}
-                    inCheck={!!analysis?.in_check}
+                    fen={effFen}
+                    legalMoves={optimistic.legalMoves ?? analysis?.legal_moves ?? []}
+                    inCheck={optimistic.inCheck ?? !!analysis?.in_check}
                     lastMoveUci={lastMoveUci}
                     lastMoveClass={lastMoveClass}
                     isBranching={isBranching}
