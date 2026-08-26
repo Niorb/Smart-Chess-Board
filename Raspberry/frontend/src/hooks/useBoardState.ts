@@ -142,17 +142,33 @@ export interface EndgameCompleteSummary {
   accuracy: number;
 }
 
+export interface EndgamePendingReply {
+  uci: string;
+  san: string;
+  from: [number, number];
+  to: [number, number];
+  from_sq: string;
+  to_sq: string;
+  is_capture: boolean;
+}
+
 export interface EndgameDrillState {
   active: boolean;
   phase: 'idle' | 'setup_white' | 'setup_black' | 'playing' | 'complete';
   drill: EndgameDrillItem | null;
   setup_status: EndgameSetupStatus;
+  turn?: 'white' | 'black';
+  player_color?: 'white' | 'black';
+  pending_reply?: EndgamePendingReply | null;
+  is_computing_reply?: boolean;
   moves_played: number;
   mistakes: number;
   eval_cp?: number | null;
   mate?: number | null;
   hint_uci?: string | null;
   history: string[];
+  solution_line?: string[];
+  solution_explanation?: string;
   complete_summary?: EndgameCompleteSummary | null;
 }
 

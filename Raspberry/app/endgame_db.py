@@ -50,6 +50,8 @@ class EndgameDrill:
     hint: str = ""
     max_plies: int = 60
     target_moves_par: int = 15
+    solution_line: list[str] = field(default_factory=list)
+    solution_explanation: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +67,8 @@ class EndgameDrill:
             "hint": self.hint,
             "max_plies": self.max_plies,
             "target_moves_par": self.target_moves_par,
+            "solution_line": self.solution_line,
+            "solution_explanation": self.solution_explanation,
         }
 
 
@@ -85,6 +89,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Take the direct opposition with your King and shepherd your passed pawn to promotion without giving up key squares.",
         key_concepts=["Direct Opposition", "Key Squares", "Shouldering"],
         hint="Step your King directly in front of the enemy King or onto key squares before advancing the pawn.",
+        solution_line=["1. Kd3 Kd5", "2. e3 Ke5", "3. e4 Ke6", "4. Kd4 Kd6", "5. e5+ Ke6", "6. Ke4 Ke7", "7. Kd5 Kd7", "8. e6+ Ke7", "9. Ke5 Ke8", "10. Kd6 Kd8", "11. e7+ Ke8", "12. Ke6"],
+        solution_explanation="1. Take direct opposition with 1. Kd3!. 2. Step your King into key squares ahead of the pawn. 3. Advance the pawn only when your King firmly controls the path, avoiding stalemate on e6.",
     ),
     EndgameDrill(
         id="pawn_rook_pawn_draw",
@@ -97,6 +103,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Defend with Black against White's h-pawn. Lock your King into the corner or maintain stalemate barriers.",
         key_concepts=["Corner Stalemate", "Rook Pawn Inherent Draw", "King Confinement"],
         hint="Keep your King cycling between h8 and g8 (or corner squares) so White cannot deliver checkmate without stalemate.",
+        solution_line=["1... Kg4", "2. Kg2 Kh4", "3. h3 Kh5", "4. Kg3 Kg5", "5. h4+ Kh5", "6. Kh3 Kh6", "7. Kg4 Kg6", "8. h5+ Kh6", "9. Kh4 Kh7", "10. Kg5 Kg7", "11. h6+ Kh7", "12. Kh5 Kh8", "13. Kg6 Kg8", "14. h7+ Kh8", "15. Kh6"],
+        solution_explanation="Cycle your King into the corner pocket (h8/g8). White is forced to either stalemate Black or give up the h-pawn.",
     ),
     EndgameDrill(
         id="pawn_square",
@@ -109,6 +117,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Calculate the rule of the square and sprint your passed pawn directly to promotion before Black's King can intercept.",
         key_concepts=["Rule of the Square", "Pawn Race", "Promotion Outpost"],
         hint="Push the a-pawn immediately! Black's King is outside the square of the pawn and cannot catch it.",
+        solution_line=["1. a5 Kd2", "2. a6 Kc3", "3. a7 Kb4", "4. a8=Q"],
+        solution_explanation="Push the a-pawn immediately! Because Black's King starts outside the square (a4-a8-e8-e4), Black cannot catch the pawn before it promotes on a8.",
     ),
 
     # 2. Rook Endgames
@@ -123,6 +133,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="The cornerstone of all Rook endgames. Build a rook bridge on the 4th rank to shield your King from vertical checks and promote.",
         key_concepts=["Building the Bridge", "4th Rank Rook Shield", "King Escape"],
         hint="Activate your Rook to the 4th rank (Rc4), step your King out, and use the Rook on c4 to block Black's checking Rook.",
+        solution_line=["1. Rd1+ Ke7", "2. Rd4 Ra1", "3. Kc7 Rc1+", "4. Kb6 Rb1+", "5. Kc6 Rc1+", "6. Kb5 Rb1+", "7. Rb4"],
+        solution_explanation="1. Cut off Black's King with 1. Rd1+ Ke7. 2. Build the bridge with 2. Rd4! (4th rank). 3. Step King out to c7. When Black checks from behind, retreat King to b5 and interpose with 7. Rb4!, ensuring the b-pawn promotes safely!",
     ),
     EndgameDrill(
         id="rook_philidor",
@@ -135,6 +147,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="The fundamental defensive technique. Hold your Rook on the 6th rank (or 3rd rank from defender's side) until White pushes the pawn, then drop back for perpetual checks.",
         key_concepts=["6th-Rank Cutoff", "Rear Checking Distance", "Passive Defense Transition"],
         hint="Keep your Rook along the 6th rank (e6/a6) preventing White's King from advancing. When White pushes e5, drop your Rook to the 1st rank and deliver endless back checks!",
+        solution_line=["1... Re6", "2. Kf3 Rf6+", "3. Ke3 Re6", "4. Kd4 Rd6+", "5. Kc5 Re6", "6. Re1 Re5+", "7. Kd4 Ra5", "8. e5 Ra8"],
+        solution_explanation="Hold your Rook on the 6th rank cutoff until White pushes e5. Once e5 is pushed, immediately drop to the 1st rank (Ra8/Re8) to deliver endless distance checks from behind!",
     ),
     EndgameDrill(
         id="rook_short_side",
@@ -147,6 +161,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Keep your King on the short side of the pawn while checking the enemy King from the long side with maximum distance.",
         key_concepts=["Short Side King", "Long Side Rook Distance", "Flank Checks"],
         hint="Step your King towards the short side and deliver horizontal flank checks with maximum checking distance.",
+        solution_line=["1. Kd2 Re8", "2. Ra4 Kc5", "3. Kd3 Rd8+", "4. Kc3"],
+        solution_explanation="Keep your King on the short side of the pawn while using your Rook to deliver flank checks from the long side at maximum checking distance.",
     ),
 
     # 3. Minor Piece Endgames
@@ -161,6 +177,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Drive the enemy King to a corner matching the color of your Bishop using Delétang's triangles and the Knight 'W' coordinate maneuver.",
         key_concepts=["Delétang's Triangles", "W-Maneuver", "Color of Bishop's Corner"],
         hint="Coordinate your King, Bishop, and Knight together. Restrict the enemy King into shrinking triangles and herd him toward a1 or h8.",
+        solution_line=["1. Bb2 Kd3", "2. Kb1 Kd2", "3. Nf2 Ke3", "4. Nh3 Ke4", "5. Kc2"],
+        solution_explanation="Drive the opposing King toward a corner matching your Bishop's square color using Delétang's shrinking triangles and the Knight 'W' coordinate pattern.",
     ),
     EndgameDrill(
         id="minor_kbbk",
@@ -173,6 +191,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Use the pair of Bishops side-by-side to construct an impenetrable diagonal wall, pushing the King into the corner for mate.",
         key_concepts=["Adjacent Diagonals", "King Confinement", "Corner Mate"],
         hint="Place your Bishops side by side on adjacent diagonals to slice off ranks and files until the King is trapped on the rim.",
+        solution_line=["1. Bc2 Kd4", "2. Bb2+ Kc4", "3. Kb1 Kb4", "4. Kc1 Kc4", "5. Kd2"],
+        solution_explanation="Place your pair of Bishops side by side on adjacent diagonals to build an impassable barrier, gradually herding the enemy King to the edge and corner.",
     ),
     EndgameDrill(
         id="minor_knight_vs_pawn",
@@ -185,6 +205,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Use your Knight's jumping agility to blockade or eliminate the advanced enemy passer before it queens.",
         key_concepts=["Knight Blockade", "Forking Promotion Square", "Time Distance"],
         hint="Position your Knight where it directly covers the promotion square (h8) or can deliver a check that captures the queen.",
+        solution_line=["1. Ng5 Ke2", "2. Nh3 Kf3", "3. h8=Q"],
+        solution_explanation="Position the Knight to cover the promotion square or fork the King and newly promoted piece.",
     ),
 
     # 4. Queen Endgames
@@ -199,6 +221,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Drive the White King in front of the c-pawn with checking zig-zags, then bring your own King forward in the tempo gained.",
         key_concepts=["King Stepping In Front", "Tempo Zig-Zag", "King March"],
         hint="Deliver Queen checks to force the enemy King directly onto c8 in front of his pawn, then march your King closer on each tempo!",
+        solution_line=["1... Qe5+", "2. Kd2 Qxc7", "3. Kd3 Kg2"],
+        solution_explanation="Deliver zig-zag checks with your Queen to force White's King directly onto c8 in front of the pawn, then use the tempo to march your King forward.",
     ),
     EndgameDrill(
         id="queen_vs_pawn_7th_a",
@@ -211,6 +235,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Unlike central pawns, a rook-pawn or bishop-pawn on the 7th offers a stalemate haven for the defending King.",
         key_concepts=["Corner Stalemate Defense", "Inherent Rook-Pawn Draw", "Perpetual Threat"],
         hint="When Black pushes White's King to a8, taking the pawn results in stalemate!",
+        solution_line=["1... Qa1+", "2. Ke2 Qxa7", "3. Kd3"],
+        solution_explanation="Be careful: with a rook-pawn on the 7th, driving White into the corner (a8) results in stalemate if you block without check.",
     ),
     EndgameDrill(
         id="queen_vs_rook_philidor",
@@ -223,6 +249,8 @@ CORE_CURRICULUM: list[EndgameDrill] = [
         description="Win the Rook through zugzwang, fork tactics, and driving the King-Rook battery apart with Queen triangulations.",
         key_concepts=["Queen Forks", "Zugzwang", "Separating King and Rook"],
         hint="Use triangulating Queen checks to separate the Black King and Rook, then deliver a double attack fork to win the Rook.",
+        solution_line=["1. Qxd2+ Ke4", "2. Ke2 Kf5", "3. Qd4"],
+        solution_explanation="Use triangulation checks with your Queen to separate the King and Rook, eventually forking the Rook or forcing a skewering check.",
     ),
 ]
 

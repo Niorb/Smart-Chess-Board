@@ -46,6 +46,7 @@ import {
   startEndgameDrill,
   stopEndgameDrill,
   requestEndgameHint,
+  applyEndgameOpponentMove,
   createCustomEndgame,
   resetEndgameProgress,
   type EndgameDrillItem,
@@ -83,6 +84,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
   const [puzzleResult, setPuzzleResult] = useState<BlunderAttemptResult | null>(null);
+  const [showBlunderSolution, setShowBlunderSolution] = useState<boolean>(false);
+  const [showEndgameSolution, setShowEndgameSolution] = useState<boolean>(false);
   const [webMoveInput, setWebMoveInput] = useState<string>('');
   const prevOnMainlineRef = useRef<boolean>(true);
   const [webBoardOpen, setWebBoardOpen] = useState<boolean>(false);
@@ -694,6 +697,14 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       setTimeout(() => setFeedbackMsg(null), 5000);
     } catch (err) {
       console.error('Error requesting endgame hint:', err);
+    }
+  };
+
+  const handleApplyEndgameOpponentMove = async () => {
+    try {
+      await applyEndgameOpponentMove();
+    } catch (err) {
+      console.error('Error applying opponent move:', err);
     }
   };
 
@@ -1516,7 +1527,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       </h3>
                       {currentBlunder?.classification && getQualityBadge(currentBlunder.classification)}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 text-xs text-rose-400 font-bold bg-rose-950/50 px-3 py-1 rounded-full border border-rose-500/30">
                         Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map(() => '❤️').join('')}
                       </div>
@@ -1526,6 +1537,17 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       >
                         <Lightbulb className="w-3.5 h-3.5" />
                         {analysis?.blunder_hint_active ? 'Hide Hint' : 'LED Hint'}
+                      </button>
+                      <button
+                        onClick={() => setShowBlunderSolution((prev) => !prev)}
+                        className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+                          showBlunderSolution
+                            ? 'bg-amber-950/60 border-amber-500 text-amber-300'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                        {showBlunderSolution ? 'Hide Solution' : '💡 Solution'}
                       </button>
                     </div>
                   </div>
@@ -1591,8 +1613,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                         </div>
                       )}
 
-                      {/* Full Grandmaster Solution Line if Solved */}
-                      {(puzzleResult?.puzzle_complete || currentBlunder?.solution_line_san) && (
+                      {/* Full Grandmaster Solution Line if Solved or Requested */}
+                      {(showBlunderSolution || puzzleResult?.puzzle_complete || currentBlunder?.solution_line_san) && (
                         <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5">
                           <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
@@ -2013,13 +2035,24 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={handleRequestEndgameHint}
-                      className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                      className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
                     >
                       <Lightbulb className="w-4 h-4" />
                       Hint
+                    </button>
+                    <button
+                      onClick={() => setShowEndgameSolution((prev) => !prev)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                        showEndgameSolution
+                          ? 'bg-amber-950/60 border-amber-500 text-amber-300'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      <Lightbulb className="w-4 h-4 text-amber-400" />
+                      {showEndgameSolution ? 'Hide Solution' : '💡 Solution'}
                     </button>
                     <button
                       onClick={handleStopEndgame}
@@ -2104,59 +2137,148 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                 )}
 
                 {eg.phase === 'playing' && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Gameplay Live Metrics */}
-                    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Flame className="w-4 h-4 text-amber-400" />
-                        Drill Progress
-                      </h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
-                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves Played</div>
-                          <div className="text-xl font-bold text-white mt-1">
-                            {eg.moves_played} <span className="text-xs text-slate-500">/ {eg.drill.target_moves_par} par</span>
-                          </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Interactive Web Board */}
+                    <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-between space-y-4">
+                      <div className="w-full flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Side:</span>
+                          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                            eg.drill.player_color === 'black'
+                              ? 'bg-slate-800 text-slate-200 border border-slate-700'
+                              : 'bg-amber-950/50 text-amber-300 border border-amber-500/30'
+                          }`}>
+                            {eg.drill.player_color === 'black' ? '♚ You play as Black' : '♔ You play as White'}
+                          </span>
                         </div>
-                        <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
-                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
-                          <div className="text-xl font-bold text-rose-400 mt-1">
-                            {eg.mistakes}
-                          </div>
-                        </div>
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                          eg.turn === eg.drill.player_color
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-blue-950/60 text-blue-300 border border-blue-500/40 animate-pulse'
+                        }`}>
+                          {eg.turn === eg.drill.player_color ? 'Your Turn' : "Opponent's Turn (Black)"}
+                        </span>
                       </div>
 
-                      <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                        <div className="text-xs font-semibold text-slate-300">Defensive Opponent:</div>
-                        <p className="text-xs text-slate-400">
-                          Stockfish 17.1 is playing optimal theoretical resistance. Any winning move is accepted!
-                        </p>
+                      <WebAnalysisBoard
+                        fen={analysis?.fen || eg.drill.fen}
+                        legalMoves={analysis?.legal_moves ?? []}
+                        inCheck={!!analysis?.in_check}
+                        lastMoveUci={
+                          analysis?.last_move && typeof analysis.last_move === 'object' && 'from' in analysis.last_move
+                            ? `${analysis.last_move.from}${analysis.last_move.to}`
+                            : undefined
+                        }
+                        myColor={eg.drill.player_color}
+                        onMovePlayed={(uci: string) => { void sendAnalysisMove(uci); }}
+                      />
+
+                      <div className="text-[11px] text-slate-400 text-center">
+                        Play moves on the physical board or drag & drop pieces on the web board above.
                       </div>
                     </div>
 
-                    {/* Move History */}
-                    <div className="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-400" />
-                        Move History
-                      </h4>
-                      <div className="min-h-[100px] max-h-[140px] overflow-y-auto p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap gap-2 items-start content-start">
-                        {eg.history.length > 0 ? (
-                          eg.history.map((san, idx) => (
-                            <span
-                              key={idx}
-                              className={`px-2.5 py-1 text-xs font-mono rounded-lg border font-bold ${
-                                idx % 2 === 0
-                                  ? 'bg-slate-800 text-white border-slate-700'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800'
-                              }`}
-                            >
-                              {Math.floor(idx / 2) + 1}{idx % 2 === 0 ? '.' : '...'} {san}
+                    {/* Live Guidance, Opponent Response, and Solution Column */}
+                    <div className="lg:col-span-5 space-y-4">
+                      {/* Opponent Reply Status / Action Banner */}
+                      {eg.pending_reply && (
+                        <div className="p-4 bg-blue-950/50 border border-blue-500/40 rounded-2xl space-y-2 shadow-lg animate-pulse">
+                          <div className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center justify-between">
+                            <span>Opponent Move (Black):</span>
+                            <span className="font-mono text-sm font-bold text-white bg-blue-900/60 px-2 py-0.5 rounded border border-blue-400/30">
+                              {eg.pending_reply.san}
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-slate-500 italic">Make your first move on the physical board...</span>
-                        )}
+                          </div>
+                          <div className="text-xs text-blue-200/90 leading-relaxed">
+                            Move piece from <b className="font-mono text-amber-300 font-bold">{eg.pending_reply.from_sq}</b> to <b className="font-mono text-cyan-300 font-bold">{eg.pending_reply.to_sq}</b> on the physical board.
+                          </div>
+                          <button
+                            onClick={handleApplyEndgameOpponentMove}
+                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md mt-1"
+                          >
+                            Apply Move on Board
+                          </button>
+                        </div>
+                      )}
+
+                      {eg.is_computing_reply && (
+                        <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-slate-300 flex items-center gap-2.5">
+                          <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+                          Stockfish is calculating Black's defensive reply...
+                        </div>
+                      )}
+
+                      {/* Theoretical Solution & Technique Card */}
+                      {(showEndgameSolution || eg.solution_line?.length) && showEndgameSolution && (
+                        <div className="bg-amber-950/30 border border-amber-500/40 rounded-2xl p-5 space-y-3 shadow-lg">
+                          <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
+                            <Lightbulb className="w-4 h-4 text-amber-400" />
+                            Theoretical Winning Technique
+                          </div>
+
+                          {(eg.solution_line?.length || eg.drill.solution_line?.length) && (
+                            <div className="space-y-1">
+                              <div className="text-[11px] text-slate-400 font-semibold">Grandmaster Solution Line:</div>
+                              <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 font-mono text-xs text-amber-200 leading-relaxed max-h-28 overflow-y-auto">
+                                {(eg.solution_line ?? eg.drill.solution_line ?? []).join(' ')}
+                              </div>
+                            </div>
+                          )}
+
+                          {(eg.solution_explanation || eg.drill.solution_explanation) && (
+                            <div className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 leading-relaxed">
+                              {eg.solution_explanation || eg.drill.solution_explanation}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Drill Progress Metrics */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Flame className="w-3.5 h-3.5 text-amber-400" />
+                          Drill Metrics
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                            <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves</div>
+                            <div className="text-lg font-bold text-white mt-0.5">
+                              {eg.moves_played} <span className="text-xs text-slate-500 font-normal">/ {eg.drill.target_moves_par} par</span>
+                            </div>
+                          </div>
+                          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                            <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
+                            <div className="text-lg font-bold text-rose-400 mt-0.5">
+                              {eg.mistakes}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Move History */}
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                          Move History ({eg.history.length})
+                        </h4>
+                        <div className="min-h-[70px] max-h-[120px] overflow-y-auto p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap gap-1.5 items-start content-start">
+                          {eg.history.length > 0 ? (
+                            eg.history.map((san, idx) => (
+                              <span
+                                key={idx}
+                                className={`px-2 py-0.5 text-xs font-mono rounded-md border font-bold ${
+                                  idx % 2 === 0
+                                    ? 'bg-slate-800 text-white border-slate-700'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800'
+                                }`}
+                              >
+                                {Math.floor(idx / 2) + 1}{idx % 2 === 0 ? '.' : '...'} {san}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">Make your first move on the board...</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

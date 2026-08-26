@@ -167,6 +167,12 @@ def test_endgame_state_machine_and_moves():
         # Advance to playing phase
         mgr.endgame_phase = "playing"
 
+        payload = mgr.get_endgame_payload()
+        assert "turn" in payload
+        assert "player_color" in payload
+        assert "solution_line" in payload
+        assert "solution_explanation" in payload
+
         # Request on-demand hint
         hint = mgr.request_endgame_hint()
         assert "hint_uci" in hint or "hint_text" in hint
@@ -183,6 +189,48 @@ def test_endgame_state_machine_and_moves():
         assert stop_res["status"] == "IDLE"
         assert mgr.game_status == "IDLE"
         assert mgr.endgame_active is False
+
+    asyncio.run(_test())
+
+
+def test_endgame_opponent_reply_and_solution():
+    """Verifies that endgame drills provide solution lines and handle opponent replies."""
+    async def _test():
+        mgr = BoardStateManager()
+        # Start Lucena position drill
+        res = await mgr.start_endgame_drill(drill_id="rook_lucena")
+        assert res["active"] is True
+        assert mgr.endgame_drill is not None
+        assert len(mgr.endgame_drill.solution_line) > 0
+        assert len(mgr.endgame_drill.solution_explanation) > 0
+
+        # Advance to playing
+        mgr.endgame_phase = "playing"
+
+        # Check payload contains solution line and turn information
+        payload = mgr.get_endgame_payload()
+        assert payload["turn"] == "white"
+        assert payload["player_color"] == "white"
+        assert len(payload["solution_line"]) > 0
+
+        # Simulate White making the 1st move (1. Rd1+) from web source
+        move_res = mgr.handle_endgame_move_sync("c1d1", source="web")
+        assert move_res.get("result") == "ok"
+        assert mgr.endgame_moves_played >= 1
+
+        # Verify pending reply application helper
+        mgr.endgame_pending_reply = {
+            "uci": "d7e7",
+            "san": "Ke7",
+            "from": [3, 6],
+            "to": [4, 6],
+            "from_sq": "d7",
+            "to_sq": "e7",
+            "is_capture": False,
+        }
+        apply_res = mgr.apply_endgame_pending_opponent_move()
+        assert apply_res.get("result") == "ok"
+        assert "Ke7" in mgr.endgame_history
 
     asyncio.run(_test())
 

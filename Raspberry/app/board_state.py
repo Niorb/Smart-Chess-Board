@@ -1734,7 +1734,7 @@ class BoardStateManager:
 
         # Trigger AI defense reply
         if not self.endgame_board.is_game_over():
-            self._spawn_task(self._calculate_and_apply_endgame_engine_reply())
+            self._spawn_task(self._calculate_and_apply_endgame_engine_reply(source=source))
 
         return {
             "result": "ok",
@@ -1743,7 +1743,7 @@ class BoardStateManager:
             "analysis": self.get_analysis_payload(),
         }
 
-    async def _calculate_and_apply_endgame_engine_reply(self) -> None:
+    async def _calculate_and_apply_endgame_engine_reply(self, source: str = "board") -> None:
         """Calculates best defensive reply using Stockfish 17.1 and prompts physical movement."""
         if not self.endgame_board or self.endgame_board.is_game_over():
             return
@@ -1760,16 +1760,79 @@ class BoardStateManager:
                     t_c = chess.square_file(move.to_square)
                     t_r = chess.square_rank(move.to_square)
                     is_cap = self.endgame_board.is_capture(move)
+                    opp_san = self.endgame_board.san(move)
 
-                    # Queue opponent move in physical tracker
+                    # Store pending reply for UI display
+                    self.endgame_pending_reply = {
+                        "uci": reply_uci,
+                        "san": opp_san,
+                        "from": [f_c, f_r],
+                        "to": [t_c, t_r],
+                        "from_sq": chess.square_name(move.from_square),
+                        "to_sq": chess.square_name(move.to_square),
+                        "is_capture": is_cap,
+                    }
+
+                    # Queue opponent move in physical tracker for LED lighting
                     self.move_tracker.set_opponent_move(
                         (f_c, f_r), (t_c, t_r), is_capture=is_cap
                     )
-                    logger.info(f"Endgame AI defense reply queued: {reply_uci}")
+                    logger.info(f"Endgame AI defense reply queued: {reply_uci} ({opp_san})")
+
+                    # If playing via web UI, automatically execute reply after a short delay
+                    if source == "web":
+                        await asyncio.sleep(0.35)
+                        if self.endgame_board and move in self.endgame_board.legal_moves:
+                            self.endgame_board.push(move)
+                            self.endgame_history.append(opp_san)
+                            self.endgame_moves_played += 1
+                            self.analysis_active_board = self.endgame_board.copy()
+                            self.last_move = ((f_c, f_r), (t_c, t_r))
+                            self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.8)
+                            self.move_tracker.pending_opponent_move = None
+                            self.endgame_pending_reply = None
+                            logger.info(f"Endgame AI defense reply auto-applied on web: {reply_uci}")
+
+                            if self._check_endgame_goal_achieved():
+                                await self._record_endgame_completion(won=True)
         except Exception as e:
             logger.error(f"Failed to calculate endgame AI reply: {e}")
         finally:
             self._endgame_computing_reply = False
+
+    def apply_endgame_pending_opponent_move(self) -> dict[str, Any]:
+        """Applies the active pending opponent reply on the endgame board."""
+        if not self.endgame_board or not getattr(self, "endgame_pending_reply", None):
+            return {"error": "No pending opponent reply to apply"}
+
+        reply = self.endgame_pending_reply
+        uci = reply.get("uci", "")
+        try:
+            move = chess.Move.from_uci(uci)
+            if move in self.endgame_board.legal_moves:
+                san = self.endgame_board.san(move)
+                f_c = chess.square_file(move.from_square)
+                f_r = chess.square_rank(move.from_square)
+                t_c = chess.square_file(move.to_square)
+                t_r = chess.square_rank(move.to_square)
+                is_cap = self.endgame_board.is_capture(move)
+
+                self.endgame_board.push(move)
+                self.endgame_history.append(san)
+                self.endgame_moves_played += 1
+                self.analysis_active_board = self.endgame_board.copy()
+                self.last_move = ((f_c, f_r), (t_c, t_r))
+                self.trigger_arrival_flash(t_c, t_r, is_capture=is_cap, duration=0.8)
+                self.move_tracker.pending_opponent_move = None
+                self.endgame_pending_reply = None
+
+                if self._check_endgame_goal_achieved():
+                    self._spawn_task(self._record_endgame_completion(won=True))
+
+                return {"result": "ok", "analysis": self.get_analysis_payload()}
+        except Exception as e:
+            return {"error": str(e)}
+        return {"error": "Failed to apply move"}
 
     def _check_endgame_goal_achieved(self) -> bool:
         """Checks if active endgame drill goal has been achieved."""
@@ -1783,39 +1846,36 @@ class BoardStateManager:
             if self.endgame_board.is_checkmate():
                 return True
             # Material dominance victory condition
-            pieces = self.endgame_board.piece_map()
-            opp_color = chess.BLACK if self.endgame_drill.player_color == "white" else chess.WHITE
-            opp_pieces = [p for p in pieces.values() if p.color == opp_color]
-            my_pieces = [p for p in pieces.values() if p.color != opp_color]
-            if len(opp_pieces) == 1 and opp_pieces[0].piece_type == chess.KING:
-                has_major = any(p.piece_type in (chess.QUEEN, chess.ROOK) for p in my_pieces)
-                if has_major and self.endgame_moves_played >= 1:
-                    return True
+            my_col = chess.WHITE if self.endgame_drill.player_color == "white" else chess.BLACK
+            opp_col = chess.BLACK if my_col == chess.WHITE else chess.WHITE
+            my_q = len(self.endgame_board.pieces(chess.QUEEN, my_col))
+            opp_q = len(self.endgame_board.pieces(chess.QUEEN, opp_col))
+            opp_r = len(self.endgame_board.pieces(chess.ROOK, opp_col))
+            opp_minors = len(self.endgame_board.pieces(chess.BISHOP, opp_col)) + len(self.endgame_board.pieces(chess.KNIGHT, opp_col))
+            if my_q >= 1 and opp_q == 0 and opp_r == 0 and opp_minors == 0:
+                return True
             return False
         elif goal == "draw":
-            if (
-                self.endgame_board.is_stalemate()
-                or self.endgame_board.is_insufficient_material()
-                or self.endgame_board.can_claim_fifty_moves()
-            ):
-                return True
-            if self.endgame_moves_played >= 10:
-                return True
-            return False
+            return self.endgame_board.is_stalemate() or self.endgame_board.is_insufficient_material()
         return False
 
-    async def _record_endgame_completion(self, won: bool = True) -> None:
-        """Records completion in database, calculates accuracy, and triggers victory celebration."""
+    async def _record_endgame_completion(self, won: bool) -> None:
+        """Records drill completion in progress database."""
+        if not self.endgame_drill:
+            return
+
         try:
             from app.endgame_db import progress_manager
         except ImportError:
             from .endgame_db import progress_manager
 
-        mistakes = self.endgame_mistakes
+        drill_id = self.endgame_drill.id
         moves = self.endgame_moves_played
+        mistakes = self.endgame_mistakes
         accuracy = max(0.0, 100.0 - (mistakes * 15.0))
+
         stars = progress_manager.record_completion(
-            drill_id=self.endgame_drill.id,
+            drill_id=drill_id,
             mistakes=mistakes,
             moves_count=moves,
             accuracy=accuracy,
@@ -1829,9 +1889,6 @@ class BoardStateManager:
             "accuracy": round(accuracy, 1),
         }
         self.endgame_phase = "complete"
-
-        logger.info(f"Endgame drill '{self.endgame_drill.title}' completed! Stars: {stars}, Mistakes: {mistakes}, Moves: {moves}")
-
         if won:
             self.trigger_animation("GAME_WON", {"night_mode": bool(settings.get("night_mode", False))})
 
@@ -1848,12 +1905,18 @@ class BoardStateManager:
                     "misplaced": [],
                     "is_ready": False,
                 },
+                "turn": "white",
+                "player_color": "white",
+                "pending_reply": None,
+                "is_computing_reply": False,
                 "moves_played": 0,
                 "mistakes": 0,
                 "eval_cp": self.endgame_eval_cp,
                 "mate": self.endgame_mate,
                 "hint_uci": self.endgame_hint_uci,
                 "history": [],
+                "solution_line": [],
+                "solution_explanation": "",
                 "complete_summary": None,
             }
 
@@ -1869,12 +1932,18 @@ class BoardStateManager:
                 "misplaced": [list(sq) for sq in misplaced],
                 "is_ready": is_ready,
             },
+            "turn": ("white" if self.endgame_board.turn == chess.WHITE else "black") if self.endgame_board else "white",
+            "player_color": self.endgame_drill.player_color if self.endgame_drill else "white",
+            "pending_reply": getattr(self, "endgame_pending_reply", None),
+            "is_computing_reply": getattr(self, "_endgame_computing_reply", False),
             "moves_played": self.endgame_moves_played,
             "mistakes": self.endgame_mistakes,
             "eval_cp": self.endgame_eval_cp,
             "mate": self.endgame_mate,
             "hint_uci": self.endgame_hint_uci,
             "history": list(self.endgame_history),
+            "solution_line": self.endgame_drill.solution_line if self.endgame_drill else [],
+            "solution_explanation": self.endgame_drill.solution_explanation if self.endgame_drill else "",
             "complete_summary": self.endgame_complete_summary,
         }
 

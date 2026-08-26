@@ -400,6 +400,8 @@ export interface EndgameDrillItem {
   best_accuracy: number;
   best_moves: number;
   attempts_count: number;
+  solution_line?: string[];
+  solution_explanation?: string;
 }
 
 export async function getEndgameDrills(): Promise<EndgameDrillItem[]> {
@@ -420,6 +422,10 @@ export async function stopEndgameDrill() {
 
 export async function requestEndgameHint() {
   return jsonPost<{ hint_uci?: string; hint_text?: string }>('/endgame/hint');
+}
+
+export async function applyEndgameOpponentMove() {
+  return jsonPost('/endgame/apply_opponent_move');
 }
 
 export async function createCustomEndgame(params: {

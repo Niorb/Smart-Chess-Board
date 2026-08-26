@@ -866,6 +866,12 @@ async def create_custom_endgame_route(body: CustomEndgameRequest):
     return {"status": "success", "analysis": res}
 
 
+@app.post("/api/endgame/apply_opponent_move")
+async def apply_endgame_opponent_move_route():
+    """Applies the active pending opponent reply on the endgame board."""
+    return state_manager.apply_endgame_pending_opponent_move()
+
+
 @app.post("/api/endgame/reset-progress")
 async def reset_endgame_progress_route():
     """Clears all saved completion progress and stars."""
