@@ -415,7 +415,8 @@ def test_adversarial_endgame_stop_and_reset_board_to_idle():
             missing_white=[],
             missing_black=[],
             misplaced_pieces=[],
-            is_empty=False,
+            white_count=16,
+            black_count=16,
         )
         concluded = mgr._try_conclude_analysis_on_board_reset(setup_ready)
         assert concluded is True
