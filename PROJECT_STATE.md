@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Tactical Puzzles & Opponent Moves (The Side We Don't Play) (2026-08-26)
+## Latest Change — Endgame Opponent Replies & Webapp Solution Reveal (2026-08-26)
+1. **Opponent Turn Guidance & Auto-Execution (`board_state.py`, `physical_tracker.py`)**:
+   - In Endgame Academy drills (e.g. Lucena Position), when the player makes their move as White, Stockfish computes the optimal defensive move for Black.
+   - For web play (`source == "web"`), Black's defensive response is automatically executed on the active board with arrival animations and history updates.
+   - For physical board play (`source == "board"`), `PhysicalPieceTracker.set_opponent_move()` illuminates Black's piece to move in Solar Orange (`COLOR_INT_OPPONENT_FROM`) and destination square in Cyan Azure (`COLOR_INT_OPPONENT_TO`) with an animated trace, while the webapp displays: `"Opponent Move (Black): [SAN] ([From] -> [To])"` with a 1-click `"Apply Move on Board"` button.
+2. **On-Demand Solution Reveal for All Puzzles (`endgame_db.py`, `AnalysisTab.tsx`, `api.ts`)**:
+   - Added `solution_line` (complete Grandmaster algebraic sequence) and `solution_explanation` (master theoretical technique) to all 12 core endgame drills in `endgame_db.py`.
+   - Added `"💡 Solution"` toggle button in both **Endgame Academy** (Sub-view 4) and **Blunder Blitz / Tactical Puzzles** (Sub-view 2), allowing players to inspect the winning technique and full multi-ply refutation line at any point.
+   - Embedded `WebAnalysisBoard` directly into Endgame Academy's playing phase with drag-and-drop piece movement and perspective indicators.
+3. **Automated Verification (`test_endgame_trainer.py`)**:
+   - Added `test_endgame_opponent_reply_and_solution` verifying solution line serialization and opponent reply execution.
+   - Verified **369 / 369 pytest test cases passing** on the Raspberry Pi.
+
+## Previous Change — Tactical Puzzles & Opponent Moves (The Side We Don't Play) (2026-08-26)
 1. **Opponent Setup Move & Contextual Perspective (`coach_engine.py`, `board_state.py`)**:
    - `BlunderChallenge` and `extract_blunders()` now track:
      - `player_color` (the side we play to find the refutation) and `opponent_color` (the side we don't play).
