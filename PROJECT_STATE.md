@@ -3,30 +3,27 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Blunder Blitz & Endgame Academy Behavioral Specifications & Adversarial Suite (2026-08-27)
-1. **Behavioral Specifications & Symmetrical Opponent Move Flows (`board_state.py`, `main.py`, `api.ts`, `AnalysisTab.tsx`, `useBoardState.ts`)**:
-   - **Tactical Puzzles (Blunder Blitz)**:
-     - Multi-ply sequence tracking with strict separation of player moves and opponent defensive replies.
-     - Web UI: Opponent reply executes automatically on the active board with arrival animations and history updates.
-     - Physical Board: Opponent reply queues in `move_tracker.set_opponent_move()` with Solar Orange origin (`COLOR_INT_OPPONENT_FROM`), Cyan Azure target (`COLOR_INT_OPPONENT_TO`), and animated comet trace. Physical piece movement confirms opponent move and transfers turn back to player.
-     - Added `apply_blunder_pending_opponent_move()` helper and `POST /api/analysis/blunder_drill/apply_opponent_move` endpoint for 1-click web application.
-     - Added pending opponent reply card and 1-click "Apply Move on Board" action in `AnalysisTab.tsx`.
-     - Out-of-turn lockout: prevents move submissions while opponent reply is pending without decrementing attempts.
-     - Transition isolation: switching puzzle indices or stopping modes cleanly resets pending opponent replies and tracker state.
-     - Auto-queen promotion support for 4-character UCI inputs against queening solutions.
-   - **Endgame Academy (Tablebase Trainer)**:
-     - Turn-enforced state machine rejecting out-of-turn moves and rapid input spam during Stockfish evaluation.
-     - Comprehensive draw detection supporting stalemate, insufficient material, 50-move rule, threefold repetition (`is_repetition(3)`), and `can_claim_draw()`.
-     - Two-phase sparse setup validation (`setup_white` -> `setup_black` -> `playing` with `BOARD_READY` snap-flash).
-     - State reset isolation on drill start and stop.
-   - **Strict Solution Concealment**:
-     - Solution lines and grandmaster continuation sequences are completely hidden on both web and board until user explicitly clicks `💡 Solution`.
-2. **Comprehensive Adversarial Test Suite (`test_blunder_endgame_adversarial.py`, `test_api_routes.py`, `test_blunder_drill.py`)**:
-   - Added exhaustive adversarial test coverage covering illegal moves, malformed inputs, move exhaustion, completed puzzle boundaries, sparse sensor matrix desyncs, polarity mismatches, pending reply lockouts, puzzle index transitions, auto-queening, threefold repetitions, and board reset gates.
+## Latest Change — Blunder Blitz & Endgame Academy Adversarial Hardening & Reviewer Round 2 Verification (2026-08-27)
+1. **Adversarial Edge Case Fixes & Symmetrical Opponent Castling (`board_state.py`, `test_blunder_endgame_adversarial.py`)**:
+   - **Opponent Castling Defense Guidance**:
+     - Added support for opponent castling (`is_castling`, `rook_from`, `rook_to`) in Blunder Blitz and Endgame Academy.
+     - Queues two-phase King/Rook movement in `PhysicalPieceTracker.set_opponent_move()`, enabling physical LED trace and turn handover on castling replies.
+   - **Strict Solution Concealment in Payloads**:
+     - Removed `next_expected_move` leakage from in-progress move attempt responses (`puzzle_complete == False`).
+     - Continuation lines are only revealed upon puzzle completion or explicit user toggle of `💡 Solution`.
+   - **Physical Tracker State Resynchronization**:
+     - Explicitly reset `move_tracker.reset(self.physical_state)` upon applying opponent moves in `apply_blunder_pending_opponent_move()` and `apply_endgame_pending_opponent_move()`, ensuring physical piece baselines and transients remain 100% in sync.
+     - Routed physical opponent move confirmation in `update_loop` through `PhysicalPieceTracker.process_physical_state()` for robust capture and castling tracking.
+   - **Endgame Out-of-Turn & Pending Reply Lockouts**:
+     - Added explicit pre-condition lockout in `handle_endgame_move_sync()` when `endgame_pending_reply` is active.
+2. **Exhaustive Adversarial Test Suite Expansion (`test_blunder_endgame_adversarial.py`)**:
+   - Added `test_adversarial_opponent_castling_in_blunder_and_endgame` verifying two-phase opponent castling mechanics.
+   - Added `test_adversarial_strict_solution_concealment_in_progress` ensuring zero payload leaks during multi-ply puzzles.
+   - Added `test_adversarial_endgame_pending_opponent_move_lockout` verifying turn-lock enforcement.
 3. **Automated Verification**:
-   - **381 / 381 tests passing (100%)** on Raspberry Pi (`ssh pi@pi`).
-   - Frontend built cleanly with zero TypeScript errors (`tsc -b && vite build`).
-   - `smart-chess.service` running healthy and authenticated with Lichess.
+   - **384 / 384 tests passing (100%)** on physical Raspberry Pi (`ssh pi@pi`).
+   - Frontend built with zero TypeScript errors (`tsc -b && vite build`) in 4.52s.
+   - `smart-chess.service` running healthy, authenticated with Lichess as 'RobiDeli' (Rating: 1527), and Stockfish 17.1 active.
 
 ## Previous Change — Endgame Opponent Replies & Webapp Solution Reveal (2026-08-26)
 1. **Opponent Turn Guidance & Auto-Execution (`board_state.py`, `physical_tracker.py`)**:
