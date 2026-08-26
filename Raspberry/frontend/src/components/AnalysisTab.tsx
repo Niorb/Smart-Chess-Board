@@ -2164,13 +2164,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                         fen={analysis?.fen || eg.drill.fen}
                         legalMoves={analysis?.legal_moves ?? []}
                         inCheck={!!analysis?.in_check}
-                        lastMoveUci={
-                          eg.pending_reply
-                            ? `${eg.pending_reply.from_sq}${eg.pending_reply.to_sq}`
-                            : boardState.last_move
-                            ? `${String.fromCharCode(97 + boardState.last_move[0][0])}${boardState.last_move[0][1] + 1}${String.fromCharCode(97 + boardState.last_move[1][0])}${boardState.last_move[1][1] + 1}`
-                            : undefined
-                        }
+                        lastMoveUci={eg.pending_reply?.uci || boardState.physical?.pending_opponent_move?.uci || undefined}
                         myColor={eg.drill.player_color}
                         onMovePlayed={(uci: string) => { void sendAnalysisMove(uci); }}
                       />
