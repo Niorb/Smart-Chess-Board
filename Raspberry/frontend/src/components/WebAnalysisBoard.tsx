@@ -72,7 +72,10 @@ const THEMES: Theme[] = [
 ];
 
 const THEME_STORAGE_KEY = 'webboard-theme';
-const MOVE_ANIM_MS = 140;
+/** Animation tuning: base glide time plus extra per-square travelled. */
+const MOVE_ANIM_BASE_MS = 150;
+const MOVE_ANIM_PER_SQUARE_MS = 26;
+const MOVE_ANIM_MAX_MS = 280;
 
 function parseFenPlacement(fen: string): string[][] {
   // FEN ranks arrive 8 -> 1; index so that grid[0] = RANK 1 row (consistent
@@ -108,6 +111,32 @@ function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
 }
 
 /**
+ * Glyph of a captured piece that used to sit on `sq`, if the latest move
+ * captured there (used to render the fade-out ghost). Returns '' when none.
+ */
+function capturedGhostSquare(
+  prevGrid: string[][] | null,
+  grid: string[][],
+  lastHighlight: { from: Coord; to: Coord } | null,
+  sq: Coord,
+  pieceNow: string,
+): string {
+  if (!prevGrid || !lastHighlight) return '';
+  // Only squares that are NOT the arrival square (that one animates the mover)
+  if (sq[0] === lastHighlight.to[0] && sq[1] === lastHighlight.to[1]) return '';
+  const before = prevGrid[sq[1]]?.[sq[0]] ?? '';
+  const after = pieceNow;
+  if (!before || after === before) return '';
+  // The victim must be of the opposite color of the moving piece.
+  const mover = grid[lastHighlight.to[1]]?.[lastHighlight.to[0]] ?? '';
+  if (!mover) return '';
+  const moverIsWhite = mover === mover.toUpperCase();
+  const victimIsWhite = before === before.toUpperCase();
+  if (moverIsWhite === victimIsWhite) return '';
+  return before;
+}
+
+/**
  * Interactive lichess-style analysis board: SVG pieces, themed squares,
  * drag & drop + click-to-move (pointer events, mouse and touch), legal-move
  * dots/capture rings, check glow, promotion picker, smooth move animation,
@@ -131,6 +160,18 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 }) => {
   const grid = useMemo(() => parseFenPlacement(fen), [fen]);
   const whiteToMove = (fen.split(' ')[1] || 'w') === 'w';
+  // Previous placement grid, used to animate capture fade-outs
+  const prevGridRef = useRef<string[][] | null>(null);
+  useEffect(() => {
+    return () => {
+      prevGridRef.current = null;
+    };
+  }, []);
+  const prevGrid = prevGridRef.current;
+  useEffect(() => {
+    // Update after paint so the current render still sees the old board
+    prevGridRef.current = grid;
+  }, [grid]);
 
   // Board orientation: auto-follows the user's color; a manual flip overrides.
   const [flipped, setFlipped] = useState<boolean>(myColor === 'black');
@@ -175,6 +216,20 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   }, [themeIdx]);
 
   const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
+
+  // Castling rook animation: derived once per position change
+  const rookAnimBase = useMemo(() => {
+    if (!lastHighlight || !lastMoveUci || lastMoveUci.length < 4) return null;
+    const kFrom = lastHighlight.from;
+    const kTo = lastHighlight.to;
+    const dFile = kTo[0] - kFrom[0];
+    if (Math.abs(dFile) !== 2) return null; // not a castling king move
+    const rFrom: Coord = [dFile > 0 ? 7 : 0, kFrom[1]];
+    const rTo: Coord = [dFile > 0 ? 5 : 3, kTo[1]];
+    const glyph = grid[rTo[1]]?.[rTo[0]] ?? '';
+    if (!glyph || glyph.toUpperCase() !== 'R') return null;
+    return { from: rFrom, to: rTo, glyph };
+  }, [lastHighlight, lastMoveUci, grid]);
 
   // Suggested better-move arrow (shown after inaccuracies/mistakes/blunders)
   const suggestArrow = useMemo(() => {
@@ -441,6 +496,23 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             const isTargetCapture = isTarget && targets.get(squareName) === true;
             const isCheckedKing = !!checkedKingSquare && checkedKingSquare[0] === file && checkedKingSquare[1] === rank;
             const isDragOrigin = !!drag && drag.from[0] === file && drag.from[1] === rank;
+            // Castling: when the last move is a king's two-square move, its
+            // rook glides alongside instead of teleporting.
+            const rookAnim =
+              rookAnimBase &&
+              file === rookAnimBase.to[0] &&
+              rank === rookAnimBase.to[1]
+                ? rookAnimBase
+                : null;
+
+            // Captured piece that used to occupy this square (fade-out ghost).
+            const captured = capturedGhostSquare(
+              prevGrid,
+              grid,
+              lastHighlight,
+              [file, rank],
+              piece,
+            );
 
             return (
               <div
@@ -490,11 +562,32 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     from={lastHighlight.from}
                     to={[file, rank]}
                     flipped={flipped}
+                    glyph={piece}
+                  />
+                )}
+
+                {/* Castling rook glides alongside the king */}
+                {piece && rookAnim && lastHighlight && !isDragOrigin && (
+                  <MovingPiece
+                    key={`rook-${lastMoveUci}-${fen.length}`}
+                    src={PIECE_IMAGES[piece]}
+                    from={rookAnim.from}
+                    to={[file, rank]}
+                    flipped={flipped}
+                    glyph={piece}
+                  />
+                )}
+
+                {/* Fading ghost of a captured piece */}
+                {captured && !isDragOrigin && (
+                  <CapturedGhost
+                    key={`cap-${lastMoveUci}-${file}${rank}`}
+                    src={PIECE_IMAGES[captured]}
                   />
                 )}
 
                 {/* Static piece */}
-                {piece && !isLastTo && !isDragOrigin && (
+                {piece && !isLastTo && !rookAnim && !isDragOrigin && (
                   <img
                     src={PIECE_IMAGES[piece]}
                     alt={piece}
@@ -653,15 +746,17 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 };
 
 /**
- * Piece that slides in from its origin square on mount (CSS transform
- * transition) — gives every navigation step a smooth glide.
+ * Piece that slides in from its origin square on mount — smooth, distance-aware
+ * glide with a subtle pick-up scale and a gentle hop for knights.
  */
 const MovingPiece: React.FC<{
   src: string;
   from: Coord;
   to: Coord;
   flipped?: boolean;
-}> = ({ src, from, to, flipped }) => {
+  /** Glyph of the mover ('n'/'N' ⇒ arcing knight hop). */
+  glyph?: string;
+}> = ({ src, from, to, flipped, glyph }) => {
   const ref = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
@@ -672,16 +767,35 @@ const MovingPiece: React.FC<{
     const screenRow = (r: number) => (flipped ? r : 7 - r);
     const dCol = screenCol(from[0]) - screenCol(to[0]);
     const dRow = screenRow(from[1]) - screenRow(to[1]);
+    const dist = Math.max(Math.abs(dCol), Math.abs(dRow));
+    // Longer moves get proportionally more time, clamped so it stays snappy
+    const dur = Math.min(MOVE_ANIM_BASE_MS + dist * MOVE_ANIM_PER_SQUARE_MS, MOVE_ANIM_MAX_MS);
+    const isKnight = glyph === 'n' || glyph === 'N';
+
     el.style.transition = 'none';
     el.style.transform = `translate(${dCol * 100}%, ${dRow * 100}%)`;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        el.style.transition = `transform ${MOVE_ANIM_MS}ms cubic-bezier(0.25, 0.9, 0.35, 1)`;
+        el.style.transition = [
+          `transform ${dur}ms cubic-bezier(0.2, 0.9, 0.3, 1)`,
+          'filter 120ms ease',
+        ].join(', ');
         el.style.transform = 'translate(0, 0)';
+        if (isKnight) {
+          // Knight hops: lift up mid-flight then settle down at arrival
+          el.animate(
+            [
+              { offset: 0, translate: '0 0' },
+              { offset: 0.5, translate: '0 -22%' },
+              { offset: 1, translate: '0 0' },
+            ],
+            { duration: dur, easing: 'ease-in-out', composite: 'add' },
+          );
+        }
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [from, to, flipped, glyph]);
 
   return (
     <img
@@ -690,6 +804,40 @@ const MovingPiece: React.FC<{
       alt=""
       draggable={false}
       className="relative z-[5] pointer-events-none will-change-transform"
+      style={{
+        width: '88%',
+        height: '88%',
+        filter: 'drop-shadow(0 4px 7px rgba(0,0,0,0.45))',
+      }}
+    />
+  );
+};
+
+/**
+ * Fading ghost of a captured piece that shrinks away when the position changes.
+ */
+const CapturedGhost: React.FC<{ src: string }> = ({ src }) => {
+  const ref = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.animate(
+      [
+        { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(0.55)' },
+      ],
+      { duration: 180, easing: 'ease-out', fill: 'forwards' },
+    );
+  }, []);
+
+  return (
+    <img
+      ref={ref}
+      src={src}
+      alt=""
+      draggable={false}
+      className="absolute inset-0 m-auto z-[4] pointer-events-none will-change-transform"
       style={{ width: '88%', height: '88%', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))' }}
     />
   );
