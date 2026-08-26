@@ -3,7 +3,18 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Engine Lines Panel, Always-On Best Arrow, Instant Web Moves (2026-08-26)
+## Latest Change — Lines Panel Beside Board, Toast Banners Removed (2026-08-26)
+1. **Engine Lines panel moved beside the board**: the panel now sits as a sibling
+   column in the eval-bar + board flex row (right of the board) instead of stacking
+   underneath it; layout container widened accordingly.
+2. **Layout-shifting toasts removed**: the Feedback Toast Banner and the
+   "Back on the main game line" confirmation banner were removed from Game Review —
+   they pushed page content when appearing (typically on divergence / return to the
+   mainline). State plumbing trimmed with them.
+3. **Automated Verification**: frontend build clean; 359/359 passing on Pi; service
+   restarted healthy.
+
+## Previous Change — Engine Lines Panel, Always-On Best Arrow, Instant Web Moves (2026-08-26)
 1. **Chess.com-style "Engine Lines" panel (`WebAnalysisBoard.tsx`)**: three clickable
    PV lines (SAN sequence + eval) rendered right of the board. Clicking a line snaps
    back from any variation and plays that line's first move as a branch; the engine
