@@ -1898,6 +1898,7 @@ class BoardStateManager:
 
         # Check goal completion
         if self._check_endgame_goal_achieved():
+            self.endgame_phase = "complete"
             self._spawn_task(self._record_endgame_completion(won=True))
             return {
                 "result": "complete",
@@ -1906,6 +1907,7 @@ class BoardStateManager:
                 "analysis": self.get_analysis_payload(),
             }
         elif self.endgame_board.is_game_over():
+            self.endgame_phase = "complete"
             self._spawn_task(self._record_endgame_completion(won=False))
             return {
                 "result": "complete",

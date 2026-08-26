@@ -739,6 +739,7 @@ def test_adversarial_endgame_checkmate_direction_and_game_over_transitions():
         # Reset and play Qf2 (stalemate!) -> Black has no moves, but not in checkmate -> won=False
         mgr.endgame_board = chess.Board("8/8/8/8/8/5K2/7Q/7k w - - 0 1")
         res_stale = mgr.handle_endgame_move_sync("h2f2", source="web")
+        await asyncio.sleep(0.01)
         assert mgr.endgame_board.is_stalemate() is True
         assert res_stale["result"] == "complete"
         assert res_stale["won"] is False
