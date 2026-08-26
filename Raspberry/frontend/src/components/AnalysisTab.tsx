@@ -527,6 +527,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     scoreCp={scoreCp}
                     mate={mate}
                     onMovePlayed={handleWebMove}
+                    myColor={boardState.my_color === 'black' ? 'black' : 'white'}
                   />
                 );
               })()

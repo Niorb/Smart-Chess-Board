@@ -30,6 +30,8 @@ interface WebAnalysisBoardProps {
   mate?: number | null;
   /** Called with the full UCI (incl. promotion suffix) when a move is played. */
   onMovePlayed: (uci: string) => void;
+  /** Color the user played in the analyzed game — board auto-orients to it. */
+  myColor?: 'white' | 'black' | null;
 }
 
 const PIECE_IMAGES: Record<string, string> = {
@@ -69,7 +71,9 @@ const THEME_STORAGE_KEY = 'webboard-theme';
 const MOVE_ANIM_MS = 140;
 
 function parseFenPlacement(fen: string): string[][] {
-  const rows = (fen.split(' ')[0] || '').split('/');
+  // FEN ranks arrive 8 -> 1; index so that grid[0] = RANK 1 row (consistent
+  // with Coord semantics where rank 0 == chess rank 1).
+  const rows = (fen.split(' ')[0] || '').split('/').reverse();
   const grid: string[][] = [];
   for (const row of rows) {
     const cells: string[] = [];
@@ -117,9 +121,21 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   scoreCp,
   mate,
   onMovePlayed,
+  myColor,
 }) => {
   const grid = useMemo(() => parseFenPlacement(fen), [fen]);
   const whiteToMove = (fen.split(' ')[1] || 'w') === 'w';
+
+  // Board orientation: auto-follows the user's color; a manual flip overrides.
+  const [flipped, setFlipped] = useState<boolean>(myColor === 'black');
+  const [manualFlip, setManualFlip] = useState<boolean>(false);
+  useEffect(() => {
+    if (!manualFlip) setFlipped(myColor === 'black');
+  }, [myColor, manualFlip]);
+  const toggleOrientation = () => {
+    setManualFlip(true);
+    setFlipped((f) => !f);
+  };
 
   const [themeIdx, setThemeIdx] = useState<number>(() => {
     try {
@@ -340,6 +356,13 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             {isBranching ? 'VARIATION SANDBOX' : 'MAIN GAME LINE'}
           </span>
           <button
+            onClick={toggleOrientation}
+            title="Flip board orientation"
+            className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
+          >
+            {flipped ? 'Black ▼' : 'White ▲'}
+          </button>
+          <button
             onClick={cycleTheme}
             title="Change board theme"
             className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
@@ -351,22 +374,24 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
       {/* Eval bar + board */}
       <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: '545px' }}>
-        {/* Always-on evaluation bar */}
+        {/* Always-on evaluation bar (oriented with the board) */}
         <div className="relative self-stretch w-5 rounded-full overflow-hidden bg-slate-800 ring-1 ring-slate-700 shadow-inner">
           <div
-            className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-100 to-white transition-[height] duration-300 ease-out"
+            className={`absolute inset-x-0 bg-gradient-to-t from-slate-100 to-white transition-[height] duration-300 ease-out ${
+              flipped ? 'top-0' : 'bottom-0'
+            }`}
             style={{ height: `${wc}%` }}
           />
           <div
             className="absolute inset-x-0 h-px bg-violet-400/70"
-            style={{ bottom: `${wc}%` }}
+            style={flipped ? { top: `${wc}%` } : { bottom: `${wc}%` }}
           />
           <div
             className="absolute inset-x-0 text-center text-[9px] font-mono font-bold pointer-events-none"
             style={{
-              bottom: `calc(${wc}% + 2px)`,
+              ...(flipped ? { top: `calc(${wc}% + 2px)` } : { bottom: `calc(${wc}% + 2px)` }),
               color: wc > 45 ? '#0f172a' : '#e2e8f0',
-              transform: wc > 92 || wc < 8 ? 'translateY(-14px)' : 'none',
+              transform: wc > 92 || wc < 8 ? (flipped ? 'translateY(14px)' : 'translateY(-14px)') : 'none',
             }}
           >
             {evalText}
@@ -388,8 +413,10 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
           >
           {Array.from({ length: 64 }).map((_, idx) => {
             const rowFromTop = Math.floor(idx / 8); // 0..7 top->bottom
-            const file = idx % 8;
-            const rank = 7 - rowFromTop;
+            const col = idx % 8;
+            // Orientation: white view shows rank 8 at top; flipped shows rank 1 at top
+            const rank = flipped ? rowFromTop : 7 - rowFromTop;
+            const file = flipped ? 7 - col : col;
             const c: Coord = [file, rank];
             const squareName = FILES[file] + (rank + 1);
             const piece = pieceAt(c);
@@ -450,6 +477,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     src={PIECE_IMAGES[piece]}
                     from={lastHighlight.from}
                     to={[file, rank]}
+                    flipped={flipped}
                   />
                 )}
 
@@ -566,17 +594,20 @@ const MovingPiece: React.FC<{
   src: string;
   from: Coord;
   to: Coord;
-}> = ({ src, from, to }) => {
+  flipped?: boolean;
+}> = ({ src, from, to, flipped }) => {
   const ref = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Screen-space square deltas (rows are rendered top->bottom, ranks inverted)
-    const dFile = from[0] - to[0];
-    const dRow = 7 - from[1] - (7 - to[1]);
+    // Screen-space square deltas accounting for board orientation
+    const screenCol = (f: number) => (flipped ? 7 - f : f);
+    const screenRow = (r: number) => (flipped ? r : 7 - r);
+    const dCol = screenCol(from[0]) - screenCol(to[0]);
+    const dRow = screenRow(from[1]) - screenRow(to[1]);
     el.style.transition = 'none';
-    el.style.transform = `translate(${dFile * 100}%, ${dRow * 100}%)`;
+    el.style.transform = `translate(${dCol * 100}%, ${dRow * 100}%)`;
     const raf = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.style.transition = `transform ${MOVE_ANIM_MS}ms cubic-bezier(0.25, 0.9, 0.35, 1)`;
