@@ -37,7 +37,7 @@ interface AnalysisMoveItem {
   best_move?: string | null;
 }
 
-interface BlunderChallenge {
+export interface BlunderChallenge {
   ply_index: number;
   fen_before: string;
   played_move: string;
@@ -46,6 +46,15 @@ interface BlunderChallenge {
   best_move: string;
   best_score_cp?: number | null;
   description: string;
+  player_color?: 'white' | 'black';
+  opponent_color?: 'white' | 'black';
+  opponent_prev_move_uci?: string | null;
+  opponent_prev_move_san?: string | null;
+  fen_prior_to_opponent?: string | null;
+  solution_pv?: string[];
+  solution_line_san?: string[];
+  opponent_replies?: string[];
+  player_moves?: string[];
   top_moves?: Array<{
     uci: string;
     score_cp?: number | null;
@@ -183,6 +192,7 @@ interface AnalysisState {
   anchor_coord?: [number, number] | null;
   blunders: BlunderChallenge[];
   blunder_index: number;
+  blunder_step?: number;
   blunder_attempts: number;
   blunder_hint_active: boolean;
   gm_game?: GMGameSummary | null;

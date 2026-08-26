@@ -48,7 +48,8 @@ import {
   requestEndgameHint,
   createCustomEndgame,
   resetEndgameProgress,
-  type EndgameDrillItem
+  type EndgameDrillItem,
+  type BlunderAttemptResult
 } from '../api';
 
 interface AnalysisTabProps {
@@ -81,6 +82,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
   const [, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
+  const [puzzleResult, setPuzzleResult] = useState<BlunderAttemptResult | null>(null);
   const [webMoveInput, setWebMoveInput] = useState<string>('');
   const prevOnMainlineRef = useRef<boolean>(true);
   const [webBoardOpen, setWebBoardOpen] = useState<boolean>(false);
@@ -606,20 +608,40 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     }
   };
 
-  const handleBlunderAttemptSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!guessInput.trim()) return;
+  const handleStartBlunderDrill = async (idx: number) => {
+    setPuzzleResult(null);
+    setGuessInput('');
     try {
-      const res = await submitBlunderAttempt(guessInput.trim());
+      await startBlunderDrill(idx);
+    } catch (err) {
+      console.error('Error starting blunder drill:', err);
+    }
+  };
+
+  const handlePuzzleMove = async (uciOrSan: string) => {
+    if (!uciOrSan.trim()) return;
+    try {
+      const res = await submitBlunderAttempt(uciOrSan.trim());
+      setPuzzleResult(res);
       if (res.correct) {
-        setFeedbackMsg({ text: `🏆 ${res.message}`, type: 'success' });
+        if (res.puzzle_complete) {
+          setFeedbackMsg({ text: `🏆 ${res.message}`, type: 'success' });
+        } else {
+          setFeedbackMsg({ text: `⚡ ${res.message}`, type: 'info' });
+        }
       } else {
-        setFeedbackMsg({ text: `❌ ${res.message} (${res.attempts_remaining} attempts left)`, type: 'error' });
+        setFeedbackMsg({ text: `❌ ${res.message} (${res.attempts_remaining ?? 0} attempts left)`, type: 'error' });
       }
       setGuessInput('');
     } catch {
-      setFeedbackMsg({ text: 'Error submitting blunder attempt.', type: 'error' });
+      setFeedbackMsg({ text: 'Error submitting puzzle move.', type: 'error' });
     }
+  };
+
+  const handleBlunderAttemptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guessInput.trim()) return;
+    await handlePuzzleMove(guessInput.trim());
   };
 
   const handleToggleHint = async () => {
@@ -1440,19 +1462,22 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         </div>
       )}
 
-      {/* SUB-VIEW 2: BLUNDER BLITZ DRILL */}
+      {/* SUB-VIEW 2: BLUNDER BLITZ / TACTICAL PUZZLES */}
       {subMode === 'blunder_drill' && (
         <div className="space-y-6">
           {blunders.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Blunder selector sidebar */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mistakes Extracted ({blunders.length})</h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mistakes Extracted ({blunders.length})</h4>
+                  <span className="text-[11px] text-slate-500 font-mono">Puzzles</span>
+                </div>
+                <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
                   {blunders.map((b, idx) => (
                     <div
                       key={idx}
-                      onClick={() => startBlunderDrill(idx)}
+                      onClick={() => handleStartBlunderDrill(idx)}
                       className={`p-3 rounded-xl border cursor-pointer transition-all ${
                         activeBlunderIndex === idx
                           ? 'bg-rose-950/60 border-rose-500 text-white shadow-md'
@@ -1460,61 +1485,172 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       }`}
                     >
                       <div className="flex items-center justify-between text-xs font-bold mb-1">
-                        <span>Puzzle #{idx + 1} (Move {Math.floor(b.ply_index / 2) + 1})</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className={b.player_color === 'black' ? 'text-slate-400' : 'text-amber-300'}>
+                            {b.player_color === 'black' ? '♚' : '♔'}
+                          </span>
+                          Puzzle #{idx + 1} (Move {Math.floor(b.ply_index / 2) + 1})
+                        </span>
                         {getQualityBadge(b.classification)}
                       </div>
-                      <div className="text-xs text-slate-400 line-clamp-1">{b.description}</div>
+                      <div className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{b.description}</div>
+                      {b.opponent_prev_move_san && (
+                        <div className="mt-1.5 text-[10px] text-amber-400/80 font-mono">
+                          Opponent played: {b.opponent_prev_move_san}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Active Blunder Challenge Card */}
-              <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
+              {/* Active Blunder Challenge & Interactive Board */}
+              <div className="lg:col-span-8 space-y-4">
+                {/* Top Status & Perspective Banner */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5">
                       <Flame className="w-5 h-5 text-rose-400" />
                       <h3 className="text-base font-bold text-white">
-                        Blunder Rehabilitation #{activeBlunderIndex + 1}
+                        Tactical Refutation #{activeBlunderIndex + 1}
                       </h3>
+                      {currentBlunder?.classification && getQualityBadge(currentBlunder.classification)}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-rose-400 font-bold bg-rose-950/50 px-3 py-1 rounded-full border border-rose-500/30">
-                      Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map(() => '❤️').join('')}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 text-xs text-rose-400 font-bold bg-rose-950/50 px-3 py-1 rounded-full border border-rose-500/30">
+                        Attempts: {Array.from({ length: analysis?.blunder_attempts ?? 3 }).map(() => '❤️').join('')}
+                      </div>
+                      <button
+                        onClick={handleToggleHint}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border border-amber-500/20"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        {analysis?.blunder_hint_active ? 'Hide Hint' : 'LED Hint'}
+                      </button>
                     </div>
                   </div>
 
-                  <p className="text-sm text-slate-300 bg-slate-950 p-4 rounded-xl border border-slate-800 leading-relaxed">
+                  {/* Perspective & Opponent's Move Info Card */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Your Side:</span>
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${
+                        currentBlunder?.player_color === 'black'
+                          ? 'bg-slate-800 text-slate-200 border border-slate-700'
+                          : 'bg-amber-950/50 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {currentBlunder?.player_color === 'black' ? '♚ Black to Move' : '♔ White to Move'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Opponent Move:</span>
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/30 px-2.5 py-0.5 rounded-md border border-amber-500/20">
+                        {currentBlunder?.opponent_prev_move_san ? currentBlunder.opponent_prev_move_san : 'Initiating move'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed">
                     {currentBlunder?.description || 'Find the best tactical refutation in this position.'}
                   </p>
-
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      onClick={handleToggleHint}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border border-amber-500/20"
-                    >
-                      <Lightbulb className="w-4 h-4" />
-                      {analysis?.blunder_hint_active ? 'Hide LED Hint' : 'Show LED Hint on Board'}
-                    </button>
-                  </div>
                 </div>
 
-                {/* Move Guess Form */}
-                <form onSubmit={handleBlunderAttemptSubmit} className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    placeholder="Enter algebraic move (e.g. e2e4 or Re8)..."
-                    value={guessInput}
-                    onChange={(e) => setGuessInput(e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
-                  />
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-bold transition-all shadow-md"
-                  >
-                    Submit Move
-                  </button>
-                </form>
+                {/* Interactive Board & Continuation Box */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  {/* Web Board */}
+                  <div className="md:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col items-center">
+                    <WebAnalysisBoard
+                      fen={analysis?.fen || currentBlunder?.fen_before || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'}
+                      legalMoves={analysis?.legal_moves ?? []}
+                      inCheck={!!analysis?.in_check}
+                      lastMoveUci={
+                        (analysis?.last_move && typeof analysis.last_move === 'object' && 'from' in analysis.last_move)
+                          ? `${analysis.last_move.from}${analysis.last_move.to}`
+                          : (currentBlunder?.opponent_prev_move_uci || undefined)
+                      }
+                      myColor={currentBlunder?.player_color === 'black' ? 'black' : 'white'}
+                      onMovePlayed={(from, to, promo) => handlePuzzleMove(`${from}${to}${promo || ''}`)}
+                    />
+                  </div>
+
+                  {/* Move Continuation & Action Card */}
+                  <div className="md:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                        Tactical Sequence
+                      </h4>
+
+                      {/* Opponent's defensive reply announcement */}
+                      {puzzleResult?.opponent_reply_san && (
+                        <div className="p-3 bg-blue-950/40 border border-blue-500/30 rounded-xl space-y-1">
+                          <div className="text-[10px] text-blue-300 font-bold uppercase tracking-wider">
+                            Opponent Response (Side we don't play):
+                          </div>
+                          <div className="text-sm font-mono font-bold text-white flex items-center gap-2">
+                            <span>{puzzleResult.player_san}</span>
+                            <span className="text-slate-500">→</span>
+                            <span className="text-blue-400">{puzzleResult.opponent_reply_san}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Full Grandmaster Solution Line if Solved */}
+                      {(puzzleResult?.puzzle_complete || currentBlunder?.solution_line_san) && (
+                        <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5">
+                          <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Grandmaster Continuation Line:
+                          </div>
+                          <div className="text-xs font-mono text-emerald-200 leading-relaxed">
+                            {(puzzleResult?.solution_line || currentBlunder?.solution_line_san)?.join(' ') || currentBlunder?.best_move}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Navigation between puzzles */}
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          disabled={activeBlunderIndex <= 0}
+                          onClick={() => handleStartBlunderDrill(Math.max(0, activeBlunderIndex - 1))}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                        >
+                          <ChevronLeft className="w-4 h-4" /> Prev
+                        </button>
+                        <span className="text-xs text-slate-400 font-mono">
+                          {activeBlunderIndex + 1} / {blunders.length}
+                        </span>
+                        <button
+                          disabled={activeBlunderIndex >= blunders.length - 1}
+                          onClick={() => handleStartBlunderDrill(Math.min(blunders.length - 1, activeBlunderIndex + 1))}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                        >
+                          Next <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Move Guess Form */}
+                    <form onSubmit={handleBlunderAttemptSubmit} className="space-y-2">
+                      <div className="text-[11px] text-slate-400">Play on the board above or type your move:</div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. e2e4 or Re8..."
+                          value={guessInput}
+                          onChange={(e) => setGuessInput(e.target.value)}
+                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                        />
+                        <button
+                          type="submit"
+                          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

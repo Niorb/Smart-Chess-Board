@@ -343,16 +343,33 @@ export async function startReplayRecall(movesUci?: string[]) {
   return jsonPost('/analysis/replay/recall', movesUci ? { moves_uci: movesUci } : {});
 }
 
+export interface BlunderAttemptResult {
+  correct: boolean;
+  step_complete?: boolean;
+  puzzle_complete?: boolean;
+  message: string;
+  player_san?: string;
+  opponent_reply_uci?: string | null;
+  opponent_reply_san?: string | null;
+  current_step?: number;
+  total_steps?: number;
+  best_move?: string;
+  next_expected_move?: string;
+  solution_line?: string[];
+  active_fen?: string | null;
+  attempts_remaining?: number;
+}
+
 export async function startBlunderDrill(index: number = 0) {
   return jsonPost('/analysis/blunder_drill/start', { index });
 }
 
 export async function submitBlunderAttempt(uci: string) {
-  return jsonPost('/analysis/blunder_drill/attempt', { uci });
+  return jsonPost<BlunderAttemptResult>('/analysis/blunder_drill/attempt', { uci });
 }
 
 export async function toggleBlunderHint() {
-  return jsonPost('/analysis/blunder_drill/hint');
+  return jsonPost<{ active: boolean }>('/analysis/blunder_drill/hint');
 }
 
 export async function resolvePromotion(piece: 'q' | 'n' | 'r' | 'b' = 'q') {

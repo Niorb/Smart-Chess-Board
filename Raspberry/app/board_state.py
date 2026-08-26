@@ -1062,6 +1062,7 @@ class BoardStateManager:
         self.analysis_submode = "blunder_drill"
         self.analysis_has_advanced = True
         self.analysis_blunder_index = max(0, min(len(self.analysis_blunders) - 1, index)) if self.analysis_blunders else 0
+        self.analysis_blunder_step = 0
         self.analysis_blunder_attempts = 3
         self.analysis_blunder_hint_active = False
 
@@ -1070,6 +1071,18 @@ class BoardStateManager:
             fen = blunder.get("fen_before")
             if fen:
                 self.analysis_active_board = chess.Board(fen)
+
+            # Highlight opponent's prior move (the move from the side we don't play!)
+            opp_prev = blunder.get("opponent_prev_move_uci")
+            if opp_prev and len(opp_prev) >= 4:
+                fc = ord(opp_prev[0]) - ord('a')
+                fr = int(opp_prev[1]) - 1
+                tc = ord(opp_prev[2]) - ord('a')
+                tr = int(opp_prev[3]) - 1
+                self.last_move = ((fc, fr), (tc, tr))
+            else:
+                self.last_move = None
+
         return self.get_analysis_payload()
 
     def submit_blunder_attempt(self, uci: str) -> dict[str, Any]:
@@ -1078,22 +1091,109 @@ class BoardStateManager:
             return {"correct": False, "message": "No active blunder challenge."}
 
         blunder = self.analysis_blunders[self.analysis_blunder_index]
-        best_move = blunder.get("best_move", "")
+        player_moves = blunder.get("player_moves") or ([blunder.get("best_move")] if blunder.get("best_move") else [])
+        opponent_replies = blunder.get("opponent_replies") or []
+        step_idx = getattr(self, "analysis_blunder_step", 0)
 
-        if uci.lower() == best_move.lower():
-            if len(uci) >= 4:
-                to_c = ord(uci[2]) - ord('a')
-                to_r = int(uci[3]) - 1
-                self.trigger_arrival_flash(to_c, to_r, is_capture=False, duration=0.8)
-            return {
-                "correct": True,
-                "message": "Brilliant! You found the grandmaster solution.",
-                "best_move": best_move,
-            }
+        if step_idx < len(player_moves):
+            expected_move = player_moves[step_idx]
+        else:
+            expected_move = player_moves[-1] if player_moves else blunder.get("best_move", "")
+
+        uci_clean = uci.strip().lower()
+        if self.analysis_active_board:
+            try:
+                # Accept SAN input as well as UCI
+                legal_ucis = [m.uci() for m in self.analysis_active_board.legal_moves]
+                if uci_clean not in legal_ucis:
+                    m_parsed = self.analysis_active_board.parse_san(uci.strip())
+                    uci_clean = m_parsed.uci()
+            except Exception:
+                pass
+
+        if uci_clean == expected_move.lower():
+            player_move_obj = chess.Move.from_uci(expected_move)
+            player_san = expected_move
+            is_capture = False
+            if self.analysis_active_board and player_move_obj in self.analysis_active_board.legal_moves:
+                is_capture = self.analysis_active_board.is_capture(player_move_obj)
+                player_san = self.analysis_active_board.san(player_move_obj)
+                self.analysis_active_board.push(player_move_obj)
+
+            if len(expected_move) >= 4:
+                to_c = ord(expected_move[2]) - ord('a')
+                to_r = int(expected_move[3]) - 1
+                from_c = ord(expected_move[0]) - ord('a')
+                from_r = int(expected_move[1]) - 1
+                self.trigger_arrival_flash(to_c, to_r, is_capture=is_capture, duration=0.6)
+                self.last_move = ((from_c, from_r), (to_c, to_r))
+
+            # Automatically provide & execute the opponent's reply (the move from the side we don't play!)
+            opp_move_uci = None
+            opp_san = None
+            if step_idx < len(opponent_replies):
+                opp_move_uci = opponent_replies[step_idx]
+                opp_move_obj = chess.Move.from_uci(opp_move_uci)
+                if self.analysis_active_board and opp_move_obj in self.analysis_active_board.legal_moves:
+                    opp_is_cap = self.analysis_active_board.is_capture(opp_move_obj)
+                    opp_san = self.analysis_active_board.san(opp_move_obj)
+                    self.analysis_active_board.push(opp_move_obj)
+
+                    if len(opp_move_uci) >= 4:
+                        opp_fc = ord(opp_move_uci[0]) - ord('a')
+                        opp_fr = int(opp_move_uci[1]) - 1
+                        opp_tc = ord(opp_move_uci[2]) - ord('a')
+                        opp_tr = int(opp_move_uci[3]) - 1
+                        self.last_move = ((opp_fc, opp_fr), (opp_tc, opp_tr))
+                        self.trigger_arrival_flash(opp_tc, opp_tr, is_capture=opp_is_cap, duration=0.8)
+
+            self.analysis_blunder_step = step_idx + 1
+
+            if self.analysis_blunder_step < len(player_moves):
+                next_expected = player_moves[self.analysis_blunder_step]
+                msg = (
+                    f"Good move ({player_san})! Opponent responded with {opp_san}. Find the follow-up move!"
+                    if opp_san
+                    else f"Good move ({player_san})! Find the follow-up move!"
+                )
+                return {
+                    "correct": True,
+                    "step_complete": True,
+                    "puzzle_complete": False,
+                    "message": msg,
+                    "player_san": player_san,
+                    "opponent_reply_uci": opp_move_uci,
+                    "opponent_reply_san": opp_san,
+                    "current_step": self.analysis_blunder_step,
+                    "total_steps": len(player_moves),
+                    "best_move": expected_move,
+                    "next_expected_move": next_expected,
+                    "active_fen": self.analysis_active_board.fen() if self.analysis_active_board else None,
+                }
+            else:
+                solution_line = blunder.get("solution_line_san", [])
+                opp_tail = f" Opponent continuation: {opp_san}." if opp_san else ""
+                msg = f"Brilliant! Tactical refutation solved.{opp_tail}"
+                return {
+                    "correct": True,
+                    "step_complete": True,
+                    "puzzle_complete": True,
+                    "message": msg,
+                    "player_san": player_san,
+                    "opponent_reply_uci": opp_move_uci,
+                    "opponent_reply_san": opp_san,
+                    "current_step": self.analysis_blunder_step,
+                    "total_steps": len(player_moves),
+                    "best_move": expected_move,
+                    "solution_line": solution_line,
+                    "active_fen": self.analysis_active_board.fen() if self.analysis_active_board else None,
+                }
         else:
             self.analysis_blunder_attempts = max(0, self.analysis_blunder_attempts - 1)
             return {
                 "correct": False,
+                "step_complete": False,
+                "puzzle_complete": False,
                 "message": "Not quite the best move. Try again!",
                 "attempts_remaining": self.analysis_blunder_attempts,
             }
@@ -2041,6 +2141,7 @@ class BoardStateManager:
             "anchor_coord": list(self.analysis_anchor_coord) if self.analysis_anchor_coord else None,
             "blunders": self.analysis_blunders,
             "blunder_index": self.analysis_blunder_index,
+            "blunder_step": getattr(self, "analysis_blunder_step", 0),
             "blunder_attempts": self.analysis_blunder_attempts,
             "blunder_hint_active": self.analysis_blunder_hint_active,
             "gm_game": gm_game.to_dict() if gm_game else None,
@@ -2829,10 +2930,14 @@ class BoardStateManager:
                     if 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
                         blunder = self.analysis_blunders[self.analysis_blunder_index]
                         if self.analysis_blunder_hint_active:
-                            bm = blunder.get("best_move", "")
+                            step_idx = getattr(self, "analysis_blunder_step", 0)
+                            player_moves = blunder.get("player_moves") or ([blunder.get("best_move")] if blunder.get("best_move") else [])
+                            bm = player_moves[step_idx] if step_idx < len(player_moves) else blunder.get("best_move", "")
                             if len(bm) >= 4:
                                 bm_f = (ord(bm[0]) - ord('a'), int(bm[1]) - 1)
+                                bm_t = (ord(bm[2]) - ord('a'), int(bm[3]) - 1)
                                 set_square_leds(bm_f[0], bm_f[1], c_mint_emerald)
+                                set_square_leds(bm_t[0], bm_t[1], c_azure)
 
                 elif self.analysis_submode in ("replay_learn", "replay_recall"):
                     # Side-to-move indicator: gentle pulse on the King square

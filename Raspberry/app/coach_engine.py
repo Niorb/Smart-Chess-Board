@@ -116,6 +116,15 @@ class BlunderChallenge:
     best_move: str
     best_score_cp: int | None
     description: str
+    player_color: str = "white"
+    opponent_color: str = "black"
+    opponent_prev_move_uci: str | None = None
+    opponent_prev_move_san: str | None = None
+    fen_prior_to_opponent: str | None = None
+    solution_pv: list[str] = field(default_factory=list)
+    solution_line_san: list[str] = field(default_factory=list)
+    opponent_replies: list[str] = field(default_factory=list)
+    player_moves: list[str] = field(default_factory=list)
     top_moves: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,6 +137,15 @@ class BlunderChallenge:
             "best_move": self.best_move,
             "best_score_cp": self.best_score_cp,
             "description": self.description,
+            "player_color": self.player_color,
+            "opponent_color": self.opponent_color,
+            "opponent_prev_move_uci": self.opponent_prev_move_uci,
+            "opponent_prev_move_san": self.opponent_prev_move_san,
+            "fen_prior_to_opponent": self.fen_prior_to_opponent,
+            "solution_pv": self.solution_pv,
+            "solution_line_san": self.solution_line_san,
+            "opponent_replies": self.opponent_replies,
+            "player_moves": self.player_moves,
             "top_moves": self.top_moves,
         }
 
@@ -715,7 +733,7 @@ class CoachEngine:
     ) -> list[BlunderChallenge]:
         """Extracts critical mistakes from played moves to form training puzzles."""
         challenges: list[BlunderChallenge] = []
-        for played in played_analyses:
+        for idx, played in enumerate(played_analyses):
             ply = played["ply"]
             delta = played.get("delta_cp", 0)
             if delta >= min_delta or played.get("classification") == "blunder":
@@ -724,18 +742,84 @@ class CoachEngine:
                 if not best_move:
                     continue
 
-                desc = f"At move {ply // 2 + 1} ({played['turn'].capitalize()}), {played['san']} lost {delta} centipawns. Find the better move!"
+                player_color = str(played.get("turn", "white")).lower()
+                opponent_color = "black" if player_color == "white" else "white"
+
+                # Previous move from the side we don't play (leading into this puzzle position)
+                opp_prev_uci = None
+                opp_prev_san = None
+                fen_prior = None
+                if idx > 0 and idx - 1 < len(played_analyses):
+                    prev_item = played_analyses[idx - 1]
+                    opp_prev_uci = prev_item.get("uci")
+                    opp_prev_san = prev_item.get("san")
+                    if idx - 1 < len(evaluations):
+                        fen_prior = evaluations[idx - 1].get("fen")
+
+                fen_before = pos_eval.get("fen", "")
+                top_moves = pos_eval.get("top_moves", [])
+
+                # Extract PV moves and calculate full solution sequence
+                pv_uci: list[str] = []
+                if top_moves and "pv" in top_moves[0] and top_moves[0]["pv"]:
+                    pv_uci = [str(x) for x in top_moves[0]["pv"]]
+                elif best_move:
+                    pv_uci = [best_move]
+
+                solution_line_san: list[str] = []
+                player_moves: list[str] = []
+                opponent_replies: list[str] = []
+
+                if fen_before and pv_uci:
+                    try:
+                        b = chess.Board(fen_before)
+                        for i, uci_str in enumerate(pv_uci):
+                            m = chess.Move.from_uci(uci_str)
+                            if m in b.legal_moves:
+                                san_str = b.san(m)
+                                move_num = b.fullmove_number
+                                prefix = f"{move_num}." if b.turn == chess.WHITE else f"{move_num}..."
+                                solution_line_san.append(f"{prefix} {san_str}")
+                                if i % 2 == 0:
+                                    player_moves.append(uci_str)
+                                else:
+                                    opponent_replies.append(uci_str)
+                                b.push(m)
+                            else:
+                                break
+                    except Exception as e:
+                        logger.debug(f"Error computing solution SAN: {e}")
+
+                if not player_moves and best_move:
+                    player_moves = [best_move]
+
+                opp_context = f" after opponent's {opp_prev_san}" if opp_prev_san else ""
+                desc = (
+                    f"At move {ply // 2 + 1} ({player_color.capitalize()}){opp_context}, "
+                    f"{played['san']} was a {played.get('classification', 'mistake')} (lost {delta} cp). "
+                    f"Find the grandmaster refutation!"
+                )
+
                 challenges.append(
                     BlunderChallenge(
                         ply_index=ply,
-                        fen_before=pos_eval.get("fen", ""),
+                        fen_before=fen_before,
                         played_move=played["uci"],
                         classification=played.get("classification", "blunder"),
                         delta_cp=delta,
                         best_move=best_move,
                         best_score_cp=pos_eval.get("score_cp"),
                         description=desc,
-                        top_moves=pos_eval.get("top_moves", []),
+                        player_color=player_color,
+                        opponent_color=opponent_color,
+                        opponent_prev_move_uci=opp_prev_uci,
+                        opponent_prev_move_san=opp_prev_san,
+                        fen_prior_to_opponent=fen_prior,
+                        solution_pv=pv_uci,
+                        solution_line_san=solution_line_san,
+                        opponent_replies=opponent_replies,
+                        player_moves=player_moves,
+                        top_moves=top_moves,
                     )
                 )
         return challenges
