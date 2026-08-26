@@ -171,8 +171,8 @@ def test_endgame_state_machine_and_moves():
         hint = mgr.request_endgame_hint()
         assert "hint_uci" in hint or "hint_text" in hint
 
-        # Play legal move: e3e4
-        legal_move = "e3e4"
+        # Play legal move: e2e4
+        legal_move = "e2e4"
         move_res = mgr.handle_endgame_move_sync(legal_move, source="board")
         assert move_res.get("result") in ("ok", "complete")
         assert mgr.endgame_moves_played == 1

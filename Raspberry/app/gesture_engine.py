@@ -979,6 +979,10 @@ class EndgameMenuGesture(BaseGesture):
 
         return overlay
 
+    def get_indicator_leds(self, time_now: float) -> dict[tuple[int, int], int]:
+        """Convenience method returning the active LED indicators dictionary."""
+        return self.get_led_overlay(time_now)
+
     def execute_completion(self) -> None:
         drill = self.get_active_drill()
         drill_id = drill.id if drill else "pawn_opposition"
