@@ -521,6 +521,7 @@ def test_adversarial_endgame_pending_opponent_and_draw_repetitions():
         mgr.endgame_board = chess.Board(drill.fen)
         mgr.endgame_phase = "playing"
         mgr.endgame_active = True
+        mgr.endgame_board.turn = chess.BLACK
 
         # Simulate pending opponent reply
         mgr.endgame_pending_reply = {

@@ -1153,9 +1153,6 @@ class BoardStateManager:
                 is_capture = self.analysis_active_board.is_capture(player_move_obj)
                 player_san = self.analysis_active_board.san(player_move_obj)
                 self.analysis_active_board.push(player_move_obj)
-                is_capture = self.analysis_active_board.is_capture(player_move_obj)
-                player_san = self.analysis_active_board.san(player_move_obj)
-                self.analysis_active_board.push(player_move_obj)
 
             if len(expected_move) >= 4:
                 to_c = ord(expected_move[2]) - ord('a')
