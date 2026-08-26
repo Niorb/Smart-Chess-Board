@@ -3,7 +3,17 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Optimistic UI: Instant Moves & Navigation (2026-08-26)
+## Latest Change — Optimistic Overlay Reconciliation Fix (2026-08-26)
+1. **Glitch fix**: the optimistic overlay was cleared as soon as the HTTP response
+   arrived — often BEFORE the WebSocket broadcast with the new position — so the
+   board snapped back to the pre-move position for a frame ("back and forth once").
+   The overlay is now dropped only when the server FEN has actually caught up with
+   the optimistic position (comparison modulo move counters); WS arrivals also
+   trigger reconciliation. Hard rollback retained for rejected moves.
+2. **Automated Verification**: frontend build clean; 359/359 passing on Pi; service
+   restarted healthy.
+
+## Previous Change — Optimistic UI: Instant Moves & Navigation (2026-08-26)
 1. **Client-side instant application (`AnalysisTab.tsx` + `chess.js`)**: keyboard
    navigation (← → Home End / h l g G) and web moves now apply LOCALLY the instant
    they happen — FEN, last-move highlight, legal-move dots and check state are
