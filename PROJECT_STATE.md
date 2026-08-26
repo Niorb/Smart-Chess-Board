@@ -3,7 +3,27 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — "Analyse on Board" Button for Recent Lichess Matches (2026-08-26)
+## Latest Change — Engine Lines Panel, Always-On Best Arrow, Instant Web Moves (2026-08-26)
+1. **Chess.com-style "Engine Lines" panel (`WebAnalysisBoard.tsx`)**: three clickable
+   PV lines (SAN sequence + eval) rendered right of the board. Clicking a line snaps
+   back from any variation and plays that line's first move as a branch; the engine
+   keeps computing down the followed line only.
+2. **Always-on best-move arrow while branched**: in a variation sandbox the emerald
+   arrow continuously shows `top_lines[0]`; on the mainline it still appears only
+   after inaccuracy/mistake/blunder as before.
+3. **Instant web moves (`main.py`)**: `/api/analysis/move` now runs via
+   `asyncio.to_thread`, so the HTTP response returns immediately and state flows to
+   clients through the WS broadcast — no more ~0.5 s stall per move.
+4. **Async lines compute**: new `coach_engine.get_top_lines()` (MultiPV=3, depth 10,
+   12-ply PVs, SAN conversion, per-position cache) + non-blocking `request_lines()`;
+   results reach the UI via the WS payload `top_lines` (digest-tracked so clients get
+   them the moment Stockfish finishes). New endpoint `/api/analysis/lines`. Depth
+   precompute may take seconds — user preference: quality over speed; UI never blocks.
+5. **Automated Verification**: end-to-end on-device check confirmed lines arrive
+   (~5 s first compute at depth 10, instant thereafter from cache); frontend build
+   clean; 359/359 passing on physical Raspberry Pi; service restarted healthy.
+
+## Previous Change — "Analyse on Board" Button for Recent Lichess Matches (2026-08-26)
 1. **New button (`AnalysisTab.tsx`)**: each card in Recent Lichess Matches now has an
    emerald **Analyse on Board** button next to the violet **Analyse Web** one. It starts
    the Stockfish analysis of that game on the PHYSICAL board (LED move traces,
