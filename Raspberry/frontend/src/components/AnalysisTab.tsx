@@ -66,7 +66,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const setSubMode = (view: SubMode) => setUiView((prev) => ({ ...prev, view }));
   const [gmGamesList, setGmGamesList] = useState<GMGameSummary[]>([]);
   const [selectedGMId, setSelectedGMId] = useState<string>('kasparov_topalov_1999');
-  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
   const [webMoveInput, setWebMoveInput] = useState<string>('');
   const prevOnMainlineRef = useRef<boolean>(true);
