@@ -564,18 +564,18 @@ def test_adversarial_opponent_castling_in_blunder_and_endgame():
     # Blunder puzzle where opponent's reply is Kingside Castling: e8g8
     blunder_castle = {
         "ply_index": 12,
-        "fen_before": "r1bqk2r/pppp1ppp/2n5/4p3/2B1n3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
-        "best_move": "c4f7",
+        "fen_before": "r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 4 4",
+        "best_move": "d2d3",
         "player_color": "white",
-        "player_moves": ["c4f7", "d1e2"],
+        "player_moves": ["d2d3", "c1g5"],
         "opponent_replies": ["e8g8"],
-        "solution_line_san": ["5. Bxf7+", "5... O-O", "6. Qe2"],
+        "solution_line_san": ["4. d3", "4... O-O", "5. Bg5"],
     }
     mgr.analysis_blunders = [blunder_castle]
     mgr.start_blunder_drill(0)
 
-    # 1. Player plays Bxf7 on physical board
-    res1 = mgr.submit_blunder_attempt("c4f7", source="board")
+    # 1. Player plays d2d3 on physical board
+    res1 = mgr.submit_blunder_attempt("d2d3", source="board")
     assert res1["correct"] is True
     assert mgr.analysis_blunder_pending_reply is not None
     assert mgr.analysis_blunder_pending_reply["is_castling"] is True
