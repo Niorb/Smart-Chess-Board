@@ -3,26 +3,28 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Blunder Blitz & Endgame Academy Adversarial Hardening & Reviewer Round 2 Verification (2026-08-27)
-1. **Adversarial Edge Case Fixes & Symmetrical Opponent Castling (`board_state.py`, `test_blunder_endgame_adversarial.py`)**:
+## Latest Change — Blunder Blitz & Endgame Academy Full Adversarial Hardening & Bug Resolution (2026-08-27)
+1. **Adversarial Edge Case Fixes & Symmetrical Opponent Handling (`board_state.py`, `physical_tracker.py`, `AnalysisTab.tsx`, `test_blunder_endgame_adversarial.py`)**:
    - **Opponent Castling Defense Guidance**:
      - Added support for opponent castling (`is_castling`, `rook_from`, `rook_to`) in Blunder Blitz and Endgame Academy.
-     - Queues two-phase King/Rook movement in `PhysicalPieceTracker.set_opponent_move()`, enabling physical LED trace and turn handover on castling replies.
-   - **Strict Solution Concealment in Payloads**:
+     - Queues two-phase King/Rook movement in `PhysicalMoveTracker.set_opponent_move()`, enabling physical LED trace and turn handover on castling replies.
+   - **Strict Solution Concealment in Payloads & UI**:
      - Removed `next_expected_move` leakage from in-progress move attempt responses (`puzzle_complete == False`).
-     - Continuation lines are only revealed upon puzzle completion or explicit user toggle of `💡 Solution`.
-   - **Physical Tracker State Resynchronization**:
+     - Continuation lines and winning explanations are strictly guarded by `showBlunderSolution` and `showEndgameSolution` in `AnalysisTab.tsx` and never revealed automatically on move completion.
+   - **Mid-Air Capture Safety & Physical Tracker State Resynchronization**:
+     - Enhanced `PhysicalMoveTracker` to verify that captured target squares are vacated before confirming opponent captures, preventing false confirmations during mid-air transit.
      - Explicitly reset `move_tracker.reset(self.physical_state)` upon applying opponent moves in `apply_blunder_pending_opponent_move()` and `apply_endgame_pending_opponent_move()`, ensuring physical piece baselines and transients remain 100% in sync.
-     - Routed physical opponent move confirmation in `update_loop` through `PhysicalPieceTracker.process_physical_state()` for robust capture and castling tracking.
-   - **Endgame Out-of-Turn & Pending Reply Lockouts**:
+     - Routed physical opponent move confirmation in `update_loop` through `PhysicalMoveTracker.process_physical_state()` for robust capture and castling tracking.
+   - **Endgame Out-of-Turn & Terminal State Handling**:
      - Added explicit pre-condition lockout in `handle_endgame_move_sync()` when `endgame_pending_reply` is active.
-2. **Exhaustive Adversarial Test Suite Expansion (`test_blunder_endgame_adversarial.py`)**:
-   - Added `test_adversarial_opponent_castling_in_blunder_and_endgame` verifying two-phase opponent castling mechanics.
-   - Added `test_adversarial_strict_solution_concealment_in_progress` ensuring zero payload leaks during multi-ply puzzles.
-   - Added `test_adversarial_endgame_pending_opponent_move_lockout` verifying turn-lock enforcement.
+     - Checkmate direction validation ensures player checkmating opponent awards victory, while opponent checkmating player triggers loss (`won=False`).
+     - `endgame_phase = "complete"` transitions synchronously upon terminal states (checkmate, stalemate, draw).
+     - Flexible SAN/UCI parsing for opponent replies and player moves.
+2. **Exhaustive Adversarial Test Suite (`test_blunder_endgame_adversarial.py`, 430+ lines)**:
+   - 17 comprehensive adversarial test cases covering opponent castling, mid-air capture safety, strict solution concealment, turn lockouts, rapid REST/web submissions, sensor desynchronizations, and checkmate directionality.
 3. **Automated Verification**:
-   - **384 / 384 tests passing (100%)** on physical Raspberry Pi (`ssh pi@pi`).
-   - Frontend built with zero TypeScript errors (`tsc -b && vite build`) in 4.52s.
+   - **388 / 388 tests passing (100%)** on physical Raspberry Pi (`ssh pi@pi`).
+   - Frontend built with zero TypeScript errors (`tsc -b && vite build`) in 4.35s.
    - `smart-chess.service` running healthy, authenticated with Lichess as 'RobiDeli' (Rating: 1527), and Stockfish 17.1 active.
 
 ## Previous Change — Endgame Opponent Replies & Webapp Solution Reveal (2026-08-26)
