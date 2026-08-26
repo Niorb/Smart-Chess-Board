@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Board Orientation & Mirrored-Board Fix (2026-08-26)
+## Latest Change — Live Sideline Engine & Suggestion Arrows (2026-08-26)
+1. **Stockfish stays live in variations**: `get_analysis_payload()` now serves the cached
+   live engine evaluation of the branch position as `current_eval` while in a variation
+   sandbox (requested on every branch move and on step-back within a line), so Top
+   Candidates keep updating off the mainline.
+2. **Suggestion arrows**: after a mainline move classified inaccuracy / mistake / blunder,
+   an emerald arrow on the web board shows the engine's better move (`played_analyses[ply].
+   best_move`). The arrow is clickable — it steps back to the pre-move position, plays the
+   suggestion as a new variation, and Stockfish immediately evaluates the fresh line
+   (Top Candidates + eval bar update live).
+3. **Automated Verification**: 2 new tests (branch eval serving via coach cache;
+   engine re-engagement on branch step-back); 359/359 passing on physical Raspberry Pi.
+
+## Previous Change — Board Orientation & Mirrored-Board Fix (2026-08-26)
 1. **Critical fix — vertically mirrored board (`WebAnalysisBoard.tsx`)**: FEN rows were
    parsed rank 8-first but indexed as rank 1-first, so ALL pieces rendered on the mirrored
    rank (white looked like it was on black's side) and clicking a piece read the wrong
