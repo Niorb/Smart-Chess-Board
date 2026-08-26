@@ -22,6 +22,10 @@ interface WebAnalysisBoardProps {
   lastMoveUci?: string | null;
   /** Classification of the last MAINLINE move (colors the highlight tint). */
   lastMoveClass?: string | null;
+  /** UCI of the engine's suggested better move (drawn as a clickable arrow). */
+  suggestMove?: string | null;
+  /** Invoked when the user clicks the suggestion arrow. */
+  onSuggestionClick?: () => void;
   /** True while the position is off the main game line (variation sandbox). */
   isBranching?: boolean;
   /** Live evaluation for the always-on eval bar. */
@@ -117,11 +121,13 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   lastMoveUci,
   lastMoveClass,
   isBranching,
-  winChance,
-  scoreCp,
-  mate,
-  onMovePlayed,
-  myColor,
+    winChance,
+    scoreCp,
+    mate,
+    onMovePlayed,
+    myColor,
+    suggestMove,
+    onSuggestionClick,
 }) => {
   const grid = useMemo(() => parseFenPlacement(fen), [fen]);
   const whiteToMove = (fen.split(' ')[1] || 'w') === 'w';
@@ -169,6 +175,12 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   }, [themeIdx]);
 
   const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
+
+  // Suggested better-move arrow (shown after inaccuracies/mistakes/blunders)
+  const suggestArrow = useMemo(() => {
+    if (!suggestMove || suggestMove.length < 4) return null;
+    return uciToCoords(suggestMove);
+  }, [suggestMove]);
 
   // Squares the selected piece may travel to
   const targets = useMemo(() => {
@@ -518,6 +530,60 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             );
           })}
           </div>
+
+          {/* Suggested better-move arrow (clickable) */}
+          {suggestArrow && (
+            <svg
+              className="absolute inset-0 z-[7] w-full h-full"
+              viewBox="0 0 8 8"
+              style={{ overflow: 'visible', pointerEvents: 'none' }}
+            >
+              {(() => {
+                const screenCol = (f: number) => (flipped ? 7 - f : f);
+                const screenRow = (r: number) => (flipped ? r : 7 - r);
+                const x1 = screenCol(suggestArrow.from[0]) + 0.5;
+                const y1 = screenRow(suggestArrow.from[1]) + 0.5;
+                const x2 = screenCol(suggestArrow.to[0]) + 0.5;
+                const y2 = screenRow(suggestArrow.to[1]) + 0.5;
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const ux = dx / len;
+                const uy = dy / len;
+                // Shorten the shaft so it starts/ends inside the squares
+                const sx = x1 + ux * 0.3;
+                const sy = y1 + uy * 0.3;
+                const hx = x2 - ux * 0.38;
+                const hy = y2 - uy * 0.38;
+                const px = -uy;
+                const py = ux;
+                const headW = 0.22;
+                return (
+                  <g
+                    style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                    onClick={() => onSuggestionClick?.()}
+                  >
+                    <line
+                      x1={sx} y1={sy} x2={hx} y2={hy}
+                      stroke="rgba(16, 185, 129, 0.85)"
+                      strokeWidth={0.17}
+                      strokeLinecap="round"
+                    />
+                    <polygon
+                      points={`${x2},${y2} ${hx + px * headW},${hy + py * headW} ${hx - px * headW},${hy - py * headW}`}
+                      fill="rgba(16, 185, 129, 0.85)"
+                    />
+                    {/* Fat invisible hit area for easy clicking */}
+                    <line
+                      x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke="transparent"
+                      strokeWidth={0.6}
+                    />
+                  </g>
+                );
+              })()}
+            </svg>
+          )}
 
           {/* Promotion picker */}
           {promotion && (

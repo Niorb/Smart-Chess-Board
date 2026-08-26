@@ -274,13 +274,36 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       prevOnMainlineRef.current = !result.analysis?.is_branching;
       setWebMoveInput('');
       if (result.action === 'branch') {
-        setFeedbackMsg({ text: '⚡ Variation sandbox active — ← / h steps back one move.', type: 'info' });
+        setFeedbackMsg({ text: '⚡ Variation sandbox active — Stockfish is computing candidate moves for this line.', type: 'info' });
         setTimeout(() => setFeedbackMsg(null), 3000);
       }
     } catch (err) {
       console.error('Error playing web analysis move:', err);
     }
   }, [analysis?.active, analysis?.submode]);
+
+  // Suggested better move after a suboptimal mainline move (arrow on board).
+  // Clicking it steps back and plays the engine's suggestion as a variation,
+  // which re-engages Stockfish to evaluate the new line.
+  const lastPlayedInfo = currentPly > 0 ? playedAnalyses[currentPly - 1] : null;
+  const suggestMove = !analysis?.is_branching &&
+    ['inaccuracy', 'mistake', 'blunder'].includes(lastPlayedInfo?.classification ?? '')
+    ? lastPlayedInfo?.best_move ?? null
+    : null;
+
+  const handleSuggestionClick = useCallback(async () => {
+    const info = currentPly > 0 ? playedAnalyses[currentPly - 1] : null;
+    if (!info?.best_move) return;
+    try {
+      await stepAnalysis(currentPly - 1);            // return to the pre-move position
+      prevOnMainlineRef.current = false;
+      await sendAnalysisMove(info.best_move);        // play suggestion -> branch + fresh eval
+      setFeedbackMsg({ text: `Engine suggestion ${info.best_move} played — Stockfish evaluating the new line…`, type: 'info' });
+      setTimeout(() => setFeedbackMsg(null), 3200);
+    } catch (err) {
+      console.error('Error playing suggested move:', err);
+    }
+  }, [currentPly, playedAnalyses]);
 
   const handleResetBranch = async () => {
     try {
@@ -527,6 +550,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     scoreCp={scoreCp}
                     mate={mate}
                     onMovePlayed={handleWebMove}
+                    onSuggestionClick={handleSuggestionClick}
+                    suggestMove={suggestMove}
                     myColor={boardState.my_color === 'black' ? 'black' : 'white'}
                   />
                 );

@@ -988,3 +988,68 @@ def test_analysis_payload_reports_check():
         assert payload["in_check"] is True
 
     asyncio.run(_test())
+
+
+def test_branch_position_serves_live_engine_evaluation(monkeypatch):
+    async def _test():
+        from app.coach_engine import PositionEvaluation
+
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        mgr.step_analysis(2)
+
+        # Diverge into a sandbox; no engine data yet
+        res = mgr.handle_analysis_move("b1c3", source="web")
+        assert res["action"] == "branch"
+        assert mgr.analysis_branch_moves == ["b1c3"]
+
+        # Stockfish caches an evaluation of the branch position -> payload serves it
+        branch_fen = mgr.analysis_active_board.fen()
+        cached = PositionEvaluation(
+            fen=branch_fen, score_cp=40, mate=None, win_chance=57.0,
+            best_move="g1f3", top_moves=[],
+        )
+        monkeypatch.setattr(
+            board_state_module.coach_engine,
+            "get_cached_evaluation",
+            lambda fen: cached if " ".join(fen.split()[:4]) in branch_fen else None,
+        )
+        payload = mgr.get_analysis_payload()
+        assert payload["is_branching"] is True
+        assert payload["current_eval"] is not None
+        assert payload["current_eval"]["best_move"] == "g1f3"
+        assert payload["current_eval"]["score_cp"] == 40
+
+    asyncio.run(_test())
+
+
+def test_branch_step_back_reengages_engine(monkeypatch):
+    async def _test():
+        calls = {"n": 0}
+        real_req = board_state_module.coach_engine.request_analysis
+        monkeypatch.setattr(
+            board_state_module.coach_engine,
+            "request_analysis",
+            lambda board: calls.__setitem__("n", calls["n"] + 1),
+        )
+
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        mgr.step_analysis(2)
+        mgr.handle_analysis_move("f1c4", source="web")
+        mgr.handle_analysis_move("g1f3", source="web")
+
+        # Un-play one move: still branched -> engine re-engaged on the line
+        calls["n"] = 0
+        res = mgr.navigate_analysis("back")
+        assert res["action"] == "branch_back"
+        assert res["on_mainline"] is False
+        assert calls["n"] == 1
+
+        # Un-play the final move: back on mainline, no extra engine dispatch needed
+        calls["n"] = 0
+        res = mgr.navigate_analysis("back")
+        assert res["on_mainline"] is True
+        assert calls["n"] == 0
+
+    asyncio.run(_test())

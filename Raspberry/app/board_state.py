@@ -885,6 +885,9 @@ class BoardStateManager:
                     # Variation fully un-played: back on the main timeline.
                     self.analysis_anchor_ply = None
                     self.analysis_anchor_coord = None
+                else:
+                    # Re-engage Stockfish for the remaining variation position.
+                    coach_engine.request_analysis(self.analysis_active_board)
             else:
                 self.step_analysis(max(0, self.analysis_current_ply - 1))
         elif direction == "forward":
@@ -1587,7 +1590,17 @@ class BoardStateManager:
     def get_analysis_payload(self) -> dict[str, Any]:
         """Constructs serialized payload for Analysis and Training modes."""
         curr_eval = None
-        if 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
+        if self.analysis_branch_moves:
+            # Inside a variation sandbox: serve the LIVE Stockfish evaluation of
+            # the branch position (requested on every branch move) so the engine
+            # keeps suggesting candidates off the mainline.
+            try:
+                branch_eval = coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                if branch_eval is not None:
+                    curr_eval = branch_eval.to_dict()
+            except Exception as e:
+                logger.debug(f"Branch evaluation lookup failed: {e}")
+        elif 0 <= self.analysis_current_ply < len(self.analysis_evaluations):
             curr_eval = self.analysis_evaluations[self.analysis_current_ply]
 
         gm_game = get_gm_game(self.analysis_gm_game_id) if self.analysis_gm_game_id else None
