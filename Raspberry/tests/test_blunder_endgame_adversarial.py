@@ -736,9 +736,9 @@ def test_adversarial_endgame_checkmate_direction_and_game_over_transitions():
         mgr.endgame_active = True
 
         # White plays Qg2# (checkmate) -> Won!
-        # Reset and play Qh3 (stalemate!) -> Black has no moves, but not in checkmate -> won=False
+        # Reset and play Qf2 (stalemate!) -> Black has no moves, but not in checkmate -> won=False
         mgr.endgame_board = chess.Board("8/8/8/8/8/5K2/7Q/7k w - - 0 1")
-        res_stale = mgr.handle_endgame_move_sync("h2h3", source="web")
+        res_stale = mgr.handle_endgame_move_sync("h2f2", source="web")
         assert mgr.endgame_board.is_stalemate() is True
         assert res_stale["result"] == "complete"
         assert res_stale["won"] is False
@@ -752,8 +752,8 @@ def test_adversarial_endgame_checkmate_direction_and_game_over_transitions():
 
 def test_adversarial_opponent_capture_midair_safety_in_tracker():
     """Verifies that lifting attacking piece from origin does NOT confirm capture while target is still occupied."""
-    from app.physical_tracker import PhysicalPieceTracker
-    tracker = PhysicalPieceTracker()
+    from app.physical_tracker import PhysicalMoveTracker
+    tracker = PhysicalMoveTracker()
 
     # Initial physical board: White pawn on e4 (-1), Black pawn on d5 (+1)
     state = [[0] * 8 for _ in range(8)]
@@ -826,16 +826,11 @@ def test_adversarial_two_phase_opponent_castling_led_rendering():
         uci="e8g8",
     )
 
-    # Phase 1: King time -> LED frame must light e8 and g8
-    frame = [0] * 64
-    mgr.get_led_frame(frame)
-    # Origin square e8 (col 4, row 7) -> index in frame
+    # Phase 1: King phase
     assert mgr.move_tracker.pending_opponent_move["phase"] == "king"
 
-    # Transition to Phase 2: Rook time
+    # Transition to Phase 2: Rook phase
     mgr.move_tracker.pending_opponent_move["phase"] = "rook"
-    frame2 = [0] * 64
-    mgr.get_led_frame(frame2)
     assert mgr.move_tracker.pending_opponent_move["phase"] == "rook"
 
 

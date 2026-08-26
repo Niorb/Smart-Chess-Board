@@ -1181,9 +1181,21 @@ class BoardStateManager:
             opp_move_uci = None
             opp_san = None
             if step_idx < len(opponent_replies):
-                opp_move_uci = opponent_replies[step_idx]
-                opp_move_obj = chess.Move.from_uci(opp_move_uci)
-                if self.analysis_active_board and opp_move_obj in self.analysis_active_board.legal_moves:
+                opp_move_raw = opponent_replies[step_idx]
+                opp_move_obj = None
+                if self.analysis_active_board:
+                    try:
+                        opp_move_obj = chess.Move.from_uci(opp_move_raw)
+                        if opp_move_obj not in self.analysis_active_board.legal_moves:
+                            opp_move_obj = self.analysis_active_board.parse_san(opp_move_raw)
+                    except Exception:
+                        try:
+                            opp_move_obj = self.analysis_active_board.parse_san(opp_move_raw)
+                        except Exception:
+                            opp_move_obj = None
+
+                if self.analysis_active_board and opp_move_obj and opp_move_obj in self.analysis_active_board.legal_moves:
+                    opp_move_uci = opp_move_obj.uci()
                     opp_is_cap = self.analysis_active_board.is_capture(opp_move_obj)
                     opp_san = self.analysis_active_board.san(opp_move_obj)
 
