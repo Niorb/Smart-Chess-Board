@@ -69,9 +69,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [guessInput, setGuessInput] = useState<string>('');
   const [webMoveInput, setWebMoveInput] = useState<string>('');
-  const [onMainlineToast, setOnMainlineToast] = useState<boolean>(false);
   const prevOnMainlineRef = useRef<boolean>(true);
-  const toastTimerRef = useRef<number | null>(null);
   const [webBoardOpen, setWebBoardOpen] = useState<boolean>(false);
 
   // Recent Lichess Games State
@@ -232,13 +230,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     if (!analysis?.active || analysis.submode !== 'review') return;
     try {
       const res = await navAnalysis(direction);
-      const onMainline = !!res?.on_mainline;
-      if (onMainline && !prevOnMainlineRef.current) {
-        setOnMainlineToast(true);
-        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = window.setTimeout(() => setOnMainlineToast(false), 2500);
-      }
-      prevOnMainlineRef.current = onMainline;
+      prevOnMainlineRef.current = !!res?.on_mainline;
     } catch (err) {
       console.error('Error navigating analysis:', err);
     }
@@ -510,28 +502,6 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           </button>
         </div>
       </div>
-
-      {/* Feedback Toast Banner */}
-      {feedbackMsg && (
-        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium animate-fadeIn ${
-          feedbackMsg.type === 'success'
-            ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300'
-            : feedbackMsg.type === 'error'
-            ? 'bg-rose-950/80 border-rose-500/40 text-rose-300'
-            : 'bg-violet-950/80 border-violet-500/40 text-violet-300'
-        }`}>
-          <span>{feedbackMsg.text}</span>
-          <button onClick={() => setFeedbackMsg(null)} className="opacity-60 hover:opacity-100">✕</button>
-        </div>
-      )}
-
-      {/* Back-on-Mainline Confirmation Toast */}
-      {onMainlineToast && (
-        <div className="p-3.5 rounded-xl bg-emerald-600/90 border border-emerald-400/60 text-white text-xs font-bold flex items-center gap-2 shadow-lg animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4" />
-          Back on the main game line
-        </div>
-      )}
 
       {/* SUB-VIEW 1: GAME REVIEW ("The Grandmaster's Lens") */}
       {subMode === 'review' && (

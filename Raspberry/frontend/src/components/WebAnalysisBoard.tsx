@@ -734,53 +734,54 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             </div>
           )}
 
-          {/* Engine lines panel (chess.com-style, right of the board) */}
-          <div
-            className="self-stretch w-[190px] shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex flex-col gap-1 overflow-y-auto"
-            data-testid="engine-lines"
-          >
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 pb-1">
-              Engine Lines
-            </div>
-            {(topLines ?? []).length === 0 && (
-              <div className="text-[10px] text-slate-600 px-1 py-2">Computing…</div>
-            )}
-            {(topLines ?? []).map((line, i) => {
-              const evalLabel =
-                line.mate !== null && line.mate !== undefined
-                  ? `M${Math.abs(line.mate)}`
-                  : `${(line.score_cp ?? 0) >= 0 ? '+' : ''}${((line.score_cp ?? 0) / 100).toFixed(1)}`;
-              const isBest = i === 0;
-              return (
-                <button
-                  key={`${line.uci.join('')}-${i}`}
-                  onClick={() => onLineClick?.(i)}
-                  title={`Follow this line (${evalLabel})`}
-                  className={`w-full text-left rounded-lg px-2 py-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                    isBest
-                      ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
-                      : 'bg-slate-900/70 border-slate-700/50 hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      className={`text-[10px] font-mono font-bold ${
-                        isBest ? 'text-emerald-300' : 'text-slate-400'
-                      }`}
-                    >
-                      #{i + 1} {evalLabel}
-                    </span>
-                    <span className="text-[9px] text-slate-600">
-                      {line.san.length ? `${Math.ceil(line.san.length / 2)} moves` : ''}
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-200 truncate">
-                    {line.san.join(' ') || line.uci.join(' ')}
-                  </div>
-                </button>
-              );
-            })}
+        </div>
+
+        {/* Engine lines panel (chess.com-style, right of the board) */}
+        <div
+          className="self-stretch w-[190px] shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex flex-col gap-1 overflow-y-auto"
+          data-testid="engine-lines"
+        >
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 pb-1">
+            Engine Lines
           </div>
+          {(topLines ?? []).length === 0 && (
+            <div className="text-[10px] text-slate-600 px-1 py-2">Computing…</div>
+          )}
+          {(topLines ?? []).map((line, i) => {
+            const evalLabel =
+              line.mate !== null && line.mate !== undefined
+                ? `M${Math.abs(line.mate)}`
+                : `${(line.score_cp ?? 0) >= 0 ? '+' : ''}${((line.score_cp ?? 0) / 100).toFixed(1)}`;
+            const isBest = i === 0;
+            return (
+              <button
+                key={`${line.uci.join('')}-${i}`}
+                onClick={() => onLineClick?.(i)}
+                title={`Follow this line (${evalLabel})`}
+                className={`w-full text-left rounded-lg px-2 py-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  isBest
+                    ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-slate-900/70 border-slate-700/50 hover:bg-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span
+                    className={`text-[10px] font-mono font-bold ${
+                      isBest ? 'text-emerald-300' : 'text-slate-400'
+                    }`}
+                  >
+                    #{i + 1} {evalLabel}
+                  </span>
+                  <span className="text-[9px] text-slate-600">
+                    {line.san.length ? `${Math.ceil(line.san.length / 2)} moves` : ''}
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-200 truncate">
+                  {line.san.join(' ') || line.uci.join(' ')}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
