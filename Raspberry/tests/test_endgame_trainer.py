@@ -59,18 +59,18 @@ def test_progress_manager_operations(tmp_path):
     # 1. Initial state
     drills = mgr.get_all_drills()
     assert len(drills) >= 11
-    assert all(not d["completed"] for d in drills)
+    assert all(d.get("progress") is None for d in drills)
 
     # 2. Record 3-star completion (0 mistakes, par moves)
     drill_id = drills[0]["id"]
     stars = mgr.record_completion(drill_id=drill_id, mistakes=0, moves_count=4, accuracy=100.0)
     assert stars == 3
 
-    drill = mgr.get_drill_by_id(drill_id)
-    assert drill.completed is True
-    assert drill.stars == 3
-    assert drill.best_accuracy == 100.0
-    assert drill.attempts_count == 1
+    prog = mgr.get_progress(drill_id)
+    assert prog is not None
+    assert prog["stars"] == 3
+    assert prog["accuracy"] == 100.0
+    assert prog["attempts"] == 1
 
     # 3. Record 2-star completion on second drill
     drill_id_2 = drills[1]["id"]
@@ -91,9 +91,8 @@ def test_progress_manager_operations(tmp_path):
 
     # 5. Reset progress
     mgr.reset_progress()
-    d1_reset = mgr.get_drill_by_id(drill_id)
-    assert d1_reset.completed is False
-    assert d1_reset.stars == 0
+    prog_reset = mgr.get_progress(drill_id)
+    assert prog_reset is None
 
 
 def test_two_phase_sparse_setup_validation():
@@ -158,7 +157,7 @@ def test_endgame_state_machine_and_moves():
     async def _test():
         mgr = BoardStateManager()
         # King & Pawn vs King: 8/8/8/4k3/8/4P3/8/4K3 w - - 0 1
-        res = await mgr.start_endgame_drill(drill_id="pawn_opposition_basic")
+        res = await mgr.start_endgame_drill(drill_id="pawn_opposition")
         assert res["active"] is True
         assert mgr.analysis_submode == "endgame"
         assert mgr.endgame_phase == "setup_white"

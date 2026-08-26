@@ -26,9 +26,13 @@ ENDGAME_PROGRESS_FILE = os.path.join(
 
 class EndgameCategory(str, Enum):
     PAWN = "pawn"
+    PAWNS = "pawn"
     ROOK = "rook"
+    ROOKS = "rook"
     MINOR = "minor"
+    MINORS = "minor"
     QUEEN = "queen"
+    QUEENS = "queen"
     CUSTOM = "custom"
 
 
@@ -45,6 +49,7 @@ class EndgameDrill:
     key_concepts: list[str]
     hint: str
     max_plies: int = 60
+    target_moves_par: int = 15
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +64,7 @@ class EndgameDrill:
             "key_concepts": self.key_concepts,
             "hint": self.hint,
             "max_plies": self.max_plies,
+            "target_moves_par": self.target_moves_par,
         }
 
 
@@ -220,12 +226,14 @@ CORE_CURRICULUM: list[EndgameDrill] = [
     ),
 ]
 
+CORE_ENDGAME_DRILLS = CORE_CURRICULUM
+
 
 class EndgameProgressManager:
     """Manages persistent drill progress, stars, mistakes, and custom FEN drills."""
 
-    def __init__(self, file_path: str = ENDGAME_PROGRESS_FILE):
-        self.file_path = file_path
+    def __init__(self, file_path: str = ENDGAME_PROGRESS_FILE, storage_path: str | None = None):
+        self.file_path = storage_path or file_path
         self._data: dict[str, Any] = {
             "completed_drills": {},
             "custom_drills": [],
@@ -364,6 +372,10 @@ class EndgameProgressManager:
                     max_plies=custom_dict.get("max_plies", 60),
                 )
         return None
+
+    def get_progress(self, drill_id: str) -> dict[str, Any] | None:
+        """Returns progress stats for a drill or None if not completed."""
+        return self._data.get("completed_drills", {}).get(drill_id)
 
     def reset_progress(self) -> None:
         """Resets all drill completion records."""
