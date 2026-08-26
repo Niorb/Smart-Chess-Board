@@ -3,7 +3,14 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Post-Replay Setup Validation Lighting & Reset Guidance (2026-08-26)
+## Latest Change — Gesture Arming Requires Full Board Reset (`is_setup_ready`) (2026-08-26)
+1. **Gesture Setup-Readiness Prerequisite (`gesture_engine.py`, `board_state.py`)**:
+   - Gestures (e.g. `h2` Replay Menu, `e2` Analysis Gate, `d2` Memory Replay Gate, `a2` Night Mode Toggle) can now ONLY start when the physical board was already fully reset in the standard 32-piece starting position (`is_setup_ready == True`).
+   - When setting up the board piece by piece, placing `h2` (or any other gesture pawn) as the 32nd piece will no longer prematurely arm or light up as a gesture.
+   - Once all 32 pieces are in place, the `BOARD_READY` snap-flash plays, starter pawns glow, and lifting a starter pawn will cleanly start the intended gesture.
+2. **Automated Verification**: Added `test_gestures_not_startable_before_board_reset` in `test_gesture_engine.py`.
+
+## Previous Change — Post-Replay Setup Validation Lighting & Reset Guidance (2026-08-26)
 1. **Post-Replay Board State & Setup Guidance (`board_state.py`)**:
    - When a replay game reaches the end (whether completed with or without mistakes), the `RECALL_COMPLETE` celebration animation plays as expected.
    - Once the celebration animation completes, the board transitions cleanly into setup validation mode (Layer 1): missing starting squares are lit in White (`c_setup_missing`) and misplaced piece squares are lit in Orange (`c_setup_misplaced`).

@@ -2859,7 +2859,9 @@ class BoardStateManager:
                                 completed_gestures: list[str] = []
                                 if hasattr(self, "gesture_engine"):
                                     completed_gestures = self.gesture_engine.evaluate(
-                                        self.physical_state, self.game_status
+                                        self.physical_state,
+                                        self.game_status,
+                                        is_setup_ready=self.setup_result.is_setup_ready,
                                     )
 
                                 # Setup Ready Edge Detection & Animation Triggering

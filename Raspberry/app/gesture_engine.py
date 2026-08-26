@@ -117,7 +117,12 @@ class BaseGesture(ABC):
         return max(0.0, self.timeout - (now - self.start_time))
 
     @abstractmethod
-    def evaluate(self, physical_state: list[list[int]], now: float) -> bool:
+    def evaluate(
+        self,
+        physical_state: list[list[int]],
+        now: float,
+        is_armed: bool = True,
+    ) -> bool:
         """
         Evaluates physical board sensor states.
         Returns True when the gesture successfully completes.
@@ -214,7 +219,12 @@ class CornerGateGesture(BaseGesture):
             COLOR_INT_EMERALD,
         )
 
-    def evaluate(self, physical_state: list[list[int]], now: float) -> bool:
+    def evaluate(
+        self,
+        physical_state: list[list[int]],
+        now: float,
+        is_armed: bool = True,
+    ) -> bool:
         first = self.first_coord
         second = self.second_coord
         prefix = self.log_prefix
@@ -229,6 +239,8 @@ class CornerGateGesture(BaseGesture):
 
         # Step 0: Idle / Armed
         if self.step == 0:
+            if not is_armed:
+                return False
             # Gesture begins when ONLY the first piece is lifted and the second is placed
             if lifted_starting == {first}:
                 self.step = 1
@@ -414,7 +426,12 @@ class RestartPreviousGameGesture(BaseGesture):
         if self.state_manager:
             self.state_manager.trigger_arrival_flash(coord[0], coord[1], duration=0.6)
 
-    def evaluate(self, physical_state: list[list[int]], now: float) -> bool:
+    def evaluate(
+        self,
+        physical_state: list[list[int]],
+        now: float,
+        is_armed: bool = True,
+    ) -> bool:
         lifted_starting, extra_occupied = self._get_board_anomalies(physical_state)
 
         # Center squares bumped with pieces immediately cancels the menu
@@ -429,8 +446,10 @@ class RestartPreviousGameGesture(BaseGesture):
                 self._holdoff = False
             return False
 
-        # Step 0 -> 1: arm the menu when ONLY the h2 pawn is lifted
+        # Step 0 -> 1: arm the menu when ONLY the h2 pawn is lifted AND board was armed
         if not self.is_active:
+            if not is_armed:
+                return False
             if lifted_starting == {self.H2_COORD}:
                 self.step = 1
                 self.start_time = now
@@ -762,6 +781,7 @@ class PhysicalGestureEngine:
     def __init__(self, state_manager: Any = None):
         self.state_manager = state_manager
         self.gestures: list[BaseGesture] = []
+        self._armed_for_gestures: bool = False
         # Register standard gestures
         self.register_gesture(RestartPreviousGameGesture(state_manager=state_manager))
         self.register_gesture(ToggleNightModeGesture(state_manager=state_manager))
@@ -789,10 +809,13 @@ class PhysicalGestureEngine:
         self,
         physical_state: list[list[int]],
         game_status: str,
+        is_setup_ready: bool = False,
         now: float | None = None,
     ) -> list[str]:
         """
-        Evaluates registered gestures. Gestures only operate during IDLE or GAME_OVER.
+        Evaluates registered gestures. Gestures only operate during IDLE or GAME_OVER,
+        and can only start when the board has previously been fully reset into the
+        standard starting configuration (is_setup_ready == True).
         Returns list of completed gesture names.
         """
         if now is None:
@@ -802,11 +825,21 @@ class PhysicalGestureEngine:
             self.reset()
             return []
 
+        # When all 32 pieces are in their starting positions, arm the gesture engine
+        if is_setup_ready:
+            self._armed_for_gestures = True
+
+        can_arm = self._armed_for_gestures
+
         completed: list[str] = []
         for gesture in self.gestures:
-            if gesture.evaluate(physical_state, now):
+            if gesture.evaluate(physical_state, now, is_armed=can_arm):
                 completed.append(gesture.name)
                 gesture.execute_completion()
+                self._armed_for_gestures = False
+
+        if self.is_active:
+            self._armed_for_gestures = False
 
         return completed
 
@@ -837,6 +870,7 @@ class PhysicalGestureEngine:
 
     def reset(self) -> None:
         """Resets all registered gestures."""
+        self._armed_for_gestures = False
         for gesture in self.gestures:
             gesture.reset()
 

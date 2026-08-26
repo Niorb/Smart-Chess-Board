@@ -285,8 +285,12 @@ class TestPhysicalGestureEngine:
         assert len(engine.gestures) >= 1
 
         board = create_starting_board()
+        # Arm the engine with a fully placed starting board
+        engine.evaluate(board, game_status="IDLE", is_setup_ready=True, now=99.0)
+
+        # Lift h2
         board[7][1] = 0
-        engine.evaluate(board, game_status="IDLE", now=100.0)
+        engine.evaluate(board, game_status="IDLE", is_setup_ready=False, now=100.0)
         assert engine.is_active
         assert engine.active_gesture is not None
         assert engine.active_gesture.name == "restart_previous_game"
@@ -294,6 +298,30 @@ class TestPhysicalGestureEngine:
         # Playing game status resets all gestures
         engine.evaluate(board, game_status="PLAYING", now=101.0)
         assert not engine.is_active
+
+    def test_gestures_not_startable_before_board_reset(self):
+        """Verify that when setting up the board (e.g. 31 pieces placed, h2 placed last), gestures do not start prematurely."""
+        mock_mgr = MagicMock()
+        engine = PhysicalGestureEngine(state_manager=mock_mgr)
+
+        # Board being set up: 31 pieces placed, h2 (7, 1) is not placed yet (is_setup_ready=False)
+        board = create_starting_board()
+        board[7][1] = 0
+        engine.evaluate(board, game_status="IDLE", is_setup_ready=False, now=100.0)
+        assert not engine.is_active
+        assert engine.active_gesture is None
+
+        # User places h2 as the 32nd piece (board is now fully reset, is_setup_ready=True)
+        board[7][1] = -1
+        engine.evaluate(board, game_status="IDLE", is_setup_ready=True, now=101.0)
+        assert not engine.is_active
+
+        # NOW that the board was fully reset, lifting h2 starts the gesture as expected
+        board[7][1] = 0
+        engine.evaluate(board, game_status="IDLE", is_setup_ready=False, now=102.0)
+        assert engine.is_active
+        assert engine.active_gesture is not None
+        assert engine.active_gesture.name == "restart_previous_game"
 
     def test_state_payload(self):
         engine = PhysicalGestureEngine()
