@@ -23,9 +23,6 @@ import {
   PlayCircle,
   GraduationCap,
   Star,
-  Award,
-  AlertTriangle,
-  HelpCircle,
   X
 } from 'lucide-react';
 import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
@@ -1855,493 +1852,507 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       )}
 
       {/* SUB-VIEW 4: ENDGAME ACADEMY ("Theoretical Mastery") */}
-      {subMode === 'endgame' && (
-        <div className="space-y-6">
-          {/* Active Endgame Drill View */}
-          {analysis?.active && analysis.submode === 'endgame' && analysis.endgame?.drill ? (
-            <div className="space-y-6">
-              {/* Header Card */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {analysis.endgame.drill.category_title || analysis.endgame.drill.category}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                      Goal: {analysis.endgame.drill.target_goal.toUpperCase()}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                      Playing as {analysis.endgame.drill.player_color.toUpperCase()}
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    {analysis.endgame.drill.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-2xl">
-                    {analysis.endgame.drill.description}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleRequestEndgameHint}
-                    className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
-                  >
-                    <Lightbulb className="w-4 h-4" />
-                    Hint
-                  </button>
-                  <button
-                    onClick={handleStopEndgame}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
-                  >
-                    Exit Drill
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Banner & Guidance based on Phase */}
-              {analysis.endgame.phase === 'setup_white' && (
-                <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/40 border border-amber-500/40 rounded-2xl p-6 shadow-xl space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
-                      <h4 className="text-base font-bold text-amber-200">
-                        Phase 1 of 2: Place White Pieces
-                      </h4>
+      {subMode === 'endgame' && (() => {
+        const eg = analysis?.endgame;
+        return (
+          <div className="space-y-6">
+            {/* Active Endgame Drill View */}
+            {analysis?.active && analysis.submode === 'endgame' && eg?.drill ? (
+              <div className="space-y-6">
+                {/* Header Card */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {eg.drill.category_title || eg.drill.category}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        Goal: {eg.drill.target_goal.toUpperCase()}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        Playing as {eg.drill.player_color.toUpperCase()}
+                      </span>
                     </div>
-                    <span className="text-xs font-mono text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/30">
-                      Target squares illuminated with piece colors
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Place all required White pieces on the board. Each piece type glows in its dedicated color.
-                    When all White pieces are correctly positioned, a gentle ivory wave will confirm and advance to Black piece setup.
-                  </p>
-
-                  {/* Piece Setup Checklist */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    {analysis.endgame.setup_status.missing_white.length > 0 ? (
-                      analysis.endgame.setup_status.missing_white.map(([c, r], idx) => (
-                        <div key={idx} className="p-3 bg-slate-950/80 border border-amber-500/40 rounded-xl flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-300">White Piece</span>
-                          <span className="font-mono text-xs font-bold text-amber-400">{String.fromCharCode(97 + c)}{r + 1}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-full p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        All White pieces in position! Advancing...
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {analysis.endgame.phase === 'setup_black' && (
-                <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-emerald-950/40 border border-emerald-500/40 rounded-2xl p-6 shadow-xl space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-                      <h4 className="text-base font-bold text-emerald-200">
-                        Phase 2 of 2: Place Black Pieces
-                      </h4>
-                    </div>
-                    <span className="text-xs font-mono text-emerald-300 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30">
-                      Keep White pieces in place
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Now place the Black pieces on their illuminated target squares. When all pieces are correctly detected, the board will flash ready and the drill will begin!
-                  </p>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    {analysis.endgame.setup_status.missing_black.length > 0 ? (
-                      analysis.endgame.setup_status.missing_black.map(([c, r], idx) => (
-                        <div key={idx} className="p-3 bg-slate-950/80 border border-emerald-500/40 rounded-xl flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-300">Black Piece</span>
-                          <span className="font-mono text-xs font-bold text-emerald-400">{String.fromCharCode(97 + c)}{r + 1}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-full p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        Board synchronized! Starting drill...
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {analysis.endgame.phase === 'playing' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Gameplay Live Metrics */}
-                  <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-amber-400" />
-                      Drill Progress
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves Played</div>
-                        <div className="text-xl font-bold text-white mt-1">
-                          {analysis.endgame.moves_played} <span className="text-xs text-slate-500">/ {analysis.endgame.drill.target_moves_par} par</span>
-                        </div>
-                      </div>
-                      <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
-                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
-                        <div className="text-xl font-bold text-rose-400 mt-1">
-                          {analysis.endgame.mistakes}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                      <div className="text-xs font-semibold text-slate-300">Defensive Opponent:</div>
-                      <p className="text-xs text-slate-400">
-                        Stockfish 17.1 is playing optimal theoretical resistance. Any winning move is accepted!
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Move History */}
-                  <div className="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-emerald-400" />
-                      Move History
-                    </h4>
-                    <div className="min-h-[100px] max-h-[140px] overflow-y-auto p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap gap-2 items-start content-start">
-                      {analysis.endgame.history.length > 0 ? (
-                        analysis.endgame.history.map((san, idx) => (
-                          <span
-                            key={idx}
-                            className={`px-2.5 py-1 text-xs font-mono rounded-lg border font-bold ${
-                              idx % 2 === 0
-                                ? 'bg-slate-800 text-white border-slate-700'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}
-                          >
-                            {Math.floor(idx / 2) + 1}{idx % 2 === 0 ? '.' : '...'} {san}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-500 italic">Make your first move on the physical board...</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {analysis.endgame.phase === 'complete' && analysis.endgame.complete_summary && (
-                <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/60 border border-emerald-500/50 rounded-2xl p-8 shadow-2xl text-center space-y-6">
-                  <div className="inline-flex p-4 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
-                    <Trophy className="w-10 h-10" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-white">
-                      Theoretical Objective Achieved!
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      {eg.drill.title}
                     </h3>
-                    <p className="text-sm text-slate-300 mt-1">
-                      {analysis.endgame.drill.title} mastered.
+                    <p className="text-xs text-slate-400 max-w-2xl">
+                      {eg.drill.description}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-center gap-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-8 h-8 ${
-                          i < (analysis.endgame.complete_summary?.stars || 0)
-                            ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]'
-                            : 'text-slate-700'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-3 max-w-md mx-auto gap-3">
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <div className="text-[10px] text-slate-400 uppercase font-semibold">Accuracy</div>
-                      <div className="text-lg font-bold text-emerald-400 mt-0.5">
-                        {analysis.endgame.complete_summary.accuracy}%
-                      </div>
-                    </div>
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves</div>
-                      <div className="text-lg font-bold text-white mt-0.5">
-                        {analysis.endgame.complete_summary.moves_count}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                      <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
-                      <div className="text-lg font-bold text-rose-400 mt-0.5">
-                        {analysis.endgame.complete_summary.mistakes}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center gap-3 pt-2">
+                  <div className="flex items-center gap-3">
                     <button
-                      onClick={() => handleStartEndgame(analysis.endgame?.drill?.id)}
-                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg transition-all"
+                      onClick={handleRequestEndgameHint}
+                      className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
                     >
-                      Retry Drill
+                      <Lightbulb className="w-4 h-4" />
+                      Hint
                     </button>
                     <button
                       onClick={handleStopEndgame}
-                      className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all"
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
                     >
-                      Back to Academy
+                      Exit Drill
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* Physical Piece Color Code Legend */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Hardware LED Color Code Legend (Same for White & Black)
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#FFD700] shadow-[0_0_8px_#FFD700]" />
-                    <span className="font-medium text-slate-200">♔ King (Gold)</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#8C28F0] shadow-[0_0_8px_#8C28F0]" />
-                    <span className="font-medium text-slate-200">♕ Queen (Violet)</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#00A0FF] shadow-[0_0_8px_#00A0FF]" />
-                    <span className="font-medium text-slate-200">♖ Rook (Cyan)</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#DC8C00] shadow-[0_0_8px_#DC8C00]" />
-                    <span className="font-medium text-slate-200">♗ Bishop (Amber)</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#00DC8C] shadow-[0_0_8px_#00DC8C]" />
-                    <span className="font-medium text-slate-200">♘ Knight (Mint)</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#DCDCF0] shadow-[0_0_8px_#DCDCF0]" />
-                    <span className="font-medium text-slate-200">♙ Pawn (Pearl)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Curriculum Browser Screen */
-            <div className="space-y-6">
-              {/* Category Filter Bar & Action Header */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {[
-                    { id: 'all', label: 'All Drills' },
-                    { id: 'pawns', label: 'Pawns' },
-                    { id: 'rooks', label: 'Rooks' },
-                    { id: 'minors', label: 'Minor Pieces' },
-                    { id: 'queens', label: 'Queens' },
-                    { id: 'custom', label: 'Custom' },
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setSelectedEndgameCategory(cat.id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                        selectedEndgameCategory === cat.id
-                          ? 'bg-emerald-600 text-white shadow-md'
-                          : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
+                {/* Status Banner & Guidance based on Phase */}
+                {eg.phase === 'setup_white' && (
+                  <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/40 border border-amber-500/40 rounded-2xl p-6 shadow-xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
+                        <h4 className="text-base font-bold text-amber-200">
+                          Phase 1 of 2: Place White Pieces
+                        </h4>
+                      </div>
+                      <span className="text-xs font-mono text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                        Target squares illuminated with piece colors
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Place all required White pieces on the board. Each piece type glows in its dedicated color.
+                      When all White pieces are correctly positioned, a gentle ivory wave will confirm and advance to Black piece setup.
+                    </p>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsCustomModalOpen(true)}
-                    className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    <Layers className="w-4 h-4" />
-                    Custom FEN Drill
-                  </button>
-                  <button
-                    onClick={handleResetEndgameProgress}
-                    className="px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-800 rounded-xl text-xs font-semibold transition-all"
-                    title="Reset Progress"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                    {/* Piece Setup Checklist */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                      {eg.setup_status.missing_white.length > 0 ? (
+                        eg.setup_status.missing_white.map(([c, r], idx) => (
+                          <div key={idx} className="p-3 bg-slate-950/80 border border-amber-500/40 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-medium text-slate-300">White Piece</span>
+                            <span className="font-mono text-xs font-bold text-amber-400">{String.fromCharCode(97 + c)}{r + 1}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          All White pieces in position! Advancing...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-              {/* Drills Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {endgameDrills
-                  .filter((d) => selectedEndgameCategory === 'all' || d.category === selectedEndgameCategory)
-                  .map((drill) => (
-                    <div
-                      key={drill.id}
-                      className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between space-y-4 hover:border-emerald-500/40 transition-all group"
-                    >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            {drill.category_title}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: 3 }).map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`w-3.5 h-3.5 ${
-                                  drill.completed && i < drill.stars
-                                    ? 'text-amber-400 fill-amber-400'
-                                    : 'text-slate-700'
-                                }`}
-                              />
-                            ))}
+                {eg.phase === 'setup_black' && (
+                  <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-emerald-950/40 border border-emerald-500/40 rounded-2xl p-6 shadow-xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+                        <h4 className="text-base font-bold text-emerald-200">
+                          Phase 2 of 2: Place Black Pieces
+                        </h4>
+                      </div>
+                      <span className="text-xs font-mono text-emerald-300 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                        Keep White pieces in place
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Now place the Black pieces on their illuminated target squares. When all pieces are correctly detected, the board will flash ready and the drill will begin!
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                      {eg.setup_status.missing_black.length > 0 ? (
+                        eg.setup_status.missing_black.map(([c, r], idx) => (
+                          <div key={idx} className="p-3 bg-slate-950/80 border border-emerald-500/40 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-medium text-slate-300">Black Piece</span>
+                            <span className="font-mono text-xs font-bold text-emerald-400">{String.fromCharCode(97 + c)}{r + 1}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          Board synchronized! Starting drill...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {eg.phase === 'playing' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Gameplay Live Metrics */}
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Flame className="w-4 h-4 text-amber-400" />
+                        Drill Progress
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves Played</div>
+                          <div className="text-xl font-bold text-white mt-1">
+                            {eg.moves_played} <span className="text-xs text-slate-500">/ {eg.drill.target_moves_par} par</span>
                           </div>
                         </div>
+                        <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
+                          <div className="text-xl font-bold text-rose-400 mt-1">
+                            {eg.mistakes}
+                          </div>
+                        </div>
+                      </div>
 
-                        <h4 className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
-                          {drill.title}
-                        </h4>
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                          {drill.description}
+                      <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                        <div className="text-xs font-semibold text-slate-300">Defensive Opponent:</div>
+                        <p className="text-xs text-slate-400">
+                          Stockfish 17.1 is playing optimal theoretical resistance. Any winning move is accepted!
                         </p>
                       </div>
+                    </div>
 
-                      <div className="space-y-3 pt-3 border-t border-slate-800/80">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
-                          <span>Goal: <strong className="text-white font-semibold">{drill.target_goal.toUpperCase()}</strong></span>
-                          <span>Par: <strong className="text-white font-semibold">{drill.target_moves_par} moves</strong></span>
-                        </div>
-
-                        <button
-                          onClick={() => handleStartEndgame(drill.id)}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
-                        >
-                          <PlayCircle className="w-4 h-4" />
-                          Start Drill on Board
-                        </button>
+                    {/* Move History */}
+                    <div className="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4">
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                        Move History
+                      </h4>
+                      <div className="min-h-[100px] max-h-[140px] overflow-y-auto p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-wrap gap-2 items-start content-start">
+                        {eg.history.length > 0 ? (
+                          eg.history.map((san, idx) => (
+                            <span
+                              key={idx}
+                              className={`px-2.5 py-1 text-xs font-mono rounded-lg border font-bold ${
+                                idx % 2 === 0
+                                  ? 'bg-slate-800 text-white border-slate-700'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              {Math.floor(idx / 2) + 1}{idx % 2 === 0 ? '.' : '...'} {san}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-500 italic">Make your first move on the physical board...</span>
+                        )}
                       </div>
                     </div>
-                  ))}
-              </div>
-
-              {/* Physical Gesture Tip */}
-              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl text-xs text-slate-400 leading-relaxed flex items-center gap-3">
-                <div className="p-2 bg-emerald-600/20 border border-emerald-500/30 rounded-xl text-emerald-400 shrink-0">
-                  <GraduationCap className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="font-bold text-slate-200">Autonomous Board Gesture: </span>
-                  Lift the <span className="font-mono text-emerald-300 font-bold">c2</span> pawn to open the Endgame Academy directly on the physical board. Select category on rank 1 (a1: Pawns, b1: Rooks, c1: Minors, d1: Queens) and replace c2 to confirm!
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Custom FEN Modal */}
-          {isCustomModalOpen && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-emerald-400" />
-                    Create Custom Endgame Drill
-                  </h3>
-                  <button
-                    onClick={() => setIsCustomModalOpen(false)}
-                    className="p-1 text-slate-400 hover:text-white rounded-lg"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleCreateCustomEndgame} className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="block text-slate-300 font-semibold mb-1">Drill Title</label>
-                    <input
-                      type="text"
-                      value={customTitleInput}
-                      onChange={(e) => setCustomTitleInput(e.target.value)}
-                      placeholder="e.g. My Pawn Endgame"
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                    />
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-slate-300 font-semibold mb-1">FEN Position</label>
-                    <input
-                      type="text"
-                      required
-                      value={customFenInput}
-                      onChange={(e) => setCustomFenInput(e.target.value)}
-                      placeholder="8/8/8/4k3/8/8/4P3/4K3 w - - 0 1"
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
+                {eg.phase === 'complete' && eg.complete_summary && (
+                  <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/60 border border-emerald-500/50 rounded-2xl p-8 shadow-2xl text-center space-y-6">
+                    <div className="inline-flex p-4 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
+                      <Trophy className="w-10 h-10" />
+                    </div>
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1">Player Color</label>
-                      <select
-                        value={customColorInput}
-                        onChange={(e) => setCustomColorInput(e.target.value as 'white' | 'black')}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                      >
-                        <option value="white">White</option>
-                        <option value="black">Black</option>
-                      </select>
+                      <h3 className="text-2xl font-black text-white">
+                        Theoretical Objective Achieved!
+                      </h3>
+                      <p className="text-sm text-slate-300 mt-1">
+                        {eg.drill.title} mastered.
+                      </p>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-300 font-semibold mb-1">Target Goal</label>
-                      <select
-                        value={customGoalInput}
-                        onChange={(e) => setCustomGoalInput(e.target.value as 'win' | 'draw' | 'mate')}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    <div className="flex items-center justify-center gap-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-8 h-8 ${
+                            i < (eg.complete_summary?.stars || 0)
+                              ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]'
+                              : 'text-slate-700'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-3 max-w-md mx-auto gap-3">
+                      <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Accuracy</div>
+                        <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                          {eg.complete_summary.accuracy}%
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Moves</div>
+                        <div className="text-lg font-bold text-white mt-0.5">
+                          {eg.complete_summary.moves_count}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Mistakes</div>
+                        <div className="text-lg font-bold text-rose-400 mt-0.5">
+                          {eg.complete_summary.mistakes}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center gap-3 pt-2">
+                      <button
+                        onClick={() => handleStartEndgame(eg.drill?.id)}
+                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg transition-all"
                       >
-                        <option value="win">Win</option>
-                        <option value="draw">Draw</option>
-                        <option value="mate">Checkmate</option>
-                      </select>
+                        Retry Drill
+                      </button>
+                      <button
+                        onClick={handleStopEndgame}
+                        className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all"
+                      >
+                        Back to Academy
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-slate-300 font-semibold mb-1">Description (Optional)</label>
-                    <textarea
-                      rows={2}
-                      value={customDescInput}
-                      onChange={(e) => setCustomDescInput(e.target.value)}
-                      placeholder="Key theoretical ideas or objectives..."
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                    />
+                {/* Physical Piece Color Code Legend */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Hardware LED Color Code Legend (Same for White & Black)
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#FFD700] shadow-[0_0_8px_#FFD700]" />
+                      <span className="font-medium text-slate-200">♔ King (Gold)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#8C28F0] shadow-[0_0_8px_#8C28F0]" />
+                      <span className="font-medium text-slate-200">♕ Queen (Violet)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#00A0FF] shadow-[0_0_8px_#00A0FF]" />
+                      <span className="font-medium text-slate-200">♖ Rook (Cyan)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#DC8C00] shadow-[0_0_8px_#DC8C00]" />
+                      <span className="font-medium text-slate-200">♗ Bishop (Amber)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#00DC8C] shadow-[0_0_8px_#00DC8C]" />
+                      <span className="font-medium text-slate-200">♘ Knight (Mint)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-[#DCDCF0] shadow-[0_0_8px_#DCDCF0]" />
+                      <span className="font-medium text-slate-200">♙ Pawn (Pearl)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Curriculum Browser Screen */
+              <div className="space-y-6">
+                {/* Category Filter Bar & Action Header */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {[
+                      { id: 'all', label: 'All Drills' },
+                      { id: 'pawns', label: 'Pawns' },
+                      { id: 'rooks', label: 'Rooks' },
+                      { id: 'minors', label: 'Minor Pieces' },
+                      { id: 'queens', label: 'Queens' },
+                      { id: 'custom', label: 'Custom' },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedEndgameCategory(cat.id)}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                          selectedEndgameCategory === cat.id
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-2">
+                  <div className="flex items-center gap-2">
                     <button
-                      type="button"
+                      onClick={() => setIsCustomModalOpen(true)}
+                      className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Custom FEN Drill
+                    </button>
+                    <button
+                      onClick={handleResetEndgameProgress}
+                      className="px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-800 rounded-xl text-xs font-semibold transition-all"
+                      title="Reset Progress"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Drills Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {endgameDrills
+                    .filter((d) => selectedEndgameCategory === 'all' || d.category === selectedEndgameCategory)
+                    .map((drill) => (
+                      <div
+                        key={drill.id}
+                        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between space-y-4 hover:border-emerald-500/40 transition-all group"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {drill.category_title}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 3 }).map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`w-3.5 h-3.5 ${
+                                    drill.completed && i < drill.stars
+                                      ? 'text-amber-400 fill-amber-400'
+                                      : 'text-slate-700'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <h4 className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
+                            {drill.title}
+                          </h4>
+                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                            {drill.description}
+                          </p>
+                        </div>
+
+                        <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span>Goal: <strong className="text-white font-semibold">{drill.target_goal.toUpperCase()}</strong></span>
+                            <span>Par: <strong className="text-white font-semibold">{drill.target_moves_par} moves</strong></span>
+                          </div>
+
+                          <button
+                            onClick={() => handleStartEndgame(drill.id)}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
+                          >
+                            <PlayCircle className="w-4 h-4" />
+                            Start Drill on Board
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Physical Gesture Tip */}
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl text-xs text-slate-400 leading-relaxed flex items-center gap-3">
+                  <div className="p-2 bg-emerald-600/20 border border-emerald-500/30 rounded-xl text-emerald-400 shrink-0">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-200">Autonomous Board Gesture: </span>
+                    Lift the <span className="font-mono text-emerald-300 font-bold">c2</span> pawn to open the Endgame Academy directly on the physical board. Select category on rank 1 (a1: Pawns, b1: Rooks, c1: Minors, d1: Queens) and replace c2 to confirm!
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Custom FEN Modal */}
+            {isCustomModalOpen && (
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-emerald-400" />
+                      Create Custom Endgame Drill
+                    </h3>
+                    <button
                       onClick={() => setIsCustomModalOpen(false)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold"
+                      className="p-1 text-slate-400 hover:text-white rounded-lg"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md"
-                    >
-                      Launch Drill
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
-                </form>
+
+                  <form onSubmit={handleCreateCustomEndgame} className="space-y-3.5 text-xs">
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Drill Title</label>
+                      <input
+                        type="text"
+                        value={customTitleInput}
+                        onChange={(e) => setCustomTitleInput(e.target.value)}
+                        placeholder="e.g. My Pawn Endgame"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">FEN Position</label>
+                      <input
+                        type="text"
+                        required
+                        value={customFenInput}
+                        onChange={(e) => setCustomFenInput(e.target.value)}
+                        placeholder="8/8/8/4k3/8/8/4P3/4K3 w - - 0 1"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-300 font-semibold mb-1">Player Color</label>
+                        <select
+                          value={customColorInput}
+                          onChange={(e) => setCustomColorInput(e.target.value as 'white' | 'black')}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="white">White</option>
+                          <option value="black">Black</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-300 font-semibold mb-1">Target Goal</label>
+                        <select
+                          value={customGoalInput}
+                          onChange={(e) => setCustomGoalInput(e.target.value as 'win' | 'draw' | 'mate')}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="win">Win</option>
+                          <option value="draw">Draw</option>
+                          <option value="mate">Checkmate</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Description (Optional)</label>
+                      <textarea
+                        rows={2}
+                        value={customDescInput}
+                        onChange={(e) => setCustomDescInput(e.target.value)}
+                        placeholder="Key theoretical ideas or objectives..."
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Theoretical Hint (Optional)</label>
+                      <input
+                        type="text"
+                        value={customHintInput}
+                        onChange={(e) => setCustomHintInput(e.target.value)}
+                        placeholder="Key hint for the player..."
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomModalOpen(false)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-md"
+                      >
+                        Launch Drill
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
