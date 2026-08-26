@@ -3,7 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Smoother Web Board, Always-On Eval Bar & Color-Coded Moves (2026-08-25)
+## Latest Change — Board Orientation & Mirrored-Board Fix (2026-08-26)
+1. **Critical fix — vertically mirrored board (`WebAnalysisBoard.tsx`)**: FEN rows were
+   parsed rank 8-first but indexed as rank 1-first, so ALL pieces rendered on the mirrored
+   rank (white looked like it was on black's side) and clicking a piece read the wrong
+   cell — selection and legal-move dots could never match what was on screen. This was the
+   root cause of "cannot play moves by clicking" and the black-side appearance.
+2. **Orientation**: board auto-orients to the user's game color (`my_color`) with a manual
+   **White ▲ / Black ▼** flip toggle in the header; piece-slide animation deltas account
+   for orientation.
+3. **Eval bar orientation**: white's share now grows from the player's side of the board,
+   keeping quality indications consistent with the viewed orientation.
+4. **Automated Verification**: frontend build clean; 357/357 passing on physical Raspberry Pi.
+
+## Previous Change — Smoother Web Board, Always-On Eval Bar & Color-Coded Moves (2026-08-25)
 1. **Click-to-move fixed**: first click on a piece selected AND instantly deselected it
    (pointerup treated every quick release as a toggle). Selection now persists on the first
    click; only a second click on the same piece deselects — click-piece-then-square works.
