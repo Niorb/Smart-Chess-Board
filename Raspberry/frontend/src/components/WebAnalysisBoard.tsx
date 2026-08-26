@@ -795,7 +795,10 @@ const MovingPiece: React.FC<{
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [from, to, flipped, glyph]);
+    // Primitive deps only: array props get new identities on every parent
+    // render, which would replay the slide forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from[0], from[1], to[0], to[1], flipped, glyph]);
 
   return (
     <img
