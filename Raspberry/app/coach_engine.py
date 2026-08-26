@@ -375,10 +375,10 @@ class CoachEngine:
             return []
 
         multipv = min(num_lines, len(legal))
-        # Time-bounded (not depth): MultiPV x3 is heavy on the Pi's CPU, a wall
-        # clock cap keeps first-render latency well under a second.
+        # Depth-bounded for line quality; the compute is async and cached so
+        # UI latency stays unaffected (results stream via WS broadcast).
         infos = await self._analyse_with_recovery(
-            board, chess.engine.Limit(time=0.35), multipv
+            board, chess.engine.Limit(depth=depth), multipv
         )
         if not isinstance(infos, list):
             infos = [infos]
