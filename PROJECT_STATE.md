@@ -3,7 +3,26 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Eval Bar Tracks Variations (2026-08-26)
+## Latest Change — "Analyse on Board" Button for Recent Lichess Matches (2026-08-26)
+1. **New button (`AnalysisTab.tsx`)**: each card in Recent Lichess Matches now has an
+   emerald **Analyse on Board** button next to the violet **Analyse Web** one. It starts
+   the Stockfish analysis of that game on the PHYSICAL board (LED move traces,
+   piece-by-piece stepping) by calling `/api/analysis/start` with `moves_uci` and no
+   `web_only` flag, closing the web board and showing a loading/success toast.
+2. **Automated Verification**: frontend build clean; 359/359 passing on physical
+   Raspberry Pi; service restarted healthy.
+
+## Previous Change — Smoother Piece Movement Animations (2026-08-26)
+1. **Web board animation upgrades (`WebAnalysisBoard.tsx`)**:
+   - Distance-aware glide duration (150 ms base + 26 ms per square, capped 280 ms)
+     with snappier easing, replacing the fixed 140 ms slide.
+   - Knights get a gentle hop (lift ~22% mid-flight via Web Animations API).
+   - Captured pieces fade/shrink out (~180 ms) instead of vanishing; en passant
+     handled via a previous-placement-grid diff.
+   - Castling rook glides alongside the king instead of teleporting.
+2. **Automated Verification**: frontend build clean; 359/359 passing on Pi.
+
+## Older — Eval Bar Tracks Variations (2026-08-26)
 1. **Fix**: while in a variation sandbox the eval bar read `evaluations[current_ply]` (the
    stale mainline evaluation at the anchor ply) before falling back to `current_eval`, so it
    never reflected sideline positions. It now prefers the live branch evaluation from
