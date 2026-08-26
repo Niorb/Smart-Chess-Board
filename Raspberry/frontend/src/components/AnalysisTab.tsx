@@ -1616,8 +1616,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                         </div>
                       )}
 
-                      {/* Full Grandmaster Solution Line ONLY if Solved or Requested */}
-                      {(showBlunderSolution || puzzleResult?.puzzle_complete) && (
+                      {/* Full Grandmaster Solution Line ONLY if User Clicks Solution */}
+                      {showBlunderSolution && (
                         <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5">
                           <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />

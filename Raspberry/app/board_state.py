@@ -3485,17 +3485,31 @@ class BoardStateManager:
                                                 self._spawn_task(self._calculate_and_apply_endgame_engine_reply())
                                     elif self.endgame_phase == "playing":
                                         if self.endgame_board:
-                                            adapter = AnalysisEngineAdapter(self.endgame_board)
-                                            move_result = self.move_tracker.process_physical_state(
-                                                self.physical_state, adapter
-                                            )
-                                            if move_result:
-                                                from_f, from_r, to_f, to_r, promo = move_result
-                                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                                uci = f"{from_sq}{to_sq}{promo or ''}"
-                                                logger.info(f"Physical endgame move detected: {uci}")
-                                                self.handle_endgame_move_sync(uci, source="board")
+                                            # Check if active pending opponent reply was physically placed
+                                            if getattr(self, "endgame_pending_reply", None):
+                                                opp_rep = self.endgame_pending_reply
+                                                o_from = opp_rep["from"]
+                                                o_to = opp_rep["to"]
+                                                if (
+                                                    self.physical_state[o_from[0]][o_from[1]] == 0
+                                                    and self.physical_state[o_to[0]][o_to[1]] != 0
+                                                ):
+                                                    logger.info(
+                                                        f"Physical board confirmed endgame opponent reply: {opp_rep['uci']}"
+                                                    )
+                                                    self.apply_endgame_pending_opponent_move()
+                                            else:
+                                                adapter = AnalysisEngineAdapter(self.endgame_board)
+                                                move_result = self.move_tracker.process_physical_state(
+                                                    self.physical_state, adapter
+                                                )
+                                                if move_result:
+                                                    from_f, from_r, to_f, to_r, promo = move_result
+                                                    from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                                    to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                                    uci = f"{from_sq}{to_sq}{promo or ''}"
+                                                    logger.info(f"Physical endgame move detected: {uci}")
+                                                    self.handle_endgame_move_sync(uci, source="board")
                                     elif self.endgame_phase == "complete":
                                         setup_res = self.setup_validator.validate(self.physical_state)
                                         if setup_res.is_setup_ready:
