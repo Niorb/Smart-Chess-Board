@@ -1039,8 +1039,8 @@ def test_branch_step_back_reengages_engine(monkeypatch):
         mgr = BoardStateManager()
         await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
         mgr.step_analysis(2)
-        mgr.handle_analysis_move("f1c4", source="web")
-        mgr.handle_analysis_move("g1f3", source="web")
+        mgr.handle_analysis_move("f1c4", source="web")   # white alternative
+        mgr.handle_analysis_move("g8f6", source="web")   # black alternative
 
         # Un-play one move: still branched -> engine re-engaged on the line
         calls["n"] = 0
