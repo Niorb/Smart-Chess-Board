@@ -316,6 +316,17 @@ export async function resetAnalysisBranch() {
   return jsonPost('/analysis/branch_reset');
 }
 
+export interface EngineLine {
+  uci: string[];
+  san: string[];
+  score_cp: number | null;
+  mate: number | null;
+}
+
+export async function getEngineLines(fen?: string, numLines = 3) {
+  return jsonPost<{ lines: EngineLine[] }>('/analysis/lines', { fen: fen ?? null, num_lines: numLines });
+}
+
 export async function stopAnalysis() {
   return jsonPost('/analysis/stop');
 }

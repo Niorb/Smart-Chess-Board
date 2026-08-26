@@ -12,6 +12,13 @@ import bB from '../assets/pieces/bB.svg';
 import bN from '../assets/pieces/bN.svg';
 import bP from '../assets/pieces/bP.svg';
 
+interface EngineLineProp {
+  uci: string[];
+  san: string[];
+  score_cp: number | null;
+  mate: number | null;
+}
+
 interface WebAnalysisBoardProps {
   fen: string;
   /** Legal moves for the current position (UCI), provided by the backend. */
@@ -36,6 +43,10 @@ interface WebAnalysisBoardProps {
   onMovePlayed: (uci: string) => void;
   /** Color the user played in the analyzed game — board auto-orients to it. */
   myColor?: 'white' | 'black' | null;
+  /** Top engine PV lines for the position (chess.com-style panel). */
+  topLines?: EngineLineProp[] | null;
+  /** Invoked with a line index when a user clicks an engine line to follow it. */
+  onLineClick?: (lineIndex: number) => void;
 }
 
 const PIECE_IMAGES: Record<string, string> = {
@@ -157,6 +168,8 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     myColor,
     suggestMove,
     onSuggestionClick,
+    topLines,
+    onLineClick,
 }) => {
   const grid = useMemo(() => parseFenPlacement(fen), [fen]);
   const whiteToMove = (fen.split(' ')[1] || 'w') === 'w';
@@ -231,11 +244,17 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     return { from: rFrom, to: rTo, glyph };
   }, [lastHighlight, lastMoveUci, grid]);
 
-  // Suggested better-move arrow (shown after inaccuracies/mistakes/blunders)
+  // Suggested better-move arrow. On the mainline it appears after
+  // inaccuracies/mistakes/blunders; inside a variation sandbox it shows the
+  // engine's best move for the CURRENT position at all times.
   const suggestArrow = useMemo(() => {
+    if (isBranching) {
+      const best = topLines?.[0]?.uci?.[0];
+      if (best && best.length >= 4) return uciToCoords(best);
+    }
     if (!suggestMove || suggestMove.length < 4) return null;
     return uciToCoords(suggestMove);
-  }, [suggestMove]);
+  }, [isBranching, topLines, suggestMove]);
 
   // Squares the selected piece may travel to
   const targets = useMemo(() => {
@@ -439,8 +458,8 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         </div>
       </div>
 
-      {/* Eval bar + board */}
-      <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: '545px' }}>
+      {/* Eval bar + board + engine lines panel */}
+      <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: '860px' }}>
         {/* Always-on evaluation bar (oriented with the board) */}
         <div className="relative self-stretch w-5 rounded-full overflow-hidden bg-slate-800 ring-1 ring-slate-700 shadow-inner">
           <div
@@ -714,6 +733,54 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
               </div>
             </div>
           )}
+
+          {/* Engine lines panel (chess.com-style, right of the board) */}
+          <div
+            className="self-stretch w-[190px] shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex flex-col gap-1 overflow-y-auto"
+            data-testid="engine-lines"
+          >
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 pb-1">
+              Engine Lines
+            </div>
+            {(topLines ?? []).length === 0 && (
+              <div className="text-[10px] text-slate-600 px-1 py-2">Computing…</div>
+            )}
+            {(topLines ?? []).map((line, i) => {
+              const evalLabel =
+                line.mate !== null && line.mate !== undefined
+                  ? `M${Math.abs(line.mate)}`
+                  : `${(line.score_cp ?? 0) >= 0 ? '+' : ''}${((line.score_cp ?? 0) / 100).toFixed(1)}`;
+              const isBest = i === 0;
+              return (
+                <button
+                  key={`${line.uci.join('')}-${i}`}
+                  onClick={() => onLineClick?.(i)}
+                  title={`Follow this line (${evalLabel})`}
+                  className={`w-full text-left rounded-lg px-2 py-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                    isBest
+                      ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
+                      : 'bg-slate-900/70 border-slate-700/50 hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className={`text-[10px] font-mono font-bold ${
+                        isBest ? 'text-emerald-300' : 'text-slate-400'
+                      }`}
+                    >
+                      #{i + 1} {evalLabel}
+                    </span>
+                    <span className="text-[9px] text-slate-600">
+                      {line.san.length ? `${Math.ceil(line.san.length / 2)} moves` : ''}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-200 truncate">
+                    {line.san.join(' ') || line.uci.join(' ')}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

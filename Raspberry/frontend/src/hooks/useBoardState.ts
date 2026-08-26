@@ -160,6 +160,12 @@ interface AnalysisState {
   fen: string;
   legal_moves?: string[];
   in_check?: boolean;
+  top_lines?: Array<{
+    uci: string[];
+    san: string[];
+    score_cp: number | null;
+    mate: number | null;
+  }> | null;
 }
 
 interface GestureItem {

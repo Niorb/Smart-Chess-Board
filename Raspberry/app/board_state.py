@@ -840,7 +840,11 @@ class BoardStateManager:
                 logger.warning(f"Error stepping move at ply {idx}: {e}")
                 break
 
-        return self.get_analysis_payload()
+            # Keep the engine lines panel warm for the freshly reached position
+            # (async, non-blocking; cached results are served instantly).
+            coach_engine.request_lines(self.analysis_active_board)
+
+            return self.get_analysis_payload()
 
     def reset_analysis_branch(self) -> dict[str, Any]:
         """Snaps back to original game timeline from a virtual branch."""
@@ -888,6 +892,7 @@ class BoardStateManager:
                 else:
                     # Re-engage Stockfish for the remaining variation position.
                     coach_engine.request_analysis(self.analysis_active_board)
+                    coach_engine.request_lines(self.analysis_active_board)
             else:
                 self.step_analysis(max(0, self.analysis_current_ply - 1))
         elif direction == "forward":
@@ -1468,6 +1473,7 @@ class BoardStateManager:
                     self.move_tracker.clear_in_flight_move()
                 self._last_restoration_sig = None
                 coach_engine.request_analysis(self.analysis_active_board)
+                coach_engine.request_lines(self.analysis_active_board)
                 if not web and len(uci) >= 4:
                     to_c = ord(uci[2]) - ord('a')
                     to_r = int(uci[3]) - 1
@@ -1605,6 +1611,10 @@ class BoardStateManager:
 
         gm_game = get_gm_game(self.analysis_gm_game_id) if self.analysis_gm_game_id else None
 
+        # Top-3 engine lines for the active position (cached; computed async in
+        # the background so the UI never blocks on Stockfish).
+        top_lines = coach_engine.get_cached_lines(self.analysis_active_board.fen())
+
         return {
             "active": self.game_status == "ANALYSIS",
             "submode": self.analysis_submode,
@@ -1643,6 +1653,7 @@ class BoardStateManager:
             # Web-board interaction data (drag & drop legality, check indicator)
             "legal_moves": [m.uci() for m in self.analysis_active_board.legal_moves],
             "in_check": self.analysis_active_board.is_check(),
+            "top_lines": top_lines,
         }
 
     def _build_coach_payload(self) -> dict[str, Any]:
@@ -2624,6 +2635,8 @@ class BoardStateManager:
             self.analysis_is_loading if self.game_status == "ANALYSIS" else False,
             len(self.analysis_branch_moves),
             self.analysis_submode if self.game_status == "ANALYSIS" else "",
+            self.analysis_active_board.fen() if self.game_status == "ANALYSIS" else "",
+            id(coach_engine.get_cached_lines(self.analysis_active_board.fen())) if self.game_status == "ANALYSIS" else 0,
             opp_gone.get("gone", False),
             opp_gone.get("claim_win_in", 0),
             None if eval_res is None else (eval_res.score_cp, eval_res.mate, eval_res.win_chance),

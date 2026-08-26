@@ -244,7 +244,9 @@ class CoachEngine:
         self._analysis_task: asyncio.Task | None = None
         self._engine_lock: asyncio.Lock | None = None
         self._cache: dict[str, PositionEvaluation] = {}
+        self._lines_cache: dict[str, list[dict[str, Any]]] = {}
         self._max_cache_entries: int = 128
+        self._lines_task: asyncio.Task | None = None
         self._is_running: bool = False
         self._last_unavail_log: float = 0.0
 
@@ -314,6 +316,111 @@ class CoachEngine:
         """Returns cached position evaluation for the given FEN if present."""
         clean_fen = " ".join(fen.split()[:4])
         return self._cache.get(clean_fen)
+
+    def get_cached_lines(self, fen: str) -> list[dict[str, Any]] | None:
+        """Returns cached PV lines for the given FEN if present."""
+        clean_fen = " ".join(fen.split()[:4])
+        return self._lines_cache.get(clean_fen)
+
+    def request_lines(self, board: chess.Board) -> None:
+        """Dispatches a non-blocking async computation of the top PV lines.
+
+        Never cancels an in-flight lines job (same policy as request_analysis):
+        jobs are skipped while one is running; results land in _lines_cache and
+        reach clients via the next broadcast.
+        """
+        clean_fen = " ".join(board.fen().split()[:4])
+        if clean_fen in self._lines_cache:
+            return
+        task = self._lines_task
+        if task is not None and not task.done():
+            return
+        try:
+            lines_task = asyncio.create_task(self.get_top_lines(board.fen()))
+        except RuntimeError:
+            return
+        self._lines_task = lines_task
+
+        def _done(t: asyncio.Task):
+            if not t.cancelled() and t.exception() is not None:
+                logger.debug(f"PV lines computation failed: {t.exception()}")
+
+        lines_task.add_done_callback(_done)
+
+    async def get_top_lines(
+        self,
+        fen: str,
+        num_lines: int = 3,
+        depth: int = 10,
+        max_plies: int = 12,
+    ) -> list[dict[str, Any]]:
+        """Computes the top-N principal variations for a position with Stockfish.
+
+        Returns [{uci: [move_uci...], san: [move_san...], score_cp, mate}] sorted
+        best-first from the side-to-move's perspective (score_cp positive = good
+        for the side to move). Cached per position.
+        """
+        clean_fen = " ".join(fen.split()[:4])
+        cached = self._lines_cache.get(clean_fen)
+        if cached is not None:
+            return cached
+
+        try:
+            board = chess.Board(fen)
+        except Exception:
+            return []
+
+        legal = list(board.legal_moves)
+        if not legal:
+            return []
+
+        multipv = min(num_lines, len(legal))
+        infos = await self._analyse_with_recovery(
+            board, chess.engine.Limit(depth=depth), multipv
+        )
+        if not isinstance(infos, list):
+            infos = [infos]
+
+        lines: list[dict[str, Any]] = []
+        for info in infos[:num_lines]:
+            pv = info.get("pv", [])
+            if not pv:
+                continue
+            pv = pv[:max_plies]
+            uci_list = [m.uci() for m in pv]
+            san_board = board.copy(stack=False)
+            san_list: list[str] = []
+            for m in pv:
+                if m not in san_board.legal_moves:
+                    break
+                san_list.append(san_board.san(m))
+                san_board.push(m)
+
+            score_pov = info.get("score")
+            score_cp: int | None = None
+            mate: int | None = None
+            if score_pov is not None:
+                pov_score = score_pov.pov(board.turn)
+                cp_raw = pov_score.score()
+                mate = pov_score.mate()
+                # Mate scores map to huge centipawn values so lines sort sensibly
+                if cp_raw is not None:
+                    score_cp = cp_raw
+                else:
+                    sign = -1 if (mate or 0) < 0 else 1
+                    score_cp = sign * (10000 + abs(mate or 0) * 100)
+            lines.append({
+                "uci": uci_list,
+                "san": san_list,
+                "score_cp": score_cp,
+                "mate": mate,
+            })
+
+        if len(self._lines_cache) >= self._max_cache_entries:
+            oldest_key = next(iter(self._lines_cache))
+            del self._lines_cache[oldest_key]
+        self._lines_cache[clean_fen] = lines
+        return lines
 
     def request_analysis(self, board: chess.Board):
         """Dispatches non-blocking async evaluation for the board position.

@@ -771,9 +771,37 @@ async def toggle_blunder_hint_route():
 
 @app.post("/api/analysis/move")
 async def analysis_move_route(body: AnalysisMoveRequest):
-    """Executes a web move in Analysis mode (passive board): auto-advances on game moves or branches on alternatives."""
-    res = state_manager.handle_analysis_move(body.uci, source="web")
+    """Executes a web move in Analysis mode (passive board).
+
+    Runs in a worker thread so the event loop is never blocked and the HTTP
+    response returns instantly; state changes propagate to clients via the
+    WebSocket broadcast instead of waiting on this request.
+    """
+    res = await asyncio.to_thread(state_manager.handle_analysis_move, body.uci, "web")
     return {"status": "success", "result": res}
+
+
+class AnalysisLinesRequest(BaseModel):
+    fen: str | None = None
+    num_lines: int = 3
+
+
+@app.post("/api/analysis/lines")
+async def analysis_lines_route(body: AnalysisLinesRequest | None = None):
+    """Returns the top engine lines (PVs) for the current or given position."""
+    if body and body.fen:
+        lines = await coach_engine.get_top_lines(body.fen, num_lines=body.num_lines)
+    else:
+        sm = state_manager
+        if sm.game_status != "ANALYSIS":
+            return {"lines": []}
+        # Serve cached lines immediately; kick off background compute otherwise.
+        cached = coach_engine.get_cached_lines(sm.analysis_active_board.fen())
+        if cached is not None:
+            return {"lines": cached}
+        coach_engine.request_lines(sm.analysis_active_board)
+        return {"lines": []}
+    return {"lines": lines}
 
 
 # --- WebSocket Stream ---

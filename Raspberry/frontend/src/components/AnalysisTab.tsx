@@ -333,6 +333,26 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     }
   };
 
+  // Follow an engine line: step back to the current position's start, then play
+  // the line's first move as a variation (the engine keeps computing down it).
+  const handleLineClick = useCallback(async (lineIndex: number) => {
+    if (!analysis?.active || analysis.submode !== 'review') return;
+    const line = analysis.top_lines?.[lineIndex];
+    const firstMove = line?.uci?.[0];
+    if (!firstMove || firstMove.length < 4) return;
+    try {
+      // If we're mid-variation, snap back to the mainline anchor first so the
+      // clicked line is played from the position it was computed for.
+      if (analysis.is_branching) {
+        await resetAnalysisBranch();
+      }
+      prevOnMainlineRef.current = false;
+      await sendAnalysisMove(firstMove);
+    } catch (err) {
+      console.error('Error following engine line:', err);
+    }
+  }, [analysis?.active, analysis?.submode, analysis?.is_branching, analysis?.top_lines]);
+
   const handleStartGM = async (gameId: string) => {
     setSelectedGMId(gameId);
     setFeedbackMsg({ text: 'Loading Grandmaster masterpiece...', type: 'info' });
@@ -578,6 +598,8 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     onSuggestionClick={handleSuggestionClick}
                     suggestMove={suggestMove}
                     myColor={boardState.my_color === 'black' ? 'black' : 'white'}
+                    topLines={analysis?.top_lines ?? null}
+                    onLineClick={handleLineClick}
                   />
                 );
               })()
