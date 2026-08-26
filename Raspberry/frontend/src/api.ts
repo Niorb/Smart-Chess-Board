@@ -372,6 +372,10 @@ export async function toggleBlunderHint() {
   return jsonPost<{ active: boolean }>('/analysis/blunder_drill/hint');
 }
 
+export async function applyBlunderOpponentMove() {
+  return jsonPost('/analysis/blunder_drill/apply_opponent_move');
+}
+
 export async function resolvePromotion(piece: 'q' | 'n' | 'r' | 'b' = 'q') {
   return jsonPost<{ status: string; piece: string }>('/game/promote', { piece });
 }

@@ -399,7 +399,69 @@ def test_websocket_initial_snapshot_on_connect():
         assert "diagnostics" in data
 
 
+def test_blunder_api_routes():
+    """Verify Blunder Blitz REST API endpoints."""
+    client = TestClient(app)
+
+    # 1. Start blunder drill
+    resp_start = client.post("/api/analysis/blunder_drill/start", json={"index": 0})
+    assert resp_start.status_code == 200
+
+    # 2. Toggle hint
+    resp_hint = client.post("/api/analysis/blunder_drill/hint")
+    assert resp_hint.status_code == 200
+    assert "hint_active" in resp_hint.json()
+
+    # 3. Attempt move
+    resp_attempt = client.post("/api/analysis/blunder_drill/attempt", json={"uci": "e2e4"})
+    assert resp_attempt.status_code == 200
+    assert "correct" in resp_attempt.json()
+
+    # 4. Apply opponent move
+    resp_apply = client.post("/api/analysis/blunder_drill/apply_opponent_move")
+    assert resp_apply.status_code == 200
 
 
+def test_endgame_api_routes():
+    """Verify Endgame Academy REST API endpoints."""
+    client = TestClient(app)
 
+    # 1. Get all drills
+    resp_drills = client.get("/api/endgame/drills")
+    assert resp_drills.status_code == 200
+    drills = resp_drills.json()
+    assert isinstance(drills, list)
+    assert len(drills) >= 11
 
+    # 2. Start drill
+    resp_start = client.post("/api/endgame/start", json={"drill_id": "pawn_opposition"})
+    assert resp_start.status_code == 200
+
+    # 3. Request hint
+    resp_hint = client.post("/api/endgame/hint")
+    assert resp_hint.status_code == 200
+
+    # 4. Apply opponent move
+    resp_apply = client.post("/api/endgame/apply_opponent_move")
+    assert resp_apply.status_code == 200
+
+    # 5. Create custom drill
+    custom_payload = {
+        "title": "Custom Pawn Drill",
+        "fen": "8/8/8/4k3/8/4P3/8/4K3 w - - 0 1",
+        "player_color": "white",
+        "target_goal": "win",
+        "difficulty": 2,
+    }
+    resp_custom = client.post("/api/endgame/custom", json=custom_payload)
+    assert resp_custom.status_code == 200
+
+    # 6. Stop drill
+    resp_stop = client.post("/api/endgame/stop")
+    assert resp_stop.status_code == 200
+    assert resp_stop.json()["status"] == "IDLE"
+
+    # 7. Reset progress
+    resp_reset = client.post("/api/endgame/reset-progress")
+    assert resp_reset.status_code == 200
+    assert resp_reset.json()["status"] == "success"

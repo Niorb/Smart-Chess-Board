@@ -770,6 +770,12 @@ async def toggle_blunder_hint_route():
     return {"hint_active": state_manager.toggle_blunder_hint()}
 
 
+@app.post("/api/analysis/blunder_drill/apply_opponent_move")
+async def apply_blunder_opponent_move_route():
+    """Applies the active pending opponent reply on the blunder drill board."""
+    return state_manager.apply_blunder_pending_opponent_move()
+
+
 @app.post("/api/analysis/move")
 async def analysis_move_route(body: AnalysisMoveRequest):
     """Executes a web move in Analysis mode (passive board).

@@ -3,7 +3,25 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Endgame Opponent Replies & Webapp Solution Reveal (2026-08-26)
+## Latest Change — Blunder Blitz & Endgame Academy Behavioral Specifications & Adversarial Suite (2026-08-27)
+1. **Behavioral Specifications & Symmetrical Opponent Move Flows (`board_state.py`, `main.py`, `api.ts`)**:
+   - **Tactical Puzzles (Blunder Blitz)**:
+     - Multi-ply sequence tracking with strict separation of player moves and opponent defensive replies.
+     - Web UI: Opponent reply executes automatically on the active board with arrival animations and history updates.
+     - Physical Board: Opponent reply queues in `move_tracker.set_opponent_move()` with Solar Orange origin (`COLOR_INT_OPPONENT_FROM`), Cyan Azure target (`COLOR_INT_OPPONENT_TO`), and animated comet trace. Physical piece movement confirms opponent move and transfers turn back to player.
+     - Added `apply_blunder_pending_opponent_move()` helper and `POST /api/analysis/blunder_drill/apply_opponent_move` endpoint for 1-click web application.
+   - **Endgame Academy (Tablebase Trainer)**:
+     - Turn-enforced state machine rejecting out-of-turn moves and rapid input spam during Stockfish evaluation.
+     - Comprehensive draw detection supporting stalemate, insufficient material, 50-move rule, threefold repetition, and `can_claim_draw()`.
+     - Two-phase sparse setup validation (`setup_white` -> `setup_black` -> `playing` with `BOARD_READY` snap-flash).
+   - **Strict Solution Concealment**:
+     - Solution lines and grandmaster continuation sequences are completely hidden on both web and board until user explicitly clicks `💡 Solution`.
+2. **Comprehensive Adversarial Test Suite (`test_blunder_endgame_adversarial.py`, `test_api_routes.py`)**:
+   - Added exhaustive adversarial test coverage covering illegal moves, malformed inputs, move exhaustion, completed puzzle boundaries, sparse sensor matrix desyncs, polarity mismatches, rapid concurrent requests, and board reset gates.
+3. **Automated Verification**:
+   - Full test suite execution on Raspberry Pi (`ssh pi@pi`).
+
+## Previous Change — Endgame Opponent Replies & Webapp Solution Reveal (2026-08-26)
 1. **Opponent Turn Guidance & Auto-Execution (`board_state.py`, `physical_tracker.py`)**:
    - In Endgame Academy drills (e.g. Lucena Position), when the player makes their move as White, Stockfish computes the optimal defensive move for Black.
    - For web play (`source == "web"`), Black's defensive response is automatically executed on the active board with arrival animations and history updates.
