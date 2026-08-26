@@ -3,7 +3,14 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Live Sideline Engine & Suggestion Arrows (2026-08-26)
+## Latest Change — Eval Bar Tracks Variations (2026-08-26)
+1. **Fix**: while in a variation sandbox the eval bar read `evaluations[current_ply]` (the
+   stale mainline evaluation at the anchor ply) before falling back to `current_eval`, so it
+   never reflected sideline positions. It now prefers the live branch evaluation from
+   `current_eval` whenever branched, falling back to mainline data on the game line.
+2. **Automated Verification**: frontend build clean; service restarted healthy.
+
+## Previous Change — Live Sideline Engine & Suggestion Arrows (2026-08-26)
 1. **Stockfish stays live in variations**: `get_analysis_payload()` now serves the cached
    live engine evaluation of the branch position as `current_eval` while in a variation
    sandbox (requested on every branch move and on step-back within a line), so Top
