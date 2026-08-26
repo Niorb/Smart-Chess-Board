@@ -1948,7 +1948,11 @@ class BoardStateManager:
                 return
 
             # Layer 1: Setup / Idle Board Validation & Physical Gesture Overlay
-            if self.game_status in ["IDLE", "SETUP", "GAME_OVER"]:
+            if self.game_status in ["IDLE", "SETUP", "GAME_OVER"] or (
+                self.game_status == "ANALYSIS"
+                and getattr(self, "replay_complete", False)
+                and not getattr(self, "analysis_web_only", False)
+            ):
                 self.setup_result = self.setup_validator.validate(self.physical_state)
                 setup_result = self.setup_result
 
@@ -2635,6 +2639,7 @@ class BoardStateManager:
             self.analysis_is_loading if self.game_status == "ANALYSIS" else False,
             len(self.analysis_branch_moves),
             self.analysis_submode if self.game_status == "ANALYSIS" else "",
+            getattr(self, "replay_complete", False) if self.game_status == "ANALYSIS" else False,
             self.analysis_active_board.fen() if self.game_status == "ANALYSIS" else "",
             id(coach_engine.get_cached_lines(self.analysis_active_board.fen())) if self.game_status == "ANALYSIS" else 0,
             opp_gone.get("gone", False),
@@ -2815,20 +2820,21 @@ class BoardStateManager:
                                         if self.analysis_anchor_coord is not None:
                                             self._check_analysis_board_restoration()
 
-                                        # Physical Move Tracking during ANALYSIS mode
-                                        adapter = AnalysisEngineAdapter(self.analysis_active_board)
-                                        move_result = self.move_tracker.process_physical_state(
-                                            self.physical_state, adapter
-                                        )
-                                        if move_result:
-                                            from_f, from_r, to_f, to_r, promo = move_result
-                                            from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
-                                            to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
-                                            uci = f"{from_sq}{to_sq}{promo or ''}"
-                                            logger.info(f"Physical analysis move detected: {uci}")
-                                            self.handle_analysis_move(uci)
+                                        # Physical Move Tracking during ANALYSIS mode (skipped when replay is complete and user is resetting pieces)
+                                        if not getattr(self, "replay_complete", False):
+                                            adapter = AnalysisEngineAdapter(self.analysis_active_board)
+                                            move_result = self.move_tracker.process_physical_state(
+                                                self.physical_state, adapter
+                                            )
+                                            if move_result:
+                                                from_f, from_r, to_f, to_r, promo = move_result
+                                                from_sq = f"{chr(ord('a') + from_f - 1)}{from_r}"
+                                                to_sq = f"{chr(ord('a') + to_f - 1)}{to_r}"
+                                                uci = f"{from_sq}{to_sq}{promo or ''}"
+                                                logger.info(f"Physical analysis move detected: {uci}")
+                                                self.handle_analysis_move(uci)
 
-                                        if getattr(self, "analysis_active_board", None):
+                                        if getattr(self, "analysis_active_board", None) and not getattr(self, "replay_complete", False):
                                             self.guardrail_result = self.setup_validator.validate_game_state(
                                                 self.physical_state,
                                                 self.analysis_active_board,

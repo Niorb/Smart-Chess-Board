@@ -248,3 +248,61 @@ def test_memory_replay_gesture_flow_and_disambiguation():
 
     # The scheduled recall coroutine runs on a live loop (smoke-test dispatch)
     asyncio.run(asyncio.sleep(0))
+
+
+def test_recall_completion_enters_setup_validation_led_state():
+    """Verify that after replay completion and celebration animation, the board displays setup validation LEDs."""
+    from unittest.mock import MagicMock
+    from app.led_helpers import COLOR_INT_SETUP_MISPLACED, COLOR_INT_SETUP_MISSING
+
+    async def _test():
+        mgr = BoardStateManager()
+        mgr.strip = MagicMock()
+        mgr.virtual_only = False
+
+        # Start recall session on 2 moves
+        await mgr.start_replay_recall(moves_uci=["e2e4", "e7e5"])
+        mgr.handle_replay_move("e2e4")
+        mgr.handle_replay_move("e7e5")
+        assert mgr.replay_complete is True
+        assert mgr.active_animation is not None
+        assert mgr.active_animation.name == "RECALL_COMPLETE"
+
+        # While animation is active, active_animation renders (Layer 0)
+        mgr._update_leds()
+        assert mgr.strip.show.called
+
+        # Expire the animation
+        mgr.active_animation = None
+
+        # Simulate physical board with e4 (4, 3) and e5 (4, 4) occupied (misplaced)
+        # and starting squares e2 (4, 1) and e7 (4, 6) missing
+        grid = _make_grid()
+        grid[4][1] = 0   # e2 missing
+        grid[4][3] = -1  # e4 white pawn misplaced
+        grid[4][6] = 0   # e7 missing
+        grid[4][4] = 1   # e5 black pawn misplaced
+        mgr.physical_state = grid
+
+        mgr.strip.setPixelColor.reset_mock()
+        mgr._update_leds()
+
+        call_args = [call[0] for call in mgr.strip.setPixelColor.call_args_list]
+        colors_called = [arg[1] for arg in call_args]
+
+        # White starting squares missing should be lit in COLOR_INT_SETUP_MISSING
+        assert COLOR_INT_SETUP_MISSING in colors_called
+        # Misplaced pieces on e4/e5 should be lit in COLOR_INT_SETUP_MISPLACED
+        assert COLOR_INT_SETUP_MISPLACED in colors_called
+
+        # Web-only analysis must suppress setup LEDs
+        mgr.analysis_web_only = True
+        mgr.strip.setPixelColor.reset_mock()
+        mgr._update_leds()
+        web_call_args = [call[0] for call in mgr.strip.setPixelColor.call_args_list]
+        web_colors = [arg[1] for arg in web_call_args]
+        assert COLOR_INT_SETUP_MISSING not in web_colors
+        assert COLOR_INT_SETUP_MISPLACED not in web_colors
+
+    asyncio.run(_test())
+

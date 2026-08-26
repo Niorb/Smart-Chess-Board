@@ -3,7 +3,15 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Optimistic Overlay Reconciliation Fix (2026-08-26)
+## Latest Change — Post-Replay Setup Validation Lighting & Reset Guidance (2026-08-26)
+1. **Post-Replay Board State & Setup Guidance (`board_state.py`)**:
+   - When a replay game reaches the end (whether completed with or without mistakes), the `RECALL_COMPLETE` celebration animation plays as expected.
+   - Once the celebration animation completes, the board transitions cleanly into setup validation mode (Layer 1): missing starting squares are lit in White (`c_setup_missing`) and misplaced piece squares are lit in Orange (`c_setup_misplaced`).
+   - Move tracking and guardrail evaluation are suppressed while `replay_complete` is active, allowing the user to reset pieces freely without triggering illegal move warnings.
+   - Restoring all 32 pieces to starting squares concludes the session to `IDLE` with the standard emerald snap-flash `BOARD_READY` animation.
+2. **Automated Verification**: New regression unit test in `test_gm_replay.py`.
+
+## Previous Change — Optimistic Overlay Reconciliation Fix (2026-08-26)
 1. **Glitch fix**: the optimistic overlay was cleared as soon as the HTTP response
    arrived — often BEFORE the WebSocket broadcast with the new position — so the
    board snapped back to the pre-move position for a frame ("back and forth once").
