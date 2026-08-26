@@ -33,3 +33,10 @@ Your primary responsibility is to navigate, search, index, trace, and analyze th
 ## Handoff Protocol
 - Whenever the **Lead Orchestrator**, **System Architect**, **Game Engine Specialist**, **Chess AI Specialist**, **Hardware Specialist**, **Lighting Designer**, **Frontend Specialist**, or **QA Specialist** requires context about existing code, invoke the **Code Explorer Specialist**.
 - Present clear findings with file locations and summaries so downstream specialists can design, implement, or test features efficiently.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

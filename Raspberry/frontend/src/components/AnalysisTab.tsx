@@ -148,11 +148,36 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     branching: null, branchMoves: null, legalMoves: null, inCheck: null,
   });
   const optimisticTimerRef = useRef<number | null>(null);
+  // Reconcile the overlay against fresh server data. The overlay is dropped
+  // ONLY when the server position has caught up with (or passed) it — dropping
+  // it earlier would snap the board back to the pre-move position for a frame
+  // until the WebSocket broadcast lands (the classic "move goes back and forth
+  // once" glitch).
+  const reconcileOptimistic = useCallback((serverFen: string | null) => {
+    if (optimisticTimerRef.current) window.clearTimeout(optimisticTimerRef.current);
+    optimisticTimerRef.current = null;
+    setOptimistic((o) => {
+      if (!o.fen || !serverFen) return o; // nothing pending, or no data to compare
+      // FENs match modulo move counters → server caught up
+      const strip = (f: string) => f.split(' ').slice(0, 4).join(' ');
+      if (strip(o.fen) === strip(serverFen)) {
+        return { fen: null, lastMoveUci: null, ply: null, branching: null, branchMoves: null, legalMoves: null, inCheck: null };
+      }
+      return o; // server still behind the optimistic state — keep showing it
+    });
+  }, []);
+  // Hard rollback for rejected moves
   const clearOptimistic = useCallback(() => {
     if (optimisticTimerRef.current) window.clearTimeout(optimisticTimerRef.current);
     optimisticTimerRef.current = null;
     setOptimistic({ fen: null, lastMoveUci: null, ply: null, branching: null, branchMoves: null, legalMoves: null, inCheck: null });
   }, []);
+  // When a new WS payload arrives, try reconciling against it
+  useEffect(() => {
+    if (optimistic.fen !== null && analysis?.fen) {
+      reconcileOptimistic(analysis.fen);
+    }
+  }, [analysis?.fen, optimistic.fen, reconcileOptimistic]);
   // Safety net: never let a stale overlay linger if the WS is slow
   useEffect(() => {
     if (optimistic.fen === null) return;
@@ -365,12 +390,14 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     try {
       const res = await navAnalysis(direction);
       prevOnMainlineRef.current = !!res?.on_mainline;
-      clearOptimistic();
+      const serverFen = (res as { analysis?: { fen?: string } })?.analysis?.fen
+        ?? res?.analysis?.fen ?? null;
+      reconcileOptimistic(serverFen);
     } catch (err) {
       console.error('Error navigating analysis:', err);
       clearOptimistic();
     }
-  }, [analysis, currentPly, totalPlys, optimistic.fen, applyUciLocally, boardAtPly, clearOptimistic]);
+  }, [analysis, currentPly, totalPlys, optimistic.fen, applyUciLocally, boardAtPly, reconcileOptimistic, clearOptimistic]);
 
   useEffect(() => {
     if (subMode !== 'review' || !analysis?.active) return;
@@ -452,12 +479,12 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       }
       prevOnMainlineRef.current = !result.analysis?.is_branching;
       setWebMoveInput('');
-      clearOptimistic();
+      reconcileOptimistic(result.analysis?.fen ?? null);
     } catch (err) {
       console.error('Error playing web analysis move:', err);
       clearOptimistic();
     }
-  }, [analysis, optimistic.fen, applyUciLocally, clearOptimistic]);
+  }, [analysis, optimistic.fen, applyUciLocally, reconcileOptimistic, clearOptimistic]);
 
   // Suggested better move after a suboptimal mainline move (arrow on board).
   // Clicking it steps back and plays the engine's suggestion as a variation,

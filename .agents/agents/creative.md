@@ -36,3 +36,10 @@ Your mission is to generate innovative, high-impact features, UX improvements, g
   - **Concept Name & Elevator Pitch**
   - **User Experience Impact**
   - **Technical Feasibility & Domain Requirements** (Hardware, Game Engine, Chess AI, LED Visuals, Frontend)
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

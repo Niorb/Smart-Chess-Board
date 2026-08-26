@@ -33,3 +33,10 @@ Your domain covers the local Stockfish 17.1 NNUE chess engine wrapper, multi-cor
 - Provide move evaluations, clock states, and game transitions to the **Core Game & State Engine Specialist**.
 - Provide evaluation data and candidate move vectors to the **Lighting & Animation Designer**.
 - Work with the **QA Specialist** to test mock UCI engine responses and Lichess stream simulation.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

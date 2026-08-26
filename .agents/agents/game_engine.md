@@ -36,3 +36,10 @@ Your domain covers the central state coordinator, physical sensor tracking, spat
 - Coordinate with the **Chess AI & Lichess Specialist** on move validation, engine triggers, and game clock synchronization.
 - Work with the **Lighting & Animation Designer** to trigger LED states and animation layers.
 - Pass all implementations to the **QA Specialist** for unit and integration testing.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

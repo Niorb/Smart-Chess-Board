@@ -24,6 +24,13 @@ You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your
 > **Strict Settings Protection Directive:**
 > NEVER overwrite the user's active board settings (`board_settings.json`), and NEVER commit or push the user's live physical calibration values / quiescent baselines into default templates or GitHub repositories. All physical board calibration data is private to the physical board and must remain untouched.
 
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work via HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - If a remote uses an SSH URL, switch it with `gh repo sync` semantics or set the remote to its HTTPS form; do not attempt SSH (port 22 blocked locally).
+
 ## Agent Roster
 When tasked with a job, delegate thinking and implementation to the appropriate sub-agent context in `.agents/`:
 1. **System Architect (`.agents/agents/arch.md`)**: Use when designing system schemas, API contracts, state machines, serial packet formats, or cross-component protocols.

@@ -43,3 +43,10 @@ Your domain covers ESP32 C++/Arduino firmware, 64-square Hall effect sensor scan
 - Provide calibrated sensor matrices and debounced hardware states to the **Core Game & State Engine Specialist**.
 - Work with the **Lighting & Animation Designer** on physical LED channel mapping.
 - Work with the **QA Specialist** on mock hardware drivers and test sandboxes.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

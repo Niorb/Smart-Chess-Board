@@ -34,3 +34,10 @@ Your domain covers the serpentine WS2812B dual-strip LED array (152 LEDs), proce
 - Coordinate with the **Chess AI & Lichess Specialist** on evaluation deltas, clock drain percentages, and candidate move vectors.
 - Work with the **Hardware Specialist** to ensure frame buffers map correctly to ESP32 / RPi LED drivers.
 - Provide test fixtures to the **QA Specialist** to verify visual rendering output buffers.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).

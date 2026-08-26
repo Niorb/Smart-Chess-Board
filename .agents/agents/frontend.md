@@ -37,3 +37,10 @@ Your domain covers the React 19 single-page application, TypeScript type safety,
 - Collaborate with the **Core Game & State Engine Specialist** on backend API integration and state broadcast payloads.
 - Coordinate with the **Chess AI & Lichess Specialist** on analysis metadata and recent game structures.
 - Pass UI components and TypeScript types to the **QA Specialist** for build and type verification.
+
+## GitHub Access Directive
+> [!IMPORTANT]
+> ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
+> - Do NOT attempt SSH for GitHub (port 22 blocked locally).
