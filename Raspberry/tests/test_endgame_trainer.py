@@ -171,8 +171,8 @@ def test_endgame_state_machine_and_moves():
         hint = mgr.request_endgame_hint()
         assert "hint_uci" in hint or "hint_text" in hint
 
-        # Play legal move: e1e2
-        legal_move = "e1e2"
+        # Play legal move: e3e4
+        legal_move = "e3e4"
         move_res = mgr.handle_endgame_move_sync(legal_move, source="board")
         assert move_res.get("result") in ("ok", "complete")
         assert mgr.endgame_moves_played == 1
@@ -231,6 +231,14 @@ def test_piece_led_color_palette_and_renderers():
     assert any(c != COLOR_INT_OFF for c in wave_frame)
 
 
+def _make_starting_grid():
+    grid = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        for r in (0, 1, 6, 7):
+            grid[c][r] = 1
+    return grid
+
+
 def test_endgame_c2_gesture_interaction():
     """Tests the EndgameMenuGesture lifecycle when c2 pawn is lifted and replaced."""
     engine = PhysicalGestureEngine()
@@ -238,8 +246,13 @@ def test_endgame_c2_gesture_interaction():
     assert gesture is not None
     assert gesture.starter_coord == (2, 1)  # c2 pawn
 
+    grid = _make_starting_grid()
+    now = 100.0
+
     # 1. Lift c2 -> Arms gesture and lights category selectors on Rank 1 (a1..d1)
-    gesture.on_piece_lifted((2, 1), time_now=100.0)
+    grid[2][1] = 0
+    res = gesture.evaluate(grid, now, is_armed=True)
+    assert res is False
     assert gesture.is_active is True
     assert gesture.step == 1
 
@@ -249,11 +262,17 @@ def test_endgame_c2_gesture_interaction():
     assert (2, 0) in indicators  # c1: Minors
     assert (3, 0) in indicators  # d1: Queens
 
-    # 2. Lift a category piece (e.g. b1: Rooks) -> cycles selected category
-    gesture.on_piece_lifted((1, 0), time_now=101.0)
-    assert gesture.selected_category_idx == 1  # Rooks
+    # 2. Lift a category piece (e.g. b1: Rooks) -> cycles selected category to rook
+    grid[1][0] = 0
+    gesture.evaluate(grid, now + 1.0, is_armed=True)
+    assert gesture.selected_category == "rook"
+
+    # Replace category piece b1
+    grid[1][0] = 1
+    gesture.evaluate(grid, now + 2.0, is_armed=True)
 
     # 3. Replace c2 -> confirms selection and starts drill
-    success = gesture.on_piece_placed((2, 1), time_now=102.0)
+    grid[2][1] = 1
+    success = gesture.evaluate(grid, now + 3.0, is_armed=True)
     assert success is True
     assert gesture.is_active is False

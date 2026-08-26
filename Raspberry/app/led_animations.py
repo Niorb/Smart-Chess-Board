@@ -1644,8 +1644,10 @@ def render_resignation_aura(
 # ENDGAME TRAINER SETUP & LIFECYCLE RENDERERS
 # =============================================================================
 
-def get_piece_type_color(piece_type: int, is_night: bool = False) -> int:
+def get_piece_type_color(piece_type: int, is_night: bool = False, night_mode: bool | None = None) -> int:
     """Returns the harmonized WS2812B LED Color for a given chess piece type."""
+    if night_mode is not None:
+        is_night = night_mode
     if is_night:
         if piece_type == 6:  # KING
             return COLOR_INT_NIGHT_PIECE_KING

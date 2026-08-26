@@ -44,10 +44,10 @@ class EndgameDrill:
     fen: str
     player_color: str  # "white" | "black"
     target_goal: str   # "win" | "draw" | "mate"
-    difficulty: int    # 1 (Beginner), 2 (Intermediate), 3 (Master)
-    description: str
-    key_concepts: list[str]
-    hint: str
+    difficulty: int = 1    # 1 (Beginner), 2 (Intermediate), 3 (Master)
+    description: str = ""
+    key_concepts: list[str] = field(default_factory=list)
+    hint: str = ""
     max_plies: int = 60
     target_moves_par: int = 15
 
