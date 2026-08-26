@@ -404,6 +404,7 @@ def test_adversarial_endgame_stop_and_reset_board_to_idle():
         assert stop_res["status"] == "IDLE"
         assert mgr.game_status == "IDLE"
         assert mgr.endgame_active is False
+        assert mgr.endgame_pending_reply is None
 
         # 2. Start drill, reach complete phase, and simulate restoring 32 starting pieces
         await mgr.start_endgame_drill("rook_lucena")
@@ -423,3 +424,135 @@ def test_adversarial_endgame_stop_and_reset_board_to_idle():
         assert mgr.game_status == "IDLE"
 
     asyncio.run(_test())
+
+
+def test_adversarial_blunder_pending_opponent_move_protection_and_transitions():
+    """Tests out-of-turn submission locks during pending opponent reply and safe puzzle transitions."""
+    mgr = BoardStateManager()
+    b1 = {
+        "ply_index": 1,
+        "fen_before": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        "best_move": "d8e7",
+        "player_color": "black",
+        "player_moves": ["d8e7", "g8f6"],
+        "opponent_replies": ["g1f3"],
+        "solution_line_san": ["3... Qe7", "4. Nf3", "4... Nf6"],
+    }
+    b2 = {
+        "ply_index": 2,
+        "fen_before": "8/8/8/8/8/8/8/4K2k w - - 0 1",
+        "best_move": "e1f2",
+        "player_color": "white",
+        "player_moves": ["e1f2"],
+        "opponent_replies": [],
+        "solution_line_san": ["1. Kf2"],
+    }
+    mgr.analysis_blunders = [b1, b2]
+
+    # 1. Start puzzle 0
+    mgr.start_blunder_drill(0)
+    assert mgr.analysis_blunder_step == 0
+    assert mgr.analysis_blunder_attempts == 3
+
+    # 2. Submit step 1 physically
+    res1 = mgr.submit_blunder_attempt("d8e7", source="board")
+    assert res1["correct"] is True
+    assert mgr.move_tracker.pending_opponent_move is not None
+    assert mgr.analysis_blunder_pending_reply is not None
+
+    # 3. Payload includes blunder_pending_reply
+    payload = mgr.get_analysis_payload()
+    assert payload["blunder_pending_reply"] is not None
+    assert payload["blunder_pending_reply"]["uci"] == "g1f3"
+
+    # 4. Attempt to submit next player move while opponent reply is still pending
+    res_premature = mgr.submit_blunder_attempt("g8f6", source="board")
+    assert res_premature["correct"] is False
+    assert "Waiting for opponent reply" in res_premature["error"]
+    # Attempts must NOT be decremented on pending opponent reply lockout
+    assert mgr.analysis_blunder_attempts == 3
+
+    # 5. Switch to puzzle 1 while opponent reply was pending
+    mgr.start_blunder_drill(1)
+    # Pending reply and tracker must be cleanly cleared with no state leakage
+    assert mgr.analysis_blunder_pending_reply is None
+    assert mgr.move_tracker.pending_opponent_move is None
+    assert mgr.analysis_blunder_index == 1
+    assert mgr.analysis_blunder_step == 0
+
+
+def test_adversarial_blunder_auto_queen_and_solution_concealment():
+    """Tests auto-queening for promotion puzzles and strict solution concealment."""
+    mgr = BoardStateManager()
+    promo_blunder = {
+        "ply_index": 10,
+        "fen_before": "8/4P1k1/8/8/8/8/8/4K3 w - - 0 1",
+        "best_move": "e7e8q",
+        "player_color": "white",
+        "player_moves": ["e7e8q"],
+        "opponent_replies": [],
+        "solution_line_san": ["1. e8=Q+"],
+    }
+    mgr.analysis_blunders = [promo_blunder]
+    mgr.start_blunder_drill(0)
+
+    # 1. Submit "e7e8" without "q" -> auto-queens
+    res = mgr.submit_blunder_attempt("e7e8", source="web")
+    assert res["correct"] is True
+    assert res["puzzle_complete"] is True
+    assert "solution_line" in res
+    assert res["solution_line"] == ["1. e8=Q+"]
+
+
+def test_adversarial_endgame_pending_opponent_and_draw_repetitions():
+    """Tests endgame pending opponent lockouts and threefold repetition draw achievements."""
+    async def _test():
+        mgr = BoardStateManager()
+        # Draw drill with threefold repetition position
+        drill = EndgameDrill(
+            id="test_repetition_drill",
+            category=EndgameCategory.ROOKS,
+            title="Repetition Draw",
+            fen="8/8/8/8/8/5k2/8/4K2R w - - 0 1",
+            player_color="white",
+            target_goal="draw",
+        )
+        mgr.endgame_drill = drill
+        mgr.endgame_board = chess.Board(drill.fen)
+        mgr.endgame_phase = "playing"
+        mgr.endgame_active = True
+
+        # Simulate pending opponent reply
+        mgr.endgame_pending_reply = {
+            "uci": "f3g3",
+            "san": "Kg3",
+            "from": [5, 2],
+            "to": [6, 2],
+            "from_sq": "f3",
+            "to_sq": "g3",
+            "is_capture": False,
+        }
+
+        # Apply pending reply
+        res_apply = mgr.apply_endgame_pending_opponent_move()
+        assert res_apply["result"] == "ok"
+        assert mgr.endgame_pending_reply is None
+
+        # Build threefold repetition board
+        # 1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8
+        rep_board = chess.Board()
+        rep_board.push_san("Nf3")
+        rep_board.push_san("Nf6")
+        rep_board.push_san("Ng1")
+        rep_board.push_san("Ng8")
+        rep_board.push_san("Nf3")
+        rep_board.push_san("Nf6")
+        rep_board.push_san("Ng1")
+        rep_board.push_san("Ng8")
+
+        mgr.endgame_board = rep_board
+        assert rep_board.is_repetition(3) is True
+        assert mgr._check_endgame_goal_achieved() is True
+
+    asyncio.run(_test())
+

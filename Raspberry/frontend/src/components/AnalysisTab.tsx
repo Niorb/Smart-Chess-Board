@@ -40,6 +40,7 @@ import {
   startBlunderDrill, 
   submitBlunderAttempt, 
   toggleBlunderHint,
+  applyBlunderOpponentMove,
   getRecentLichessGames,
   type LichessRecentGame,
   getEndgameDrills,
@@ -658,6 +659,20 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       setTimeout(() => setFeedbackMsg(null), 3000);
     } catch (err) {
       console.error('Error toggling hint:', err);
+    }
+  };
+
+  const handleApplyBlunderOpponentMove = async () => {
+    try {
+      const res = await applyBlunderOpponentMove();
+      if ((res as { error?: string })?.error) {
+        setFeedbackMsg({ text: (res as { error?: string }).error || 'Failed to apply move.', type: 'error' });
+      } else {
+        setFeedbackMsg({ text: 'Opponent reply applied.', type: 'info' });
+      }
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    } catch {
+      setFeedbackMsg({ text: 'Failed to apply opponent move.', type: 'error' });
     }
   };
 
@@ -1613,6 +1628,28 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                             <span className="text-slate-500">→</span>
                             <span className="text-blue-400">{puzzleResult.opponent_reply_san}</span>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Pending Opponent Reply from physical board play */}
+                      {analysis?.blunder_pending_reply && (
+                        <div className="p-3 bg-blue-950/50 border border-blue-500/40 rounded-xl space-y-2 animate-pulse shadow-md">
+                          <div className="text-[10px] text-blue-300 font-bold uppercase tracking-wider flex items-center justify-between">
+                            <span>Opponent Move (Pending):</span>
+                            <span className="font-mono text-xs font-bold text-white bg-blue-900/60 px-2 py-0.5 rounded border border-blue-400/30">
+                              {analysis.blunder_pending_reply.san}
+                            </span>
+                          </div>
+                          <div className="text-xs text-blue-200/90 leading-relaxed">
+                            Move piece from <b className="font-mono text-amber-300 font-bold">{analysis.blunder_pending_reply.from_sq}</b> to <b className="font-mono text-cyan-300 font-bold">{analysis.blunder_pending_reply.to_sq}</b> on the board.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleApplyBlunderOpponentMove}
+                            className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                          >
+                            Apply Move on Board
+                          </button>
                         </div>
                       )}
 

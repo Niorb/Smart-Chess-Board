@@ -211,6 +211,7 @@ interface AnalysisState {
   blunder_step?: number;
   blunder_attempts: number;
   blunder_hint_active: boolean;
+  blunder_pending_reply?: EndgamePendingReply | null;
   gm_game?: GMGameSummary | null;
   replay: ReplayState;
   endgame?: EndgameDrillState | null;

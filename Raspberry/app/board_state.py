@@ -946,6 +946,14 @@ class BoardStateManager:
         self.analysis_anchor_coord = None
         self.analysis_error = None
         self._last_restoration_sig = None
+        self.analysis_blunder_pending_reply = None
+        self.analysis_blunder_hint_active = False
+        self.endgame_active = False
+        self.endgame_phase = "idle"
+        self.endgame_drill = None
+        self.endgame_pending_reply = None
+        if hasattr(self, "move_tracker"):
+            self.move_tracker.pending_opponent_move = None
         self._reset_replay_session()
         return self.get_analysis_payload()
 
@@ -1065,6 +1073,10 @@ class BoardStateManager:
         self.analysis_blunder_step = 0
         self.analysis_blunder_attempts = 3
         self.analysis_blunder_hint_active = False
+        self.analysis_blunder_pending_reply = None
+        if hasattr(self, "move_tracker"):
+            self.move_tracker.pending_opponent_move = None
+            self.move_tracker.reset(self.physical_state)
 
         if self.analysis_blunders and 0 <= self.analysis_blunder_index < len(self.analysis_blunders):
             blunder = self.analysis_blunders[self.analysis_blunder_index]
@@ -1089,6 +1101,14 @@ class BoardStateManager:
         """Evaluates a blunder challenge attempt."""
         if not self.analysis_blunders or self.analysis_blunder_index >= len(self.analysis_blunders):
             return {"correct": False, "message": "No active blunder challenge."}
+
+        if getattr(self, "analysis_blunder_pending_reply", None):
+            return {
+                "correct": False,
+                "error": "Waiting for opponent reply: pending on board",
+                "message": "Opponent reply is pending. Please play the opponent's move first.",
+                "attempts_remaining": self.analysis_blunder_attempts,
+            }
 
         blunder = self.analysis_blunders[self.analysis_blunder_index]
         player_moves = blunder.get("player_moves") or ([blunder.get("best_move")] if blunder.get("best_move") else [])
@@ -1120,11 +1140,19 @@ class BoardStateManager:
             except Exception:
                 pass
 
-        if uci_clean == expected_move.lower():
-            player_move_obj = chess.Move.from_uci(expected_move)
+        if uci_clean == expected_move.lower() or (
+            len(expected_move) == 5
+            and expected_move.endswith("q")
+            and f"{uci_clean}q" == expected_move.lower()
+        ):
+            expected_move_clean = expected_move.lower()
+            player_move_obj = chess.Move.from_uci(expected_move_clean)
             player_san = expected_move
             is_capture = False
             if self.analysis_active_board and player_move_obj in self.analysis_active_board.legal_moves:
+                is_capture = self.analysis_active_board.is_capture(player_move_obj)
+                player_san = self.analysis_active_board.san(player_move_obj)
+                self.analysis_active_board.push(player_move_obj)
                 is_capture = self.analysis_active_board.is_capture(player_move_obj)
                 player_san = self.analysis_active_board.san(player_move_obj)
                 self.analysis_active_board.push(player_move_obj)
@@ -1661,11 +1689,14 @@ class BoardStateManager:
         self.endgame_mate = None
         self.endgame_hint_uci = None
         self.endgame_complete_summary = None
+        self.endgame_pending_reply = None
         self._endgame_white_wave_start = 0.0
         self._endgame_computing_reply = False
         self._endgame_undo_anchor_sq = None
         self._endgame_undo_origin_sq = None
 
+        if hasattr(self, "move_tracker"):
+            self.move_tracker.pending_opponent_move = None
         self.move_tracker.reset(self.physical_state)
 
         logger.info(f"Endgame drill '{drill.title}' started. Phase 1: White setup.")
@@ -1683,8 +1714,11 @@ class BoardStateManager:
         self.endgame_active = False
         self.endgame_phase = "idle"
         self.endgame_drill = None
+        self.endgame_pending_reply = None
         self.game_status = "IDLE"
         self.analysis_submode = "review"
+        if hasattr(self, "move_tracker"):
+            self.move_tracker.pending_opponent_move = None
         self.move_tracker.reset(self.physical_state)
         if hasattr(self, "gesture_engine"):
             self.gesture_engine.reset()
@@ -1964,6 +1998,7 @@ class BoardStateManager:
                 self.endgame_board.is_stalemate()
                 or self.endgame_board.is_insufficient_material()
                 or self.endgame_board.can_claim_draw()
+                or self.endgame_board.is_repetition(3)
                 or self.endgame_board.is_fivefold_repetition()
                 or self.endgame_board.is_seventyfive_moves()
             )
@@ -2323,6 +2358,7 @@ class BoardStateManager:
             "blunder_step": getattr(self, "analysis_blunder_step", 0),
             "blunder_attempts": self.analysis_blunder_attempts,
             "blunder_hint_active": self.analysis_blunder_hint_active,
+            "blunder_pending_reply": getattr(self, "analysis_blunder_pending_reply", None),
             "gm_game": gm_game.to_dict() if gm_game else None,
             "replay": {
                 "phase": (
