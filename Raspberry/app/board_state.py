@@ -1898,8 +1898,7 @@ class BoardStateManager:
 
         # Check goal completion
         if self._check_endgame_goal_achieved():
-            self.endgame_phase = "complete"
-            self._spawn_task(self._record_endgame_completion(won=True))
+            self._record_endgame_completion(won=True)
             return {
                 "result": "complete",
                 "won": True,
@@ -1907,8 +1906,7 @@ class BoardStateManager:
                 "analysis": self.get_analysis_payload(),
             }
         elif self.endgame_board.is_game_over():
-            self.endgame_phase = "complete"
-            self._spawn_task(self._record_endgame_completion(won=False))
+            self._record_endgame_completion(won=False)
             return {
                 "result": "complete",
                 "won": False,
@@ -1993,9 +1991,9 @@ class BoardStateManager:
                             logger.info(f"Endgame AI defense reply auto-applied on web: {reply_uci}")
 
                             if self._check_endgame_goal_achieved():
-                                await self._record_endgame_completion(won=True)
+                                self._record_endgame_completion(won=True)
                             elif self.endgame_board.is_game_over():
-                                await self._record_endgame_completion(won=False)
+                                self._record_endgame_completion(won=False)
         except Exception as e:
             logger.error(f"Failed to calculate endgame AI reply: {e}")
         finally:
@@ -2029,9 +2027,9 @@ class BoardStateManager:
                 self.move_tracker.reset(self.physical_state)
 
                 if self._check_endgame_goal_achieved():
-                    self._spawn_task(self._record_endgame_completion(won=True))
+                    self._record_endgame_completion(won=True)
                 elif self.endgame_board.is_game_over():
-                    self._spawn_task(self._record_endgame_completion(won=False))
+                    self._record_endgame_completion(won=False)
 
                 return {"result": "ok", "analysis": self.get_analysis_payload()}
         except Exception as e:
@@ -2073,7 +2071,7 @@ class BoardStateManager:
             )
         return False
 
-    async def _record_endgame_completion(self, won: bool) -> None:
+    def _record_endgame_completion(self, won: bool) -> None:
         """Records drill completion in progress database."""
         if not self.endgame_drill:
             return

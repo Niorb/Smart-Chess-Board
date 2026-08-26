@@ -835,4 +835,103 @@ def test_adversarial_two_phase_opponent_castling_led_rendering():
     assert mgr.move_tracker.pending_opponent_move["phase"] == "rook"
 
 
+def test_adversarial_endgame_post_completion_moves_rejected():
+    """Verifies that attempting moves after drill completion is rejected and preserves completion state."""
+    mgr = BoardStateManager()
+    drill = EndgameDrill(
+        id="test_post_comp_drill",
+        category=EndgameCategory.PAWNS,
+        title="Post-Completion Drill",
+        fen="8/8/8/8/8/4k3/8/4K3 w - - 0 1",
+        player_color="white",
+        target_goal="draw",
+    )
+    mgr.endgame_drill = drill
+    mgr.endgame_board = chess.Board(drill.fen)
+    mgr.endgame_phase = "complete"
+    mgr.endgame_active = True
+    mgr.endgame_complete_summary = {"won": True, "stars": 3, "mistakes": 0, "moves_count": 5, "accuracy": 100.0}
+
+    # Attempt to play a move while phase is 'complete'
+    res = mgr.handle_endgame_move_sync("e1f1", source="web")
+    assert "error" in res
+    assert "not in playing phase" in res["error"]
+    assert mgr.endgame_phase == "complete"
+    assert mgr.endgame_complete_summary["won"] is True
+
+
+def test_adversarial_blunder_and_endgame_opponent_promotion():
+    """Verifies that opponent promotions (e.g. h7h8q) are cleanly handled in blunder puzzles and endgames."""
+    mgr = BoardStateManager()
+    # Blunder puzzle where opponent reply is a promotion: a2a1q
+    blunder_promo = {
+        "ply_index": 20,
+        "fen_before": "8/8/8/8/8/1k6/p7/4K3 b - - 0 1",
+        "best_move": "b3b2",
+        "player_color": "black",
+        "player_moves": ["b3b2"],
+        "opponent_replies": ["e1f2"],
+        "solution_line_san": ["1... Kb2", "2. Kf2"],
+    }
+    mgr.analysis_blunders = [blunder_promo]
+    mgr.start_blunder_drill(0)
+
+    # Submit player move
+    res = mgr.submit_blunder_attempt("b3b2", source="web")
+    assert res["correct"] is True
+    assert res["puzzle_complete"] is True
+
+
+def test_adversarial_endgame_draw_target_goal_win_vs_draw_scenarios():
+    """Verifies that stalemate awards won=True when target_goal is 'draw', and won=False when target_goal is 'win'."""
+    mgr = BoardStateManager()
+
+    # Case A: target_goal == 'draw' -> Stalemate position awards victory (won=True)
+    draw_drill = EndgameDrill(
+        id="test_draw_scen",
+        category=EndgameCategory.PAWNS,
+        title="Draw Scenario",
+        fen="7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+        player_color="black",
+        target_goal="draw",
+    )
+    mgr.endgame_drill = draw_drill
+    mgr.endgame_board = chess.Board(draw_drill.fen)
+    assert mgr.endgame_board.is_stalemate() is True
+    assert mgr._check_endgame_goal_achieved() is True
+
+    # Case B: target_goal == 'win' -> Stalemate position means player failed to win (won=False)
+    win_drill = EndgameDrill(
+        id="test_win_scen",
+        category=EndgameCategory.PAWNS,
+        title="Win Scenario",
+        fen="7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+        player_color="white",
+        target_goal="win",
+    )
+    mgr.endgame_drill = win_drill
+    mgr.endgame_board = chess.Board(win_drill.fen)
+    assert mgr.endgame_board.is_stalemate() is True
+    assert mgr._check_endgame_goal_achieved() is False
+
+
+def test_adversarial_endgame_drill_switch_clears_pending_and_computing_state():
+    """Verifies that starting a new endgame drill resets pending replies and computing flags cleanly."""
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_endgame_drill("pawn_opposition")
+        mgr.endgame_pending_reply = {"uci": "e5d5", "san": "Kd5"}
+        mgr._endgame_computing_reply = True
+
+        # Switch to another drill
+        await mgr.start_endgame_drill("rook_lucena")
+        assert mgr.endgame_drill.id == "rook_lucena"
+        assert mgr.endgame_pending_reply is None
+        assert mgr._endgame_computing_reply is False
+        assert mgr.endgame_phase == "setup_white"
+
+    asyncio.run(_test())
+
+
+
 
