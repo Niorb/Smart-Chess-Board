@@ -313,7 +313,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             lastMoveUci: branchMoves.length > 1 ? branchMoves[branchMoves.length - 2] : null,
             branching: branchMoves.length > 1,
             legalMoves: new Chess(f).moves(),
-            inCheck: new Chess(f).in_check(),
+            inCheck: new Chess(f).inCheck(),
           }));
         } else if (currentPly > 0) {
           const np = currentPly - 1;
@@ -325,7 +325,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             lastMoveUci: np > 0 ? gameMoves[np - 1] : null,
             branching: false,
             legalMoves: new Chess(f).moves(),
-            inCheck: new Chess(f).in_check(),
+            inCheck: new Chess(f).inCheck(),
           }));
         }
       } else if (direction === 'forward' && !branched && currentPly < totalPlys) {
@@ -341,7 +341,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             lastMoveUci: gameMoves[currentPly],
             branching: false,
             legalMoves: new Chess(res.fen).moves(),
-            inCheck: new Chess(res.fen).in_check(),
+            inCheck: new Chess(res.fen).inCheck(),
           }));
         }
       } else if (direction === 'start' || direction === 'end') {
@@ -354,7 +354,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           lastMoveUci: np > 0 ? gameMoves[np - 1] : null,
           branching: false,
           legalMoves: new Chess(f).moves(),
-          inCheck: new Chess(f).in_check(),
+          inCheck: new Chess(f).inCheck(),
         }));
       }
     } catch {
@@ -431,7 +431,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             branching: true,
             branchMoves: [...(analysis.branch_moves ?? []), uci!],
             legalMoves: new Chess(res.fen).moves(),
-            inCheck: new Chess(res.fen).in_check(),
+            inCheck: new Chess(res.fen).inCheck(),
           }));
         }
       }
