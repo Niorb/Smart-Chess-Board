@@ -3,7 +3,26 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Endgame Tablebase Trainer ("Endgame Academy") (2026-08-26)
+## Latest Change — Tactical Puzzles & Opponent Moves (The Side We Don't Play) (2026-08-26)
+1. **Opponent Setup Move & Contextual Perspective (`coach_engine.py`, `board_state.py`)**:
+   - `BlunderChallenge` and `extract_blunders()` now track:
+     - `player_color` (the side we play to find the refutation) and `opponent_color` (the side we don't play).
+     - `opponent_prev_move_san` and `opponent_prev_move_uci`: The initiating move played by the opponent leading into the puzzle position.
+     - `solution_pv` & `solution_line_san`: Full multi-ply Grandmaster tactical solution line in SAN (e.g. `14. Nxe5! dxe5 15. Qxd8+`).
+     - `player_moves` and `opponent_replies`: Separated sequences for player moves and opponent defensive replies (from the side we don't play!).
+2. **Automatic Opponent Reply Execution & Multi-Step Puzzle Engine (`board_state.py`)**:
+   - Starting a puzzle (`start_blunder_drill`) highlights the opponent's previous move on physical LEDs and the web board.
+   - When a player submits their correct move, the backend automatically provides and executes the opponent's defensive reply (from the side we don't play), updating the active board, triggering arrival flashes and LED traces, and prompting for the next tactical move in multi-ply puzzles.
+   - Upon completing the tactical sequence, returns the full Grandmaster solution line and congratulatory feedback.
+3. **Interactive Web Board & Tactical UI (`AnalysisTab.tsx`, `useBoardState.ts`, `api.ts`)**:
+   - Added interactive `WebAnalysisBoard` embedded directly inside Sub-view 2 (Blunder Blitz / Tactical Puzzles) supporting move clicks/drags.
+   - Added perspective banner clearly showing "You play as White/Black" and "Opponent just played: [Move]".
+   - Added "Opponent Response (Side we don't play)" notification card and full Grandmaster continuation line card.
+4. **Automated Verification (`test_blunder_drill.py`)**:
+   - Added `test_puzzle_opponent_moves_and_continuation` verifying extraction of opponent moves and execution of opponent replies.
+   - Verified all 368 pytest test cases passing on the Raspberry Pi.
+
+## Previous Change — Endgame Tablebase Trainer ("Endgame Academy") (2026-08-26)
 1. **Curriculum & Tablebase Database (`endgame_db.py`)**:
    - Implemented 12-drill theoretical endgame curriculum across 4 core categories:
      - **Pawn Endgames**: Pawn Opposition & Key Squares, Rook Pawn Draw Fortress, Square of the Pawn Rule.
