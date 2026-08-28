@@ -296,10 +296,13 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     });
   }, [evaluations]);
 
-  const handleStartAnalysis = async (opts?: { moves_uci?: string[]; force_refresh?: boolean }) => {
+  const handleStartAnalysis = async (opts?: { moves_uci?: string[]; force_refresh?: boolean } | unknown) => {
+    const options = (opts && typeof opts === 'object' && 'force_refresh' in opts)
+      ? (opts as { moves_uci?: string[]; force_refresh?: boolean })
+      : undefined;
     setFeedbackMsg({ text: 'Analyzing game with Stockfish...', type: 'info' });
     try {
-      await startAnalysis({ ...opts, force_refresh: opts?.force_refresh ?? true });
+      await startAnalysis({ moves_uci: options?.moves_uci, force_refresh: options?.force_refresh ?? true });
       setFeedbackMsg({ text: 'Game analysis ready!', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3000);
     } catch {
