@@ -170,7 +170,7 @@ class TestCoachEngineAsync:
         asyncio.run(_test())
 
     def test_rapid_requests_do_not_cancel_inflight_analysis(self, fake_stockfish):
-        """request_analysis must skip while busy — cancelling UCI commands corrupts them."""
+        """request_analysis must not cancel running tasks and must process pending FENs sequentially."""
         async def _test():
             board_a = chess.Board()
             board_b = chess.Board()
@@ -186,6 +186,27 @@ class TestCoachEngineAsync:
 
             await first_task
             assert engine.get_cached_evaluation(board_a.fen()) is not None
+            assert engine.get_cached_evaluation(board_b.fen()) is not None
+
+        asyncio.run(_test())
+
+    def test_rapid_lines_requests_queues_and_computes(self, fake_stockfish):
+        """request_lines must not cancel running tasks and must process pending divergence FENs."""
+        async def _test():
+            board_a = chess.Board()
+            board_b = chess.Board()
+            board_b.push_san("e4")
+
+            engine = CoachEngine(stockfish_path="/usr/games/stockfish")
+            engine.request_lines(board_a)
+            first_task = engine._lines_task
+            assert first_task is not None
+
+            engine.request_lines(board_b)
+            assert engine._lines_task is first_task
+
+            await first_task
+            assert engine.get_cached_lines(board_b.fen()) is not None
 
         asyncio.run(_test())
 

@@ -25,6 +25,15 @@ As an Orchestrator:
 
 ---
 
+## Raspberry Pi Execution & Testing Directive
+> [!IMPORTANT]
+> **Never Run Commands Locally — Run Everything on the Raspberry Pi**:
+> - All tests (especially any tests involving Stockfish or the chess engine), builds, and server commands MUST be executed directly on the Raspberry Pi (`ssh pi@pi`).
+> - Never ever run tests or runtime commands locally on the host machine.
+> - Deployment & verification workflow: Stage, commit, and push changes to GitHub (`git push origin main`), then connect to the Pi via SSH (`ssh pi@pi`), pull the changes (`git pull`), execute tests/builds on the Pi, and restart the `smart-chess` service if needed.
+
+---
+
 ## Agent Roster & Domain Routing Matrix
 When tasked with a job, delegate thinking and implementation to the appropriate sub-agent context in `.agents/agents/`:
 

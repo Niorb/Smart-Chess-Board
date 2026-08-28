@@ -260,11 +260,13 @@ class CoachEngine:
         self.stockfish_path = stockfish_path or self._discover_stockfish() or ""
         self._engine: chess.engine.UciProtocol | None = None
         self._analysis_task: asyncio.Task | None = None
+        self._pending_analysis_fen: str | None = None
         self._engine_lock: asyncio.Lock | None = None
         self._cache: dict[str, PositionEvaluation] = {}
         self._lines_cache: dict[str, list[dict[str, Any]]] = {}
         self._max_cache_entries: int = 128
         self._lines_task: asyncio.Task | None = None
+        self._pending_lines_fen: str | None = None
         self._is_running: bool = False
         self._last_unavail_log: float = 0.0
 
@@ -322,11 +324,18 @@ class CoachEngine:
     async def stop(self):
         """Terminates active analysis and closes the Stockfish process."""
         self._is_running = False
+        self._pending_analysis_fen = None
+        self._pending_lines_fen = None
         if self._analysis_task and not self._analysis_task.done():
             self._analysis_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._analysis_task
         self._analysis_task = None
+        if self._lines_task and not self._lines_task.done():
+            self._lines_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._lines_task
+        self._lines_task = None
         await self._close_engine()
         logger.info("CoachEngine stopped.")
 
@@ -344,35 +353,44 @@ class CoachEngine:
         """Dispatches a non-blocking async computation of the top PV lines.
 
         Two-stage pipeline: the BEST line is computed and published first so the
-        UI can show it right away, then the full MultiPV=3 pass replaces it.
-        Never cancels an in-flight lines job (same policy as request_analysis);
-        results land in _lines_cache and reach clients via the next broadcast.
+        UI can show it right away (~80ms), then the full MultiPV=3 pass replaces it.
+        Queues the latest target FEN so rapid moves/steps are never dropped.
         """
         clean_fen = " ".join(board.fen().split()[:4])
         if clean_fen in self._lines_cache:
             return
+        self._pending_lines_fen = clean_fen
         task = self._lines_task
         if task is not None and not task.done():
             return
         try:
-            lines_task = asyncio.create_task(self._staged_lines_job(clean_fen))
+            self._lines_task = asyncio.create_task(self._lines_runner())
         except RuntimeError:
             return
-        self._lines_task = lines_task
 
-        def _done(t: asyncio.Task):
-            if not t.cancelled() and t.exception() is not None:
-                logger.debug(f"PV lines computation failed: {t.exception()}")
+    async def _lines_runner(self) -> None:
+        """Processes pending lines requests without dropping rapid divergence moves."""
+        while self._pending_lines_fen:
+            target_fen = self._pending_lines_fen
+            self._pending_lines_fen = None
+            if target_fen in self._lines_cache:
+                continue
+            try:
+                # Stage 1: best line only (fast publish ~80ms)
+                quick = await self.compute_top_lines(target_fen, num_lines=1, depth=10, time_limit=0.10)
+                if quick:
+                    self._store_lines(target_fen, quick)
 
-        lines_task.add_done_callback(_done)
+                # If user moved away while Stage 1 was computing, skip Stage 2 and move to the latest position
+                if self._pending_lines_fen and self._pending_lines_fen != target_fen:
+                    continue
 
-    async def _staged_lines_job(self, clean_fen: str) -> None:
-        """Stage 1: best line only (fast publish). Stage 2: all three lines."""
-        quick = await self.compute_top_lines(clean_fen, num_lines=1)
-        if quick:
-            self._store_lines(clean_fen, quick)
-        full = await self.compute_top_lines(clean_fen, num_lines=3)
-        self._store_lines(clean_fen, full)
+                # Stage 2: all three lines (~250ms)
+                full = await self.compute_top_lines(target_fen, num_lines=3, depth=10, time_limit=0.25)
+                if full:
+                    self._store_lines(target_fen, full)
+            except Exception as e:
+                logger.debug(f"PV lines computation failed for {target_fen}: {e}")
 
     def _store_lines(self, clean_fen: str, lines: list[dict[str, Any]]) -> None:
         if len(self._lines_cache) >= self._max_cache_entries:
@@ -386,6 +404,7 @@ class CoachEngine:
         num_lines: int = 3,
         depth: int = 10,
         max_plies: int = 12,
+        time_limit: float | None = 0.25,
     ) -> list[dict[str, Any]]:
         """Computes the top-N principal variations for a position with Stockfish.
 
@@ -403,11 +422,12 @@ class CoachEngine:
             return []
 
         multipv = min(num_lines, len(legal))
-        # Depth-bounded for line quality; the compute is async and cached so
-        # UI latency stays unaffected (results stream via WS broadcast).
-        infos = await self._analyse_with_recovery(
-            board, chess.engine.Limit(depth=depth), multipv
+        limit = (
+            chess.engine.Limit(time=time_limit, depth=depth)
+            if time_limit is not None
+            else chess.engine.Limit(depth=depth)
         )
+        infos = await self._analyse_with_recovery(board, limit, multipv)
         if not isinstance(infos, list):
             infos = [infos]
 
@@ -454,13 +474,16 @@ class CoachEngine:
         num_lines: int = 3,
         depth: int = 10,
         max_plies: int = 12,
+        time_limit: float | None = 0.25,
     ) -> list[dict[str, Any]]:
         """Computes (and caches) the top-N principal variations for a position."""
         clean_fen = " ".join(fen.split()[:4])
         cached = self._lines_cache.get(clean_fen)
         if cached is not None:
             return cached
-        lines = await self.compute_top_lines(fen, num_lines=num_lines, depth=depth, max_plies=max_plies)
+        lines = await self.compute_top_lines(
+            fen, num_lines=num_lines, depth=depth, max_plies=max_plies, time_limit=time_limit
+        )
         self._store_lines(clean_fen, lines)
         return lines
 
@@ -468,36 +491,40 @@ class CoachEngine:
         """Dispatches non-blocking async evaluation for the board position.
 
         In-flight analyses are NEVER cancelled: cancelling a queued/in-flight UCI
-        command corrupts the engine command state (CommandState.NEW failures) and
-        forced silent fallbacks. With a 100 ms analysis limit, skipping while busy
-        keeps evaluations at most one tick stale.
+        command corrupts the engine command state. Queues the latest target FEN
+        so rapid divergence and navigation moves are always evaluated.
         """
         clean_fen = " ".join(board.fen().split()[:4])
         if clean_fen in self._cache:
             return
 
+        self._pending_analysis_fen = clean_fen
         task = self._analysis_task
         if task is not None and not task.done():
             return
 
         try:
-            eval_task = asyncio.create_task(self.evaluate_position(board.fen()))
+            self._analysis_task = asyncio.create_task(self._analysis_runner())
         except RuntimeError:
             return
-        self._analysis_task = eval_task
-        eval_task.add_done_callback(self._on_analysis_done)
 
-    def _on_analysis_done(self, task: asyncio.Task):
-        if task.cancelled() or task.exception() is None:
-            return
-        exc = task.exception()
-        now = time.monotonic()
-        if isinstance(exc, CoachEngineUnavailable):
-            if now - self._last_unavail_log > 30.0:
-                self._last_unavail_log = now
-                logger.warning(f"Position analysis skipped: {exc}")
-        else:
-            logger.error(f"Background position analysis failed: {exc}")
+    async def _analysis_runner(self) -> None:
+        """Processes pending position analysis requests sequentially."""
+        while self._pending_analysis_fen:
+            target_fen = self._pending_analysis_fen
+            self._pending_analysis_fen = None
+            if target_fen in self._cache:
+                continue
+            try:
+                await self.evaluate_position(target_fen)
+            except Exception as exc:
+                now = time.monotonic()
+                if isinstance(exc, CoachEngineUnavailable):
+                    if now - self._last_unavail_log > 30.0:
+                        self._last_unavail_log = now
+                        logger.warning(f"Position analysis skipped: {exc}")
+                else:
+                    logger.error(f"Background position analysis failed: {exc}")
 
     async def evaluate_position(self, fen: str) -> PositionEvaluation:
         """Evaluates a position with caching. Requires a working Stockfish engine."""

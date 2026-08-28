@@ -46,7 +46,8 @@ Your primary mission is to:
 ### 4. Stockfish Engine UCI Synchronization & Async Staging
 - **UCI Command Locking**: All UCI transactions with Stockfish must be synchronized with `asyncio.Lock()` to prevent interleaved commands and `InvalidStateError`.
 - **Cancellation Shielding**: Wrap `engine.analyse` in `asyncio.shield` so client disconnects or task cancellations do not leave the UCI pipe in a broken or unresponsive state.
-- **Staged MultiPV Pipeline**: Compute MultiPV=1 (best line) immediately for near-instant UI feedback, then asynchronously compute MultiPV=3 in the background and stream via WebSocket.
+- **Staged MultiPV Pipeline & Time Bounds**: Compute MultiPV=1 (best line) with `time_limit=0.10s` for near-instant UI feedback (~80ms), then asynchronously compute MultiPV=3 with `time_limit=0.25s` in the background. Always enforce time bounds on UCI limits (`Limit(time=..., depth=...)`) so CPU-constrained hosts (Raspberry Pi) never stall on unbounded depth searches.
+- **Pending Request Queuing Invariant**: Never drop incoming `request_lines` or `request_analysis` requests when tasks are in flight. Track `_pending_lines_fen` and `_pending_analysis_fen` through sequential runner loops so rapid divergence moves and timeline navigation are processed without stall or infinite "Computing..." lockouts.
 - **Non-Blocking REST Endpoints**: Run synchronous or heavy chess operations in `asyncio.to_thread` to maintain a responsive 100 Hz state loop.
 
 ### 5. Lichess Cloud API Streaming & Lifecycle

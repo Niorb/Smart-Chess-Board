@@ -3608,7 +3608,11 @@ class BoardStateManager:
         eval_res = (
             coach_engine.get_cached_evaluation(eval_board.fen())
             if (self.game_status == "PLAYING" and eval_board)
-            else None
+            else (
+                coach_engine.get_cached_evaluation(self.analysis_active_board.fen())
+                if (self.game_status == "ANALYSIS" and hasattr(self, "analysis_active_board"))
+                else None
+            )
         )
         return (
             self.game_status,
@@ -4077,6 +4081,9 @@ class BoardStateManager:
 
                     if not fair_play_active and getattr(lichess_engine, "board", None) and self.game_status == "PLAYING":
                         coach_engine.request_analysis(lichess_engine.board)
+                    elif self.game_status == "ANALYSIS" and hasattr(self, "analysis_active_board"):
+                        coach_engine.request_analysis(self.analysis_active_board)
+                        coach_engine.request_lines(self.analysis_active_board)
 
                     # 4. Event-driven broadcast: send on any digest change, plus a periodic heartbeat.
                     now_mono = time.monotonic()

@@ -74,12 +74,16 @@ def fake_stockfish(monkeypatch):
     # Reset the global singleton between tests
     coach_module.coach_engine._engine = None
     coach_module.coach_engine._analysis_task = None
+    coach_module.coach_engine._pending_analysis_fen = None
+    coach_module.coach_engine._lines_task = None
+    coach_module.coach_engine._pending_lines_fen = None
     coach_module.coach_engine._cache.clear()
+    coach_module.coach_engine._lines_cache.clear()
     yield protocol
     # Ensure no background task leaks into the next test
-    task = coach_module.coach_engine._analysis_task
-    if task and not task.done():
-        task.cancel()
+    for task in (coach_module.coach_engine._analysis_task, coach_module.coach_engine._lines_task):
+        if task and not task.done():
+            task.cancel()
 
 
 @pytest.fixture(autouse=True, scope="session")
