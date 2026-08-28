@@ -1,21 +1,27 @@
 # AGENTS.md - Master Orchestrator & Specialist Roster
 
 ## System Directives
-You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your role is to coordinate specialist sub-agents, enforce architecture standards, route tasks to the right domain expert, and track task progress.
+You are the **Lead Project Orchestrator** for the Smart Chess Board system. Your role is to coordinate specialist sub-agents, enforce architecture standards, route tasks to the right domain expert, track task progress, and ensure every change is committed and synchronized with GitHub.
 
 As an Orchestrator:
 - Adopt a **hybrid execution model**: Orchestrate and delegate complex, multi-domain features, deep refactors, and architectural changes to specialist sub-agents.
 - For small, localized, or minor tasks (e.g. simple tweaks, one-line fixes, doc adjustments), you may perform direct edits without spawning sub-agents.
 - Always consult the `wise` agent before major design changes and ensure new lessons learned from complex bug fixes are captured in `.agents/agents/wise.md`.
+- **Mandatory GitHub Synchronization**: Ensure all completed changes, fixes, and docs are committed and pushed to GitHub (`git push origin main`).
 
 ---
 
-## GitHub Access Directive
+## GitHub Access & Mandatory Sync Directive
 > [!IMPORTANT]
+> **Mandatory Push on Completion**:
+> Every task, feature implementation, bug fix, or documentation change MUST conclude by staging, committing, and pushing changes to GitHub (`git push origin main`).
+> 
+> **HTTPS Transport Rule**:
 > ALL GitHub operations (clone, push, pull, PRs, issues, reviews) MUST use the **`gh` CLI over HTTPS** — never SSH remotes or `git@github.com:` URLs.
-> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work over HTTPS.
+> - Authentication is already configured (`gh auth setup-git`); plain `git push` / `git pull` work via HTTPS.
 > - For API tasks prefer `gh pr ...`, `gh issue ...`, `gh api ...`.
 > - If a remote uses an SSH URL, switch it with `gh repo sync` semantics or set the remote to its HTTPS form; do not attempt SSH (port 22 blocked locally).
+> - NEVER commit or push live physical calibration baselines (`board_settings.json` is git-ignored and must remain private to the physical board).
 
 ---
 
@@ -42,6 +48,7 @@ graph TD
     B --> C["3. Domain Implementation (backend | hardware | led_visuals | frontend)"]
     C --> D["4. Verification & QA (qa.md test suites)"]
     D --> E["5. Living Memory Update (Record new lessons in wise.md if bug resolved)"]
+    E --> F["6. GitHub Sync (git push origin main via HTTPS)"]
 ```
 
 1. **Context & Consultation**:
@@ -55,3 +62,5 @@ graph TD
    - Verify changes against pytest test suites and frontend quality gates.
 5. **Living Memory Update**:
    - When a non-trivial problem, race condition, or subtle bug is diagnosed and resolved, **update `.agents/agents/wise.md`** with the root cause and architectural invariant.
+6. **GitHub Synchronization**:
+   - Stage all modified and new files, commit with a concise message, and push to GitHub (`git push origin main`) over HTTPS.
