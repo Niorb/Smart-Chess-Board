@@ -204,6 +204,7 @@ class StartAnalysisRequest(BaseModel):
     moves_uci: list[str] | None = None
     game_id: str | None = None
     web_only: bool = False
+    force_refresh: bool = False
 
 
 class StepAnalysisRequest(BaseModel):
@@ -697,8 +698,12 @@ async def start_analysis_route(body: StartAnalysisRequest | None = None):
     moves = body.moves_uci if body else None
     game_id = body.game_id if body else None
     web_only = bool(body.web_only) if body else False
+    force_refresh = bool(body.force_refresh) if body else False
     return await state_manager.start_analysis_mode(
-        moves_uci=moves, game_id=game_id, source="web" if web_only else "board"
+        moves_uci=moves,
+        game_id=game_id,
+        source="web" if web_only else "board",
+        force_refresh=force_refresh,
     )
 
 

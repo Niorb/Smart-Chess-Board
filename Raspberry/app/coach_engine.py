@@ -159,6 +159,7 @@ class PositionEvaluation:
     best_move: str | None    # UCI e.g. "e2e4"
     top_moves: list[MoveAnalysis] = field(default_factory=list)
     moves_map: dict[str, MoveAnalysis] = field(default_factory=dict)
+    top_lines: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -169,6 +170,7 @@ class PositionEvaluation:
             "best_move": self.best_move,
             "top_moves": [m.to_dict() for m in self.top_moves],
             "moves_map": {uci: m.to_dict() for uci, m in self.moves_map.items()},
+            "top_lines": self.top_lines,
         }
 
 
@@ -348,6 +350,53 @@ class CoachEngine:
         """Returns cached PV lines for the given FEN if present."""
         clean_fen = " ".join(fen.split()[:4])
         return self._lines_cache.get(clean_fen)
+
+    def hydrate_from_cached_evaluations(self, evaluations: list[dict[str, Any]]) -> None:
+        """Populates in-memory evaluation and lines caches from serialized evaluations."""
+        for ev in evaluations:
+            fen = ev.get("fen")
+            if not fen:
+                continue
+            clean_fen = " ".join(fen.split()[:4])
+            if clean_fen not in self._cache:
+                top_moves_raw = ev.get("top_moves", [])
+                top_moves = [
+                    MoveAnalysis(
+                        uci=m.get("uci", ""),
+                        from_sq=m.get("from", ""),
+                        to_sq=m.get("to", ""),
+                        classification=MoveQuality(m.get("classification", "good")),
+                        delta_cp=m.get("delta_cp", 0),
+                        score_cp=m.get("score_cp"),
+                        mate=m.get("mate"),
+                    )
+                    for m in top_moves_raw
+                ]
+                moves_map = {
+                    uci: MoveAnalysis(
+                        uci=m.get("uci", ""),
+                        from_sq=m.get("from", ""),
+                        to_sq=m.get("to", ""),
+                        classification=MoveQuality(m.get("classification", "good")),
+                        delta_cp=m.get("delta_cp", 0),
+                        score_cp=m.get("score_cp"),
+                        mate=m.get("mate"),
+                    )
+                    for uci, m in ev.get("moves_map", {}).items()
+                }
+                self._cache[clean_fen] = PositionEvaluation(
+                    fen=clean_fen,
+                    score_cp=ev.get("score_cp"),
+                    mate=ev.get("mate"),
+                    win_chance=ev.get("win_chance", 50.0),
+                    best_move=ev.get("best_move"),
+                    top_moves=top_moves,
+                    moves_map=moves_map,
+                    top_lines=ev.get("top_lines", []),
+                )
+            top_lines = ev.get("top_lines")
+            if top_lines and clean_fen not in self._lines_cache:
+                self._store_lines(clean_fen, top_lines)
 
     def request_lines(self, board: chess.Board) -> None:
         """Dispatches a non-blocking async computation of the top PV lines.
@@ -640,10 +689,41 @@ class CoachEngine:
                     to_sq=chess.square_name(legal_move.to_square),
                     classification=MoveQuality.BLUNDER,
                     delta_cp=300,
-                    score_cp=None,
-                    mate=None,
-                )
-                moves_map[uci] = analysis
+        # Extract and format top PV lines
+        top_lines: list[dict[str, Any]] = []
+        for info in infos[:3]:
+            pv = info.get("pv", [])
+            if not pv:
+                continue
+            pv_sliced = pv[:12]
+            uci_list = [m.uci() for m in pv_sliced]
+            san_board = board.copy(stack=False)
+            san_list: list[str] = []
+            for m in pv_sliced:
+                if m not in san_board.legal_moves:
+                    break
+                san_list.append(san_board.san(m))
+                san_board.push(m)
+            score_pov = info.get("score")
+            score_cp_line: int | None = None
+            mate_line: int | None = None
+            if score_pov is not None:
+                pov_score = score_pov.pov(board.turn)
+                cp_raw = pov_score.score()
+                mate_line = pov_score.mate()
+                if cp_raw is not None:
+                    score_cp_line = cp_raw
+                else:
+                    sign = -1 if (mate_line or 0) < 0 else 1
+                    score_cp_line = sign * (10000 + abs(mate_line or 0) * 100)
+            top_lines.append({
+                "uci": uci_list,
+                "san": san_list,
+                "score_cp": score_cp_line,
+                "mate": mate_line,
+            })
+        if top_lines:
+            self._store_lines(clean_fen, top_lines)
 
         return PositionEvaluation(
             fen=clean_fen,
@@ -653,6 +733,7 @@ class CoachEngine:
             best_move=best_move,
             top_moves=top_moves,
             moves_map=moves_map,
+            top_lines=top_lines,
         )
 
     async def batch_evaluate_game(self, moves_uci: list[str]) -> dict[str, Any]:

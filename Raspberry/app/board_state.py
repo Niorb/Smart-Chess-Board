@@ -788,12 +788,14 @@ class BoardStateManager:
         moves_uci: list[str] | None = None,
         game_id: str | None = None,
         source: str = "board",
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         """
         Activates Post-Game Analysis mode on the board and starts asynchronous batch evaluation.
 
         source="web" starts a webapp-only session: the physical board is ignored
         (no reset-to-IDLE gate, no move tracking, no LED guidance).
+        force_refresh=True forces full re-computation and ignores persistent cache.
         """
         self.game_status = "ANALYSIS"
         self.analysis_submode = "review"
@@ -845,23 +847,26 @@ class BoardStateManager:
 
         # Fast path: serve previously completed Stockfish analysis for this exact game
         cache_key = analysis_cache_key(self.analysis_game_moves)
-        cached = await asyncio.to_thread(load_cached_analysis, cache_key)
-        if cached and cached.get("moves") == list(self.analysis_game_moves):
-            result = cached["result"]
-            self.analysis_evaluations = result.get("evaluations", [])
-            self.analysis_played_analyses = result.get("played_analyses", [])
-            self.analysis_accuracy = {
-                "white": result.get("white_accuracy", 100.0),
-                "black": result.get("black_accuracy", 100.0),
-            }
-            self.analysis_counts = result.get("counts", {})
-            self.analysis_blunders = result.get("blunders", [])
-            self.analysis_error = None
-            self.analysis_is_loading = False
-            logger.info(
-                f"Analysis loaded from persistent cache ({len(self.analysis_game_moves)} plies)."
-            )
-            return self.get_analysis_payload()
+        if not force_refresh:
+            cached = await asyncio.to_thread(load_cached_analysis, cache_key)
+            if cached and cached.get("moves") == list(self.analysis_game_moves):
+                result = cached["result"]
+                self.analysis_evaluations = result.get("evaluations", [])
+                self.analysis_played_analyses = result.get("played_analyses", [])
+                self.analysis_accuracy = {
+                    "white": result.get("white_accuracy", 100.0),
+                    "black": result.get("black_accuracy", 100.0),
+                }
+                self.analysis_counts = result.get("counts", {})
+                self.analysis_blunders = result.get("blunders", [])
+                self.analysis_error = None
+                self.analysis_is_loading = False
+                # Hydrate in-memory engine evaluations and lines caches
+                coach_engine.hydrate_from_cached_evaluations(self.analysis_evaluations)
+                logger.info(
+                    f"Analysis loaded from persistent cache ({len(self.analysis_game_moves)} plies) and hydrated in-memory."
+                )
+                return self.get_analysis_payload()
 
         try:
             res = await coach_engine.batch_evaluate_game(self.analysis_game_moves)

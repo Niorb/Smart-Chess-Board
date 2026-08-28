@@ -296,10 +296,10 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     });
   }, [evaluations]);
 
-  const handleStartAnalysis = async () => {
+  const handleStartAnalysis = async (opts?: { moves_uci?: string[]; force_refresh?: boolean }) => {
     setFeedbackMsg({ text: 'Analyzing game with Stockfish...', type: 'info' });
     try {
-      await startAnalysis();
+      await startAnalysis({ ...opts, force_refresh: opts?.force_refresh ?? true });
       setFeedbackMsg({ text: 'Game analysis ready!', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3000);
     } catch {
@@ -309,7 +309,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   // Dedicated webapp-only analysis: runs the same engine but the physical board
   // is never used; opens the interactive web board when done.
-  const handleStartWebAnalysis = async (opts?: { moves_uci?: string[] }) => {
+  const handleStartWebAnalysis = async (opts?: { moves_uci?: string[]; force_refresh?: boolean }) => {
     setWebBoardOpen(true);
     setFeedbackMsg({ text: 'Analyzing game with Stockfish (webapp only)...', type: 'info' });
     try {
