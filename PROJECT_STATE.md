@@ -3,16 +3,20 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Recognized Physical Piece Setup Display & Green/Red Overlay Removal in Play Section (2026-08-28)
-1. **Dynamic Recognized Physical Piece Display (`board_state.py`, `App.tsx`)**:
-   - Implemented `get_recognized_pieces_grid()` on `BoardStateManager` to map active magnetic sensor polarities (`physical_state`) to recognized standard chess pieces in real time.
-   - When the board is not in an active match (`IDLE`, `SEEKING`, `SETUP`), `digital_state` dynamically reflects all physical pieces currently detected on the board (e.g. partial setup, pieces as they are placed, or full 32-piece setup).
+## Latest Change — Game Over Final Position Preservation & Recognized Setup Display in Play Section (2026-08-28)
+1. **Preserve Exact Game Over Board State (`lichess_engine.py`, `board_state.py`, `test_lichess_engine.py`)**:
+   - Fixed game termination transitions in `lichess_engine.py` (`_handle_game_full`, `_handle_game_state`, `claim_victory`, `resign`, `abort`, stream exit) to set `state_manager.game_status = "GAME_OVER"` rather than prematurely resetting to `"IDLE"`.
+   - In `board_state.py`, `GAME_OVER` preserves the exact final `chess.Board` piece arrangement from `lichess_engine.get_board()` / `local_engine.get_board()` (e.g. King on c3, Rook on c6, Knight on b6, King on e7) on the webapp endscreen, preventing physical sensor polarity from converting game-ending piece positions into pawns.
+   - Cleanly transitions from `GAME_OVER` to `IDLE` only when the user resets all 32 pieces to standard starting squares (`is_setup_ready == True`).
+2. **Dynamic Recognized Physical Piece Display during Setup (`board_state.py`, `App.tsx`)**:
+   - Implemented `get_recognized_pieces_grid()` on `BoardStateManager` to map active magnetic sensor polarities (`physical_state`) to recognized standard chess pieces during initial board setup (`IDLE`, `SEEKING`, `SETUP`).
    - Removed `boardOverlay` (the green/red sensor matrix grid overlay) from the Play section board in `App.tsx`, providing a clean, uncluttered board interface.
-2. **Board Square Color Correction (`WebAnalysisBoard.tsx`)**:
+3. **Board Square Color Correction (`WebAnalysisBoard.tsx`)**:
    - Corrected dark/light square calculation to `(file + rank) % 2 === 0` so that `a1` (0,0) and the entire `a1-h8` diagonal are dark squares.
    - Enforces classical "white on right" square parity (`h1` is light, `a1` is dark, `h8` is dark, `a8` is light) across all board themes (Green, Wood, Slate).
-3. **Automated Verification (`test_board_state.py`)**:
+4. **Automated Verification (`test_board_state.py`, `test_lichess_engine.py`)**:
    - Added `test_get_recognized_pieces_grid` verifying empty, partial, and full 32-piece board recognition.
+   - Updated `test_claim_victory_success` in `test_lichess_engine.py`.
 
 ## Previous Change — Unified Web Analysis Board Layout & Animations in Play Section (2026-08-28)
 1. **Interactive Chessboard Unification (`WebAnalysisBoard.tsx`, `App.tsx`)**:

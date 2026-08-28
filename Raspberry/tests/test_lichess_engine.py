@@ -531,7 +531,7 @@ def test_claim_victory_http_success_and_state_updates():
             assert mock_post.call_args.args[0] == "/api/board/game/claimGame123/claim-victory"
             assert engine.game_info["is_game_over"] is True
             assert engine.game_info["winner"] == "white"
-            assert mock_state_mgr.game_status == "IDLE"
+            assert mock_state_mgr.game_status == "GAME_OVER"
             mock_state_mgr.trigger_animation.assert_called_once_with("GAME_WON")
     asyncio.run(_test())
 

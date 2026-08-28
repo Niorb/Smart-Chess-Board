@@ -930,7 +930,7 @@ class LichessEngine:
                 if self.board and self.board.move_stack:
                     self._record_last_game(state_manager)
                 if state_manager and state_manager.game_status == "PLAYING":
-                    state_manager.game_status = "IDLE"
+                    state_manager.game_status = "GAME_OVER" if (self.game_info.get("is_game_over") or (self.board and self.board.is_game_over())) else "IDLE"
 
     def _record_last_game(self, state_manager=None) -> None:
         """Records the moves and metadata of the most recently finished game for analysis."""
@@ -1074,7 +1074,7 @@ class LichessEngine:
             self.game_info["winner"] = state_data.get("winner")
             self.game_info["end_reason"] = status
             self._record_last_game(state_manager)
-            state_manager.game_status = "IDLE"
+            state_manager.game_status = "GAME_OVER"
             self._trigger_end_animation(state_manager, state_data.get("winner"))
         else:
             if state_manager:
@@ -1109,7 +1109,7 @@ class LichessEngine:
             self.game_info["winner"] = winner
             self.game_info["end_reason"] = status
             self._record_last_game(state_manager)
-            state_manager.game_status = "IDLE"
+            state_manager.game_status = "GAME_OVER"
             self._trigger_end_animation(state_manager, winner)
 
     def _apply_moves(self, moves_str: str):
@@ -1266,7 +1266,7 @@ class LichessEngine:
                         self._auto_claim_task.cancel()
                         self._auto_claim_task = None
                     if state_manager:
-                        state_manager.game_status = "IDLE"
+                        state_manager.game_status = "GAME_OVER"
                         if hasattr(state_manager, "trigger_animation"):
                             state_manager.trigger_animation("GAME_WON")
                     return True
@@ -1296,7 +1296,7 @@ class LichessEngine:
                     self.game_info["winner"] = "black" if self.my_color == "white" else "white"
                     self.game_info["end_reason"] = "resign"
                     self._record_last_game(state_manager)
-                    state_manager.game_status = "IDLE"
+                    state_manager.game_status = "GAME_OVER"
                     if state_manager and hasattr(state_manager, "trigger_animation"):
                         state_manager.trigger_animation("GAME_LOST")
                     return True
@@ -1324,7 +1324,7 @@ class LichessEngine:
                     self.game_info["is_game_over"] = True
                     self.game_info["end_reason"] = "abort"
                     self._record_last_game(state_manager)
-                    state_manager.game_status = "IDLE"
+                    state_manager.game_status = "GAME_OVER"
                     return True
                 logger.warning(f"Failed to abort game: HTTP {res.status_code} - {res.text}")
                 return False
