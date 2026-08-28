@@ -296,7 +296,6 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
-  const draggedFarRef.current = false;
   const ghostSizeRef = useRef<number>(60);
 
   useEffect(() => {
