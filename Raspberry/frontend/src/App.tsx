@@ -100,8 +100,7 @@ function App() {
     return undefined;
   }, [ratingBoundary, customMinRating, customMaxRating, account?.rating]);
 
-  // Click to Move state
-  const [selectedSquare, setSelectedSquare] = useState<{ col: number; row: number } | null>(null);
+  // Click to Move promotion state
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
 
   // Disconnection & Victory Claiming State
@@ -175,27 +174,6 @@ function App() {
     };
   }, [isConnected, state.status]);
 
-  // Algebraic coordinate helper: col is rank index (0..7 -> 1..8), row is file index (0..7 -> a..h)
-  const getChessCoord = (col: number, row: number): string => {
-    const file = String.fromCharCode(97 + row);
-    const rank = col + 1;
-    return `${file}${rank}`;
-  };
-
-  // Compute legal destination squares for the currently selected square
-  const legalDestinations = useMemo(() => {
-    if (!selectedSquare || state.status !== 'PLAYING') return new Set<string>();
-    const fromCoord = getChessCoord(selectedSquare.col, selectedSquare.row);
-    const moves = state.game?.legal_moves ?? [];
-    const dests = new Set<string>();
-    for (const m of moves) {
-      if (m.startsWith(fromCoord)) {
-        dests.add(m.slice(2, 4));
-      }
-    }
-    return dests;
-  }, [selectedSquare, state.status, state.game?.legal_moves]);
-
   // Map of destination coordinate -> move quality tier for the active selected piece or physical lifted piece
   const destQualities = useMemo(() => {
     const map = new Map<string, 'best' | 'good' | 'inaccuracy' | 'blunder'>();
@@ -206,31 +184,6 @@ function App() {
     }
     return map;
   }, [state.coach]);
-
-  // Last move squares
-  const lastMoveSquares = useMemo(() => {
-    const lm = state.game?.last_move;
-    if (!lm || lm.length < 4) return null;
-    return {
-      from: lm.slice(0, 2),
-      to: lm.slice(2, 4),
-    };
-  }, [state.game?.last_move]);
-
-  // Check state location
-  const kingInCheckCoord = useMemo(() => {
-    if (!state.game?.is_check || state.status !== 'PLAYING') return null;
-    const turn = state.game.turn;
-    const kingSymbol = turn === 'white' ? 'K' : 'k';
-    for (let c = 0; c < 8; c++) {
-      for (let r = 0; r < 8; r++) {
-        if (state.digital[c]?.[r] === kingSymbol) {
-          return getChessCoord(c, r);
-        }
-      }
-    }
-    return null;
-  }, [state.game?.is_check, state.game?.turn, state.digital, state.status]);
 
   // Physical file/rank index (0..7, 0..7) to chess square string (e.g. [4, 3] -> "e4")
   const fileRankToChessCoord = (c: number, r: number): string => {
@@ -297,68 +250,6 @@ function App() {
       }
     } catch (err) {
       console.error("Error making move:", err);
-    }
-  };
-
-  const handleSquareClick = async (col: number, row: number) => {
-    if (state.status !== 'PLAYING') return;
-
-    const clickedCoord = getChessCoord(col, row);
-
-    if (!selectedSquare) {
-      const piece = state.digital[col]?.[row];
-      if (piece && piece !== '.') {
-        const isWhitePiece = piece === piece.toUpperCase();
-        const isMyPiece = state.my_color 
-          ? (state.my_color === 'white' ? isWhitePiece : !isWhitePiece)
-          : true;
-
-        if (isMyPiece) {
-          setSelectedSquare({ col, row });
-        }
-      }
-    } else {
-      const fromSquare = getChessCoord(selectedSquare.col, selectedSquare.row);
-      const toSquare = clickedCoord;
-
-      if (fromSquare === toSquare) {
-        setSelectedSquare(null);
-        return;
-      }
-
-      // Check if moving onto another friendly piece to switch selection
-      const targetPiece = state.digital[col]?.[row];
-      if (targetPiece && targetPiece !== '.') {
-        const isTargetWhite = targetPiece === targetPiece.toUpperCase();
-        const isMyTarget = state.my_color 
-          ? (state.my_color === 'white' ? isTargetWhite : !isTargetWhite)
-          : true;
-        if (isMyTarget && !legalDestinations.has(toSquare)) {
-          setSelectedSquare({ col, row });
-          return;
-        }
-      }
-
-      // Check for pawn promotion: White pawn reaching rank 8 (col 7) or Black pawn reaching rank 1 (col 0)
-      const movingPiece = state.digital[selectedSquare.col]?.[selectedSquare.row];
-      const isPawn = movingPiece?.toLowerCase() === 'p';
-      const isPromotion = isPawn && ((movingPiece === 'P' && col === 7) || (movingPiece === 'p' && col === 0));
-
-      if (isPromotion && legalDestinations.has(toSquare)) {
-        setPendingPromotion({ from: fromSquare, to: toSquare });
-        setSelectedSquare(null);
-        return;
-      }
-
-      setSelectedSquare(null);
-      try {
-        const res = await makeMove(fromSquare, toSquare);
-        if (res.status !== 'success') {
-          console.warn("Move rejected:", res.message);
-        }
-      } catch (err) {
-        console.error("Error making move:", err);
-      }
     }
   };
 
