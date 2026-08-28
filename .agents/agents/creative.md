@@ -35,7 +35,7 @@ Your mission is to generate innovative, high-impact features, UX improvements, g
 - Present ideas clearly structured with:
   - **Concept Name & Elevator Pitch**
   - **User Experience Impact**
-  - **Technical Feasibility & Domain Requirements** (Hardware, Game Engine, Chess AI, LED Visuals, Frontend)
+  - **Technical Feasibility & Domain Requirements** (Hardware, Backend, Lighting, Frontend)
 
 ## GitHub Access Directive
 > [!IMPORTANT]

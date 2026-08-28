@@ -3,7 +3,27 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Live Board Setup Highlights & Real-Time Piece Synchronization across Replay, Endgame, Review & Play (2026-08-28)
+## Latest Change — Orchestrator Architecture Rework, Wise Living Memory Agent & Streamlined Specialist Roster (2026-08-28)
+1. **Lead Project Orchestrator Rework (`AGENTS.md`)**:
+   - Replaced duplicate instructions across `AGENTS.md` and deleted `GEMINI.md`.
+   - Formulated a hybrid orchestrator model (delegates multi-domain features and deep refactors to specialist subagents, handles small direct edits directly).
+   - Preserved strict `gh` CLI over HTTPS directives; cleaned up redundant remote/SSH configuration blocks.
+2. **Dedicated Living Memory Agent (`.agents/agents/wise.md`)**:
+   - Created the `wise` agent persona as the living memory and architectural conscience of the project.
+   - Seeded with the 8 hard-won architectural lessons (Physical Move Tracking, Gestures & Gates, Solution Concealment, Stockfish UCI Async Locking, Lichess Streaming, Optimistic UI, Hardware Sandboxing, and LED Power Budgeting).
+   - Established the living document mandate: `wise.md` must be updated whenever non-trivial bugs or subtle race conditions are resolved.
+3. **Streamlined 7-Agent Core Pillars (`.agents/agents/`)**:
+   - Consolidated 9 fragmented agents down to 7 core pillars:
+     - `wise.md`: Evolving institutional memory & lessons learned.
+     - `backend.md`: FastAPI, state coordinator, physical tracker, Stockfish UCI, Lichess streaming, endgame/puzzle DB.
+     - `hardware.md`: ESP32 C++ firmware, MUX scanning, Hall sensor ADC calibration, CRC-8 framing.
+     - `led_visuals.md`: WS2812B dual-strip LED array rendering, serpentine mapping, 220mA power budgeting.
+     - `frontend.md`: React 19, TypeScript, Tailwind, WebSocket state hooks, optimistic UI reconciliation.
+     - `qa.md`: Pytest test suites, mock hardware validation, sandboxing, quality gates.
+     - `creative.md`: Brainstorming & ideation (invoked only on explicit user request).
+   - Removed obsolete files (`arch.md`, `chess_ai.md`, `explorer.md`, `game_engine.md`) and the obsolete `agentic-orchestrator` skill.
+
+## Previous Change — Live Board Setup Highlights & Real-Time Piece Synchronization across Replay, Endgame, Review & Play (2026-08-28)
 1. **First-Class Setup Highlights Support (`WebAnalysisBoard.tsx`)**:
    - Added `setupHighlights` prop (`missingWhite`, `missingBlack`, `misplaced`, `enabled`) to `WebAnalysisBoard`.
    - Missing starting squares render pulsating pure white halos/rings (`border-2 border-white/90 bg-white/20 shadow-[0_0_12px_rgba(255,255,255,0.7)]`).

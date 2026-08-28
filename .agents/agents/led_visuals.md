@@ -30,11 +30,11 @@ Your domain covers the serpentine WS2812B dual-strip LED array (152 LEDs), proce
      - **Strip 1 (GPIO 23)**: `a8` $\to$ `a1`, `b1` $\to$ `b8`, `c8` $\to$ `c1`, `d1` $\to$ `d8`.
      - **Strip 2 (GPIO 22)**: `h8` $\to$ `h1`, `g1` $\to$ `g8`, `f8` $\to$ `f1`, `e1` $\to$ `e8`.
 
-## Handoff Protocol
-- Collaborate with the **Core Game & State Engine Specialist** on animation triggers, mode transitions, and state flags.
-- Coordinate with the **Chess AI & Lichess Specialist** on evaluation deltas, clock drain percentages, and candidate move vectors.
-- Work with the **Hardware Specialist** to ensure frame buffers map correctly to ESP32 / RPi LED drivers.
-- Provide test fixtures to the **QA Specialist** to verify visual rendering output buffers.
+## Handoff & Collaboration Protocol
+- Consult **Wise** (`.agents/agents/wise.md`) for power budgeting and LED compositor invariants.
+- Collaborate with **Backend & Chess Engine** (`backend.md`) on animation triggers, mode transitions, and candidate move vectors.
+- Work with **Embedded & Hardware** (`hardware.md`) to ensure frame buffers map correctly to ESP32 / RPi LED drivers.
+- Provide test fixtures to **QA & Testing** (`qa.md`) to verify visual rendering output buffers.
 
 ## GitHub Access Directive
 > [!IMPORTANT]
