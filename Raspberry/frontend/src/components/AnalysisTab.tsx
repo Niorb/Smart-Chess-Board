@@ -26,7 +26,7 @@ import {
   X
 } from 'lucide-react';
 import type { BoardState, GMGameSummary } from '../hooks/useBoardState';
-import WebAnalysisBoard from './WebAnalysisBoard';
+import WebAnalysisBoard, { digitalGridToFen } from './WebAnalysisBoard';
 import { 
   startAnalysis, 
   stepAnalysis, 
@@ -937,6 +937,12 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     myColor={boardState.my_color === 'black' ? 'black' : 'white'}
                     topLines={analysis?.top_lines ?? null}
                     onLineClick={handleLineClick}
+                    setupHighlights={{
+                      missingWhite: boardState.physical?.setup?.missing_white,
+                      missingBlack: boardState.physical?.setup?.missing_black,
+                      misplaced: boardState.physical?.setup?.misplaced_pieces,
+                      enabled: !boardState.physical?.setup?.is_setup_ready && !isBranching && currentPly === 0,
+                    }}
                   />
                 );
               })()
@@ -1841,35 +1847,81 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           {analysis?.active && replayPhase === 'recall' && (
             <div className="space-y-6">
               {replayComplete ? (
-                /* Victory Summary */
-                <div className="bg-slate-900/90 border border-emerald-500/50 rounded-2xl p-8 text-center space-y-4 shadow-xl ring-1 ring-emerald-500/30">
-                  <Trophy className="w-14 h-14 text-amber-400 mx-auto" />
-                  <h3 className="text-xl font-bold text-white">Recall Complete!</h3>
-                  <div className="flex items-center justify-center gap-6">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-emerald-400">{correctRecalls}/{learnedPly}</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Moves Remembered</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-rose-400">{replayMistakes}</div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Mistakes</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-sky-400">
-                        {learnedPly ? Math.round((correctRecalls / learnedPly) * 100) : 0}%
+                /* Victory Summary & Live Board Reset */
+                <div className="space-y-6">
+                  <div className="bg-slate-900/90 border border-emerald-500/50 rounded-2xl p-8 text-center space-y-4 shadow-xl ring-1 ring-emerald-500/30">
+                    <Trophy className="w-14 h-14 text-amber-400 mx-auto" />
+                    <h3 className="text-xl font-bold text-white">Recall Complete!</h3>
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-emerald-400">{correctRecalls}/{learnedPly}</div>
+                        <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Moves Remembered</div>
                       </div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Memory Score</div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-rose-400">{replayMistakes}</div>
+                        <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Mistakes</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-sky-400">
+                          {learnedPly ? Math.round((correctRecalls / learnedPly) * 100) : 0}%
+                        </div>
+                        <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Memory Score</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      Set all pieces back to the starting position to finish the session, or exit below.
+                    </p>
+                    <button
+                      onClick={stopAnalysis}
+                      className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                    >
+                      Exit Replay Trainer
+                    </button>
+                  </div>
+
+                  {/* Live Board Reset Guidance */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col items-center space-y-4 shadow-xl">
+                    <div className="w-full flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          Board Reset Guidance
+                        </span>
+                      </div>
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                        boardState.physical?.setup?.is_setup_ready
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-950/80 text-amber-300 border-amber-500/40 animate-pulse'
+                      }`}>
+                        {boardState.physical?.setup?.is_setup_ready
+                          ? '✅ Board Setup Ready'
+                          : `Resetting Pieces: ${32 - ((boardState.physical?.setup?.missing_white?.length ?? 0) + (boardState.physical?.setup?.missing_black?.length ?? 0))}/32`}
+                      </span>
+                    </div>
+
+                    <WebAnalysisBoard
+                      fen={digitalGridToFen(boardState.digital)}
+                      setupHighlights={{
+                        missingWhite: boardState.physical?.setup?.missing_white,
+                        missingBlack: boardState.physical?.setup?.missing_black,
+                        misplaced: boardState.physical?.setup?.misplaced_pieces,
+                        enabled: true,
+                      }}
+                      myColor={boardState.my_color === 'black' ? 'black' : 'white'}
+                      disabled
+                    />
+
+                    <div className="text-xs text-slate-400 text-center flex items-center gap-4 flex-wrap justify-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full border border-white bg-white/40 shadow-[0_0_6px_#fff]" />
+                        <span>White square: Missing starting piece</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full border border-amber-400 bg-amber-400/40 shadow-[0_0_6px_#f59e0b]" />
+                        <span>Yellow square: Misplaced piece</span>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Set all pieces back to the starting position to finish the session, or exit below.
-                  </p>
-                  <button
-                    onClick={stopAnalysis}
-                    className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
-                  >
-                    Exit Replay Trainer
-                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2122,6 +2174,21 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                       When all White pieces are correctly positioned, a gentle ivory wave will confirm and advance to Black piece setup.
                     </p>
 
+                    {/* Live Endgame Setup Web Board */}
+                    <div className="flex flex-col items-center justify-center p-4 bg-slate-950/60 border border-slate-800 rounded-2xl">
+                      <WebAnalysisBoard
+                        fen={digitalGridToFen(boardState.digital)}
+                        setupHighlights={{
+                          missingWhite: eg.setup_status.missing_white,
+                          missingBlack: eg.setup_status.missing_black,
+                          misplaced: eg.setup_status.misplaced,
+                          enabled: true,
+                        }}
+                        myColor={eg.drill.player_color}
+                        disabled
+                      />
+                    </div>
+
                     {/* Piece Setup Checklist */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                       {eg.setup_status.missing_white.length > 0 ? (
@@ -2157,6 +2224,21 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     <p className="text-xs text-slate-300 leading-relaxed">
                       Now place the Black pieces on their illuminated target squares. When all pieces are correctly detected, the board will flash ready and the drill will begin!
                     </p>
+
+                    {/* Live Endgame Setup Web Board */}
+                    <div className="flex flex-col items-center justify-center p-4 bg-slate-950/60 border border-slate-800 rounded-2xl">
+                      <WebAnalysisBoard
+                        fen={digitalGridToFen(boardState.digital)}
+                        setupHighlights={{
+                          missingWhite: eg.setup_status.missing_white,
+                          missingBlack: eg.setup_status.missing_black,
+                          misplaced: eg.setup_status.misplaced,
+                          enabled: true,
+                        }}
+                        myColor={eg.drill.player_color}
+                        disabled
+                      />
+                    </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                       {eg.setup_status.missing_black.length > 0 ? (

@@ -3,7 +3,19 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Game Over Final Position Preservation & Recognized Setup Display in Play Section (2026-08-28)
+## Latest Change — Live Board Setup Highlights & Real-Time Piece Synchronization across Replay, Endgame, Review & Play (2026-08-28)
+1. **First-Class Setup Highlights Support (`WebAnalysisBoard.tsx`)**:
+   - Added `setupHighlights` prop (`missingWhite`, `missingBlack`, `misplaced`, `enabled`) to `WebAnalysisBoard`.
+   - Missing starting squares render pulsating pure white halos/rings (`border-2 border-white/90 bg-white/20 shadow-[0_0_12px_rgba(255,255,255,0.7)]`).
+   - Misplaced squares render amber/yellow glowing warning halos/rings (`border-2 border-amber-400 bg-amber-500/25 shadow-[0_0_12px_rgba(245,158,11,0.65)]`).
+2. **Replay Trainer Live Board Reset (`AnalysisTab.tsx`, `board_state.py`)**:
+   - In `board_state.py`, updated `update_loop` during `ANALYSIS` when `replay_complete` is active to dynamically update `digital_state = get_recognized_pieces_grid(physical_state)`, mapping piece movements in real time.
+   - In `AnalysisTab.tsx`, added `WebAnalysisBoard` to the Recall Complete screen with live recognized piece FEN (`digitalGridToFen(boardState.digital)`), real-time setup highlights, and a progress counter (`{32 - missingCount}/32`).
+3. **Endgame Academy & Review Mode Live Setup Synchronization (`AnalysisTab.tsx`, `board_state.py`)**:
+   - Added live `WebAnalysisBoard` to Endgame Academy `setup_white` and `setup_black` phases, displaying target setup squares, live piece positions, and misplaced warnings.
+   - Added live `setupHighlights` to Review mode and Play tab during board reset/setup.
+
+## Previous Change — Game Over Final Position Preservation & Recognized Setup Display in Play Section (2026-08-28)
 1. **Preserve Exact Game Over Board State (`lichess_engine.py`, `board_state.py`, `test_lichess_engine.py`)**:
    - Fixed game termination transitions in `lichess_engine.py` (`_handle_game_full`, `_handle_game_state`, `claim_victory`, `resign`, `abort`, stream exit) to set `state_manager.game_status = "GAME_OVER"` rather than prematurely resetting to `"IDLE"`.
    - In `board_state.py`, `GAME_OVER` preserves the exact final `chess.Board` piece arrangement from `lichess_engine.get_board()` / `local_engine.get_board()` (e.g. King on c3, Rook on c6, Knight on b6, King on e7) on the webapp endscreen, preventing physical sensor polarity from converting game-ending piece positions into pawns.

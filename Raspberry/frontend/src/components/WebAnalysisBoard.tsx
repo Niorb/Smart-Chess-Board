@@ -61,15 +61,23 @@ export interface WebAnalysisBoardProps {
   showOrientationToggle?: boolean;
   showThemeToggle?: boolean;
   topBar?: React.ReactNode;
-  bottomBar?: React.ReactNode;
   /** Move quality tiers for target square dots */
   destQualities?: Map<string, 'best' | 'good' | 'inaccuracy' | 'blunder'>;
   /** Custom overlay renderer per square */
   renderSquareOverlay?: (coord: Coord, squareName: string) => React.ReactNode;
   /** Whole-board overlay, e.g. physical sensor matrix */
   boardOverlay?: React.ReactNode | ((flipped: boolean) => React.ReactNode);
+  /** Physical board setup highlights (missing starting squares white, misplaced pieces amber/yellow) */
+  setupHighlights?: SetupHighlightsProp;
   className?: string;
   disabled?: boolean;
+}
+
+export interface SetupHighlightsProp {
+  missingWhite?: Array<[number, number]>;
+  missingBlack?: Array<[number, number]>;
+  misplaced?: Array<[number, number]>;
+  enabled?: boolean;
 }
 
 export const PIECE_IMAGES: Record<string, string> = {
@@ -233,10 +241,32 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   destQualities,
   renderSquareOverlay,
   boardOverlay,
+  setupHighlights,
   className,
   disabled,
 }) => {
   const legalMoves = useMemo(() => legalMovesProp ?? [], [legalMovesProp]);
+
+  const missingSquaresSet = useMemo(() => {
+    if (!setupHighlights?.enabled) return new Set<string>();
+    const set = new Set<string>();
+    for (const [f, r] of setupHighlights.missingWhite ?? []) {
+      set.add(`${f},${r}`);
+    }
+    for (const [f, r] of setupHighlights.missingBlack ?? []) {
+      set.add(`${f},${r}`);
+    }
+    return set;
+  }, [setupHighlights]);
+
+  const misplacedSquaresSet = useMemo(() => {
+    if (!setupHighlights?.enabled) return new Set<string>();
+    const set = new Set<string>();
+    for (const [f, r] of setupHighlights.misplaced ?? []) {
+      set.add(`${f},${r}`);
+    }
+    return set;
+  }, [setupHighlights]);
 
   const grid = useMemo(() => {
     if (gridProp && Array.isArray(gridProp) && gridProp.length === 8) {
@@ -653,6 +683,9 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
               piece,
             );
 
+            const isMissingStarting = missingSquaresSet.has(`${file},${rank}`);
+            const isMisplaced = misplacedSquaresSet.has(`${file},${rank}`);
+
             return (
               <div
                 key={idx}
@@ -673,6 +706,26 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                 {/* Selected square halo */}
                 {isSelected && (
                   <div className="absolute inset-0" style={{ backgroundColor: 'rgba(59, 130, 246, 0.35)' }} />
+                )}
+
+                {/* Physical setup: Misplaced piece warning highlight (amber/yellow glow) */}
+                {isMisplaced && (
+                  <div
+                    className="absolute inset-0.5 rounded-lg border-2 border-amber-400 bg-amber-500/25 z-[6] pointer-events-none shadow-[0_0_12px_rgba(245,158,11,0.65)] flex items-center justify-center animate-pulse"
+                    title="Misplaced piece — return to starting square or remove"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-200 shadow-[0_0_6px_#f59e0b]" />
+                  </div>
+                )}
+
+                {/* Physical setup: Missing starting piece highlight (pure white glow) */}
+                {isMissingStarting && (
+                  <div
+                    className="absolute inset-0.5 rounded-lg border-2 border-white/90 bg-white/20 z-[6] pointer-events-none shadow-[0_0_12px_rgba(255,255,255,0.7)] flex items-center justify-center animate-pulse"
+                    title="Missing starting piece — place piece here"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-white border border-slate-200 shadow-[0_0_6px_#fff]" />
+                  </div>
                 )}
 
                 {/* Coordinate labels along board edges */}

@@ -4016,19 +4016,26 @@ class BoardStateManager:
                             }
                             active_chess_board = getattr(lichess_engine, "board", None)
                     elif self.game_status == "ANALYSIS":
-                        fen = self.analysis_active_board.fen()
-                        if fen != self._analysis_grid_fen:
-                            board_grid = [["." for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)]
-                            for sq in chess.SQUARES:
-                                piece = self.analysis_active_board.piece_at(sq)
-                                if piece:
-                                    f = chess.square_file(sq)
-                                    r = chess.square_rank(sq)
-                                    board_grid[r][f] = piece.symbol()
-                            self.digital_state = board_grid
-                            self._analysis_grid_fen = fen
+                        if getattr(self, "replay_complete", False):
+                            self.digital_state = self.get_recognized_pieces_grid(self.physical_state)
+                            active_chess_board = None
+                        elif self.analysis_submode == "endgame" and self.endgame_phase in ["setup_white", "setup_black"]:
+                            self.digital_state = self.get_recognized_pieces_grid(self.physical_state)
+                            active_chess_board = self.analysis_active_board
+                        else:
+                            fen = self.analysis_active_board.fen()
+                            if fen != self._analysis_grid_fen:
+                                board_grid = [["." for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)]
+                                for sq in chess.SQUARES:
+                                    piece = self.analysis_active_board.piece_at(sq)
+                                    if piece:
+                                        f = chess.square_file(sq)
+                                        r = chess.square_rank(sq)
+                                        board_grid[r][f] = piece.symbol()
+                                self.digital_state = board_grid
+                                self._analysis_grid_fen = fen
+                            active_chess_board = self.analysis_active_board
                         self.clocks = ANALYSIS_CLOCKS
-                        active_chess_board = self.analysis_active_board
                     elif self.game_status == "GAME_OVER":
                         if hasattr(self, "local_engine") and self.local_engine.game_id:
                             self.digital_state = self.local_engine.get_board()

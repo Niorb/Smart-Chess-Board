@@ -1128,6 +1128,12 @@ function App() {
                   </>
                 );
               }}
+              setupHighlights={{
+                missingWhite: state.physical?.setup?.missing_white,
+                missingBlack: state.physical?.setup?.missing_black,
+                misplaced: state.physical?.setup?.misplaced_pieces,
+                enabled: !state.physical?.setup?.is_setup_ready && (state.status === 'GAME_OVER' || state.status === 'IDLE' || state.status === 'SETUP'),
+              }}
             />
           </div>
 
