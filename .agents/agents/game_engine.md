@@ -14,19 +14,20 @@ Your domain covers the central state coordinator, physical sensor tracking, spat
 ## Target Files & Scope
 - `Raspberry/app/board_state.py`: Central `BoardStateManager` loop (100 Hz tick rate), mode transitions (`IDLE`, `PLAYING`, `ANALYSIS`, `GM_TIME_MACHINE`, `BLUNDER_BLITZ`), move processing, arrival flashes, WebSocket broadcast management.
 - `Raspberry/app/physical_tracker.py`: Hall-effect sensor matrix debouncing, lift/drop tracking, piece polarity normalization, castling two-piece movement absorption, invalid placement recovery.
-- `Raspberry/app/gesture_engine.py`: Starter pawn detection (`e2`, `a2`, `h2`), physical board menu navigation (back-rank piece lifts for time control / mode selection), hold-offs, gesture state machines.
+- `Raspberry/app/gesture_engine.py`: Starter pawn detection (`e2`, `a2`, `h2`, `c2`), physical board menu navigation (back-rank piece lifts for time control / mode selection), hold-offs, gesture state machines.
 - `Raspberry/app/setup_validator.py`: Starting 32-piece setup detection and anchor configuration validation.
 - `Raspberry/app/main.py`: FastAPI REST API endpoints, WebSockets connection manager, background task supervisor.
 
-## Domain Principles & Guidelines
+## Domain Principles & Invariants
 1. **100 Hz Non-Blocking State Loop**:
-   - The `BoardStateManager` background update loop runs at ~100 Hz. Never execute blocking I/O, heavy synchronizations, or un-shielded tasks inside the tick path.
-   - Exceptions inside the tick loop must be logged with tracebacks and recovered gracefully without terminating the scanning loop.
-2. **Physical Move & Debounce Safety**:
-   - Physical pieces trigger Hall sensor transitions asynchronously. Always route piece transitions through `PhysicalMoveTracker` to debounce noise and manage multi-step interactions (e.g., castling King + Rook sequences).
-3. **State Machine Invariants**:
-   - Explicitly manage mode transitions between `IDLE`, `PLAYING`, and `ANALYSIS`.
-   - Prevent state collision during analysis resets, physical branch undo, or starting position restoration.
+   - The `BoardStateManager` background update loop runs at ~100 Hz. Never execute blocking I/O, heavy synchronizations, or un-shielded tasks inside the tick path. Wrap heavy sync routines in `asyncio.to_thread`.
+2. **Physical Move & Tracker Invariants**:
+   - **Mid-Air Capture Safety**: When tracking opponent captures, wait for the captured square to be vacated AND the destination square to be occupied by the moving piece before confirming.
+   - **Two-Phase Opponent Castling**: `PhysicalMoveTracker.set_opponent_move()` must track both King and Rook phases symmetrically.
+   - **Tracker Baseline Resync Invariant**: ALWAYS call `move_tracker.reset(self.physical_state)` whenever applying an opponent move programmatically (from web, engine, or drill) to preserve baseline alignment.
+3. **Gesture & Setup Validation Invariants**:
+   - **Setup Readiness Gate (`is_setup_ready`)**: Gestures must only arm when all 32 pieces are in standard starting positions and the `BOARD_READY` snap-flash has completed.
+   - **Post-Game Transition**: After replay/game completion animations, transition to Layer 1 setup validation mode and suppress move tracking / illegal move warnings while `replay_complete` is active.
 4. **WebSocket Broadcast Hygiene**:
    - Utilize client outgoing queues and broadcast change digests to prevent slow WebSocket clients from blocking the state loop.
 

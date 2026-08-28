@@ -375,6 +375,16 @@ class LocalGameEngine:
 
 # Shared immutable-ish sync targets (identity-stable so broadcast digests can detect change)
 EMPTY_DIGITAL_GRID = [["." for _ in range(8)] for _ in range(8)]
+STARTING_DIGITAL_GRID = [
+    ["R", "N", "B", "Q", "K", "B", "N", "R"],
+    ["P", "P", "P", "P", "P", "P", "P", "P"],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    [".", ".", ".", ".", ".", ".", ".", "."],
+    ["p", "p", "p", "p", "p", "p", "p", "p"],
+    ["r", "n", "b", "q", "k", "b", "n", "r"],
+]
 ANALYSIS_CLOCKS = {"white": "∞", "black": "∞"}
 IDLE_CLOCKS = {"white": "?", "black": "?"}
 
@@ -3989,7 +3999,10 @@ class BoardStateManager:
                             active_chess_board = getattr(lichess_engine, "board", None)
                         self.clocks = IDLE_CLOCKS
                     else:
-                        self.digital_state = EMPTY_DIGITAL_GRID
+                        if hasattr(self, "setup_result") and self.setup_result and self.setup_result.is_setup_ready:
+                            self.digital_state = STARTING_DIGITAL_GRID
+                        else:
+                            self.digital_state = EMPTY_DIGITAL_GRID
                         self.clocks = IDLE_CLOCKS
                         self.current_opening = None
 

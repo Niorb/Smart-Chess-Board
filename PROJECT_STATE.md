@@ -3,7 +3,18 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Unified Web Analysis Board Layout & Animations in Play Section (2026-08-28)
+## Latest Change — Board Square Colors & Fully Setup Piece Display in Play Section (2026-08-28)
+1. **Board Square Color Correction (`WebAnalysisBoard.tsx`)**:
+   - Corrected dark/light square calculation to `(file + rank) % 2 === 0` so that `a1` (0,0) and the entire `a1-h8` diagonal are dark squares.
+   - Enforces classical "white on right" square parity (`h1` is light, `a1` is dark, `h8` is dark, `a8` is light) across all board themes (Green, Wood, Slate).
+2. **Piece Display on Fully Setup Board (`board_state.py`, `App.tsx`, `test_board_state.py`)**:
+   - In `board_state.py`, defined `STARTING_DIGITAL_GRID` and synchronized `digital_state` to standard starting pieces whenever the physical board completes a full 32-piece setup (`is_setup_ready == True`) during `IDLE`, `SEEKING`, or `SETUP` modes.
+   - In `App.tsx`, updated `playFen` fallback to guarantee full 32-piece starting position rendering when `is_setup_ready` is active.
+   - Refined `boardOverlay` condition in the Play section to automatically conceal the sensor debugging grid once `is_setup_ready` is true, presenting a clean interactive board with all pieces in place even when no game or matchmaking queue is active.
+3. **Automated Verification**:
+   - Added `test_digital_state_starting_grid_when_setup_ready` in `test_board_state.py`.
+
+## Previous Change — Unified Web Analysis Board Layout & Animations in Play Section (2026-08-28)
 1. **Interactive Chessboard Unification (`WebAnalysisBoard.tsx`, `App.tsx`)**:
    - Replaced the Play section's legacy static unicode board with the exact modern interactive board layout from the webapp analysis section (`WebAnalysisBoard`).
    - Integrated full SVG piece vector assets (`wK`, `wQ`, `wR`, `wB`, `wN`, `wP`, `bK`, `bQ`, `bR`, `bB`, `bN`, `bP`) with drop shadows.

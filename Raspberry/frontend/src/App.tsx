@@ -234,8 +234,11 @@ function App() {
 
   // Play section active FEN computed from digital board grid
   const playFen = useMemo(() => {
+    if (state.status !== 'PLAYING' && state.physical?.setup?.is_setup_ready) {
+      return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    }
     return digitalGridToFen(state.digital, state.game?.turn ?? 'white');
-  }, [state.digital, state.game?.turn]);
+  }, [state.digital, state.game?.turn, state.status, state.physical?.setup?.is_setup_ready]);
 
   // Handle moves played via web board interaction (drag & drop or click-to-move)
   const handlePlayMove = async (uci: string) => {
@@ -1129,15 +1132,11 @@ function App() {
                 );
               }}
               boardOverlay={
-                state.status !== 'PLAYING' && !state.virtual_only
+                state.status !== 'PLAYING' && !state.virtual_only && !state.physical?.setup?.is_setup_ready
                   ? (flipped) => (
-                      <div className={`absolute inset-0 bg-blue-950/20 border transition-all duration-300 backdrop-blur-[0.5px] z-20 pointer-events-none rounded-md overflow-hidden ${
-                        state.physical?.setup?.is_setup_ready ? 'border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'border-blue-500/20'
-                      }`}>
-                        <div className={`absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white shadow z-30 ${
-                          state.physical?.setup?.is_setup_ready ? 'bg-emerald-600/90' : 'bg-blue-600/90'
-                        }`}>
-                          {state.physical?.setup?.is_setup_ready ? 'Physical Board Ready' : 'Physical Sensors Active'}
+                      <div className="absolute inset-0 bg-blue-950/20 border border-blue-500/20 transition-all duration-300 backdrop-blur-[0.5px] z-20 pointer-events-none rounded-md overflow-hidden">
+                        <div className="absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white shadow z-30 bg-blue-600/90">
+                          Physical Sensors Active
                         </div>
                         <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
                           {Array(8).fill(null).map((_, rIdx) => (

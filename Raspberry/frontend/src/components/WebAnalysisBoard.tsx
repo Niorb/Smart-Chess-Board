@@ -622,7 +622,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             const c: Coord = [file, rank];
             const squareName = FILES[file] + (rank + 1);
             const piece = pieceAt(c);
-            const isDark = (file + rank) % 2 === 1;
+            const isDark = (file + rank) % 2 === 0;
 
             const isLastFrom = lastHighlight && lastHighlight.from[0] === file && lastHighlight.from[1] === rank;
             const isLastTo = lastHighlight && lastHighlight.to[0] === file && lastHighlight.to[1] === rank;

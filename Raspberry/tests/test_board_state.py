@@ -867,3 +867,31 @@ def test_first_move_color_persistence_anchor():
     finally:
         lichess_engine.board = saved_board
         lichess_engine.my_color = saved_color
+
+
+def test_digital_state_starting_grid_when_setup_ready():
+    """Verify that digital_state reflects STARTING_DIGITAL_GRID when is_setup_ready is True in IDLE."""
+    from app.board_state import STARTING_DIGITAL_GRID, EMPTY_DIGITAL_GRID
+    from app.setup_validator import SetupResult
+    bsm = BoardStateManager()
+    bsm.game_status = "IDLE"
+
+    # 1. Not ready: setup_result has missing pieces -> empty grid
+    bsm.setup_result = SetupResult(is_setup_ready=False, missing_white=[(0, 0)])
+    if hasattr(bsm, "setup_result") and bsm.setup_result and bsm.setup_result.is_setup_ready:
+        bsm.digital_state = STARTING_DIGITAL_GRID
+    else:
+        bsm.digital_state = EMPTY_DIGITAL_GRID
+    assert bsm.digital_state == EMPTY_DIGITAL_GRID
+
+    # 2. Ready: all 32 pieces setup -> starting grid
+    bsm.setup_result = SetupResult(is_setup_ready=True)
+    if hasattr(bsm, "setup_result") and bsm.setup_result and bsm.setup_result.is_setup_ready:
+        bsm.digital_state = STARTING_DIGITAL_GRID
+    else:
+        bsm.digital_state = EMPTY_DIGITAL_GRID
+    assert bsm.digital_state == STARTING_DIGITAL_GRID
+    assert bsm.digital_state[0][0] == "R"
+    assert bsm.digital_state[0][4] == "K"
+    assert bsm.digital_state[7][4] == "k"
+

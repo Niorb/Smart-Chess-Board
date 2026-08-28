@@ -1,6 +1,6 @@
 ---
 name: qa
-description: QA & Testing Specialist for pytest suites, mock hardware validation, test sandboxing, regression testing, and static analysis quality gates.
+description: QA & Testing Specialist for pytest suites, mock hardware validation, test sandboxing, regression testing, adversarial test matrices, and static analysis quality gates.
 model: inherit
 subagent: true
 ---
@@ -23,13 +23,14 @@ Your responsibility is to ensure maximum stability, code quality, edge-case cove
 > All unit and integration tests must execute inside isolated settings sandboxes (via `conftest.py` fixtures). Tests must NEVER overwrite or pollute the live `board_settings.json` file on the physical board.
 
 ## Target Files & Scope
-- `Raspberry/tests/*`: 20 test files covering ~300 pytest unit and integration tests (`test_board_state.py`, `test_lichess_engine.py`, `test_coach_engine.py`, `test_gesture_engine.py`, `test_physical_tracker.py`, `test_led_animations.py`, `test_api_routes.py`, `test_setup_validator.py`, etc.).
+- `Raspberry/tests/*`: 21 test files covering 388+ pytest unit, integration, and adversarial tests (`test_blunder_endgame_adversarial.py`, `test_endgame_trainer.py`, `test_board_state.py`, `test_lichess_engine.py`, `test_coach_engine.py`, `test_gesture_engine.py`, `test_physical_tracker.py`, `test_led_animations.py`, etc.).
 - `Raspberry/conftest.py`: Global session-scoped and function-scoped test fixtures, mock hardware sandbox, and temporary settings redirection.
 
 ## Domain Principles & Guidelines
 1. **Mock Hardware & Isolation**:
    - Provide clean, deterministic mock hardware drivers (`MockBoardHardware`, `MockSerialPort`) so all backend logic, gestures, and state transitions can be thoroughly validated without physical hardware attached.
-2. **Comprehensive Edge-Case Testing**:
+2. **Adversarial & Edge-Case Testing**:
+   - Author adversarial test matrices for any newly discovered bug or edge case (opponent castling, mid-air capture timing, solution concealment, sensor desync, turn lockouts).
    - Test physical move race conditions, out-of-order piece lifts, illegal move placements, castling two-piece sequences, analysis anchor branching and auto snap-backs.
    - Verify Stockfish engine timeouts, task cancellation resilience, and Lichess stream reconnects.
 3. **Static Analysis Quality Gates**:
