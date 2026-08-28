@@ -260,7 +260,7 @@ class CoachEngine:
         self.stockfish_path = stockfish_path or self._discover_stockfish() or ""
         self._engine: chess.engine.UciProtocol | None = None
         self._analysis_task: asyncio.Task | None = None
-        self._pending_analysis_fen: str | None = None
+        self._pending_analysis_queue: list[str] = []
         self._engine_lock: asyncio.Lock | None = None
         self._cache: dict[str, PositionEvaluation] = {}
         self._lines_cache: dict[str, list[dict[str, Any]]] = {}
@@ -324,7 +324,7 @@ class CoachEngine:
     async def stop(self):
         """Terminates active analysis and closes the Stockfish process."""
         self._is_running = False
-        self._pending_analysis_fen = None
+        self._pending_analysis_queue.clear()
         self._pending_lines_fen = None
         if self._analysis_task and not self._analysis_task.done():
             self._analysis_task.cancel()
@@ -491,14 +491,16 @@ class CoachEngine:
         """Dispatches non-blocking async evaluation for the board position.
 
         In-flight analyses are NEVER cancelled: cancelling a queued/in-flight UCI
-        command corrupts the engine command state. Queues the latest target FEN
-        so rapid divergence and navigation moves are always evaluated.
+        command corrupts the engine command state. Queues target FENs so rapid
+        divergence and navigation moves are always evaluated.
         """
         clean_fen = " ".join(board.fen().split()[:4])
         if clean_fen in self._cache:
             return
 
-        self._pending_analysis_fen = clean_fen
+        if clean_fen not in self._pending_analysis_queue:
+            self._pending_analysis_queue.append(clean_fen)
+
         task = self._analysis_task
         if task is not None and not task.done():
             return
@@ -510,9 +512,8 @@ class CoachEngine:
 
     async def _analysis_runner(self) -> None:
         """Processes pending position analysis requests sequentially."""
-        while self._pending_analysis_fen:
-            target_fen = self._pending_analysis_fen
-            self._pending_analysis_fen = None
+        while self._pending_analysis_queue:
+            target_fen = self._pending_analysis_queue.pop(0)
             if target_fen in self._cache:
                 continue
             try:

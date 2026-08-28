@@ -74,7 +74,7 @@ def fake_stockfish(monkeypatch):
     # Reset the global singleton between tests
     coach_module.coach_engine._engine = None
     coach_module.coach_engine._analysis_task = None
-    coach_module.coach_engine._pending_analysis_fen = None
+    coach_module.coach_engine._pending_analysis_queue.clear()
     coach_module.coach_engine._lines_task = None
     coach_module.coach_engine._pending_lines_fen = None
     coach_module.coach_engine._cache.clear()
