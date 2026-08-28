@@ -3,7 +3,23 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Blunder Blitz & Endgame Academy Full Adversarial Hardening & Bug Resolution (2026-08-27)
+## Latest Change — Unified Web Analysis Board Layout & Animations in Play Section (2026-08-28)
+1. **Interactive Chessboard Unification (`WebAnalysisBoard.tsx`, `App.tsx`)**:
+   - Replaced the Play section's legacy static unicode board with the exact modern interactive board layout from the webapp analysis section (`WebAnalysisBoard`).
+   - Integrated full SVG piece vector assets (`wK`, `wQ`, `wR`, `wB`, `wN`, `wP`, `bK`, `bQ`, `bR`, `bB`, `bN`, `bP`) with drop shadows.
+   - Preserved exact piece animations:
+     - Distance-aware smooth gliding arrivals (`MovingPiece`) with cubic-bezier easing curve.
+     - Arc hopping animations for Knight maneuvers.
+     - Symmetrical King and Rook gliding animations during castling.
+     - Fading ghost shrink animations (`CapturedGhost`) on capture squares.
+     - Direct DOM pointer tracking for buttery smooth drag-and-drop.
+   - Unified theme system (Green, Wood, Slate) sharing `localStorage` persistence across both Play and Analysis sections.
+   - Built-in board orientation flipping (White ▲ / Black ▼) auto-oriented to player color.
+   - Integrated in-board SVG promotion picker dialog for instant web promotions.
+   - Seamless layering of physical board overlays (physical sensor matrix calibration grid, guardrail mismatch badges, candidate attacker outlines, and mid-air capture swords).
+   - AI Coach move quality tiers (best, good, inaccuracy, blunder) colored directly on destination move indicators.
+
+## Previous Change — Blunder Blitz & Endgame Academy Full Adversarial Hardening & Bug Resolution (2026-08-27)
 1. **Adversarial Edge Case Fixes & Symmetrical Opponent Handling (`board_state.py`, `physical_tracker.py`, `AnalysisTab.tsx`, `test_blunder_endgame_adversarial.py`)**:
    - **Opponent Castling Defense Guidance**:
      - Added support for opponent castling (`is_castling`, `rook_from`, `rook_to`) in Blunder Blitz and Endgame Academy.

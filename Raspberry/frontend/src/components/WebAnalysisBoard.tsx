@@ -12,17 +12,20 @@ import bB from '../assets/pieces/bB.svg';
 import bN from '../assets/pieces/bN.svg';
 import bP from '../assets/pieces/bP.svg';
 
-interface EngineLineProp {
+export interface EngineLineProp {
   uci: string[];
   san: string[];
   score_cp: number | null;
   mate: number | null;
 }
 
-interface WebAnalysisBoardProps {
-  fen: string;
+export type Coord = [number, number]; // [file 0-7, rank 0-7]
+
+export interface WebAnalysisBoardProps {
+  fen?: string;
+  grid?: string[][];
   /** Legal moves for the current position (UCI), provided by the backend. */
-  legalMoves: string[];
+  legalMoves?: string[];
   /** True when the side to move is in check. */
   inCheck?: boolean;
   /** UCI of the most recent move to highlight (mainline or branch). */
@@ -35,21 +38,41 @@ interface WebAnalysisBoardProps {
   onSuggestionClick?: () => void;
   /** True while the position is off the main game line (variation sandbox). */
   isBranching?: boolean;
-  /** Live evaluation for the always-on eval bar. */
+  /** Live evaluation for the eval bar. */
+  showEvalBar?: boolean;
   winChance?: number | null;
   scoreCp?: number | null;
   mate?: number | null;
   /** Called with the full UCI (incl. promotion suffix) when a move is played. */
-  onMovePlayed: (uci: string) => void;
+  onMovePlayed?: (uci: string) => void;
   /** Color the user played in the analyzed game — board auto-orients to it. */
   myColor?: 'white' | 'black' | null;
   /** Top engine PV lines for the position (chess.com-style panel). */
   topLines?: EngineLineProp[] | null;
+  showEngineLines?: boolean;
   /** Invoked with a line index when a user clicks an engine line to follow it. */
   onLineClick?: (lineIndex: number) => void;
+  /** Show the keyboard/usage hints under the board */
+  showHints?: boolean;
+  /** Hide the default header (or replace with custom title/header) */
+  hideHeader?: boolean;
+  headerTitle?: React.ReactNode;
+  headerRight?: React.ReactNode;
+  showOrientationToggle?: boolean;
+  showThemeToggle?: boolean;
+  topBar?: React.ReactNode;
+  bottomBar?: React.ReactNode;
+  /** Move quality tiers for target square dots */
+  destQualities?: Map<string, 'best' | 'good' | 'inaccuracy' | 'blunder'>;
+  /** Custom overlay renderer per square */
+  renderSquareOverlay?: (coord: Coord, squareName: string) => React.ReactNode;
+  /** Whole-board overlay, e.g. physical sensor matrix */
+  boardOverlay?: React.ReactNode | ((flipped: boolean) => React.ReactNode);
+  className?: string;
+  disabled?: boolean;
 }
 
-const PIECE_IMAGES: Record<string, string> = {
+export const PIECE_IMAGES: Record<string, string> = {
   K: wK, Q: wQ, R: wR, B: wB, N: wN, P: wP,
   k: bK, q: bQ, r: bR, b: bB, n: bN, p: bP,
 };
@@ -64,11 +87,9 @@ export const CLASS_TINTS: Record<string, string> = {
   blunder: 'rgba(239, 68, 68, 0.6)',      // red
 };
 
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
-type Coord = [number, number]; // [file 0-7, rank 0-7]
-
-interface Theme {
+export interface BoardTheme {
   name: string;
   label: string;
   light: string;
@@ -76,19 +97,48 @@ interface Theme {
   frame: string;
 }
 
-const THEMES: Theme[] = [
+export const THEMES: BoardTheme[] = [
   { name: 'green', label: 'Green', light: '#EBECD0', dark: '#739552', frame: '#3d4a2e' },
   { name: 'wood', label: 'Wood', light: '#F0D9B5', dark: '#B58863', frame: '#6b4a2f' },
   { name: 'slate', label: 'Slate', light: '#4B5872', dark: '#323C52', frame: '#1e293b' },
 ];
 
-const THEME_STORAGE_KEY = 'webboard-theme';
+export const THEME_STORAGE_KEY = 'webboard-theme';
 /** Animation tuning: base glide time plus extra per-square travelled. */
-const MOVE_ANIM_BASE_MS = 150;
-const MOVE_ANIM_PER_SQUARE_MS = 26;
-const MOVE_ANIM_MAX_MS = 280;
+export const MOVE_ANIM_BASE_MS = 150;
+export const MOVE_ANIM_PER_SQUARE_MS = 26;
+export const MOVE_ANIM_MAX_MS = 280;
 
-function parseFenPlacement(fen: string): string[][] {
+export function digitalGridToFen(digital: string[][], turn: 'white' | 'black' = 'white'): string {
+  if (!digital || !Array.isArray(digital) || digital.length < 8) {
+    return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  }
+  const ranks: string[] = [];
+  for (let r = 7; r >= 0; r--) {
+    let emptyCount = 0;
+    let rankStr = '';
+    for (let f = 0; f < 8; f++) {
+      const p = digital[r]?.[f];
+      if (!p || p === '.') {
+        emptyCount++;
+      } else {
+        if (emptyCount > 0) {
+          rankStr += emptyCount.toString();
+          emptyCount = 0;
+        }
+        rankStr += p;
+      }
+    }
+    if (emptyCount > 0) {
+      rankStr += emptyCount.toString();
+    }
+    ranks.push(rankStr || '8');
+  }
+  const activeColor = turn === 'black' ? 'b' : 'w';
+  return `${ranks.join('/')} ${activeColor} - - 0 1`;
+}
+
+export function parseFenPlacement(fen: string): string[][] {
   // FEN ranks arrive 8 -> 1; index so that grid[0] = RANK 1 row (consistent
   // with Coord semantics where rank 0 == chess rank 1).
   const rows = (fen.split(' ')[0] || '').split('/').reverse();
@@ -107,11 +157,11 @@ function parseFenPlacement(fen: string): string[][] {
   return grid.slice(0, 8);
 }
 
-function coordToSquareName(c: Coord): string {
+export function coordToSquareName(c: Coord): string {
   return `${FILES[c[0]]}${c[1] + 1}`;
 }
 
-function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
+export function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
   if (!uci || uci.length < 4) return null;
   const f = FILES.indexOf(uci[0]);
   const r = parseInt(uci[1], 10) - 1;
@@ -125,7 +175,7 @@ function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
  * Glyph of a captured piece that used to sit on `sq`, if the latest move
  * captured there (used to render the fade-out ghost). Returns '' when none.
  */
-function capturedGhostSquare(
+export function capturedGhostSquare(
   prevGrid: string[][] | null,
   grid: string[][],
   lastHighlight: { from: Coord; to: Coord } | null,
@@ -148,31 +198,60 @@ function capturedGhostSquare(
 }
 
 /**
- * Interactive lichess-style analysis board: SVG pieces, themed squares,
+ * Interactive lichess-style analysis & play board: SVG pieces, themed squares,
  * drag & drop + click-to-move (pointer events, mouse and touch), legal-move
  * dots/capture rings, check glow, promotion picker, smooth move animation,
- * and an always-on evaluation bar.
- * Fully virtual: moves are dispatched through the web-only analysis endpoint.
+ * and an evaluation bar.
  */
 const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   fen,
-  legalMoves,
+  grid: gridProp,
+  legalMoves: legalMovesProp,
   inCheck,
   lastMoveUci,
   lastMoveClass,
   isBranching,
-    winChance,
-    scoreCp,
-    mate,
-    onMovePlayed,
-    myColor,
-    suggestMove,
-    onSuggestionClick,
-    topLines,
-    onLineClick,
+  showEvalBar,
+  winChance,
+  scoreCp,
+  mate,
+  onMovePlayed,
+  myColor,
+  suggestMove,
+  onSuggestionClick,
+  topLines,
+  showEngineLines,
+  onLineClick,
+  showHints,
+  hideHeader,
+  headerTitle,
+  headerRight,
+  showOrientationToggle,
+  showThemeToggle,
+  topBar,
+  bottomBar,
+  destQualities,
+  renderSquareOverlay,
+  boardOverlay,
+  className,
+  disabled,
 }) => {
-  const grid = useMemo(() => parseFenPlacement(fen), [fen]);
-  const whiteToMove = (fen.split(' ')[1] || 'w') === 'w';
+  const legalMoves = useMemo(() => legalMovesProp ?? [], [legalMovesProp]);
+
+  const grid = useMemo(() => {
+    if (gridProp && Array.isArray(gridProp) && gridProp.length === 8) {
+      return gridProp.map((row) => row.map((cell) => (cell === '.' ? '' : cell)));
+    }
+    return parseFenPlacement(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  }, [fen, gridProp]);
+
+  const whiteToMove = useMemo(() => {
+    if (fen) {
+      return (fen.split(' ')[1] || 'w') === 'w';
+    }
+    return true;
+  }, [fen]);
+
   // Previous placement grid, used to animate capture fade-outs
   const prevGridRef = useRef<string[][] | null>(null);
   useEffect(() => {
@@ -217,7 +296,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
-  const draggedFarRef = useRef<boolean>(false);
+  const draggedFarRef.current = false;
   const ghostSizeRef = useRef<number>(60);
 
   useEffect(() => {
@@ -244,9 +323,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     return { from: rFrom, to: rTo, glyph };
   }, [lastHighlight, lastMoveUci, grid]);
 
-  // Suggested better-move arrow. On the mainline it appears after
-  // inaccuracies/mistakes/blunders; inside a variation sandbox it shows the
-  // engine's best move for the CURRENT position at all times.
+  // Suggested better-move arrow
   const suggestArrow = useMemo(() => {
     if (isBranching) {
       const best = topLines?.[0]?.uci?.[0];
@@ -263,7 +340,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     const map = new Map<string, boolean>();
     for (const lm of legalMoves) {
       if (lm.startsWith(prefix)) {
-        map.set(lm.slice(2, 4), lm.length > 4); // capture?
+        map.set(lm.slice(2, 4), lm.length > 4); // capture or promotion
       }
     }
     return map;
@@ -283,10 +360,17 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
   const pieceAt = (c: Coord): string => grid[c[1]]?.[c[0]] ?? '';
 
-  const isOwnTurnPiece = (glyph: string): boolean =>
-    !!glyph && (whiteToMove ? glyph === glyph.toUpperCase() : glyph === glyph.toLowerCase());
+  const isOwnTurnPiece = (glyph: string, c?: Coord): boolean => {
+    if (!glyph || disabled) return false;
+    if (legalMoves.length > 0 && c) {
+      const sqName = coordToSquareName(c);
+      return legalMoves.some((lm) => lm.startsWith(sqName));
+    }
+    return whiteToMove ? glyph === glyph.toUpperCase() : glyph === glyph.toLowerCase();
+  };
 
   const tryPlay = (from: Coord, to: Coord): boolean => {
+    if (disabled || !onMovePlayed) return false;
     const fromStr = coordToSquareName(from);
     const toStr = coordToSquareName(to);
     const candidates = legalMoves.filter((lm) => lm.startsWith(fromStr + toStr));
@@ -310,11 +394,13 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     const rect = boardRef.current?.getBoundingClientRect();
     if (!rect) return null;
     const sq = rect.width / 8;
-    const f = Math.floor((clientX - rect.left) / sq);
+    const col = Math.floor((clientX - rect.left) / sq);
     const rowFromTop = Math.floor((clientY - rect.top) / sq);
-    const r = 7 - rowFromTop;
-    if (f < 0 || f > 7 || r < 0 || r > 7 || rowFromTop < 0 || rowFromTop > 7) return null;
-    return [f, r];
+    if (col < 0 || col > 7 || rowFromTop < 0 || rowFromTop > 7) return null;
+    const rank = flipped ? rowFromTop : 7 - rowFromTop;
+    const file = flipped ? 7 - col : col;
+    if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
+    return [file, rank];
   };
 
   const positionGhost = (clientX: number, clientY: number) => {
@@ -325,7 +411,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent, c: Coord) => {
-    if (promotion) return;
+    if (promotion || disabled) return;
 
     // Complete a click-click move onto a highlighted target
     if (selected && targets.has(coordToSquareName(c))) {
@@ -334,17 +420,15 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     }
 
     const glyph = pieceAt(c);
-    if (!isOwnTurnPiece(glyph)) {
+    if (!isOwnTurnPiece(glyph, c)) {
       setSelected(null);
       return;
     }
 
-    // Select (and prepare a potential drag). wasSelected lets a SECOND click
-    // on the same piece toggle the selection off (lichess behaviour).
+    // Select (and prepare a potential drag)
     const wasSelected = !!selected && selected[0] === c[0] && selected[1] === c[1];
     setSelected(c);
     pressRef.current = { coord: c, startX: e.clientX, startY: e.clientY, wasSelected };
-    draggedFarRef.current = false;
     const rect = boardRef.current?.getBoundingClientRect();
     if (rect) ghostSizeRef.current = rect.width / 8;
     setDrag({ from: c, piece: glyph });
@@ -355,6 +439,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   // Global pointer tracking while a piece is held
   useEffect(() => {
     if (!drag) return;
+    let hasDraggedFar = false;
 
     const onMove = (e: PointerEvent) => {
       const press = pressRef.current;
@@ -363,9 +448,9 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         Math.abs(e.clientX - press.startX) > 5 ||
         Math.abs(e.clientY - press.startY) > 5
       ) {
-        draggedFarRef.current = true;
+        hasDraggedFar = true;
       }
-      if (draggedFarRef.current) {
+      if (hasDraggedFar) {
         positionGhost(e.clientX, e.clientY);
       }
     };
@@ -378,7 +463,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
       const target = squareFromPoint(e.clientX, e.clientY);
 
-      if (draggedFarRef.current) {
+      if (hasDraggedFar) {
         // Drag release: play if dropped on a legal square, otherwise snap back.
         if (
           target &&
@@ -405,7 +490,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
       window.removeEventListener('pointerup', onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag !== null, selected, legalMoves]);
+  }, [drag !== null, selected, legalMoves, disabled]);
 
   const cycleTheme = () => setThemeIdx((i) => (i + 1) % THEMES.length);
 
@@ -417,7 +502,8 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
       ? 'rgba(139, 92, 246, 0.45)'
       : 'rgba(255, 213, 79, 0.42)';
 
-  // Eval bar geometry (always rendered, independent of play-section settings)
+  // Eval bar geometry
+  const shouldShowEvalBar = showEvalBar ?? (winChance !== undefined || scoreCp !== undefined || mate !== undefined);
   const wc = Math.max(2, Math.min(98, winChance ?? 50));
   let evalText = '0.0';
   if (mate !== null && mate !== undefined) {
@@ -426,69 +512,100 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     evalText = `${scoreCp >= 0 ? '+' : ''}${(scoreCp / 100).toFixed(1)}`;
   }
 
-  return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-white">Analysis Board</h3>
-        <div className="flex items-center gap-2">
-          <span
-            className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
-              isBranching
-                ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-            }`}
-          >
-            {isBranching ? 'VARIATION SANDBOX' : 'MAIN GAME LINE'}
-          </span>
-          <button
-            onClick={toggleOrientation}
-            title="Flip board orientation"
-            className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
-          >
-            {flipped ? 'Black ▼' : 'White ▲'}
-          </button>
-          <button
-            onClick={cycleTheme}
-            title="Change board theme"
-            className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
-          >
-            {theme.label}
-          </button>
-        </div>
-      </div>
+  const shouldShowLines = showEngineLines ?? ((topLines ?? []).length > 0 || isBranching);
+  const shouldShowHints = showHints ?? true;
 
-      {/* Eval bar + board + engine lines panel */}
-      <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: '860px' }}>
-        {/* Always-on evaluation bar (oriented with the board) */}
-        <div className="relative self-stretch w-5 rounded-full overflow-hidden bg-slate-800 ring-1 ring-slate-700 shadow-inner">
-          <div
-            className={`absolute inset-x-0 bg-gradient-to-t from-slate-100 to-white transition-[height] duration-300 ease-out ${
-              flipped ? 'top-0' : 'bottom-0'
-            }`}
-            style={{ height: `${wc}%` }}
-          />
-          <div
-            className="absolute inset-x-0 h-px bg-violet-400/70"
-            style={flipped ? { top: `${wc}%` } : { bottom: `${wc}%` }}
-          />
-          <div
-            className="absolute inset-x-0 text-center text-[9px] font-mono font-bold pointer-events-none"
-            style={{
-              ...(flipped ? { top: `calc(${wc}% + 2px)` } : { bottom: `calc(${wc}% + 2px)` }),
-              color: wc > 45 ? '#0f172a' : '#e2e8f0',
-              transform: wc > 92 || wc < 8 ? (flipped ? 'translateY(14px)' : 'translateY(-14px)') : 'none',
-            }}
-          >
-            {evalText}
+  return (
+    <div className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-3 md:p-4 shadow-xl ${className || ''}`}>
+      {/* Header if not hidden */}
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            {headerTitle ? (
+              typeof headerTitle === 'string' ? (
+                <h3 className="text-sm font-bold text-white">{headerTitle}</h3>
+              ) : (
+                headerTitle
+              )
+            ) : (
+              <h3 className="text-sm font-bold text-white">Analysis Board</h3>
+            )}
+            {isBranching !== undefined && (
+              <span
+                className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                  isBranching
+                    ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                }`}
+              >
+                {isBranching ? 'VARIATION SANDBOX' : 'MAIN GAME LINE'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {showOrientationToggle !== false && (
+              <button
+                onClick={toggleOrientation}
+                title="Flip board orientation"
+                className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
+              >
+                {flipped ? 'Black ▼' : 'White ▲'}
+              </button>
+            )}
+            {showThemeToggle !== false && (
+              <button
+                onClick={cycleTheme}
+                title="Change board theme"
+                className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-all"
+              >
+                {theme.label}
+              </button>
+            )}
+            {headerRight}
           </div>
         </div>
+      )}
+
+      {/* Top Bar (e.g. Opponent Header Bar in Play section) */}
+      {topBar && (
+        <div className="mb-3">
+          {topBar}
+        </div>
+      )}
+
+      {/* Eval bar + board + engine lines panel */}
+      <div className="mx-auto flex items-stretch justify-center gap-2" style={{ maxWidth: shouldShowLines ? '860px' : '560px' }}>
+        {/* Evaluation bar (oriented with the board) */}
+        {shouldShowEvalBar && (
+          <div className="relative self-stretch w-5 rounded-full overflow-hidden bg-slate-800 ring-1 ring-slate-700 shadow-inner flex-shrink-0">
+            <div
+              className={`absolute inset-x-0 bg-gradient-to-t from-slate-100 to-white transition-[height] duration-300 ease-out ${
+                flipped ? 'top-0' : 'bottom-0'
+              }`}
+              style={{ height: `${wc}%` }}
+            />
+            <div
+              className="absolute inset-x-0 h-px bg-violet-400/70"
+              style={flipped ? { top: `${wc}%` } : { bottom: `${wc}%` }}
+            />
+            <div
+              className="absolute inset-x-0 text-center text-[9px] font-mono font-bold pointer-events-none"
+              style={{
+                ...(flipped ? { top: `calc(${wc}% + 2px)` } : { bottom: `calc(${wc}% + 2px)` }),
+                color: wc > 45 ? '#0f172a' : '#e2e8f0',
+                transform: wc > 92 || wc < 8 ? (flipped ? 'translateY(14px)' : 'translateY(-14px)') : 'none',
+              }}
+            >
+              {evalText}
+            </div>
+          </div>
+        )}
 
         {/* Board */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 max-w-full">
           <div
             ref={boardRef}
-            className="grid w-full aspect-square rounded-md overflow-hidden select-none"
+            className="grid w-full aspect-square rounded-md overflow-hidden select-none relative"
             style={{
               gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
               gridTemplateRows: 'repeat(8, minmax(0, 1fr))',
@@ -515,6 +632,10 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             const isTargetCapture = isTarget && targets.get(squareName) === true;
             const isCheckedKing = !!checkedKingSquare && checkedKingSquare[0] === file && checkedKingSquare[1] === rank;
             const isDragOrigin = !!drag && drag.from[0] === file && drag.from[1] === rank;
+
+            const isLeftEdge = col === 0;
+            const isBottomEdge = rowFromTop === 7;
+
             // Castling: when the last move is a king's two-square move, its
             // rook glides alongside instead of teleporting.
             const rookAnim =
@@ -540,7 +661,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                 className="relative flex items-center justify-center"
                 style={{
                   backgroundColor: isDark ? theme.dark : theme.light,
-                  cursor: isOwnTurnPiece(piece) || isTarget ? 'pointer' : 'default',
+                  cursor: isOwnTurnPiece(piece, c) || isTarget ? 'pointer' : 'default',
                   boxShadow: isCheckedKing
                     ? 'inset 0 0 12px 4px rgba(255, 40, 40, 0.75)'
                     : undefined,
@@ -555,28 +676,31 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                   <div className="absolute inset-0" style={{ backgroundColor: 'rgba(59, 130, 246, 0.35)' }} />
                 )}
 
-                {/* Coordinate labels */}
-                {file === 0 && (
+                {/* Coordinate labels along board edges */}
+                {isLeftEdge && (
                   <span
-                    className="absolute top-0.5 left-1 text-[9px] font-bold z-10 pointer-events-none"
+                    className="absolute top-0.5 left-1 text-[9px] font-bold z-10 pointer-events-none select-none"
                     style={{ color: isDark ? theme.light : theme.dark, opacity: 0.85 }}
                   >
                     {rank + 1}
                   </span>
                 )}
-                {rank === 0 && (
+                {isBottomEdge && (
                   <span
-                    className="absolute bottom-0.5 right-1 text-[9px] font-bold z-10 pointer-events-none"
+                    className="absolute bottom-0.5 right-1 text-[9px] font-bold z-10 pointer-events-none select-none"
                     style={{ color: isDark ? theme.light : theme.dark, opacity: 0.85 }}
                   >
                     {FILES[file]}
                   </span>
                 )}
 
+                {/* Custom Square Overlay (e.g. Guardrail badges, Capture swords) */}
+                {renderSquareOverlay && renderSquareOverlay(c, squareName)}
+
                 {/* Smoothly animated arriving piece */}
                 {piece && isLastTo && lastHighlight && !isDragOrigin && (
                   <MovingPiece
-                    key={`${lastMoveUci}-${fen.length}`}
+                    key={`${lastMoveUci}-${fen?.length ?? 0}`}
                     src={PIECE_IMAGES[piece]}
                     from={lastHighlight.from}
                     to={[file, rank]}
@@ -588,7 +712,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                 {/* Castling rook glides alongside the king */}
                 {piece && rookAnim && lastHighlight && !isDragOrigin && (
                   <MovingPiece
-                    key={`rook-${lastMoveUci}-${fen.length}`}
+                    key={`rook-${lastMoveUci}-${fen?.length ?? 0}`}
                     src={PIECE_IMAGES[piece]}
                     from={rookAnim.from}
                     to={[file, rank]}
@@ -611,7 +735,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     src={PIECE_IMAGES[piece]}
                     alt={piece}
                     draggable={false}
-                    className="relative z-[5] pointer-events-none"
+                    className="relative z-[5] pointer-events-none select-none"
                     style={{ width: '88%', height: '88%', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))' }}
                   />
                 )}
@@ -620,27 +744,54 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     src={PIECE_IMAGES[piece]}
                     alt=""
                     draggable={false}
-                    className="absolute inset-0 m-auto opacity-30 pointer-events-none"
+                    className="absolute inset-0 m-auto opacity-30 pointer-events-none select-none"
                     style={{ width: '88%', height: '88%' }}
                   />
                 )}
 
-                {/* Legal move indicators */}
+                {/* Legal move indicators (with Move Quality tier support) */}
                 {isTarget && !isTargetCapture && (
                   <div
-                    className="absolute rounded-full z-[6] pointer-events-none"
-                    style={{ width: '30%', height: '30%', backgroundColor: 'rgba(15, 23, 42, 0.28)' }}
+                    className={`absolute rounded-full z-[6] pointer-events-none ${
+                      destQualities?.get(squareName) === 'good'
+                        ? 'bg-cyan-400/90 shadow-[0_0_8px_rgba(34,211,238,0.9)]'
+                        : destQualities?.get(squareName) === 'inaccuracy'
+                        ? 'bg-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+                        : destQualities?.get(squareName) === 'blunder'
+                        ? 'bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.9)]'
+                        : destQualities?.get(squareName) === 'best'
+                        ? 'bg-emerald-400/90 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
+                        : 'bg-slate-900/30'
+                    }`}
+                    style={{ width: '30%', height: '30%' }}
                   />
                 )}
                 {isTarget && isTargetCapture && (
                   <div
-                    className="absolute inset-[6%] rounded-full z-[6] pointer-events-none"
-                    style={{ border: 'calc(min(4vw, 5px)) solid rgba(15, 23, 42, 0.32)' }}
+                    className={`absolute inset-[6%] rounded-full z-[6] pointer-events-none ${
+                      destQualities?.get(squareName) === 'good'
+                        ? 'border-cyan-400/90 shadow-[0_0_8px_rgba(34,211,238,0.5)]'
+                        : destQualities?.get(squareName) === 'inaccuracy'
+                        ? 'border-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.5)]'
+                        : destQualities?.get(squareName) === 'blunder'
+                        ? 'border-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                        : destQualities?.get(squareName) === 'best'
+                        ? 'border-emerald-400/90 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
+                        : 'border-slate-900/35'
+                    }`}
+                    style={{ borderStyle: 'solid', borderWidth: 'calc(min(4vw, 5px))' }}
                   />
                 )}
               </div>
             );
           })}
+
+          {/* Whole-board overlay (e.g. physical sensor matrix when active) */}
+          {boardOverlay && (
+            <div className="absolute inset-0 z-20 pointer-events-auto">
+              {typeof boardOverlay === 'function' ? boardOverlay(flipped) : boardOverlay}
+            </div>
+          )}
           </div>
 
           {/* Suggested better-move arrow (clickable) */}
@@ -720,7 +871,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                     <button
                       key={p}
                       onClick={() => {
-                        onMovePlayed(uci);
+                        onMovePlayed?.(uci);
                         setPromotion(null);
                       }}
                       className="w-full aspect-square flex items-center justify-center hover:bg-violet-600/40 transition-colors"
@@ -737,53 +888,62 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         </div>
 
         {/* Engine lines panel (chess.com-style, right of the board) */}
-        <div
-          className="self-stretch w-[190px] shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex flex-col gap-1 overflow-y-auto"
-          data-testid="engine-lines"
-        >
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 pb-1">
-            Engine Lines
+        {shouldShowLines && (
+          <div
+            className="self-stretch w-[190px] shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex flex-col gap-1 overflow-y-auto"
+            data-testid="engine-lines"
+          >
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 pb-1">
+              Engine Lines
+            </div>
+            {(topLines ?? []).length === 0 && (
+              <div className="text-[10px] text-slate-600 px-1 py-2">Computing…</div>
+            )}
+            {(topLines ?? []).map((line, i) => {
+              const evalLabel =
+                line.mate !== null && line.mate !== undefined
+                  ? `M${Math.abs(line.mate)}`
+                  : `${(line.score_cp ?? 0) >= 0 ? '+' : ''}${((line.score_cp ?? 0) / 100).toFixed(1)}`;
+              const isBest = i === 0;
+              return (
+                <button
+                  key={`${line.uci.join('')}-${i}`}
+                  onClick={() => onLineClick?.(i)}
+                  title={`Follow this line (${evalLabel})`}
+                  className={`w-full text-left rounded-lg px-2 py-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                    isBest
+                      ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
+                      : 'bg-slate-900/70 border-slate-700/50 hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className={`text-[10px] font-mono font-bold ${
+                        isBest ? 'text-emerald-300' : 'text-slate-400'
+                      }`}
+                    >
+                      #{i + 1} {evalLabel}
+                    </span>
+                    <span className="text-[9px] text-slate-600">
+                      {line.san.length ? `${Math.ceil(line.san.length / 2)} moves` : ''}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-200 truncate">
+                    {line.san.join(' ') || line.uci.join(' ')}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-          {(topLines ?? []).length === 0 && (
-            <div className="text-[10px] text-slate-600 px-1 py-2">Computing…</div>
-          )}
-          {(topLines ?? []).map((line, i) => {
-            const evalLabel =
-              line.mate !== null && line.mate !== undefined
-                ? `M${Math.abs(line.mate)}`
-                : `${(line.score_cp ?? 0) >= 0 ? '+' : ''}${((line.score_cp ?? 0) / 100).toFixed(1)}`;
-            const isBest = i === 0;
-            return (
-              <button
-                key={`${line.uci.join('')}-${i}`}
-                onClick={() => onLineClick?.(i)}
-                title={`Follow this line (${evalLabel})`}
-                className={`w-full text-left rounded-lg px-2 py-1.5 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                  isBest
-                    ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
-                    : 'bg-slate-900/70 border-slate-700/50 hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <span
-                    className={`text-[10px] font-mono font-bold ${
-                      isBest ? 'text-emerald-300' : 'text-slate-400'
-                    }`}
-                  >
-                    #{i + 1} {evalLabel}
-                  </span>
-                  <span className="text-[9px] text-slate-600">
-                    {line.san.length ? `${Math.ceil(line.san.length / 2)} moves` : ''}
-                  </span>
-                </div>
-                <div className="text-[11px] font-mono text-slate-200 truncate">
-                  {line.san.join(' ') || line.uci.join(' ')}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        )}
       </div>
+
+      {/* Bottom Bar (e.g. Player Footer Bar in Play section) */}
+      {bottomBar && (
+        <div className="mt-3">
+          {bottomBar}
+        </div>
+      )}
 
       {/* Floating dragged piece (positioned via direct DOM writes — no re-renders) */}
       {drag && (
@@ -796,19 +956,21 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
             src={PIECE_IMAGES[drag.piece]}
             alt=""
             draggable={false}
-            className="block w-full h-full"
+            className="block w-full h-full select-none"
             style={{ filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.5))' }}
           />
         </div>
       )}
 
-      <div className="mt-3 text-center text-[10px] text-slate-500 leading-relaxed">
-        Drag a piece or click piece then square ·{' '}
-        <span className="font-mono text-slate-400">&larr; &rarr;</span> /{' '}
-        <span className="font-mono text-slate-400">h l</span> step ·{' '}
-        <span className="font-mono text-slate-400">Home End</span> /{' '}
-        <span className="font-mono text-slate-400">g G</span> jump
-      </div>
+      {shouldShowHints && (
+        <div className="mt-3 text-center text-[10px] text-slate-500 leading-relaxed">
+          Drag a piece or click piece then square ·{' '}
+          <span className="font-mono text-slate-400">&larr; &rarr;</span> /{' '}
+          <span className="font-mono text-slate-400">h l</span> step ·{' '}
+          <span className="font-mono text-slate-400">Home End</span> /{' '}
+          <span className="font-mono text-slate-400">g G</span> jump
+        </div>
+      )}
     </div>
   );
 };
@@ -817,7 +979,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
  * Piece that slides in from its origin square on mount — smooth, distance-aware
  * glide with a subtle pick-up scale and a gentle hop for knights.
  */
-const MovingPiece: React.FC<{
+export const MovingPiece: React.FC<{
   src: string;
   from: Coord;
   to: Coord;
@@ -874,7 +1036,7 @@ const MovingPiece: React.FC<{
       src={src}
       alt=""
       draggable={false}
-      className="relative z-[5] pointer-events-none will-change-transform"
+      className="relative z-[5] pointer-events-none will-change-transform select-none"
       style={{
         width: '88%',
         height: '88%',
@@ -887,7 +1049,7 @@ const MovingPiece: React.FC<{
 /**
  * Fading ghost of a captured piece that shrinks away when the position changes.
  */
-const CapturedGhost: React.FC<{ src: string }> = ({ src }) => {
+export const CapturedGhost: React.FC<{ src: string }> = ({ src }) => {
   const ref = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
@@ -908,7 +1070,7 @@ const CapturedGhost: React.FC<{ src: string }> = ({ src }) => {
       src={src}
       alt=""
       draggable={false}
-      className="absolute inset-0 m-auto z-[4] pointer-events-none will-change-transform"
+      className="absolute inset-0 m-auto z-[4] pointer-events-none will-change-transform select-none"
       style={{ width: '88%', height: '88%', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))' }}
     />
   );

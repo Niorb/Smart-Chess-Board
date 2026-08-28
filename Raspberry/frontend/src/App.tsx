@@ -57,28 +57,8 @@ import {
   Crown,
   BookOpen,
 } from 'lucide-react'
+import WebAnalysisBoard, { digitalGridToFen } from './components/WebAnalysisBoard'
 const AnalysisTab = lazy(() => import('./components/AnalysisTab'))
-
-// Helper to render digital piece characters/icons
-const PIECE_ICONS_WHITE: Record<string, string> = {
-  p: '♙', r: '♖', n: '♘', b: '♗', q: '♕', k: '♔'
-};
-const PIECE_ICONS_BLACK: Record<string, string> = {
-  p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚'
-};
-
-function renderPiece(p: string) {
-  if (!p || p === '.') return null;
-  const isWhite = p === p.toUpperCase();
-  const piece = p.toLowerCase();
-  const icon = isWhite ? PIECE_ICONS_WHITE[piece] : PIECE_ICONS_BLACK[piece];
-
-  return (
-    <span className={`text-4xl ${isWhite ? 'text-slate-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]' : 'text-slate-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]'} select-none transition-transform hover:scale-105`}>
-      {icon || p}
-    </span>
-  );
-}
 
 function App() {
   const { state, isConnected } = useBoardState();
@@ -298,6 +278,27 @@ function App() {
     }
     return coords;
   }, [state.physical?.capture_candidate_attackers]);
+
+  // Play section active FEN computed from digital board grid
+  const playFen = useMemo(() => {
+    return digitalGridToFen(state.digital, state.game?.turn ?? 'white');
+  }, [state.digital, state.game?.turn]);
+
+  // Handle moves played via web board interaction (drag & drop or click-to-move)
+  const handlePlayMove = async (uci: string) => {
+    if (state.status !== 'PLAYING' || uci.length < 4) return;
+    const fromSquare = uci.slice(0, 2);
+    const toSquare = uci.slice(2, 4);
+    const promotionPiece = uci.length > 4 ? uci.slice(4) : undefined;
+    try {
+      const res = await makeMove(fromSquare, toSquare, promotionPiece);
+      if (res.status !== 'success') {
+        console.warn("Move rejected:", res.message);
+      }
+    } catch (err) {
+      console.error("Error making move:", err);
+    }
+  };
 
   const handleSquareClick = async (col: number, row: number) => {
     if (state.status !== 'PLAYING') return;
@@ -1115,246 +1116,180 @@ function App() {
               </div>
             )}
 
-            {/* Opponent Header Bar */}
-            <div className={`flex justify-between items-center bg-slate-900/80 border border-slate-800 rounded-t-2xl px-4 py-2.5 text-xs transition-all duration-300 ${
-              isOpponentTurn ? 'border-amber-500/50 bg-amber-950/10 shadow-[0_0_12px_rgba(245,158,11,0.1)]' : ''
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`w-3 h-3 rounded-full border ${
-                  state.my_color === 'white' ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'
-                }`} />
-                <div className="flex flex-col text-left">
-                  <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                    {state.game?.opponent?.username || 'Opponent'}
-                    {state.game?.opponent?.title && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">
-                        {state.game.opponent.title}
+            {/* Interactive Web Board (Exact Analysis Layout, SVG pieces, Themes, Smooth Animations & Overlays) */}
+            <WebAnalysisBoard
+              fen={playFen}
+              legalMoves={state.status === 'PLAYING' ? (state.game?.legal_moves ?? []) : []}
+              inCheck={state.game?.is_check}
+              lastMoveUci={state.game?.last_move}
+              showEvalBar={state.coach?.eval_bar_enabled && state.status === 'PLAYING'}
+              winChance={state.coach?.evaluation?.win_chance}
+              scoreCp={state.coach?.evaluation?.score_cp}
+              mate={state.coach?.evaluation?.mate}
+              onMovePlayed={handlePlayMove}
+              myColor={state.my_color === 'black' ? 'black' : 'white'}
+              destQualities={destQualities}
+              showEngineLines={false}
+              showHints={false}
+              headerTitle={
+                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">
+                  {state.status === 'PLAYING'
+                    ? (isLocalGame ? 'Local Match (OTB)' : state.coach?.is_ai_game ? 'Stockfish Match' : 'Lichess Online')
+                    : 'Chessboard'}
+                </span>
+              }
+              topBar={
+                <div className={`flex justify-between items-center bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs transition-all duration-300 ${
+                  isOpponentTurn ? 'border-amber-500/50 bg-amber-950/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]' : ''
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-3 h-3 rounded-full border ${
+                      state.my_color === 'white' ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'
+                    }`} />
+                    <div className="flex flex-col text-left">
+                      <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                        {state.game?.opponent?.username || 'Opponent'}
+                        {state.game?.opponent?.title && (
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">
+                            {state.game.opponent.title}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Rating: {state.game?.opponent?.rating || 1500}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Opponent Clock */}
+                  <div className={`font-mono text-base font-extrabold px-3 py-1 rounded-lg border transition-all ${
+                    isOpponentTurn
+                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                      : 'bg-slate-950 border-slate-800 text-slate-400'
+                  }`}>
+                    {state.my_color === 'white' ? displayClocks.black : displayClocks.white}
+                  </div>
+                </div>
+              }
+              bottomBar={
+                <div className={`flex justify-between items-center bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs transition-all duration-300 ${
+                  isMyTurn ? 'border-emerald-500/50 bg-emerald-950/20 shadow-[0_0_12px_rgba(16,185,129,0.15)]' : ''
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-3 h-3 rounded-full border ${
+                      state.my_color === 'black' ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'
+                    }`} />
+                    <div className="flex flex-col text-left">
+                      <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                        {account?.username || 'You'} (Playing as {state.my_color || 'White'})
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Rating: {account?.rating || 1500}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Player Clock */}
+                  <div className={`font-mono text-base font-extrabold px-3 py-1 rounded-lg border transition-all ${
+                    isMyTurn
+                      ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                      : 'bg-slate-950 border-slate-800 text-slate-400'
+                  }`}>
+                    {state.my_color === 'black' ? displayClocks.black : displayClocks.white}
+                  </div>
+                </div>
+              }
+              renderSquareOverlay={(_c, squareName) => {
+                const isGuardrailMissing = guardrailMissingCoords.has(squareName);
+                const isGuardrailUnexpected = guardrailUnexpectedCoords.has(squareName);
+                const isPendingCaptureTarget = pendingCaptureTargetCoord === squareName;
+                const isCandidateAttacker = candidateAttackerCoords.has(squareName);
+
+                if (!isGuardrailMissing && !isGuardrailUnexpected && !isPendingCaptureTarget && !isCandidateAttacker) {
+                  return null;
+                }
+
+                return (
+                  <>
+                    {isGuardrailMissing && (
+                      <span
+                        className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)] z-20 pointer-events-none"
+                        title="Missing piece detected"
+                      />
+                    )}
+                    {isGuardrailUnexpected && (
+                      <span
+                        className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,1)] z-20 pointer-events-none"
+                        title="Unexpected piece detected"
+                      />
+                    )}
+                    {isPendingCaptureTarget && (
+                      <span
+                        className="absolute top-0.5 right-0.5 text-[10px] select-none text-rose-300 font-bold z-20 pointer-events-none drop-shadow"
+                        title="Capture target"
+                      >
+                        ⚔
                       </span>
                     )}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Rating: {state.game?.opponent?.rating || 1500}
-                  </span>
-                </div>
-              </div>
+                    {isCandidateAttacker && (
+                      <div className="absolute inset-0 ring-2 ring-amber-400 ring-dashed ring-inset bg-amber-400/20 shadow-[0_0_8px_rgba(251,191,36,0.6)] z-10 pointer-events-none" />
+                    )}
+                  </>
+                );
+              }}
+              boardOverlay={
+                state.status !== 'PLAYING' && !state.virtual_only
+                  ? (flipped) => (
+                      <div className={`absolute inset-0 bg-blue-950/20 border transition-all duration-300 backdrop-blur-[0.5px] z-20 pointer-events-none rounded-md overflow-hidden ${
+                        state.physical?.setup?.is_setup_ready ? 'border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'border-blue-500/20'
+                      }`}>
+                        <div className={`absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white shadow z-30 ${
+                          state.physical?.setup?.is_setup_ready ? 'bg-emerald-600/90' : 'bg-blue-600/90'
+                        }`}>
+                          {state.physical?.setup?.is_setup_ready ? 'Physical Board Ready' : 'Physical Sensors Active'}
+                        </div>
+                        <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
+                          {Array(8).fill(null).map((_, rIdx) => (
+                            Array(8).fill(null).map((_, cIdx) => {
+                              const fileIdx = flipped ? (7 - cIdx) : cIdx;
+                              const rankIdx = flipped ? rIdx : (7 - rIdx);
 
-              {/* Opponent Clock */}
-              <div className={`font-mono text-base font-extrabold px-3 py-1 rounded-lg border transition-all ${
-                isOpponentTurn
-                  ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.3)]'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
-              }`}>
-                {state.my_color === 'white' ? displayClocks.black : displayClocks.white}
-              </div>
-            </div>
+                              const sensorStateVal = state.physical.grid?.[fileIdx]?.[rankIdx] ?? 0;
+                              const isDisabled = (state.physical.disabled_squares ?? []).some(
+                                (sq) => sq[0] === fileIdx && sq[1] === rankIdx
+                              );
 
-            {/* 8x8 Board Container with Live Evaluation Gauge */}
-            <div className="flex items-stretch w-full aspect-square bg-slate-900 overflow-hidden shadow-2xl border-x-4 border-slate-800 relative">
-              {/* Vertical Eval Bar (When Eval Bar enabled and playing or AI game) */}
-              {state.coach?.eval_bar_enabled && state.status === 'PLAYING' && (
-                <div className="w-5 bg-slate-950 flex flex-col justify-end border-r border-slate-800 relative select-none flex-shrink-0">
-                  {/* Black Bar (Top) */}
-                  <div 
-                    className="w-full bg-slate-800 transition-all duration-500 ease-out"
-                    style={{ height: `${100 - (state.coach?.evaluation?.win_chance ?? 50)}%` }}
-                  />
-                  {/* White Bar (Bottom) */}
-                  <div 
-                    className="w-full bg-slate-200 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                    style={{ height: `${state.coach?.evaluation?.win_chance ?? 50}%` }}
-                  />
-                  {/* Eval Score Badge */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-90deg] text-[9px] font-mono font-extrabold tracking-tighter whitespace-nowrap px-1 py-0.5 rounded bg-slate-900/90 text-slate-200 border border-slate-700/80 shadow">
-                    {state.coach?.evaluation?.mate !== null && state.coach?.evaluation?.mate !== undefined
-                      ? `M${state.coach.evaluation.mate}`
-                      : state.coach?.evaluation?.score_cp !== null && state.coach?.evaluation?.score_cp !== undefined
-                      ? `${(state.coach.evaluation.score_cp / 100).toFixed(1)}`
-                      : '0.0'}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
-                {Array(8).fill(null).map((_, rIdx) => (
-                  Array(8).fill(null).map((_, cIdx) => {
-                    const isFlipped = state.my_color === 'black';
-                    const displayCol = isFlipped ? rIdx : 7 - rIdx;
-                    const displayRow = isFlipped ? 7 - cIdx : cIdx;
-                    const isDark = (displayCol + displayRow) % 2 === 0;
-
-                    const coord = getChessCoord(displayCol, displayRow);
-                    const piece = state.digital[displayCol]?.[displayRow] || '.';
-                    const isSelected = selectedSquare?.col === displayCol && selectedSquare?.row === displayRow;
-                    const isLegalDest = legalDestinations.has(coord);
-                    const isLastMoveSrc = lastMoveSquares?.from === coord;
-                    const isLastMoveDst = lastMoveSquares?.to === coord;
-                    const isInCheck = kingInCheckCoord === coord;
-                    const isPendingCaptureTarget = pendingCaptureTargetCoord === coord;
-                    const isCandidateAttacker = candidateAttackerCoords.has(coord);
-                    const isGuardrailMissing = guardrailMissingCoords.has(coord);
-                    const isGuardrailUnexpected = guardrailUnexpectedCoords.has(coord);
-
-                    let squareBgClass = isDark ? 'bg-slate-700/80' : 'bg-slate-600/60';
-                    if (isLastMoveSrc || isLastMoveDst) {
-                      squareBgClass = isDark ? 'bg-amber-700/40' : 'bg-amber-600/40';
-                    }
-
-                    return (
-                      <div 
-                        key={`sq-${displayCol}-${displayRow}`}
-                        onClick={() => handleSquareClick(displayCol, displayRow)}
-                        className={`flex items-center justify-center relative cursor-pointer select-none transition-colors duration-150 ${squareBgClass} ${
-                          isSelected ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-400/30' : ''
-                        } ${
-                          isInCheck ? 'ring-4 ring-rose-500 ring-inset bg-rose-500/30 animate-pulse' : ''
-                        } ${
-                          isPendingCaptureTarget ? 'ring-4 ring-rose-500 ring-inset bg-rose-500/30 animate-pulse shadow-[0_0_12px_rgba(244,63,94,0.8)]' : ''
-                        } ${
-                          isCandidateAttacker ? 'ring-2 ring-amber-400 ring-dashed ring-inset bg-amber-400/20 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : ''
-                        } ${
-                          isGuardrailMissing ? 'ring-4 ring-amber-500 ring-dashed ring-inset bg-amber-500/25 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.7)]' : ''
-                        } ${
-                          isGuardrailUnexpected ? 'ring-4 ring-red-600 ring-dashed ring-inset bg-red-600/30 animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.8)]' : ''
-                        }`}
-                      >
-                        {/* Piece Icon */}
-                        {renderPiece(piece)}
-
-                        {/* Guardrail Mismatch Badge Overlay */}
-                        {isGuardrailMissing && (
-                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)]" title="Missing piece detected" />
-                        )}
-                        {isGuardrailUnexpected && (
-                          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,1)]" title="Unexpected piece detected" />
-                        )}
-                        {isPendingCaptureTarget && (
-                          <span className="absolute top-0.5 right-0.5 text-[9px] select-none text-rose-300 font-bold" title="Capture target">⚔</span>
-                        )}
-
-                        {/* Legal Move Indicator Dot (with Coach / Blunder Guard Color Tiers) */}
-                        {isLegalDest && (
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            {(() => {
-                              const quality = destQualities.get(coord);
-                              let ringColor = 'ring-emerald-400/80 bg-emerald-400/20';
-                              let dotColor = 'bg-emerald-400/80 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
-
-                              if (quality === 'good') {
-                                ringColor = 'ring-cyan-400/80 bg-cyan-400/20';
-                                dotColor = 'bg-cyan-400/90 shadow-[0_0_8px_rgba(34,211,238,0.9)]';
-                              } else if (quality === 'inaccuracy') {
-                                ringColor = 'ring-amber-400/80 bg-amber-400/20';
-                                dotColor = 'bg-amber-400/90 shadow-[0_0_8px_rgba(251,191,36,0.9)]';
-                              } else if (quality === 'blunder') {
-                                ringColor = 'ring-rose-500/80 bg-rose-500/30';
-                                dotColor = 'bg-rose-500/90 shadow-[0_0_8px_rgba(244,63,94,0.9)]';
+                              let bgClass = 'bg-slate-900/30';
+                              if (isDisabled) {
+                                bgClass = 'bg-slate-950/80 border border-slate-900/40 opacity-25 cursor-not-allowed';
+                              } else if (sensorStateVal === 1) {
+                                bgClass = 'bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
+                              } else if (sensorStateVal === -1) {
+                                bgClass = 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
                               }
 
-                              return piece !== '.' ? (
-                                <div className={`w-full h-full rounded-none ring-4 ring-inset ${ringColor} animate-pulse`} />
-                              ) : (
-                                <div className={`w-3.5 h-3.5 rounded-full ${dotColor}`} />
+                              return (
+                                <div 
+                                  key={`sensor-${fileIdx}-${rankIdx}`}
+                                  title={`Square [${fileIdx},${rankIdx}] - Left-click: Calibrate baseline to current reading | Right-click: Disable`}
+                                  onClick={() => {
+                                    if (!isDisabled) handleCalibrateSquare(fileIdx, rankIdx);
+                                  }}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    handleToggleDisableSquare(fileIdx, rankIdx);
+                                  }}
+                                  className={`rounded transition-all duration-200 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/60'} ${bgClass}`}
+                                />
                               );
-                            })()}
-                          </div>
-                        )}
-
-                        {/* Rank & File labels along edges */}
-                        {((!isFlipped && displayRow === 0) || (isFlipped && displayRow === 7)) && (
-                          <span className="absolute top-0.5 left-1 text-[8px] font-bold text-slate-400 font-mono opacity-60">
-                            {displayCol + 1}
-                          </span>
-                        )}
-                        {((!isFlipped && displayCol === 0) || (isFlipped && displayCol === 7)) && (
-                          <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-slate-400 font-mono opacity-60">
-                            {String.fromCharCode(97 + displayRow)}
-                          </span>
-                        )}
+                            })
+                          ))}
+                        </div>
                       </div>
-                    );
-                  })
-                ))}
-              </div>
-
-              {/* Physical Sensor Overlay (Visible when not actively playing and not virtual-only) */}
-              {state.status !== 'PLAYING' && !state.virtual_only && (
-                <div className={`absolute inset-0 bg-blue-950/10 border transition-all duration-300 backdrop-blur-[0.5px] z-10 pointer-events-none ${
-                  state.physical?.setup?.is_setup_ready ? 'border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'border-blue-500/20'
-                }`}>
-                  <div className={`absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white ${
-                    state.physical?.setup?.is_setup_ready ? 'bg-emerald-600/90' : 'bg-blue-600/90'
-                  }`}>
-                    {state.physical?.setup?.is_setup_ready ? 'Physical Board Ready' : 'Physical Sensors Active'}
-                  </div>
-                  <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
-                    {Array(8).fill(null).map((_, rIdx) => (
-                      Array(8).fill(null).map((_, cIdx) => {
-                        const isFlipped = state.my_color === 'black';
-                        const fileIdx = isFlipped ? (7 - cIdx) : cIdx;
-                        const rankIdx = isFlipped ? rIdx : (7 - rIdx);
-
-                        const sensorStateVal = state.physical.grid?.[fileIdx]?.[rankIdx] ?? 0;
-                        const isDisabled = (state.physical.disabled_squares ?? []).some(
-                          (sq) => sq[0] === fileIdx && sq[1] === rankIdx
-                        );
-
-                        let bgClass = 'bg-slate-900/30';
-                        if (isDisabled) {
-                          bgClass = 'bg-slate-950/80 border border-slate-900/40 opacity-25 cursor-not-allowed';
-                        } else if (sensorStateVal === 1) {
-                          bgClass = 'bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
-                        } else if (sensorStateVal === -1) {
-                          bgClass = 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
-                        }
-
-                        return (
-                          <div 
-                            key={`sensor-${fileIdx}-${rankIdx}`}
-                            title={`Square [${fileIdx},${rankIdx}] - Left-click: Calibrate baseline to current reading | Right-click: Disable`}
-                            onClick={() => {
-                              if (!isDisabled) handleCalibrateSquare(fileIdx, rankIdx);
-                            }}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              handleToggleDisableSquare(fileIdx, rankIdx);
-                            }}
-                            className={`rounded transition-all duration-200 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/60'} ${bgClass}`}
-                          />
-                        );
-                      })
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Player Footer Bar */}
-            <div className={`flex justify-between items-center bg-slate-900/80 border border-slate-800 rounded-b-2xl px-4 py-2.5 text-xs transition-all duration-300 ${
-              isMyTurn ? 'border-emerald-500/50 bg-emerald-950/10 shadow-[0_0_12px_rgba(16,185,129,0.1)]' : ''
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`w-3 h-3 rounded-full border ${
-                  state.my_color === 'black' ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'
-                }`} />
-                <div className="flex flex-col text-left">
-                  <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
-                    {account?.username || 'You'} (Playing as {state.my_color || 'White'})
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Rating: {account?.rating || 1500}
-                  </span>
-                </div>
-              </div>
-
-              {/* Player Clock */}
-              <div className={`font-mono text-base font-extrabold px-3 py-1 rounded-lg border transition-all ${
-                isMyTurn
-                  ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
-              }`}>
-                {state.my_color === 'black' ? displayClocks.black : displayClocks.white}
-              </div>
-            </div>
+                    )
+                  : undefined
+              }
+            />
           </div>
 
           {/* Right Column: Game Matchmaking & Controls Panel */}
