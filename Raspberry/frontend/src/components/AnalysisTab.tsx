@@ -431,17 +431,15 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       // Optimistic application is best-effort only
     }
 
-    // --- Backend dispatch (source of truth; WS payload reconciles) ---
+    // --- Backend dispatch (source of truth; WS payload reconciles via useEffect) ---
     try {
       const res = await navAnalysis(direction);
       prevOnMainlineRef.current = !!res?.on_mainline;
-      const serverFen = (res as { analysis?: { fen?: string } } | null)?.analysis?.fen ?? null;
-      reconcileOptimistic(serverFen);
     } catch (err) {
       console.error('Error navigating analysis:', err);
       clearOptimistic();
     }
-  }, [analysis, currentPly, totalPlys, optimistic.fen, applyUciLocally, boardAtPly, reconcileOptimistic, clearOptimistic]);
+  }, [analysis, currentPly, totalPlys, optimistic.fen, applyUciLocally, boardAtPly, clearOptimistic]);
 
   useEffect(() => {
     if (subMode !== 'review' || !analysis?.active) return;
@@ -510,7 +508,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       // best-effort
     }
 
-    // --- Backend dispatch (source of truth; WS payload reconciles) ---
+    // --- Backend dispatch (source of truth; WS payload reconciles via useEffect) ---
     try {
       const res = await sendAnalysisMove(mv);
       const result = (res as { result?: { action?: string; analysis?: { is_branching?: boolean } } })?.result
@@ -523,12 +521,11 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       }
       prevOnMainlineRef.current = !result.analysis?.is_branching;
       setWebMoveInput('');
-      reconcileOptimistic((result.analysis as { fen?: string } | null | undefined)?.fen ?? null);
     } catch (err) {
       console.error('Error playing web analysis move:', err);
       clearOptimistic();
     }
-  }, [analysis, optimistic.fen, applyUciLocally, reconcileOptimistic, clearOptimistic]);
+  }, [analysis, optimistic.fen, applyUciLocally, clearOptimistic]);
 
   // Suggested better move after a suboptimal mainline move (arrow on board).
   // Clicking it steps back and plays the engine's suggestion as a variation,
@@ -935,6 +932,7 @@ const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
                     onSuggestionClick={handleSuggestionClick}
                     suggestMove={suggestMove}
                     myColor={boardState.my_color === 'black' ? 'black' : 'white'}
+                    showEngineLines={true}
                     topLines={analysis?.top_lines ?? null}
                     onLineClick={handleLineClick}
                     setupHighlights={{
