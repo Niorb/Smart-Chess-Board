@@ -3,16 +3,16 @@
 ## Current Sprint Goal
 Maintain AI Sub-Agent Roster and Implement Smart Chess Board Core Features.
 
-## Latest Change — Board Square Colors & Fully Setup Piece Display in Play Section (2026-08-28)
-1. **Board Square Color Correction (`WebAnalysisBoard.tsx`)**:
+## Latest Change — Recognized Physical Piece Setup Display & Green/Red Overlay Removal in Play Section (2026-08-28)
+1. **Dynamic Recognized Physical Piece Display (`board_state.py`, `App.tsx`)**:
+   - Implemented `get_recognized_pieces_grid()` on `BoardStateManager` to map active magnetic sensor polarities (`physical_state`) to recognized standard chess pieces in real time.
+   - When the board is not in an active match (`IDLE`, `SEEKING`, `SETUP`), `digital_state` dynamically reflects all physical pieces currently detected on the board (e.g. partial setup, pieces as they are placed, or full 32-piece setup).
+   - Removed `boardOverlay` (the green/red sensor matrix grid overlay) from the Play section board in `App.tsx`, providing a clean, uncluttered board interface.
+2. **Board Square Color Correction (`WebAnalysisBoard.tsx`)**:
    - Corrected dark/light square calculation to `(file + rank) % 2 === 0` so that `a1` (0,0) and the entire `a1-h8` diagonal are dark squares.
    - Enforces classical "white on right" square parity (`h1` is light, `a1` is dark, `h8` is dark, `a8` is light) across all board themes (Green, Wood, Slate).
-2. **Piece Display on Fully Setup Board (`board_state.py`, `App.tsx`, `test_board_state.py`)**:
-   - In `board_state.py`, defined `STARTING_DIGITAL_GRID` and synchronized `digital_state` to standard starting pieces whenever the physical board completes a full 32-piece setup (`is_setup_ready == True`) during `IDLE`, `SEEKING`, or `SETUP` modes.
-   - In `App.tsx`, updated `playFen` fallback to guarantee full 32-piece starting position rendering when `is_setup_ready` is active.
-   - Refined `boardOverlay` condition in the Play section to automatically conceal the sensor debugging grid once `is_setup_ready` is true, presenting a clean interactive board with all pieces in place even when no game or matchmaking queue is active.
-3. **Automated Verification**:
-   - Added `test_digital_state_starting_grid_when_setup_ready` in `test_board_state.py`.
+3. **Automated Verification (`test_board_state.py`)**:
+   - Added `test_get_recognized_pieces_grid` verifying empty, partial, and full 32-piece board recognition.
 
 ## Previous Change — Unified Web Analysis Board Layout & Animations in Play Section (2026-08-28)
 1. **Interactive Chessboard Unification (`WebAnalysisBoard.tsx`, `App.tsx`)**:

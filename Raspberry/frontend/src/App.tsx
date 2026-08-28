@@ -232,13 +232,10 @@ function App() {
     return coords;
   }, [state.physical?.capture_candidate_attackers]);
 
-  // Play section active FEN computed from digital board grid
+  // Play section active FEN computed from digital board grid (contains recognized pieces)
   const playFen = useMemo(() => {
-    if (state.status !== 'PLAYING' && state.physical?.setup?.is_setup_ready) {
-      return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    }
     return digitalGridToFen(state.digital, state.game?.turn ?? 'white');
-  }, [state.digital, state.game?.turn, state.status, state.physical?.setup?.is_setup_ready]);
+  }, [state.digital, state.game?.turn]);
 
   // Handle moves played via web board interaction (drag & drop or click-to-move)
   const handlePlayMove = async (uci: string) => {
@@ -1131,54 +1128,6 @@ function App() {
                   </>
                 );
               }}
-              boardOverlay={
-                state.status !== 'PLAYING' && !state.virtual_only && !state.physical?.setup?.is_setup_ready
-                  ? (flipped) => (
-                      <div className="absolute inset-0 bg-blue-950/20 border border-blue-500/20 transition-all duration-300 backdrop-blur-[0.5px] z-20 pointer-events-none rounded-md overflow-hidden">
-                        <div className="absolute top-1 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider text-white shadow z-30 bg-blue-600/90">
-                          Physical Sensors Active
-                        </div>
-                        <div className="grid grid-cols-8 grid-rows-8 w-full h-full p-1 gap-1 pointer-events-auto">
-                          {Array(8).fill(null).map((_, rIdx) => (
-                            Array(8).fill(null).map((_, cIdx) => {
-                              const fileIdx = flipped ? (7 - cIdx) : cIdx;
-                              const rankIdx = flipped ? rIdx : (7 - rIdx);
-
-                              const sensorStateVal = state.physical.grid?.[fileIdx]?.[rankIdx] ?? 0;
-                              const isDisabled = (state.physical.disabled_squares ?? []).some(
-                                (sq) => sq[0] === fileIdx && sq[1] === rankIdx
-                              );
-
-                              let bgClass = 'bg-slate-900/30';
-                              if (isDisabled) {
-                                bgClass = 'bg-slate-950/80 border border-slate-900/40 opacity-25 cursor-not-allowed';
-                              } else if (sensorStateVal === 1) {
-                                bgClass = 'bg-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
-                              } else if (sensorStateVal === -1) {
-                                bgClass = 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.6)]';
-                              }
-
-                              return (
-                                <div 
-                                  key={`sensor-${fileIdx}-${rankIdx}`}
-                                  title={`Square [${fileIdx},${rankIdx}] - Left-click: Calibrate baseline to current reading | Right-click: Disable`}
-                                  onClick={() => {
-                                    if (!isDisabled) handleCalibrateSquare(fileIdx, rankIdx);
-                                  }}
-                                  onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    handleToggleDisableSquare(fileIdx, rankIdx);
-                                  }}
-                                  className={`rounded transition-all duration-200 cursor-pointer ${isDisabled ? '' : 'hover:bg-slate-800/60'} ${bgClass}`}
-                                />
-                              );
-                            })
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  : undefined
-              }
             />
           </div>
 

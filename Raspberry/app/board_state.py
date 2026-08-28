@@ -690,6 +690,45 @@ class BoardStateManager:
             "gesture": self.gesture_engine.get_state_payload() if hasattr(self, "gesture_engine") else None,
         }
 
+    def get_recognized_pieces_grid(self, physical_state: list[list[int]] | None = None) -> list[list[str]]:
+        """
+        Builds an 8x8 piece grid mapping recognized physical piece polarities
+        to their standard chess starting pieces.
+        - physical_state is 8x8 [cols][rows] (cols=0..7 for files a..h, rows=0..7 for ranks 1..8)
+        - Returns 8x8 grid [rank_idx][file_idx] compatible with digital_state
+        """
+        ps = physical_state if physical_state is not None else self.physical_state
+        grid = [["." for _ in range(8)] for _ in range(8)]
+        if not ps or len(ps) < 8:
+            return grid
+
+        # Standard piece mapping for ranks 1 & 8
+        rank1_pieces = ["R", "N", "B", "Q", "K", "B", "N", "R"]
+        rank8_pieces = ["r", "n", "b", "q", "k", "b", "n", "r"]
+
+        for file_idx in range(8):
+            for rank_idx in range(8):
+                val = ps[file_idx][rank_idx] if rank_idx < len(ps[file_idx]) else 0
+                if val == -1:  # White piece (South pole)
+                    if rank_idx == 0:
+                        grid[rank_idx][file_idx] = rank1_pieces[file_idx]
+                    elif rank_idx == 1:
+                        grid[rank_idx][file_idx] = "P"
+                    elif rank_idx in (6, 7):
+                        grid[rank_idx][file_idx] = rank8_pieces[file_idx].upper() if rank_idx == 7 else "P"
+                    else:
+                        grid[rank_idx][file_idx] = "P"
+                elif val == 1:  # Black piece (North pole)
+                    if rank_idx == 7:
+                        grid[rank_idx][file_idx] = rank8_pieces[file_idx]
+                    elif rank_idx == 6:
+                        grid[rank_idx][file_idx] = "p"
+                    elif rank_idx in (0, 1):
+                        grid[rank_idx][file_idx] = rank1_pieces[file_idx].lower() if rank_idx == 0 else "p"
+                    else:
+                        grid[rank_idx][file_idx] = "p"
+        return grid
+
     def start_local_game(self, fen: str | None = None) -> dict[str, Any]:
         """
         Starts a local two-player over-the-board match.
@@ -3999,10 +4038,7 @@ class BoardStateManager:
                             active_chess_board = getattr(lichess_engine, "board", None)
                         self.clocks = IDLE_CLOCKS
                     else:
-                        if hasattr(self, "setup_result") and self.setup_result and self.setup_result.is_setup_ready:
-                            self.digital_state = STARTING_DIGITAL_GRID
-                        else:
-                            self.digital_state = EMPTY_DIGITAL_GRID
+                        self.digital_state = self.get_recognized_pieces_grid(self.physical_state)
                         self.clocks = IDLE_CLOCKS
                         self.current_opening = None
 
