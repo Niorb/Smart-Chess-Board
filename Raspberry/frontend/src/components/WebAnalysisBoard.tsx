@@ -61,6 +61,7 @@ export interface WebAnalysisBoardProps {
   showOrientationToggle?: boolean;
   showThemeToggle?: boolean;
   topBar?: React.ReactNode;
+  bottomBar?: React.ReactNode;
   /** Move quality tiers for target square dots */
   destQualities?: Map<string, 'best' | 'good' | 'inaccuracy' | 'blunder'>;
   /** Custom overlay renderer per square */
