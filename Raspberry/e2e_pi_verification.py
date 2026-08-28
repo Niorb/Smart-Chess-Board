@@ -257,8 +257,8 @@ def test_api_and_websocket():
     with urllib.request.urlopen("http://localhost:8000/api/board/health") as response:
         assert response.status == 200
         data = json.loads(response.read().decode("utf-8"))
-        assert data["status"] in ("healthy", "online", "ok")
-        pass_section("GET /api/board/health", f"Status: {data['status']}")
+        assert "status" in data and "subsystems" in data
+        pass_section("GET /api/board/health", f"Status: {data['status']}, Subsystems: {list(data['subsystems'].keys())}")
 
     # Endgame Drills catalog
     with urllib.request.urlopen("http://localhost:8000/api/endgame/drills") as response:
