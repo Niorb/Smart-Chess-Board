@@ -689,6 +689,10 @@ class CoachEngine:
                     to_sq=chess.square_name(legal_move.to_square),
                     classification=MoveQuality.BLUNDER,
                     delta_cp=300,
+                    score_cp=None,
+                    mate=None,
+                )
+                moves_map[uci] = analysis
         # Extract and format top PV lines
         top_lines: list[dict[str, Any]] = []
         for info in infos[:3]:
