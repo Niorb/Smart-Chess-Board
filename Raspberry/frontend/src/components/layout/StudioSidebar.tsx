@@ -8,7 +8,8 @@ import {
   Sparkles,
   Sun,
   Moon,
-  Radio
+  Radio,
+  LogOut
 } from 'lucide-react';
 import { useArtisanTheme } from '../../context/useArtisanTheme';
 import type { StudioView } from '../../types/theme';
@@ -21,6 +22,7 @@ interface StudioSidebarProps {
   nightMode: boolean;
   onToggleNightMode: () => void;
   hasActiveGesture?: boolean;
+  onStopAnalysis?: () => void;
 }
 
 export const StudioSidebar: React.FC<StudioSidebarProps> = ({
@@ -31,6 +33,7 @@ export const StudioSidebar: React.FC<StudioSidebarProps> = ({
   nightMode,
   onToggleNightMode,
   hasActiveGesture,
+  onStopAnalysis,
 }) => {
   const { activeView, setActiveView, lens, toggleLens } = useArtisanTheme();
 
@@ -122,6 +125,25 @@ export const StudioSidebar: React.FC<StudioSidebarProps> = ({
               </button>
             );
           })}
+
+          {/* Quick Exit Analysis Action in Sidebar */}
+          {status === 'ANALYSIS' && onStopAnalysis && (
+            <button
+              onClick={onStopAnalysis}
+              title="Exit Analysis Mode & return to Play Studio"
+              className="flex items-center justify-between p-2.5 mt-1 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-rose-300 transition-all text-left shadow-sm active:scale-95 group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-rose-500/20 group-hover:bg-rose-500/30 text-rose-400">
+                  <LogOut size={14} />
+                </div>
+                <span className="text-xs font-bold font-display text-rose-200">Exit Analysis</span>
+              </div>
+              <span className="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                STOP
+              </span>
+            </button>
+          )}
         </nav>
 
         {/* Signature Lens Controls */}

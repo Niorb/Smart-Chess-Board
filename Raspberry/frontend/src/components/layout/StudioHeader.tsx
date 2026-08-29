@@ -8,7 +8,8 @@ import {
   GraduationCap,
   Terminal,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
 import { useArtisanTheme } from '../../context/useArtisanTheme';
 import type { LichessAccount } from '../../api';
@@ -23,6 +24,7 @@ interface StudioHeaderProps {
   nightMode: boolean;
   onToggleNightMode: () => void;
   opening?: { name?: string; variation?: string; eco?: string; out_of_book?: boolean } | null;
+  onStopAnalysis?: () => void;
 }
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
@@ -32,6 +34,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
   nightMode,
   onToggleNightMode,
   opening,
+  onStopAnalysis,
 }) => {
   const { currentTheme, cycleTheme, activeView, setActiveView } = useArtisanTheme();
 
@@ -52,15 +55,28 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
                 {currentTheme.label.split(' ')[0]}
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
               Status: <strong className={
                 status === 'PLAYING' ? 'text-emerald-400 font-bold' :
                 status === 'SEEKING' ? 'text-blue-400 font-bold animate-pulse' :
+                status === 'ANALYSIS' ? 'text-violet-400 font-bold' :
                 'text-slate-300'
               }>{status}</strong>
             </span>
           </div>
         </div>
+
+        {/* Quick Exit Analysis Button in Header */}
+        {status === 'ANALYSIS' && onStopAnalysis && (
+          <button
+            onClick={onStopAnalysis}
+            title="Exit Analysis Mode & return to Play Studio"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 border border-rose-500/40 text-xs font-mono font-bold transition-all active:scale-95 shadow-sm"
+          >
+            <LogOut size={12} />
+            <span>Exit Analysis</span>
+          </button>
+        )}
 
         {/* Cartographer's Path Opening Novelty Indicator */}
         {opening && opening.name && (

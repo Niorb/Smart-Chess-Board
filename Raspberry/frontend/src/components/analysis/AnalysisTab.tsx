@@ -8,8 +8,11 @@ import {
   ChevronRight,
   SkipBack,
   SkipForward,
+  LogOut,
+  RotateCcw,
 } from 'lucide-react';
 import type { BoardState } from '../../hooks/useBoardState';
+import { useArtisanTheme } from '../../context/useArtisanTheme';
 import WebAnalysisBoard from '../board/WebAnalysisBoard';
 import { MoveHistoryTree } from './MoveHistoryTree';
 import {
@@ -18,6 +21,7 @@ import {
   navAnalysis,
   sendAnalysisMove,
   resetAnalysisBranch,
+  stopAnalysis,
   getRecentLichessGames,
   type LichessRecentGame,
 } from '../../api';
@@ -27,6 +31,7 @@ interface AnalysisTabProps {
 }
 
 export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
+  const { setActiveView } = useArtisanTheme();
   const analysis = boardState.analysis;
   const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);
   const [isLoadingRecentGames, setIsLoadingRecentGames] = useState<boolean>(false);
@@ -136,6 +141,15 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     }
   };
 
+  const handleExitAnalysis = async () => {
+    try {
+      await stopAnalysis();
+      setActiveView('play');
+    } catch (err) {
+      console.error('Error stopping analysis:', err);
+    }
+  };
+
   // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -190,6 +204,28 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <Compass size={14} className="text-violet-400" />
               The Grandmaster's Lens
             </span>
+          }
+          headerRight={
+            <div className="flex items-center gap-1.5">
+              {analysis?.is_branching && (
+                <button
+                  onClick={handleResetBranch}
+                  title="Return to Main Game Line"
+                  className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold font-mono rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-all active:scale-95 shadow-sm"
+                >
+                  <RotateCcw size={11} />
+                  <span>Main Line</span>
+                </button>
+              )}
+              <button
+                onClick={handleExitAnalysis}
+                title="Exit Analysis Mode & return to Play Studio"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold font-mono rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 border border-rose-500/40 transition-all active:scale-95 shadow-sm"
+              >
+                <LogOut size={12} />
+                <span>Exit Analysis</span>
+              </button>
+            </div>
           }
         />
 

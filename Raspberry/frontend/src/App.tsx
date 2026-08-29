@@ -30,6 +30,7 @@ import {
   testMoveTrace,
   saveBoardDefaults,
   startAnalysis,
+  stopAnalysis,
   getGMGames,
   startGMGame,
   getEndgameDrills,
@@ -635,6 +636,20 @@ function StudioApp() {
     }
   };
 
+  const handleStopAnalysis = async () => {
+    setLoading(true);
+    try {
+      await stopAnalysis();
+      setActiveView('play');
+      addToast('info', 'Exited analysis mode. Board returned to ready state.', 'Analysis Concluded');
+    } catch (err) {
+      console.error('Error stopping analysis mode:', err);
+      addToast('error', 'Failed to stop analysis mode', 'Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex bg-[#0b0f17] text-slate-100 p-3 md:p-6 select-none font-sans overflow-x-hidden">
       <div className="w-full max-w-[1440px] mx-auto flex gap-6">
@@ -651,6 +666,7 @@ function StudioApp() {
             persistSettings({ nMode: next });
           }}
           hasActiveGesture={state.gesture?.is_active || state.physical?.gesture?.is_active}
+          onStopAnalysis={handleStopAnalysis}
         />
 
         {/* Main Studio View Area */}
@@ -674,6 +690,7 @@ function StudioApp() {
               eco: state.opening.eco,
               out_of_book: state.opening.out_of_book,
             } : null}
+            onStopAnalysis={handleStopAnalysis}
           />
 
           {/* Dynamic Active Workspace View */}
