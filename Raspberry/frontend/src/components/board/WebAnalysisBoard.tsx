@@ -177,7 +177,8 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
-  const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
+  const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
+  const lastMoveUciClean = lastMoveUci ?? null;
 
   // Piece Gliding Animation State & Invariant Lifecycle (Render-Phase Transition)
   const [glideState, setGlideState] = useState<{
@@ -188,17 +189,17 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     glides: [],
   });
 
-  if (lastMoveUci !== glideState.lastMoveUci) {
-    if (!lastMoveUci || lastMoveUci.length < 4) {
+  if (lastMoveUciClean !== glideState.lastMoveUci) {
+    if (!lastMoveUciClean || lastMoveUciClean.length < 4) {
       setGlideState({
-        lastMoveUci,
+        lastMoveUci: lastMoveUciClean,
         glides: [],
       });
     } else {
-      const coords = uciToCoords(lastMoveUci);
+      const coords = uciToCoords(lastMoveUciClean);
       if (!coords) {
         setGlideState({
-          lastMoveUci,
+          lastMoveUci: lastMoveUciClean,
           glides: [],
         });
       } else {
@@ -206,7 +207,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         const piece = grid[to[1]]?.[to[0]] || '';
         if (!piece) {
           setGlideState({
-            lastMoveUci,
+            lastMoveUci: lastMoveUciClean,
             glides: [],
           });
         } else {
@@ -237,7 +238,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
           }
 
           setGlideState({
-            lastMoveUci,
+            lastMoveUci: lastMoveUciClean,
             glides,
           });
         }
