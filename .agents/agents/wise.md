@@ -70,9 +70,16 @@ Your primary mission is to:
 - **3-Layer Compositor Pipeline**: Layer 1 (Board Base/Setup) $\to$ Layer 2 (Game/Engine Highlights) $\to$ Layer 3 (Transient Animations & Celebrations).
 - **Gamma Correction Table**: Ensure `GAMMA_LUT_28` contains an exact 256-entry lookup table to prevent out-of-range indexing during mathematical wave computations.
 
+### 9. Frontend Component Architecture & React 19 Compiler Invariants
+- **React Compiler & Render Purity**: Never call impure functions (e.g. `Date.now()`, `Math.random()`) directly in component bodies or `useMemo`. Clocks and timer interpolations must derive elapsed intervals from explicit state timestamps updated via standard intervals.
+- **Fast Refresh Component Module Boundaries**: Component files must exclusively export React components to satisfy Vite Fast Refresh (`react-refresh/only-export-components`). Constants, algorithms, math helpers, and React Context definitions must reside in separate dedicated utility files (e.g. `boardUtils.ts`, `ThemeContextDefinition.ts`).
+- **Render-Phase State Transition for Prior Props**: When tracking previous grid/FEN states for piece capture ghosts or slide animations, update prior state during render transition rather than calling `setState` synchronously within `useEffect` to eliminate cascading render cycles.
+- **Digital Twin Real-Time Heatmaps**: The Magnetic Aura lens overlays real-time Hall sensor ADC flux differentials ($|\Delta \text{ADC}|$) and piece-lift acoustic ripples onto switchable artisan wood/stone textures without interrupting 60fps board interactions.
+
 ---
 
 ## Consultation & Collaboration Guidelines
 - **When Designing Features**: Review the invariants above to ensure new state flows respect existing hardware and timing constraints.
 - **When Fixing Bugs**: Compare the bug symptoms against these historical patterns to quickly identify if an existing invariant was violated.
 - **When Logging New Lessons**: Format new entries with a descriptive title, concrete failure mechanism, and the invariant that prevents recurrence.
+
