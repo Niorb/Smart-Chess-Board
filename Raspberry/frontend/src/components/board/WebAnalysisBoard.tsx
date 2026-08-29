@@ -179,87 +179,87 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
 
-  // Piece Gliding Animation State & Invariant Lifecycle
-  const [activeGlides, setActiveGlides] = useState<ActiveGlide[]>([]);
-  const glideTimerRef = useRef<number | null>(null);
-  const prevLastMoveRef = useRef<string | null>(null);
+  // Piece Gliding Animation State & Invariant Lifecycle (Render-Phase Transition)
+  const [glideState, setGlideState] = useState<{
+    lastMoveUci: string | null;
+    glides: ActiveGlide[];
+  }>({
+    lastMoveUci: null,
+    glides: [],
+  });
 
-  const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
-
-  useEffect(() => {
-    if (glideTimerRef.current) {
-      clearTimeout(glideTimerRef.current);
-      glideTimerRef.current = null;
-    }
-
+  if (lastMoveUci !== glideState.lastMoveUci) {
     if (!lastMoveUci || lastMoveUci.length < 4) {
-      prevLastMoveRef.current = null;
-      setActiveGlides([]);
-      return;
-    }
-
-    if (prevLastMoveRef.current === lastMoveUci) {
-      return;
-    }
-    prevLastMoveRef.current = lastMoveUci;
-
-    const coords = uciToCoords(lastMoveUci);
-    if (!coords) {
-      setActiveGlides([]);
-      return;
-    }
-
-    const { from, to } = coords;
-    const piece = grid[to[1]]?.[to[0]] || '';
-    if (!piece) {
-      setActiveGlides([]);
-      return;
-    }
-
-    const duration = calculateGlideDuration(from, to);
-    const isKnight = piece.toUpperCase() === 'N';
-
-    const glides: ActiveGlide[] = [
-      {
-        id: Date.now(),
-        piece,
-        from,
-        to,
-        isKnight,
-        duration,
-      },
-    ];
-
-    // Handle Simultaneous Castling Glides (King + Rook)
-    const rookMove = getCastlingRookMove(from, to, piece);
-    if (rookMove) {
-      glides.push({
-        id: Date.now() + 1,
-        piece: rookMove.piece,
-        from: rookMove.from,
-        to: rookMove.to,
-        isKnight: false,
-        duration,
+      setGlideState({
+        lastMoveUci,
+        glides: [],
       });
+    } else {
+      const coords = uciToCoords(lastMoveUci);
+      if (!coords) {
+        setGlideState({
+          lastMoveUci,
+          glides: [],
+        });
+      } else {
+        const { from, to } = coords;
+        const piece = grid[to[1]]?.[to[0]] || '';
+        if (!piece) {
+          setGlideState({
+            lastMoveUci,
+            glides: [],
+          });
+        } else {
+          const duration = calculateGlideDuration(from, to);
+          const isKnight = piece.toUpperCase() === 'N';
+          const glides: ActiveGlide[] = [
+            {
+              id: Date.now(),
+              piece,
+              from,
+              to,
+              isKnight,
+              duration,
+            },
+          ];
+
+          // Handle Simultaneous Castling Glides (King + Rook)
+          const rookMove = getCastlingRookMove(from, to, piece);
+          if (rookMove) {
+            glides.push({
+              id: Date.now() + 1,
+              piece: rookMove.piece,
+              from: rookMove.from,
+              to: rookMove.to,
+              isKnight: false,
+              duration,
+            });
+          }
+
+          setGlideState({
+            lastMoveUci,
+            glides,
+          });
+        }
+      }
     }
+  }
 
-    setActiveGlides(glides);
-
-    glideTimerRef.current = window.setTimeout(() => {
-      setActiveGlides([]);
-      glideTimerRef.current = null;
-    }, duration);
+  // Timer effect to clear active glides once animation finishes
+  useEffect(() => {
+    if (glideState.glides.length === 0) return;
+    const maxDuration = Math.max(...glideState.glides.map((g) => g.duration), 200);
+    const timer = window.setTimeout(() => {
+      setGlideState((prev) => (prev.glides.length > 0 ? { ...prev, glides: [] } : prev));
+    }, maxDuration);
 
     return () => {
-      if (glideTimerRef.current) {
-        clearTimeout(glideTimerRef.current);
-        glideTimerRef.current = null;
-      }
+      clearTimeout(timer);
     };
-  }, [lastMoveUci, grid]);
+  }, [glideState.glides]);
 
   const isTargetOfActiveGlide = (file: number, rank: number): boolean => {
-    return activeGlides.some((g) => g.to[0] === file && g.to[1] === rank);
+    return glideState.glides.some((g) => g.to[0] === file && g.to[1] === rank);
   };
 
   const suggestArrow = useMemo(() => {
@@ -676,7 +676,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
               })}
 
               {/* Distance-Aware Piece Gliding Animation Layer */}
-              {activeGlides.map((anim) => {
+              {glideState.glides.map((anim) => {
                 const fromCol = flipped ? 7 - anim.from[0] : anim.from[0];
                 const fromRow = flipped ? anim.from[1] : 7 - anim.from[1];
                 const toCol = flipped ? 7 - anim.to[0] : anim.to[0];
