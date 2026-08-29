@@ -939,7 +939,7 @@ class BoardStateManager:
         the game line.
         """
         payload = self.get_analysis_payload()
-        if self.game_status != "ANALYSIS" or self.analysis_submode != "review":
+        if self.game_status != "ANALYSIS" or self.analysis_submode not in ("review", "replay_learn", "replay_recall"):
             return {"action": "inactive", "on_mainline": True, "analysis": payload}
 
         direction = (direction or "").lower().strip()
