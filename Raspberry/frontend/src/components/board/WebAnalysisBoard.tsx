@@ -13,7 +13,6 @@ import {
   uciToCoords,
   calculateGlideDuration,
   getCastlingRookMove,
-  capturedGhostSquare,
   parseFenPlacement,
   type EngineLineProp,
   type Coord,
@@ -152,18 +151,6 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     }
     return parseFenPlacement(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   }, [fen, gridProp]);
-
-  const [prevGridState, setPrevGridState] = useState<{ prev: string[][] | null; current: string[][] }>({
-    prev: null,
-    current: grid,
-  });
-
-  if (prevGridState.current !== grid) {
-    setPrevGridState({
-      prev: prevGridState.current,
-      current: grid,
-    });
-  }
 
   const whiteToMove = useMemo(() => {
     if (fen) return (fen.split(' ')[1] || 'w') === 'w';
@@ -573,7 +560,6 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                 const isLeftEdge = col === 0;
                 const isBottomEdge = rowFromTop === 7;
 
-                const captured = capturedGhostSquare(prevGridState.prev, grid, lastHighlight, [file, rank], piece);
                 const isMissingStarting = missingSquaresSet.has(`${file},${rank}`);
                 const isMisplaced = misplacedSquaresSet.has(`${file},${rank}`);
                 const isGlidingTarget = isTargetOfActiveGlide(file, rank);
@@ -643,13 +629,6 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                           draggable={false}
                           className="w-[84%] h-[84%] object-contain filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)] pointer-events-none select-none"
                         />
-                      </div>
-                    )}
-
-                    {/* Captured Piece Fade Ghost */}
-                    {captured && (
-                      <div className="absolute inset-0 flex items-center justify-center z-[4] pointer-events-none opacity-40 filter grayscale">
-                        <img src={PIECE_IMAGES[captured]} alt={captured} className="w-[75%] h-[75%] object-contain" />
                       </div>
                     )}
 

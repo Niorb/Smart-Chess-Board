@@ -128,23 +128,3 @@ export function getCastlingRookMove(
   const piece = kingGlyph === 'K' ? 'R' : 'r';
   return { from: rFrom, to: rTo, piece };
 }
-
-export function capturedGhostSquare(
-  prevGrid: string[][] | null,
-  grid: string[][],
-  lastHighlight: { from: Coord; to: Coord } | null,
-  sq: Coord,
-  pieceNow: string,
-): string {
-  if (!prevGrid || !lastHighlight) return '';
-  if (sq[0] === lastHighlight.to[0] && sq[1] === lastHighlight.to[1]) return '';
-  const before = prevGrid[sq[1]]?.[sq[0]] ?? '';
-  const after = pieceNow;
-  if (!before || after === before) return '';
-  const mover = grid[lastHighlight.to[1]]?.[lastHighlight.to[0]] ?? '';
-  if (!mover) return '';
-  const moverIsWhite = mover === mover.toUpperCase();
-  const victimIsWhite = before === before.toUpperCase();
-  if (moverIsWhite === victimIsWhite) return '';
-  return before;
-}
