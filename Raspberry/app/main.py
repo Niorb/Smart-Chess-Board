@@ -563,7 +563,7 @@ async def make_move_route(body: MoveRequest):
         from_sq = body.from_square.lower().strip()
         to_sq = body.to_square.lower().strip()
         uci = f"{from_sq}{to_sq}{body.promotion or ''}"
-        res = state_manager.handle_analysis_move(uci)
+        res = state_manager.handle_analysis_move(uci, source="web")
         return {"status": "success", "analysis": res}
 
     if state_manager.game_status != "PLAYING":

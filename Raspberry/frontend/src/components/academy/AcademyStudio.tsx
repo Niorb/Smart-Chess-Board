@@ -62,7 +62,7 @@ export const AcademyStudio: React.FC<AcademyStudioProps> = ({
     best_san: currentBlunder.best_move,
     hint_level: boardState.analysis?.blunder_step,
     hint_text: boardState.analysis?.blunder_hint_active ? `Look closely at ${currentBlunder.best_move.slice(0, 2)}` : undefined,
-    solved: false,
+    solved: (boardState.analysis?.blunder_step ?? 0) >= (currentBlunder.player_moves?.length || 1),
   } : null;
 
   return (

@@ -35,6 +35,15 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const totalPlys = analysis?.total_plys ?? 0;
   const currentFen = analysis?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
+  // Auto-start web analysis mode on mount if not already in analysis or playing
+  useEffect(() => {
+    if (!boardState.analysis?.active && boardState.status !== 'PLAYING') {
+      startAnalysis({ web_only: true }).catch((err) => {
+        console.warn('Auto-start analysis error:', err);
+      });
+    }
+  }, [boardState.analysis?.active, boardState.status]);
+
   // Fetch recent Lichess games
   useEffect(() => {
     let cancelled = false;
@@ -306,7 +315,8 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <button
                 key={g.id}
                 onClick={async () => {
-                  await startAnalysis({ game_id: g.id });
+                  const moves = g.moves_uci || (g as unknown as { moves?: string[] }).moves || [];
+                  await startAnalysis({ moves_uci: moves, game_id: g.id, web_only: true });
                 }}
                 className="p-2 rounded-xl bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 text-left flex items-center justify-between transition-all"
               >

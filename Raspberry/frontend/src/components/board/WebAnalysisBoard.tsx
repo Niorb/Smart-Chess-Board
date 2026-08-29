@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Chess } from 'chess.js';
 import { useArtisanTheme } from '../../context/useArtisanTheme';
 import { MagneticAuraOverlay } from './MagneticAuraOverlay';
 import { LedBezelTwin } from './LedBezelTwin';
@@ -188,17 +189,27 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     return uciToCoords(suggestMove);
   }, [isBranching, topLines, suggestMove]);
 
+  const effectiveLegalMoves = useMemo(() => {
+    if (legalMoves && legalMoves.length > 0) return legalMoves;
+    try {
+      const chess = new Chess(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      return chess.moves({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
+    } catch {
+      return [];
+    }
+  }, [legalMoves, fen]);
+
   const targets = useMemo(() => {
     if (!selected) return new Map<string, boolean>();
     const prefix = coordToSquareName(selected);
     const map = new Map<string, boolean>();
-    for (const lm of legalMoves) {
+    for (const lm of effectiveLegalMoves) {
       if (lm.startsWith(prefix)) {
         map.set(lm.slice(2, 4), lm.length > 4);
       }
     }
     return map;
-  }, [selected, legalMoves]);
+  }, [selected, effectiveLegalMoves]);
 
   const checkedKingSquare = useMemo(() => {
     if (!inCheck) return null;
@@ -215,9 +226,9 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
   const isOwnTurnPiece = (glyph: string, c?: Coord): boolean => {
     if (!glyph || disabled) return false;
-    if (legalMoves.length > 0 && c) {
+    if (effectiveLegalMoves.length > 0 && c) {
       const sqName = coordToSquareName(c);
-      return legalMoves.some((lm) => lm.startsWith(sqName));
+      return effectiveLegalMoves.some((lm) => lm.startsWith(sqName));
     }
     return whiteToMove ? glyph === glyph.toUpperCase() : glyph === glyph.toLowerCase();
   };
@@ -226,7 +237,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     if (disabled || !onMovePlayed) return false;
     const fromStr = coordToSquareName(from);
     const toStr = coordToSquareName(to);
-    const candidates = legalMoves.filter((lm) => lm.startsWith(fromStr + toStr));
+    const candidates = effectiveLegalMoves.filter((lm) => lm.startsWith(fromStr + toStr));
     if (candidates.length === 0) return false;
     if (candidates[0].length > 4) {
       const glyph = pieceAt(from);

@@ -161,11 +161,11 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
 
         {/* Top Clock Bar: Opponent */}
         <ClockWidget
-          color={state.my_color === 'white' ? 'black' : 'white'}
-          playerLabel={state.game?.opponent?.username || (isLocalGame ? 'Black' : state.coach?.is_ai_game ? 'Stockfish AI' : 'Opponent')}
+          color={state.my_color === 'black' ? 'white' : 'black'}
+          playerLabel={state.game?.opponent?.username || (isLocalGame ? (state.my_color === 'black' ? 'White' : 'Black') : state.coach?.is_ai_game ? 'Stockfish AI' : 'Opponent')}
           rating={state.game?.opponent?.rating ?? undefined}
           title={state.game?.opponent?.title ?? undefined}
-          timeStr={state.my_color === 'white' ? displayClocks.black : displayClocks.white}
+          timeStr={state.my_color === 'black' ? displayClocks.white : displayClocks.black}
           isTurn={isOpponentTurn}
         />
 
@@ -227,7 +227,7 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
         {/* Bottom Clock Bar: Player */}
         <ClockWidget
           color={state.my_color === 'black' ? 'black' : 'white'}
-          playerLabel={account?.username || 'You'}
+          playerLabel={account?.username || (isLocalGame ? (state.my_color === 'black' ? 'Black' : 'White') : 'You')}
           rating={account?.rating || 1500}
           timeStr={state.my_color === 'black' ? displayClocks.black : displayClocks.white}
           isTurn={isMyTurn}

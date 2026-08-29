@@ -1768,7 +1768,7 @@ class BoardStateManager:
         self.endgame_active = True
         self.endgame_drill_id = drill.id
         self.endgame_drill = drill
-        self.endgame_phase = "setup_white"
+        self.endgame_phase = "playing" if (self.virtual_only or getattr(self, "analysis_web_only", False)) else "setup_white"
         self.endgame_board = board.copy()
         self.endgame_moves_played = 0
         self.endgame_mistakes = 0
@@ -2229,7 +2229,18 @@ class BoardStateManager:
         (e.g. 'Nf3', 'exd5', 'O-O') in the review submode.
         """
         if self.game_status != "ANALYSIS":
-            return {"error": "Not in analysis mode"}
+            self.game_status = "ANALYSIS"
+            self.analysis_submode = "review"
+            self.analysis_web_only = (source == "web")
+            self.analysis_active_board = chess.Board()
+            self.analysis_current_ply = 0
+            self.analysis_game_moves = []
+            self.analysis_evaluations = []
+            self.analysis_played_analyses = []
+            self.analysis_branch_moves = []
+            self.analysis_anchor_ply = None
+            self.analysis_anchor_coord = None
+            logger.info("Auto-activated analysis mode on move play from IDLE")
 
         raw_text = uci.strip()
         uci = raw_text.lower()

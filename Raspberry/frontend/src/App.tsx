@@ -448,7 +448,7 @@ function StudioApp() {
     hint?: string;
   }) => {
     try {
-      await createCustomEndgame({
+      const created = await createCustomEndgame({
         fen: params.fen,
         title: params.title,
         player_color: params.side_to_move,
@@ -459,6 +459,10 @@ function StudioApp() {
       });
       const data = await getEndgameDrills();
       if (Array.isArray(data)) setEndgameDrills(data);
+      if (created && (created as unknown as { drill_id?: string }).drill_id) {
+        await startEndgameDrill({ drill_id: (created as unknown as { drill_id?: string }).drill_id });
+        setActiveView('analysis');
+      }
       addToast('success', `Created custom endgame "${params.title}"!`, 'Saved');
     } catch (err) {
       console.error('Error creating custom endgame:', err);

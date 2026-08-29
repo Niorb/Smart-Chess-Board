@@ -9,12 +9,12 @@ interface LedTesterControlProps {
 }
 
 const PRESET_ANIMATIONS = [
-  { id: 'breathe', label: 'Breathe Ambient', color: 'border-indigo-500/40 text-indigo-300' },
-  { id: 'wave', label: 'Perimeter Wave', color: 'border-cyan-500/40 text-cyan-300' },
-  { id: 'capture_strike', label: 'Capture Strike', color: 'border-rose-500/40 text-rose-300' },
-  { id: 'check_alert', label: 'Check Warning', color: 'border-amber-500/40 text-amber-300' },
-  { id: 'opening_flare', label: 'Opening Flare', color: 'border-emerald-500/40 text-emerald-300' },
-  { id: 'rainbow', label: 'Rainbow Aura', color: 'border-purple-500/40 text-purple-300' },
+  { id: 'GAME_STARTED', label: 'Game Start Fanfare', color: 'border-emerald-500/40 text-emerald-300' },
+  { id: 'GAME_WON', label: 'Victory Cascade', color: 'border-amber-500/40 text-amber-300' },
+  { id: 'GAME_LOST', label: 'Eclipse Defeat', color: 'border-rose-500/40 text-rose-300' },
+  { id: 'GAME_DRAWN', label: 'Equilibrium Draw', color: 'border-cyan-500/40 text-cyan-300' },
+  { id: 'BOARD_READY', label: 'Board Ready Ambient', color: 'border-indigo-500/40 text-indigo-300' },
+  { id: 'SEEKING', label: 'Matchmaking Pulse', color: 'border-purple-500/40 text-purple-300' },
 ];
 
 export const LedTesterControl: React.FC<LedTesterControlProps> = ({
