@@ -177,6 +177,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
+  const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
   const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
   const lastMoveUciClean = lastMoveUci ?? null;
 
