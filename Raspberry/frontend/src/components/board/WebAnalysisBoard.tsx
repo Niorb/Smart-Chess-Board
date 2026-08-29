@@ -65,7 +65,7 @@ export interface WebAnalysisBoardProps {
 }
 
 interface ActiveGlide {
-  id: number;
+  id: string;
   piece: string;
   from: Coord;
   to: Coord;
@@ -216,7 +216,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
           const isKnight = piece.toUpperCase() === 'N';
           const glides: ActiveGlide[] = [
             {
-              id: Date.now(),
+              id: `glide-${lastMoveUciClean}-${piece}`,
               piece,
               from,
               to,
@@ -229,7 +229,7 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
           const rookMove = getCastlingRookMove(from, to, piece);
           if (rookMove) {
             glides.push({
-              id: Date.now() + 1,
+              id: `glide-castling-rook-${lastMoveUciClean}-${rookMove.piece}`,
               piece: rookMove.piece,
               from: rookMove.from,
               to: rookMove.to,
