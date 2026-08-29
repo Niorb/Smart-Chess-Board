@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useBoardState } from './hooks/useBoardState';
-import { ThemeProvider, useArtisanTheme } from './context/ThemeContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { useArtisanTheme } from './context/useArtisanTheme';
 import { StudioSidebar } from './components/layout/StudioSidebar';
 import { StudioHeader } from './components/layout/StudioHeader';
 import { ToastNotification, type ToastMessage } from './components/layout/ToastNotification';
@@ -148,20 +149,13 @@ function StudioApp() {
   const [savingDefaults, setSavingDefaults] = useState(false);
   const [saveDefaultsStatus, setSaveDefaultsStatus] = useState<string | null>(null);
 
+  const effectiveNightMode = state.physical?.night_mode !== undefined ? state.physical.night_mode : nightMode;
+
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
-
-  // Sync physical night mode when triggered via gesture
-  useEffect(() => {
-    const hwNight = state.physical?.night_mode;
-    if (hwNight !== undefined && hwNight !== nightMode) {
-      setNightMode(hwNight);
-      localStorage.setItem('scb_night_mode', String(hwNight));
-    }
-  }, [state.physical?.night_mode, nightMode]);
 
   // Fetch initial account, params, GM games, and endgame drills
   useEffect(() => {
@@ -222,29 +216,23 @@ function StudioApp() {
   }, [state.coach]);
 
   // Clocks smooth interpolation ticker
-  const clocksSnapshot = useMemo(() => {
-    const raw = state.clocks_raw;
-    if (!raw || raw.updated_at == null) return null;
-    return { raw, receivedAt: Date.now() };
-  }, [state.clocks_raw?.updated_at]);
-
-  const [clockTick, setClockTick] = useState(0);
-  const clockTickerActive = state.status === 'PLAYING' && clocksSnapshot !== null;
+  const [now, setNow] = useState<number>(0);
+  const clockTickerActive = state.status === 'PLAYING' && !!state.clocks_raw && state.clocks_raw.updated_at != null;
   useEffect(() => {
     if (!clockTickerActive) return;
-    const t = window.setInterval(() => setClockTick((v) => v + 1), 500);
+    const t = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(t);
   }, [clockTickerActive]);
 
   const displayClocks = useMemo(() => {
-    void clockTick;
     const fallback = {
       white: state.clocks?.white ?? '?:??',
       black: state.clocks?.black ?? '?:??',
     };
-    if (!clocksSnapshot || clocksSnapshot.raw.turn === null) return fallback;
-    const { white, black, turn } = clocksSnapshot.raw;
-    if (white == null || black == null) return fallback;
+    const raw = state.clocks_raw;
+    if (!raw || raw.turn === null || raw.updated_at == null || raw.white == null || raw.black == null) {
+      return fallback;
+    }
     const formatMs = (ms: number): string => {
       const totalSeconds = Math.floor(ms / 1000);
       const mins = Math.floor(totalSeconds / 60);
@@ -252,12 +240,13 @@ function StudioApp() {
       if (mins > 0) return `${mins}:${String(secs).padStart(2, '0')}`;
       return `${secs}.${Math.floor((ms % 1000) / 100)}s`;
     };
-    const elapsedMs = Date.now() - clocksSnapshot.receivedAt;
+    const updatedMs = raw.updated_at > 1e11 ? raw.updated_at : raw.updated_at * 1000;
+    const elapsedMs = now > updatedMs ? now - updatedMs : 0;
     return {
-      white: turn === 'white' ? formatMs(Math.max(0, white - elapsedMs)) : formatMs(white),
-      black: turn === 'black' ? formatMs(Math.max(0, black - elapsedMs)) : formatMs(black),
+      white: raw.turn === 'white' ? formatMs(Math.max(0, raw.white - elapsedMs)) : formatMs(raw.white),
+      black: raw.turn === 'black' ? formatMs(Math.max(0, raw.black - elapsedMs)) : formatMs(raw.black),
     };
-  }, [clockTick, clocksSnapshot, state.clocks]);
+  }, [now, state.clocks_raw, state.clocks]);
 
   const buildSettingsPayload = (overrides?: Record<string, unknown>) => ({
     threshold_positive: (overrides?.pos as number) ?? positiveThresh,
@@ -273,7 +262,7 @@ function StudioApp() {
     opening_hints_enabled: (overrides?.openingHints as boolean) ?? openingHintsEnabled,
     in_loop_calibration: (overrides?.inLoopCal as boolean) ?? inLoopCalibration,
     led_intensity: (overrides?.intensity as number) ?? ledIntensity,
-    night_mode: (overrides?.nMode as boolean) ?? nightMode,
+    night_mode: (overrides?.nMode as boolean) ?? effectiveNightMode,
   });
 
   const persistSettings = (overrides?: Record<string, unknown>) => {
@@ -412,7 +401,7 @@ function StudioApp() {
   const handleStartEndgameDrill = async (id: string) => {
     setLoading(true);
     try {
-      await startEndgameDrill(id);
+      await startEndgameDrill({ drill_id: id });
       setActiveView('analysis');
       addToast('success', `Loaded Endgame Drill!`, 'Endgame Academy');
     } catch (err) {
@@ -452,14 +441,22 @@ function StudioApp() {
     fen: string;
     title: string;
     category: string;
-    difficulty: string;
+    difficulty: number;
     goal: 'win' | 'draw' | 'mate';
     side_to_move: 'white' | 'black';
     description: string;
     hint?: string;
   }) => {
     try {
-      await createCustomEndgame(params);
+      await createCustomEndgame({
+        fen: params.fen,
+        title: params.title,
+        player_color: params.side_to_move,
+        target_goal: params.goal,
+        difficulty: params.difficulty,
+        description: params.description,
+        hint: params.hint,
+      });
       const data = await getEndgameDrills();
       if (Array.isArray(data)) setEndgameDrills(data);
       addToast('success', `Created custom endgame "${params.title}"!`, 'Saved');
@@ -468,10 +465,10 @@ function StudioApp() {
     }
   };
 
-  const handleStartBlunderDrill = async (gameId?: string) => {
+  const handleStartBlunderDrill = async (index?: number) => {
     setLoading(true);
     try {
-      await startBlunderDrill(gameId);
+      await startBlunderDrill(index ?? 0);
       addToast('success', 'Generated new tactical blunder drill!', 'Drill');
     } catch (err) {
       console.error('Error starting blunder drill:', err);
@@ -641,9 +638,9 @@ function StudioApp() {
         <StudioSidebar
           status={state.status}
           isConnected={isConnected}
-          virtualOnly={state.virtual_only}
+          virtualOnly={state.virtual_only ?? false}
           onToggleVirtualOnly={handleToggleVirtualOnly}
-          nightMode={nightMode}
+          nightMode={effectiveNightMode}
           onToggleNightMode={() => {
             const next = !nightMode;
             setNightMode(next);
@@ -659,15 +656,20 @@ function StudioApp() {
             account={account}
             status={state.status}
             isConnected={isConnected}
-            virtualOnly={state.virtual_only}
+            virtualOnly={state.virtual_only ?? false}
             onToggleVirtualOnly={handleToggleVirtualOnly}
-            nightMode={nightMode}
+            nightMode={effectiveNightMode}
             onToggleNightMode={() => {
               const next = !nightMode;
               setNightMode(next);
               persistSettings({ nMode: next });
             }}
-            opening={state.opening}
+            opening={state.opening ? {
+              name: state.opening.name,
+              variation: state.opening.variation ?? undefined,
+              eco: state.opening.eco,
+              out_of_book: state.opening.out_of_book,
+            } : null}
           />
 
           {/* Dynamic Active Workspace View */}
@@ -777,7 +779,7 @@ function StudioApp() {
                 setInLoopCalibration={setInLoopCalibration}
                 ledIntensity={ledIntensity}
                 setLedIntensity={setLedIntensity}
-                nightMode={nightMode}
+                nightMode={effectiveNightMode}
                 setNightMode={setNightMode}
                 piecesMode={piecesMode}
                 onSetPiecesMode={(m) => {

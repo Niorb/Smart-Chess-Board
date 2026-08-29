@@ -1,19 +1,16 @@
 import React from 'react';
 import { 
   User, 
-  Sparkles, 
-  Layers, 
-  Sun, 
-  Moon, 
   Palette,
   BookOpen,
   Compass,
   Play,
   GraduationCap,
   Terminal,
-  Activity
+  Sun,
+  Moon
 } from 'lucide-react';
-import { useArtisanTheme } from '../../context/ThemeContext';
+import { useArtisanTheme } from '../../context/useArtisanTheme';
 import type { LichessAccount } from '../../api';
 import type { StudioView } from '../../types/theme';
 
@@ -32,8 +29,6 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
   account,
   status,
   isConnected,
-  virtualOnly,
-  onToggleVirtualOnly,
   nightMode,
   onToggleNightMode,
   opening,

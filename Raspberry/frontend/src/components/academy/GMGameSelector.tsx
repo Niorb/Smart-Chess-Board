@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlayCircle, Trophy, BookOpen, Crown } from 'lucide-react';
+import { PlayCircle, Crown } from 'lucide-react';
 import type { GMGameSummary } from '../../hooks/useBoardState';
 
 interface GMGameSelectorProps {
@@ -57,7 +57,7 @@ export const GMGameSelector: React.FC<GMGameSelectorProps> = ({
                   {g.white} vs. {g.black}
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  Result: <strong className="text-white">{g.result}</strong> • {g.ply_count} ply
+                  Result: <strong className="text-white">{g.result}</strong> • {g.moves_count || 0} moves
                 </span>
               </div>
 

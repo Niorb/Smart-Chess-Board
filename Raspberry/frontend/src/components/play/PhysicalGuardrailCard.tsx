@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, Shield, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Shield } from 'lucide-react';
 
 interface PhysicalGuardrailCardProps {
   virtualOnly: boolean;

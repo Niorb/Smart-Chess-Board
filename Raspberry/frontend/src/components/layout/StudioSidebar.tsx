@@ -8,10 +8,9 @@ import {
   Sparkles,
   Sun,
   Moon,
-  Radio,
-  Sliders
+  Radio
 } from 'lucide-react';
-import { useArtisanTheme } from '../../context/ThemeContext';
+import { useArtisanTheme } from '../../context/useArtisanTheme';
 import type { StudioView } from '../../types/theme';
 
 interface StudioSidebarProps {

@@ -1,5 +1,4 @@
 import React from 'react';
-import { Clock } from 'lucide-react';
 
 interface ClockWidgetProps {
   timeStr: string;
@@ -44,7 +43,7 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({
               </span>
             )}
           </span>
-          {rating && (
+          {rating !== undefined && (
             <span className="text-[10px] text-slate-400 font-mono">
               Rating: {rating}
             </span>

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { PIECE_IMAGES } from './WebAnalysisBoard';
+import { PIECE_IMAGES } from './boardUtils';
 
 interface CapturedPiecesBarProps {
   fen: string;

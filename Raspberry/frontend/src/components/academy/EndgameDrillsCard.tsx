@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import { 
   GraduationCap, 
-  CheckCircle2, 
   PlayCircle, 
-  Lightbulb, 
   Plus, 
-  RotateCcw, 
-  Star,
-  Target,
-  Sparkles,
   X
 } from 'lucide-react';
 import type { EndgameDrillItem } from '../../api';
@@ -18,13 +12,11 @@ interface EndgameDrillsCardProps {
   activeDrillId?: string | null;
   onStartDrill: (drillId: string) => void;
   onStopDrill: () => void;
-  onRequestHint: () => void;
-  onResetProgress: () => void;
   onCreateCustomEndgame: (params: {
     fen: string;
     title: string;
     category: string;
-    difficulty: string;
+    difficulty: number;
     goal: 'win' | 'draw' | 'mate';
     side_to_move: 'white' | 'black';
     description: string;
@@ -38,8 +30,6 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
   activeDrillId,
   onStartDrill,
   onStopDrill,
-  onRequestHint,
-  onResetProgress,
   onCreateCustomEndgame,
   loading,
 }) => {
@@ -66,7 +56,7 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
       fen: fenInput.trim(),
       title: titleInput.trim(),
       category: 'custom',
-      difficulty: 'Intermediate',
+      difficulty: 3,
       goal: goalInput,
       side_to_move: colorInput,
       description: descInput.trim() || 'Custom theoretical endgame position',
@@ -75,6 +65,8 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
     setIsModalOpen(false);
     setFenInput('');
     setTitleInput('');
+    setDescInput('');
+    setHintInput('');
   };
 
   return (
@@ -103,7 +95,7 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
 
       {/* Category Pills */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        {['all', 'Pawn Endgames', 'Rook Endgames', 'Minor Piece', 'Queen Endgames'].map((cat) => {
+        {['all', 'pawns', 'rooks', 'minors', 'queens'].map((cat) => {
           const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
           return (
             <button
@@ -115,7 +107,7 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
                   : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
               }`}
             >
-              {cat === 'all' ? 'All Drills' : cat}
+              {cat === 'all' ? 'All Drills' : cat.toUpperCase()}
             </button>
           );
         })}
@@ -138,7 +130,7 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold font-display text-white">{drill.title}</span>
                   <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 border border-slate-800">
-                    Goal: {drill.goal.toUpperCase()}
+                    Goal: {drill.target_goal.toUpperCase()}
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-300 font-sans mt-1 line-clamp-2">
@@ -148,7 +140,7 @@ export const EndgameDrillsCard: React.FC<EndgameDrillsCardProps> = ({
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
                 <span className="text-[9px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                  {drill.category} • {drill.difficulty}
+                  {drill.category_title || drill.category} • Diff {drill.difficulty}
                 </span>
                 <div className="flex items-center gap-1.5">
                   {isActive ? (

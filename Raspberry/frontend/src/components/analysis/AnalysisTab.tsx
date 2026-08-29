@@ -1,21 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Chess } from 'chess.js';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Sparkles,
-  RotateCcw,
+  Compass,
+  Brain,
+  History,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Compass,
-  Lightbulb,
-  TrendingUp,
-  Brain,
-  History,
-  Play,
-  ArrowLeft,
-  ArrowRight,
   SkipBack,
-  SkipForward
+  SkipForward,
 } from 'lucide-react';
 import type { BoardState } from '../../hooks/useBoardState';
 import WebAnalysisBoard from '../board/WebAnalysisBoard';
@@ -26,7 +18,6 @@ import {
   navAnalysis,
   sendAnalysisMove,
   resetAnalysisBranch,
-  stopAnalysis,
   getRecentLichessGames,
   type LichessRecentGame,
 } from '../../api';
@@ -39,19 +30,34 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const analysis = boardState.analysis;
   const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);
   const [isLoadingRecentGames, setIsLoadingRecentGames] = useState<boolean>(false);
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [moveInput, setMoveInput] = useState<string>('');
 
   const currentPly = analysis?.current_ply ?? 0;
   const totalPlys = analysis?.total_plys ?? 0;
-  const currentFen = analysis?.current_fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const currentFen = analysis?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
   // Fetch recent Lichess games
-  const fetchRecentGames = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    getRecentLichessGames(10)
+      .then((res) => {
+        if (!cancelled && res?.games) {
+          setRecentGames(res.games);
+        }
+      })
+      .catch((err) => {
+        console.warn('Error fetching recent games:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRefreshRecentGames = async () => {
     setIsLoadingRecentGames(true);
     try {
       const res = await getRecentLichessGames(10);
-      if (res && Array.isArray(res.games)) {
+      if (res?.games) {
         setRecentGames(res.games);
       }
     } catch (err) {
@@ -59,47 +65,49 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
     } finally {
       setIsLoadingRecentGames(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    fetchRecentGames();
-  }, [fetchRecentGames]);
-
-  // Compute parsed move list from SAN/UCI history
+  // Compute parsed move list from played_analyses or game_moves
   const parsedMoves = useMemo(() => {
+    if (analysis?.played_analyses && analysis.played_analyses.length > 0) {
+      return analysis.played_analyses.map((m) => ({
+        ply: m.ply,
+        san: m.san || m.uci,
+        uci: m.uci,
+        classification: m.classification,
+        delta_cp: m.delta_cp,
+      }));
+    }
     const movesList = [];
-    const sans = analysis?.san_moves || [];
-    const ucis = analysis?.uci_moves || [];
-    const evals = analysis?.move_evals || [];
-
-    for (let i = 0; i < Math.max(sans.length, ucis.length); i++) {
+    const gameMoves = analysis?.game_moves || [];
+    const evals = analysis?.evaluations || [];
+    for (let i = 0; i < gameMoves.length; i++) {
       const evalData = evals[i];
       movesList.push({
         ply: i + 1,
-        san: sans[i] || ucis[i] || `Move ${i + 1}`,
-        uci: ucis[i] || '',
-        classification: evalData?.classification,
+        san: gameMoves[i],
+        uci: gameMoves[i],
         score_cp: evalData?.score_cp,
         mate: evalData?.mate,
       });
     }
     return movesList;
-  }, [analysis?.san_moves, analysis?.uci_moves, analysis?.move_evals]);
+  }, [analysis]);
 
   // Navigation handlers
-  const handleNav = async (ply: number) => {
+  const handleNavPly = async (ply: number) => {
     try {
-      await navAnalysis(ply);
+      await stepAnalysis(ply);
     } catch (err) {
       console.error('Error navigating analysis ply:', err);
     }
   };
 
-  const handleStep = async (delta: number) => {
+  const handleNavDirection = async (direction: 'back' | 'forward' | 'start' | 'end') => {
     try {
-      await stepAnalysis(delta);
+      await navAnalysis(direction);
     } catch (err) {
-      console.error('Error stepping analysis:', err);
+      console.error('Error navigating analysis direction:', err);
     }
   };
 
@@ -125,21 +133,23 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        handleStep(-1);
+        handleNavDirection('back');
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        handleStep(1);
+        handleNavDirection('forward');
       } else if (e.key === 'Home') {
         e.preventDefault();
-        handleNav(0);
+        handleNavDirection('start');
       } else if (e.key === 'End') {
         e.preventDefault();
-        handleNav(totalPlys);
+        handleNavDirection('end');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [totalPlys]);
+  }, []);
+
+  const activeEval = analysis?.current_eval || analysis?.evaluations?.[currentPly - 1];
 
   return (
     <div className="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 max-w-6xl mx-auto">
@@ -149,12 +159,12 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           fen={currentFen}
           legalMoves={analysis?.legal_moves || []}
           inCheck={analysis?.in_check}
-          lastMoveUci={analysis?.last_move_uci}
+          lastMoveUci={analysis?.game_moves?.[currentPly - 1] || null}
           isBranching={analysis?.is_branching}
           showEvalBar={true}
-          winChance={analysis?.evaluation?.win_chance}
-          scoreCp={analysis?.evaluation?.score_cp}
-          mate={analysis?.evaluation?.mate}
+          winChance={activeEval?.win_chance}
+          scoreCp={activeEval?.score_cp}
+          mate={activeEval?.mate}
           onMovePlayed={handlePlayAnalysisMove}
           topLines={analysis?.top_lines}
           showEngineLines={true}
@@ -174,7 +184,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
         <div className="glass-panel rounded-2xl p-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <button
-              onClick={() => handleNav(0)}
+              onClick={() => handleNavDirection('start')}
               disabled={currentPly <= 0}
               className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-slate-300 transition-all active:scale-95"
               title="First move (Home)"
@@ -182,7 +192,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <SkipBack size={15} />
             </button>
             <button
-              onClick={() => handleStep(-1)}
+              onClick={() => handleNavDirection('back')}
               disabled={currentPly <= 0}
               className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-slate-300 transition-all active:scale-95"
               title="Previous move (Left Arrow)"
@@ -199,7 +209,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
           <div className="flex items-center gap-1">
             <button
-              onClick={() => handleStep(1)}
+              onClick={() => handleNavDirection('forward')}
               disabled={currentPly >= totalPlys && !analysis?.is_branching}
               className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-slate-300 transition-all active:scale-95"
               title="Next move (Right Arrow)"
@@ -207,7 +217,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <ChevronRight size={15} />
             </button>
             <button
-              onClick={() => handleNav(totalPlys)}
+              onClick={() => handleNavDirection('end')}
               disabled={currentPly >= totalPlys}
               className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-slate-300 transition-all active:scale-95"
               title="Latest move (End)"
@@ -228,7 +238,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               Stockfish 16 Engine Telemetry
             </h3>
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40">
-              Depth: {analysis?.evaluation?.depth ?? 20}
+              Depth: 20
             </span>
           </div>
 
@@ -236,10 +246,10 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col">
               <span className="text-[10px] font-mono uppercase text-slate-400">Position Score</span>
               <span className="text-base font-extrabold font-mono text-emerald-400 mt-0.5">
-                {analysis?.evaluation?.mate !== null && analysis?.evaluation?.mate !== undefined
-                  ? `M${Math.abs(analysis.evaluation.mate)}`
-                  : analysis?.evaluation?.score_cp !== null && analysis?.evaluation?.score_cp !== undefined
-                  ? `${analysis.evaluation.score_cp >= 0 ? '+' : ''}${(analysis.evaluation.score_cp / 100).toFixed(2)}`
+                {activeEval?.mate !== null && activeEval?.mate !== undefined
+                  ? `M${Math.abs(activeEval.mate)}`
+                  : activeEval?.score_cp !== null && activeEval?.score_cp !== undefined
+                  ? `${activeEval.score_cp >= 0 ? '+' : ''}${(activeEval.score_cp / 100).toFixed(2)}`
                   : '0.00'}
               </span>
             </div>
@@ -247,7 +257,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
             <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col">
               <span className="text-[10px] font-mono uppercase text-slate-400">Win Probability</span>
               <span className="text-base font-extrabold font-mono text-amber-400 mt-0.5">
-                {(analysis?.evaluation?.win_chance ?? 50).toFixed(1)}% White
+                {(activeEval?.win_chance ?? 50).toFixed(1)}% White
               </span>
             </div>
           </div>
@@ -267,7 +277,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           <MoveHistoryTree
             moves={parsedMoves}
             currentPly={currentPly}
-            onNavigatePly={handleNav}
+            onNavigatePly={handleNavPly}
             isBranching={analysis?.is_branching}
             branchMoves={analysis?.branch_moves}
             anchorPly={analysis?.anchor_ply}
@@ -283,7 +293,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               Load Recent Lichess Match
             </span>
             <button
-              onClick={fetchRecentGames}
+              onClick={handleRefreshRecentGames}
               disabled={isLoadingRecentGames}
               className="text-slate-400 hover:text-white"
             >
@@ -296,14 +306,13 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
               <button
                 key={g.id}
                 onClick={async () => {
-                  setSelectedGameId(g.id);
-                  await startAnalysis(g.id);
+                  await startAnalysis({ game_id: g.id });
                 }}
                 className="p-2 rounded-xl bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 text-left flex items-center justify-between transition-all"
               >
                 <div className="flex flex-col">
                   <span className="text-[11px] font-bold font-display text-white">
-                    vs. {g.opponent || 'Opponent'} ({g.speed})
+                    vs. {g.opponent?.username || 'Opponent'} ({g.speed})
                   </span>
                   <span className="text-[9px] text-slate-400 font-mono">
                     Result: {g.winner ? `${g.winner} won` : 'Draw'} • {g.moves_count || 0} moves

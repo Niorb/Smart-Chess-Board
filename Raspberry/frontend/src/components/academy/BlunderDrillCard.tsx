@@ -4,7 +4,6 @@ import {
   Lightbulb, 
   CheckCircle2, 
   AlertTriangle, 
-  RotateCcw, 
   Eye, 
   Play, 
   ArrowRight,
@@ -109,19 +108,19 @@ export const BlunderDrillCard: React.FC<BlunderDrillCardProps> = ({
           {attemptResult && (
             <div
               className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
-                attemptResult.is_correct
+                attemptResult.correct
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 shadow-emerald-glow'
                   : 'bg-rose-500/20 border-rose-500/40 text-rose-200 shadow-rose-glow'
               }`}
             >
-              {attemptResult.is_correct ? (
+              {attemptResult.correct ? (
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
               ) : (
                 <AlertTriangle size={16} className="text-rose-400 shrink-0 mt-0.5" />
               )}
               <div className="flex flex-col">
-                <span className="font-bold">{attemptResult.is_correct ? 'Brilliant! Correct Move!' : 'Incorrect Move'}</span>
-                <span className="opacity-90">{attemptResult.feedback}</span>
+                <span className="font-bold">{attemptResult.correct ? 'Brilliant! Correct Move!' : 'Incorrect Move'}</span>
+                <span className="opacity-90">{attemptResult.message}</span>
               </div>
             </div>
           )}

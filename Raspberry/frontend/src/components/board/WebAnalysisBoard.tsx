@@ -1,36 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import wK from '../../assets/pieces/wK.svg';
-import wQ from '../../assets/pieces/wQ.svg';
-import wR from '../../assets/pieces/wR.svg';
-import wB from '../../assets/pieces/wB.svg';
-import wN from '../../assets/pieces/wN.svg';
-import wP from '../../assets/pieces/wP.svg';
-import bK from '../../assets/pieces/bK.svg';
-import bQ from '../../assets/pieces/bQ.svg';
-import bR from '../../assets/pieces/bR.svg';
-import bB from '../../assets/pieces/bB.svg';
-import bN from '../../assets/pieces/bN.svg';
-import bP from '../../assets/pieces/bP.svg';
-import { useArtisanTheme } from '../../context/ThemeContext';
+import { useArtisanTheme } from '../../context/useArtisanTheme';
 import { MagneticAuraOverlay } from './MagneticAuraOverlay';
 import { LedBezelTwin } from './LedBezelTwin';
 import { EvalBar } from './EvalBar';
+import {
+  PIECE_IMAGES,
+  CLASS_TINTS,
+  FILES,
+  coordToSquareName,
+  uciToCoords,
+  capturedGhostSquare,
+  parseFenPlacement,
 
-export interface EngineLineProp {
-  uci: string[];
-  san: string[];
-  score_cp: number | null;
-  mate: number | null;
-}
+  type EngineLineProp,
+  type Coord,
+  type SetupHighlightsProp,
+} from './boardUtils';
 
-export type Coord = [number, number]; // [file 0-7, rank 0-7]
-
-export interface SetupHighlightsProp {
-  missingWhite?: Array<[number, number]>;
-  missingBlack?: Array<[number, number]>;
-  misplaced?: Array<[number, number]>;
-  enabled?: boolean;
-}
 
 export interface WebAnalysisBoardProps {
   fen?: string;
@@ -74,106 +60,7 @@ export interface WebAnalysisBoardProps {
   ledIntensity?: number;
 }
 
-export const PIECE_IMAGES: Record<string, string> = {
-  K: wK, Q: wQ, R: wR, B: wB, N: wN, P: wP,
-  k: bK, q: bQ, r: bR, b: bB, n: bN, p: bP,
-};
-
-export const CLASS_TINTS: Record<string, string> = {
-  best: 'rgba(16, 185, 129, 0.55)',
-  good: 'rgba(6, 182, 212, 0.45)',
-  book: 'rgba(148, 163, 184, 0.45)',
-  inaccuracy: 'rgba(245, 158, 11, 0.55)',
-  mistake: 'rgba(249, 115, 22, 0.58)',
-  blunder: 'rgba(244, 63, 94, 0.65)',
-};
-
-export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-export const MOVE_ANIM_BASE_MS = 150;
-export const MOVE_ANIM_PER_SQUARE_MS = 26;
-export const MOVE_ANIM_MAX_MS = 280;
-
-export function digitalGridToFen(digital: string[][], turn: 'white' | 'black' = 'white'): string {
-  if (!digital || !Array.isArray(digital) || digital.length < 8) {
-    return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  }
-  const ranks: string[] = [];
-  for (let r = 7; r >= 0; r--) {
-    let emptyCount = 0;
-    let rankStr = '';
-    for (let f = 0; f < 8; f++) {
-      const p = digital[r]?.[f];
-      if (!p || p === '.') {
-        emptyCount++;
-      } else {
-        if (emptyCount > 0) {
-          rankStr += emptyCount.toString();
-          emptyCount = 0;
-        }
-        rankStr += p;
-      }
-    }
-    if (emptyCount > 0) {
-      rankStr += emptyCount.toString();
-    }
-    ranks.push(rankStr || '8');
-  }
-  const activeColor = turn === 'black' ? 'b' : 'w';
-  return `${ranks.join('/')} ${activeColor} - - 0 1`;
-}
-
-export function parseFenPlacement(fen: string): string[][] {
-  const rows = (fen.split(' ')[0] || '').split('/').reverse();
-  const grid: string[][] = [];
-  for (const row of rows) {
-    const cells: string[] = [];
-    for (const ch of row) {
-      if (/\d/.test(ch)) {
-        for (let i = 0; i < parseInt(ch, 10); i++) cells.push('');
-      } else {
-        cells.push(ch);
-      }
-    }
-    grid.push(cells.slice(0, 8));
-  }
-  return grid.slice(0, 8);
-}
-
-export function coordToSquareName(c: Coord): string {
-  return `${FILES[c[0]]}${c[1] + 1}`;
-}
-
-export function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
-  if (!uci || uci.length < 4) return null;
-  const f = FILES.indexOf(uci[0]);
-  const r = parseInt(uci[1], 10) - 1;
-  const tf = FILES.indexOf(uci[2]);
-  const tr = parseInt(uci[3], 10) - 1;
-  if ([f, r, tf, tr].some((v) => v < 0 || v > 7)) return null;
-  return { from: [f, r], to: [tf, tr] };
-}
-
-export function capturedGhostSquare(
-  prevGrid: string[][] | null,
-  grid: string[][],
-  lastHighlight: { from: Coord; to: Coord } | null,
-  sq: Coord,
-  pieceNow: string,
-): string {
-  if (!prevGrid || !lastHighlight) return '';
-  if (sq[0] === lastHighlight.to[0] && sq[1] === lastHighlight.to[1]) return '';
-  const before = prevGrid[sq[1]]?.[sq[0]] ?? '';
-  const after = pieceNow;
-  if (!before || after === before) return '';
-  const mover = grid[lastHighlight.to[1]]?.[lastHighlight.to[0]] ?? '';
-  if (!mover) return '';
-  const moverIsWhite = mover === mover.toUpperCase();
-  const victimIsWhite = before === before.toUpperCase();
-  if (moverIsWhite === victimIsWhite) return '';
-  return before;
-}
-
-const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
+export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   fen,
   grid: gridProp,
   legalMoves: legalMovesProp,
@@ -251,25 +138,31 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     return parseFenPlacement(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   }, [fen, gridProp]);
 
+  const [prevGridState, setPrevGridState] = useState<{ prev: string[][] | null; current: string[][] }>({
+    prev: null,
+    current: grid,
+  });
+
+  if (prevGridState.current !== grid) {
+    setPrevGridState({
+      prev: prevGridState.current,
+      current: grid,
+    });
+  }
+
   const whiteToMove = useMemo(() => {
     if (fen) return (fen.split(' ')[1] || 'w') === 'w';
     return true;
   }, [fen]);
 
-  const prevGridRef = useRef<string[][] | null>(null);
-  const prevGrid = prevGridRef.current;
-  useEffect(() => {
-    prevGridRef.current = grid;
-  }, [grid]);
-
   const [selected, setSelected] = useState<Coord | null>(null);
   const [drag, setDrag] = useState<{ from: Coord; piece: string } | null>(null);
+  const [ghostSize, setGhostSize] = useState<number>(60);
   const [promotion, setPromotion] = useState<{ from: Coord; to: Coord; color: 'white' | 'black' } | null>(null);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
-  const ghostSizeRef = useRef<number>(60);
 
   const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
 
@@ -385,7 +278,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
     setSelected(c);
     pressRef.current = { coord: c, startX: e.clientX, startY: e.clientY, wasSelected };
     const rect = boardRef.current?.getBoundingClientRect();
-    if (rect) ghostSizeRef.current = rect.width / 8;
+    if (rect) setGhostSize(rect.width / 8);
     setDrag({ from: c, piece: glyph });
     requestAnimationFrame(() => positionGhost(e.clientX, e.clientY));
   };
@@ -558,7 +451,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
                   ? rookAnimBase
                   : null;
 
-              const captured = capturedGhostSquare(prevGrid, grid, lastHighlight, [file, rank], piece);
+              const captured = capturedGhostSquare(prevGridState.prev, grid, lastHighlight, [file, rank], piece);
               const isMissingStarting = missingSquaresSet.has(`${file},${rank}`);
               const isMisplaced = misplacedSquaresSet.has(`${file},${rank}`);
 
@@ -778,7 +671,7 @@ const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
         <div
           ref={ghostRef}
           className="fixed pointer-events-none z-[100] left-0 top-0 will-change-transform"
-          style={{ width: `${ghostSizeRef.current}px`, height: `${ghostSizeRef.current}px` }}
+          style={{ width: `${ghostSize}px`, height: `${ghostSize}px` }}
         >
           <img
             src={PIECE_IMAGES[drag.piece]}

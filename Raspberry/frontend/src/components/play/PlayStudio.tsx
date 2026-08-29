@@ -1,23 +1,21 @@
 import React, { useMemo } from 'react';
-import WebAnalysisBoard, { digitalGridToFen } from '../board/WebAnalysisBoard';
+import WebAnalysisBoard from '../board/WebAnalysisBoard';
+import { digitalGridToFen } from '../board/boardUtils';
 import { CapturedPiecesBar } from '../board/CapturedPiecesBar';
 import { ClockWidget } from './ClockWidget';
 import { MatchmakingDrawer } from './MatchmakingDrawer';
 import { PhysicalGuardrailCard } from './PhysicalGuardrailCard';
 import { 
-  Play, 
   XCircle, 
   Flag, 
   Handshake, 
   AlertTriangle, 
   Trophy, 
   Sparkles, 
-  RotateCcw, 
   CheckCircle2, 
   Compass, 
   Shield, 
-  Zap,
-  Bot
+  Zap
 } from 'lucide-react';
 import type { BoardState } from '../../hooks/useBoardState';
 import type { LichessAccount, LastGameParams } from '../../api';
@@ -116,21 +114,23 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
   // Candidate attacker coordinates
   const candidateAttackerCoords = useMemo(() => {
     const coords = new Set<string>();
-    if (state.physical?.capture_candidate_attackers) {
-      for (const [c, r] of state.physical.capture_candidate_attackers) {
+    const attackers = state.physical?.capture_candidate_attackers;
+    if (attackers) {
+      for (const [c, r] of attackers) {
         coords.add(`${String.fromCharCode(97 + c)}${r + 1}`);
       }
     }
     return coords;
-  }, [state.physical?.capture_candidate_attackers]);
+  }, [state.physical]);
 
   const pendingCaptureTargetCoord = useMemo(() => {
-    if (state.physical?.pending_capture_target) {
-      const [c, r] = state.physical.pending_capture_target;
+    const target = state.physical?.pending_capture_target;
+    if (target) {
+      const [c, r] = target;
       return `${String.fromCharCode(97 + c)}${r + 1}`;
     }
     return null;
-  }, [state.physical?.pending_capture_target]);
+  }, [state.physical]);
 
   return (
     <div className="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6">
@@ -151,11 +151,11 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
 
         {/* Board Setup & Guardrail Feedback */}
         <PhysicalGuardrailCard
-          virtualOnly={state.virtual_only}
+          virtualOnly={state.virtual_only ?? false}
           isSetupReady={state.physical?.setup?.is_setup_ready}
-          missingPieces={state.physical?.guardrail?.missing_pieces}
-          unexpectedPieces={state.physical?.guardrail?.unexpected_pieces}
-          isSynchronized={state.physical?.guardrail?.is_synchronized}
+          missingPieces={state.physical?.guardrail?.missing_pieces || []}
+          unexpectedPieces={state.physical?.guardrail?.unexpected_pieces || []}
+          isSynchronized={state.physical?.guardrail?.is_synchronized ?? true}
           status={state.status}
         />
 
@@ -163,8 +163,8 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
         <ClockWidget
           color={state.my_color === 'white' ? 'black' : 'white'}
           playerLabel={state.game?.opponent?.username || (isLocalGame ? 'Black' : state.coach?.is_ai_game ? 'Stockfish AI' : 'Opponent')}
-          rating={state.game?.opponent?.rating}
-          title={state.game?.opponent?.title}
+          rating={state.game?.opponent?.rating ?? undefined}
+          title={state.game?.opponent?.title ?? undefined}
           timeStr={state.my_color === 'white' ? displayClocks.black : displayClocks.white}
           isTurn={isOpponentTurn}
         />
@@ -186,9 +186,9 @@ export const PlayStudio: React.FC<PlayStudioProps> = ({
           showHints={false}
           adcGrid={state.physical?.adc}
           baselines={state.physical?.baselines}
-          liftedSquare={state.physical?.lifted_piece}
+          liftedSquare={state.physical?.lifted_square}
           resignationArmed={state.physical?.resignation_armed}
-          kingLiftElapsed={state.physical?.king_lift_elapsed_s}
+          kingLiftElapsed={state.physical?.king_lift_elapsed}
           activeAnimation={state.physical?.active_animation}
           ledIntensity={state.physical?.led_intensity}
           renderSquareOverlay={(_c, squareName) => {

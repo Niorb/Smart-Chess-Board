@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Target, Ban, RotateCcw, Activity } from 'lucide-react';
+import { Ban, RotateCcw, Activity } from 'lucide-react';
 
 interface AdcSensorMatrixProps {
   adcGrid?: number[][];

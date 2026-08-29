@@ -21,13 +21,13 @@ interface AcademyStudioProps {
     fen: string;
     title: string;
     category: string;
-    difficulty: string;
+    difficulty: number;
     goal: 'win' | 'draw' | 'mate';
     side_to_move: 'white' | 'black';
     description: string;
     hint?: string;
   }) => void;
-  onStartBlunderDrill: (gameId?: string) => void;
+  onStartBlunderDrill: (index?: number) => void;
   onSubmitBlunderAttempt: (uci: string) => Promise<BlunderAttemptResult | null>;
   onToggleBlunderHint: () => void;
   onApplyBlunderOpponentMove: () => void;
@@ -43,8 +43,6 @@ export const AcademyStudio: React.FC<AcademyStudioProps> = ({
   endgameDrills,
   onStartEndgameDrill,
   onStopEndgameDrill,
-  onRequestEndgameHint,
-  onResetEndgameProgress,
   onCreateCustomEndgame,
   onStartBlunderDrill,
   onSubmitBlunderAttempt,
@@ -53,6 +51,19 @@ export const AcademyStudio: React.FC<AcademyStudioProps> = ({
   loading,
 }) => {
   const [activeTab, setActiveTab] = useState<'gm' | 'blunder' | 'endgame'>('gm');
+
+  const currentBlunder = boardState.analysis?.blunders?.[boardState.analysis?.blunder_index ?? 0];
+  const blunderDrillState = currentBlunder ? {
+    is_active: boardState.analysis?.submode === 'blunder_drill',
+    title: `Blunder Refutation #${(boardState.analysis?.blunder_index ?? 0) + 1}`,
+    description: currentBlunder.description,
+    fen: currentBlunder.fen_before,
+    best_move: currentBlunder.best_move,
+    best_san: currentBlunder.best_move,
+    hint_level: boardState.analysis?.blunder_step,
+    hint_text: boardState.analysis?.blunder_hint_active ? `Look closely at ${currentBlunder.best_move.slice(0, 2)}` : undefined,
+    solved: false,
+  } : null;
 
   return (
     <div className="w-full flex flex-col gap-5 max-w-5xl mx-auto">
@@ -110,8 +121,8 @@ export const AcademyStudio: React.FC<AcademyStudioProps> = ({
 
       {activeTab === 'blunder' && (
         <BlunderDrillCard
-          drillState={boardState.analysis?.blunder_drill}
-          onStartDrill={onStartBlunderDrill}
+          drillState={blunderDrillState}
+          onStartDrill={() => onStartBlunderDrill()}
           onSubmitAttempt={onSubmitBlunderAttempt}
           onToggleHint={onToggleBlunderHint}
           onApplyOpponentMove={onApplyBlunderOpponentMove}
@@ -122,11 +133,9 @@ export const AcademyStudio: React.FC<AcademyStudioProps> = ({
       {activeTab === 'endgame' && (
         <EndgameDrillsCard
           drills={endgameDrills}
-          activeDrillId={boardState.analysis?.endgame_drill?.id}
+          activeDrillId={boardState.analysis?.endgame?.drill?.id}
           onStartDrill={onStartEndgameDrill}
           onStopDrill={onStopEndgameDrill}
-          onRequestHint={onRequestEndgameHint}
-          onResetProgress={onResetEndgameProgress}
           onCreateCustomEndgame={onCreateCustomEndgame}
           loading={loading}
         />

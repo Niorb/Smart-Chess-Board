@@ -5,9 +5,6 @@ import {
   RotateCcw, 
   Bot, 
   Zap, 
-  Sliders, 
-  ShieldCheck, 
-  Sparkles,
   Users
 } from 'lucide-react';
 import type { LastGameParams } from '../../api';
@@ -85,7 +82,7 @@ export const MatchmakingDrawer: React.FC<MatchmakingDrawerProps> = ({
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold transition-all"
           >
             <RotateCcw size={12} />
-            <span>Rematch Last ({lastGameParams.timeControl})</span>
+            <span>Rematch Last ({lastGameParams.time_control || '10+0'})</span>
           </button>
         )}
       </div>

@@ -3,10 +3,7 @@ import {
   Sliders, 
   RotateCcw, 
   BookmarkCheck, 
-  Sun, 
-  Moon, 
   RefreshCw, 
-  ShieldCheck,
   CheckCircle2
 } from 'lucide-react';
 
@@ -119,6 +116,32 @@ export const BoardSettingsPanel: React.FC<BoardSettingsPanelProps> = ({
         </div>
       )}
 
+      {/* Detection Mode & Sliders */}
+      <div className="flex flex-col gap-2 pt-1 border-t border-slate-800">
+        <div className="flex justify-between items-center text-xs font-mono font-bold">
+          <span className="text-slate-300">Board Pieces Mode</span>
+          <span className="text-amber-400 uppercase">{piecesMode}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(['auto', 'pieces', 'empty'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => {
+                onSetPiecesMode(mode);
+                persistSettings({ pMode: mode });
+              }}
+              className={`py-2 rounded-xl text-xs font-mono font-bold border transition-all ${
+                piecesMode === mode
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              {mode.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Threshold & Timing Sliders */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Positive Threshold */}
@@ -158,6 +181,69 @@ export const BoardSettingsPanel: React.FC<BoardSettingsPanelProps> = ({
               const v = parseInt(e.target.value, 10);
               setNegativeThresh(v);
               persistSettings({ neg: v });
+            }}
+            className="accent-amber-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Scan Delay */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between text-xs font-mono font-bold">
+            <span className="text-slate-300">Scan Delay</span>
+            <span className="text-amber-400">{scanDelay} ms</span>
+          </div>
+          <input
+            type="range"
+            min="10"
+            max="250"
+            step="5"
+            value={scanDelay}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setScanDelay(v);
+              persistSettings({ delay: v });
+            }}
+            className="accent-amber-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Debounce Threshold */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between text-xs font-mono font-bold">
+            <span className="text-slate-300">Debounce Threshold</span>
+            <span className="text-amber-400">{debounceThreshold} frames</span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="8"
+            step="1"
+            value={debounceThreshold}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setDebounceThreshold(v);
+              persistSettings({ debounce: v });
+            }}
+            className="accent-amber-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Baseline Window */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between text-xs font-mono font-bold">
+            <span className="text-slate-300">Baseline Window</span>
+            <span className="text-cyan-400">{baselineWindowS} s</span>
+          </div>
+          <input
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            value={baselineWindowS}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setBaselineWindowS(v);
+              persistSettings({ window_s: v });
             }}
             className="accent-amber-500 cursor-pointer"
           />
