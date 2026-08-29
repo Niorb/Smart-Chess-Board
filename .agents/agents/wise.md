@@ -48,6 +48,7 @@ Your primary mission is to:
 - **Cancellation Shielding**: Wrap `engine.analyse` in `asyncio.shield` so client disconnects or task cancellations do not leave the UCI pipe in a broken or unresponsive state.
 - **Staged MultiPV Pipeline & Time Bounds**: Compute MultiPV=1 (best line) with `time_limit=0.10s` for near-instant UI feedback (~80ms), then asynchronously compute MultiPV=3 with `time_limit=0.25s` in the background. Always enforce time bounds on UCI limits (`Limit(time=..., depth=...)`) so CPU-constrained hosts (Raspberry Pi) never stall on unbounded depth searches.
 - **Pending Request Queuing Invariant**: Never drop incoming `request_lines` or `request_analysis` requests when tasks are in flight. Track `_pending_lines_fen` and `_pending_analysis_fen` through sequential runner loops so rapid divergence moves and timeline navigation are processed without stall or infinite "Computing..." lockouts.
+- **Engine Calculation Telemetry (`is_computing`)**: Expose `is_computing(fen)` on `CoachEngine` tracking in-flight analysis runners and pending MultiPV lines queues. In `get_analysis_payload()`, report `is_computing: True` whenever calculations or Multi-PV lines for the active FEN are in flight or not yet cached, and include it in `_broadcast_digest` to immediately push WebSocket updates.
 - **Non-Blocking REST Endpoints**: Run synchronous or heavy chess operations in `asyncio.to_thread` to maintain a responsive 100 Hz state loop.
 
 ### 5. Lichess Cloud API Streaming & Lifecycle
@@ -58,7 +59,7 @@ Your primary mission is to:
 ### 6. Web Frontend Optimistic UI & State Reconciliation
 - **Position-Matched Overlay Reconciliation**: Never clear the optimistic move overlay immediately upon HTTP response arrival. Only drop the overlay when the incoming server FEN/state matches or overtakes the optimistic position (modulo halfmove clock), backed by a 2.5s fallback safety net.
 - **Chess.js API Compatibility**: Ensure exact method naming in client-side validations (e.g. `inCheck()` in `chess.js` vs backend snake_case).
-- **Web Animations API**: Use distance-aware glide durations (150ms + 26ms/square, capped at 280ms) and Web Animations API keyframes for knights and pieces to prevent CSS re-trigger glitches during React re-renders.
+- **Distance-Aware Piece Gliding & Castling Coordination**: Use distance-aware glide durations (\(150\text{ms} + d \times 26\text{ms}\), capped at 280ms) and dynamic CSS transform variables (`--glide-start-x`, `--glide-start-y`) on GPU layers. Simultaneously animate King and Rook during castling, hop Knights with midpoint \(1.15\times\) scale, and mask destination square pieces (`opacity-0`) during the active glide window to eliminate ghost pieces.
 
 ### 7. Hardware Calibration, Safety & Test Sandboxing
 - **Live Settings Protection**: `board_settings.json` is private to the physical board and must NEVER be overwritten, committed, or pushed to GitHub. Always create automatic `.bak` backups on save.
@@ -71,7 +72,7 @@ Your primary mission is to:
 - **Gamma Correction Table**: Ensure `GAMMA_LUT_28` contains an exact 256-entry lookup table to prevent out-of-range indexing during mathematical wave computations.
 
 ### 9. Frontend Component Architecture & React 19 Compiler Invariants
-- **React Compiler & Render Purity**: Never call impure functions (e.g. `Date.now()`, `Math.random()`) directly in component bodies or `useMemo`. Clocks and timer interpolations must derive elapsed intervals from explicit state timestamps updated via standard intervals.
+- **React Compiler & Render Purity**: Never call impure functions (e.g. `Date.now()`, `Math.random()`) directly in component bodies or `useMemo`. Clocks and timer interpolations must derive elapsed intervals from explicit state timestamps updated via standard intervals. Animation layer keys must use deterministic strings derived from move coordinates (e.g. ``glide-${lastMoveUci}-${piece}``).
 - **Fast Refresh Component Module Boundaries**: Component files must exclusively export React components to satisfy Vite Fast Refresh (`react-refresh/only-export-components`). Constants, algorithms, math helpers, and React Context definitions must reside in separate dedicated utility files (e.g. `boardUtils.ts`, `ThemeContextDefinition.ts`).
 - **Render-Phase State Transition for Prior Props**: When tracking previous grid/FEN states for piece capture ghosts or slide animations, update prior state during render transition rather than calling `setState` synchronously within `useEffect` to eliminate cascading render cycles.
 - **Digital Twin Real-Time Heatmaps**: The Magnetic Aura lens overlays real-time Hall sensor ADC flux differentials ($|\Delta \text{ADC}|$) and piece-lift acoustic ripples onto switchable artisan wood/stone textures without interrupting 60fps board interactions.
