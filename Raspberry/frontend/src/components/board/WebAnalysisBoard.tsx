@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
+import { Brain } from 'lucide-react';
 import { useArtisanTheme } from '../../context/useArtisanTheme';
 import { MagneticAuraOverlay } from './MagneticAuraOverlay';
 import { LedBezelTwin } from './LedBezelTwin';
@@ -10,14 +11,14 @@ import {
   FILES,
   coordToSquareName,
   uciToCoords,
+  calculateGlideDuration,
+  getCastlingRookMove,
   capturedGhostSquare,
   parseFenPlacement,
-
   type EngineLineProp,
   type Coord,
   type SetupHighlightsProp,
 } from './boardUtils';
-
 
 export interface WebAnalysisBoardProps {
   fen?: string;
@@ -33,6 +34,8 @@ export interface WebAnalysisBoardProps {
   winChance?: number | null;
   scoreCp?: number | null;
   mate?: number | null;
+  isComputing?: boolean;
+  isLoading?: boolean;
   onMovePlayed?: (uci: string) => void;
   myColor?: 'white' | 'black' | null;
   topLines?: EngineLineProp[] | null;
@@ -61,6 +64,15 @@ export interface WebAnalysisBoardProps {
   ledIntensity?: number;
 }
 
+interface ActiveGlide {
+  id: number;
+  piece: string;
+  from: Coord;
+  to: Coord;
+  isKnight: boolean;
+  duration: number;
+}
+
 export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   fen,
   grid: gridProp,
@@ -73,6 +85,8 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   winChance,
   scoreCp,
   mate,
+  isComputing = false,
+  isLoading = false,
   onMovePlayed,
   myColor,
   suggestMove,
@@ -165,20 +179,88 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const pressRef = useRef<{ coord: Coord; startX: number; startY: number; wasSelected: boolean } | null>(null);
 
+  // Piece Gliding Animation State & Invariant Lifecycle
+  const [activeGlides, setActiveGlides] = useState<ActiveGlide[]>([]);
+  const glideTimerRef = useRef<number | null>(null);
+  const prevLastMoveRef = useRef<string | null>(null);
+
   const lastHighlight = useMemo(() => (lastMoveUci ? uciToCoords(lastMoveUci) : null), [lastMoveUci]);
 
-  const rookAnimBase = useMemo(() => {
-    if (!lastHighlight || !lastMoveUci || lastMoveUci.length < 4) return null;
-    const kFrom = lastHighlight.from;
-    const kTo = lastHighlight.to;
-    const dFile = kTo[0] - kFrom[0];
-    if (Math.abs(dFile) !== 2) return null;
-    const rFrom: Coord = [dFile > 0 ? 7 : 0, kFrom[1]];
-    const rTo: Coord = [dFile > 0 ? 5 : 3, kTo[1]];
-    const glyph = grid[rTo[1]]?.[rTo[0]] ?? '';
-    if (!glyph || glyph.toUpperCase() !== 'R') return null;
-    return { from: rFrom, to: rTo, glyph };
-  }, [lastHighlight, lastMoveUci, grid]);
+  useEffect(() => {
+    if (glideTimerRef.current) {
+      clearTimeout(glideTimerRef.current);
+      glideTimerRef.current = null;
+    }
+
+    if (!lastMoveUci || lastMoveUci.length < 4) {
+      prevLastMoveRef.current = null;
+      setActiveGlides([]);
+      return;
+    }
+
+    if (prevLastMoveRef.current === lastMoveUci) {
+      return;
+    }
+    prevLastMoveRef.current = lastMoveUci;
+
+    const coords = uciToCoords(lastMoveUci);
+    if (!coords) {
+      setActiveGlides([]);
+      return;
+    }
+
+    const { from, to } = coords;
+    const piece = grid[to[1]]?.[to[0]] || '';
+    if (!piece) {
+      setActiveGlides([]);
+      return;
+    }
+
+    const duration = calculateGlideDuration(from, to);
+    const isKnight = piece.toUpperCase() === 'N';
+
+    const glides: ActiveGlide[] = [
+      {
+        id: Date.now(),
+        piece,
+        from,
+        to,
+        isKnight,
+        duration,
+      },
+    ];
+
+    // Handle Simultaneous Castling Glides (King + Rook)
+    const rookMove = getCastlingRookMove(from, to, piece);
+    if (rookMove) {
+      glides.push({
+        id: Date.now() + 1,
+        piece: rookMove.piece,
+        from: rookMove.from,
+        to: rookMove.to,
+        isKnight: false,
+        duration,
+      });
+    }
+
+    setActiveGlides(glides);
+
+    glideTimerRef.current = window.setTimeout(() => {
+      setActiveGlides([]);
+      glideTimerRef.current = null;
+    }, duration);
+
+    return () => {
+      if (glideTimerRef.current) {
+        clearTimeout(glideTimerRef.current);
+        glideTimerRef.current = null;
+      }
+    };
+  }, [lastMoveUci, grid]);
+
+  const isTargetOfActiveGlide = (file: number, rank: number): boolean => {
+    return activeGlides.some((g) => g.to[0] === file && g.to[1] === rank);
+  };
 
   const suggestArrow = useMemo(() => {
     if (isBranching) {
@@ -349,7 +431,20 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   const shouldShowHints = showHints ?? lens.hints;
 
   return (
-    <div className={`glass-panel rounded-3xl p-3.5 md:p-5 shadow-artisan ${className || ''}`}>
+    <div className={`glass-panel rounded-3xl p-3.5 md:p-5 shadow-artisan w-full ${className || ''}`}>
+      {/* Keyframe styles for GPU Piece Gliding */}
+      <style>{`
+        @keyframes glideLinear {
+          0% { transform: translate(var(--glide-start-x), var(--glide-start-y)); }
+          100% { transform: translate(0, 0); }
+        }
+        @keyframes glideKnightHop {
+          0% { transform: translate(var(--glide-start-x), var(--glide-start-y)) scale(1); }
+          50% { transform: translate(calc(var(--glide-start-x) * 0.5), calc(var(--glide-start-y) * 0.5)) scale(1.15); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+      `}</style>
+
       {/* Studio Header Bar */}
       {!hideHeader && (
         <div className="flex items-center justify-between mb-3.5">
@@ -401,267 +496,346 @@ export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
 
       {topBar && <div className="mb-3">{topBar}</div>}
 
-      {/* Main Board Container with Eval Bar & Engine Panel */}
-      <div className="mx-auto flex items-stretch justify-center gap-3" style={{ maxWidth: shouldShowLines ? '900px' : '580px' }}>
-        {displayEvalBar && (
-          <EvalBar
-            winChance={winChance}
-            scoreCp={scoreCp}
-            mate={mate}
-            flipped={flipped}
-          />
-        )}
-
-        <div className="relative flex-1 max-w-full">
-          {/* LED Bezel Twin Perimeter Simulator */}
-          {lens.ledBezel && (
-            <LedBezelTwin
-              lastMoveUci={lastMoveUci}
-              inCheck={inCheck}
-              activeAnimation={activeAnimation}
-              ledIntensity={ledIntensity}
+      {/* Main Board Layout: Generous Chessboard Stage & Eval Bar */}
+      <div className="w-full flex flex-col gap-3">
+        <div className="w-full flex items-stretch justify-center gap-3">
+          {displayEvalBar && (
+            <EvalBar
+              winChance={winChance}
+              scoreCp={scoreCp}
+              mate={mate}
               flipped={flipped}
+              isComputing={isComputing || isLoading}
             />
           )}
 
-          {/* Chessboard Grid */}
-          <div
-            ref={boardRef}
-            className="grid w-full aspect-square rounded-xl overflow-hidden select-none relative"
-            style={{
-              gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
-              gridTemplateRows: 'repeat(8, minmax(0, 1fr))',
-              touchAction: 'none',
-              boxShadow: `0 15px 35px -8px rgba(0,0,0,0.8), 0 0 0 8px ${currentTheme.frame}, 0 0 0 9px rgba(255,255,255,0.08)`,
-            }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            {Array.from({ length: 64 }).map((_, idx) => {
-              const rowFromTop = Math.floor(idx / 8);
-              const col = idx % 8;
-              const rank = flipped ? rowFromTop : 7 - rowFromTop;
-              const file = flipped ? 7 - col : col;
-              const c: Coord = [file, rank];
-              const squareName = FILES[file] + (rank + 1);
-              const piece = pieceAt(c);
-              const isDark = (file + rank) % 2 === 0;
-
-              const isLastFrom = lastHighlight && lastHighlight.from[0] === file && lastHighlight.from[1] === rank;
-              const isLastTo = lastHighlight && lastHighlight.to[0] === file && lastHighlight.to[1] === rank;
-              const isSelected = !!selected && selected[0] === file && selected[1] === rank;
-              const isTarget = selected !== null && targets.has(squareName);
-              const isTargetCapture = isTarget && targets.get(squareName) === true;
-              const isCheckedKing = !!checkedKingSquare && checkedKingSquare[0] === file && checkedKingSquare[1] === rank;
-              const isDragOrigin = !!drag && drag.from[0] === file && drag.from[1] === rank;
-
-              const isLeftEdge = col === 0;
-              const isBottomEdge = rowFromTop === 7;
-
-              const rookAnim =
-                rookAnimBase && file === rookAnimBase.to[0] && rank === rookAnimBase.to[1]
-                  ? rookAnimBase
-                  : null;
-
-              const captured = capturedGhostSquare(prevGridState.prev, grid, lastHighlight, [file, rank], piece);
-              const isMissingStarting = missingSquaresSet.has(`${file},${rank}`);
-              const isMisplaced = misplacedSquaresSet.has(`${file},${rank}`);
-
-              return (
-                <div
-                  key={idx}
-                  onPointerDown={(e) => handlePointerDown(e, c)}
-                  className="relative flex items-center justify-center transition-colors duration-150"
-                  style={{
-                    backgroundColor: isDark ? currentTheme.dark : currentTheme.light,
-                    cursor: isOwnTurnPiece(piece, c) || isTarget ? 'pointer' : 'default',
-                    boxShadow: isCheckedKing ? `inset 0 0 16px 5px ${currentTheme.checkGlow}` : undefined,
-                  }}
-                >
-                  {(isLastFrom || isLastTo) && (
-                    <div className="absolute inset-0 transition-colors duration-200" style={{ backgroundColor: lastTint }} />
-                  )}
-                  {isSelected && (
-                    <div className="absolute inset-0 bg-blue-500/35 border-2 border-blue-400" />
-                  )}
-
-                  {isMisplaced && (
-                    <div className="absolute inset-0.5 rounded-lg border-2 border-amber-400 bg-amber-500/25 z-[6] pointer-events-none shadow-[0_0_12px_rgba(245,158,11,0.65)] flex items-center justify-center animate-pulse">
-                      <div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-200" />
-                    </div>
-                  )}
-                  {isMissingStarting && (
-                    <div className="absolute inset-0.5 rounded-lg border-2 border-dashed border-rose-400 bg-rose-500/20 z-[6] pointer-events-none flex items-center justify-center animate-pulse">
-                      <span className="text-[10px] text-rose-300 font-bold">!</span>
-                    </div>
-                  )}
-
-                  {/* Move Target Indicators */}
-                  {isTarget && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[7]">
-                      {isTargetCapture || piece ? (
-                        <div className="w-full h-full border-4 border-emerald-400/80 rounded-full scale-90 animate-pulse" />
-                      ) : (
-                        <div
-                          className={`w-3.5 h-3.5 rounded-full ${
-                            destQualities?.get(squareName) === 'blunder'
-                              ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
-                              : destQualities?.get(squareName) === 'best'
-                              ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
-                              : 'bg-slate-900/40 border-2 border-white/60'
-                          }`}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Render Piece on Square */}
-                  {piece && (
-                    <div
-                      className={`relative w-full h-full flex items-center justify-center z-[5] transition-transform duration-200 ease-out ${
-                        isDragOrigin ? 'opacity-25 scale-95' : 'hover:scale-105'
-                      }`}
-                    >
-                      <img
-                        src={PIECE_IMAGES[piece]}
-                        alt={piece}
-                        draggable={false}
-                        className="w-[84%] h-[84%] object-contain filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)] pointer-events-none select-none"
-                      />
-                    </div>
-                  )}
-
-                  {/* Captured Piece Fade Ghost */}
-                  {captured && (
-                    <div className="absolute inset-0 flex items-center justify-center z-[4] pointer-events-none opacity-40 filter grayscale">
-                      <img src={PIECE_IMAGES[captured]} alt={captured} className="w-[75%] h-[75%] object-contain" />
-                    </div>
-                  )}
-
-                  {/* Castling Rook Animation Ghost */}
-                  {rookAnim && (
-                    <div className="absolute inset-0 flex items-center justify-center z-[5] pointer-events-none">
-                      <img src={PIECE_IMAGES[rookAnim.glyph]} alt={rookAnim.glyph} className="w-[84%] h-[84%] object-contain" />
-                    </div>
-                  )}
-
-                  {/* Rank & File Coordinate Labels */}
-                  {isLeftEdge && (
-                    <span
-                      className="absolute top-0.5 left-1 text-[10px] font-bold font-mono pointer-events-none select-none"
-                      style={{ color: isDark ? currentTheme.darkText : currentTheme.lightText, opacity: 0.75 }}
-                    >
-                      {rank + 1}
-                    </span>
-                  )}
-                  {isBottomEdge && (
-                    <span
-                      className="absolute bottom-0.5 right-1 text-[10px] font-bold font-mono pointer-events-none select-none"
-                      style={{ color: isDark ? currentTheme.darkText : currentTheme.lightText, opacity: 0.75 }}
-                    >
-                      {FILES[file]}
-                    </span>
-                  )}
-
-                  {/* Custom Square Overlay */}
-                  {renderSquareOverlay && renderSquareOverlay(c, squareName)}
+          <div className="relative flex-1 w-full max-w-[700px]">
+            {/* Live Stockfish Computing Floating HUD Badge */}
+            {(isComputing || isLoading) && (
+              <div className="absolute top-2.5 left-2.5 z-[20] flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-violet-500/50 shadow-[0_0_16px_rgba(139,92,246,0.35)] text-violet-300 text-xs font-mono font-bold animate-in fade-in zoom-in duration-200 pointer-events-none select-none">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
+                </span>
+                <Brain size={13} className="text-violet-400 animate-pulse" />
+                <span className="tracking-wide">Stockfish 17 Computing</span>
+                <div className="flex items-center gap-0.5 ml-0.5">
+                  <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1 h-1 bg-violet-400 rounded-full animate-bounce" />
                 </div>
-              );
-            })}
+              </div>
+            )}
 
-            {/* Whole-Board Overlays (Physical Sensor Matrix / Magnetic Aura Lens) */}
-            {lens.aura && (
-              <MagneticAuraOverlay
-                adcGrid={adcGrid}
-                baselines={baselines}
-                liftedSquare={liftedSquare}
-                resignationArmed={resignationArmed}
-                kingLiftElapsed={kingLiftElapsed}
+            {/* LED Bezel Twin Perimeter Simulator */}
+            {lens.ledBezel && (
+              <LedBezelTwin
+                lastMoveUci={lastMoveUci}
+                inCheck={inCheck}
+                activeAnimation={activeAnimation}
+                ledIntensity={ledIntensity}
                 flipped={flipped}
               />
             )}
 
-            {boardOverlay && (typeof boardOverlay === 'function' ? boardOverlay(flipped) : boardOverlay)}
+            {/* Chessboard Grid */}
+            <div
+              ref={boardRef}
+              className="grid w-full aspect-square rounded-xl overflow-hidden select-none relative"
+              style={{
+                gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
+                gridTemplateRows: 'repeat(8, minmax(0, 1fr))',
+                touchAction: 'none',
+                boxShadow: `0 15px 35px -8px rgba(0,0,0,0.8), 0 0 0 8px ${currentTheme.frame}, 0 0 0 9px rgba(255,255,255,0.08)`,
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {Array.from({ length: 64 }).map((_, idx) => {
+                const rowFromTop = Math.floor(idx / 8);
+                const col = idx % 8;
+                const rank = flipped ? rowFromTop : 7 - rowFromTop;
+                const file = flipped ? 7 - col : col;
+                const c: Coord = [file, rank];
+                const squareName = FILES[file] + (rank + 1);
+                const piece = pieceAt(c);
+                const isDark = (file + rank) % 2 === 0;
 
-            {/* Suggestion Engine Arrow */}
-            {suggestArrow && (
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-[10]"
-                viewBox="0 0 800 800"
-                onClick={onSuggestionClick}
-              >
-                <defs>
-                  <marker
-                    id="arrowhead-suggest"
-                    markerWidth="6"
-                    markerHeight="6"
-                    refX="4"
-                    refY="3"
-                    orient="auto"
+                const isLastFrom = lastHighlight && lastHighlight.from[0] === file && lastHighlight.from[1] === rank;
+                const isLastTo = lastHighlight && lastHighlight.to[0] === file && lastHighlight.to[1] === rank;
+                const isSelected = !!selected && selected[0] === file && selected[1] === rank;
+                const isTarget = selected !== null && targets.has(squareName);
+                const isTargetCapture = isTarget && targets.get(squareName) === true;
+                const isCheckedKing = !!checkedKingSquare && checkedKingSquare[0] === file && checkedKingSquare[1] === rank;
+                const isDragOrigin = !!drag && drag.from[0] === file && drag.from[1] === rank;
+
+                const isLeftEdge = col === 0;
+                const isBottomEdge = rowFromTop === 7;
+
+                const captured = capturedGhostSquare(prevGridState.prev, grid, lastHighlight, [file, rank], piece);
+                const isMissingStarting = missingSquaresSet.has(`${file},${rank}`);
+                const isMisplaced = misplacedSquaresSet.has(`${file},${rank}`);
+                const isGlidingTarget = isTargetOfActiveGlide(file, rank);
+
+                return (
+                  <div
+                    key={idx}
+                    onPointerDown={(e) => handlePointerDown(e, c)}
+                    className="relative flex items-center justify-center transition-colors duration-150"
+                    style={{
+                      backgroundColor: isDark ? currentTheme.dark : currentTheme.light,
+                      cursor: isOwnTurnPiece(piece, c) || isTarget ? 'pointer' : 'default',
+                      boxShadow: isCheckedKing ? `inset 0 0 16px 5px ${currentTheme.checkGlow}` : undefined,
+                    }}
                   >
-                    <polygon points="0 0, 6 3, 0 6" fill="#10b981" />
-                  </marker>
-                </defs>
-                {(() => {
-                  const fCol = flipped ? 7 - suggestArrow.from[0] : suggestArrow.from[0];
-                  const fRow = flipped ? suggestArrow.from[1] : 7 - suggestArrow.from[1];
-                  const tCol = flipped ? 7 - suggestArrow.to[0] : suggestArrow.to[0];
-                  const tRow = flipped ? suggestArrow.to[1] : 7 - suggestArrow.to[1];
+                    {(isLastFrom || isLastTo) && (
+                      <div className="absolute inset-0 transition-colors duration-200" style={{ backgroundColor: lastTint }} />
+                    )}
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-blue-500/35 border-2 border-blue-400" />
+                    )}
 
-                  const x1 = fCol * 100 + 50;
-                  const y1 = fRow * 100 + 50;
-                  const x2 = tCol * 100 + 50;
-                  const y2 = tRow * 100 + 50;
+                    {isMisplaced && (
+                      <div className="absolute inset-0.5 rounded-lg border-2 border-amber-400 bg-amber-500/25 z-[6] pointer-events-none shadow-[0_0_12px_rgba(245,158,11,0.65)] flex items-center justify-center animate-pulse">
+                        <div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-200" />
+                      </div>
+                    )}
+                    {isMissingStarting && (
+                      <div className="absolute inset-0.5 rounded-lg border-2 border-dashed border-rose-400 bg-rose-500/20 z-[6] pointer-events-none flex items-center justify-center animate-pulse">
+                        <span className="text-[10px] text-rose-300 font-bold">!</span>
+                      </div>
+                    )}
 
-                  return (
-                    <line
-                      x1={x1}
-                      y1={y1}
-                      x2={x2}
-                      y2={y2}
-                      stroke="#10b981"
-                      strokeWidth="10"
-                      strokeLinecap="round"
-                      opacity="0.8"
-                      markerEnd="url(#arrowhead-suggest)"
+                    {/* Move Target Indicators */}
+                    {isTarget && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[7]">
+                        {isTargetCapture || piece ? (
+                          <div className="w-full h-full border-4 border-emerald-400/80 rounded-full scale-90 animate-pulse" />
+                        ) : (
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full ${
+                              destQualities?.get(squareName) === 'blunder'
+                                ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+                                : destQualities?.get(squareName) === 'best'
+                                ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                                : 'bg-slate-900/40 border-2 border-white/60'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Render Piece on Square (Masked during active glide to prevent ghosting) */}
+                    {piece && (
+                      <div
+                        className={`relative w-full h-full flex items-center justify-center z-[5] transition-transform duration-200 ease-out ${
+                          isDragOrigin
+                            ? 'opacity-25 scale-95'
+                            : isGlidingTarget
+                            ? 'opacity-0'
+                            : 'hover:scale-105'
+                        }`}
+                      >
+                        <img
+                          src={PIECE_IMAGES[piece]}
+                          alt={piece}
+                          draggable={false}
+                          className="w-[84%] h-[84%] object-contain filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)] pointer-events-none select-none"
+                        />
+                      </div>
+                    )}
+
+                    {/* Captured Piece Fade Ghost */}
+                    {captured && (
+                      <div className="absolute inset-0 flex items-center justify-center z-[4] pointer-events-none opacity-40 filter grayscale">
+                        <img src={PIECE_IMAGES[captured]} alt={captured} className="w-[75%] h-[75%] object-contain" />
+                      </div>
+                    )}
+
+                    {/* Rank & File Coordinate Labels */}
+                    {isLeftEdge && (
+                      <span
+                        className="absolute top-0.5 left-1 text-[10px] font-bold font-mono pointer-events-none select-none"
+                        style={{ color: isDark ? currentTheme.darkText : currentTheme.lightText, opacity: 0.75 }}
+                      >
+                        {rank + 1}
+                      </span>
+                    )}
+                    {isBottomEdge && (
+                      <span
+                        className="absolute bottom-0.5 right-1 text-[10px] font-bold font-mono pointer-events-none select-none"
+                        style={{ color: isDark ? currentTheme.darkText : currentTheme.lightText, opacity: 0.75 }}
+                      >
+                        {FILES[file]}
+                      </span>
+                    )}
+
+                    {/* Custom Square Overlay */}
+                    {renderSquareOverlay && renderSquareOverlay(c, squareName)}
+                  </div>
+                );
+              })}
+
+              {/* Distance-Aware Piece Gliding Animation Layer */}
+              {activeGlides.map((anim) => {
+                const fromCol = flipped ? 7 - anim.from[0] : anim.from[0];
+                const fromRow = flipped ? anim.from[1] : 7 - anim.from[1];
+                const toCol = flipped ? 7 - anim.to[0] : anim.to[0];
+                const toRow = flipped ? anim.to[1] : 7 - anim.to[1];
+
+                const deltaXPercent = (fromCol - toCol) * 100;
+                const deltaYPercent = (fromRow - toRow) * 100;
+
+                return (
+                  <div
+                    key={anim.id}
+                    className="absolute z-[15] pointer-events-none flex items-center justify-center will-change-transform"
+                    style={{
+                      left: `${toCol * 12.5}%`,
+                      top: `${toRow * 12.5}%`,
+                      width: '12.5%',
+                      height: '12.5%',
+                      animation: anim.isKnight
+                        ? `glideKnightHop ${anim.duration}ms cubic-bezier(0.25, 1, 0.5, 1) forwards`
+                        : `glideLinear ${anim.duration}ms cubic-bezier(0.2, 0, 0.2, 1) forwards`,
+                      ['--glide-start-x' as string]: `${deltaXPercent}%`,
+                      ['--glide-start-y' as string]: `${deltaYPercent}%`,
+                    }}
+                  >
+                    <img
+                      src={PIECE_IMAGES[anim.piece]}
+                      alt={anim.piece}
+                      draggable={false}
+                      className="w-[84%] h-[84%] object-contain filter drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)] pointer-events-none select-none"
                     />
-                  );
-                })()}
-              </svg>
-            )}
+                  </div>
+                );
+              })}
+
+              {/* Whole-Board Overlays (Physical Sensor Matrix / Magnetic Aura Lens) */}
+              {lens.aura && (
+                <MagneticAuraOverlay
+                  adcGrid={adcGrid}
+                  baselines={baselines}
+                  liftedSquare={liftedSquare}
+                  resignationArmed={resignationArmed}
+                  kingLiftElapsed={kingLiftElapsed}
+                  flipped={flipped}
+                />
+              )}
+
+              {boardOverlay && (typeof boardOverlay === 'function' ? boardOverlay(flipped) : boardOverlay)}
+
+              {/* Suggestion Engine Arrow */}
+              {suggestArrow && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-[10]"
+                  viewBox="0 0 800 800"
+                  onClick={onSuggestionClick}
+                >
+                  <defs>
+                    <marker
+                      id="arrowhead-suggest"
+                      markerWidth="6"
+                      markerHeight="6"
+                      refX="4"
+                      refY="3"
+                      orient="auto"
+                    >
+                      <polygon points="0 0, 6 3, 0 6" fill="#10b981" />
+                    </marker>
+                  </defs>
+                  {(() => {
+                    const fCol = flipped ? 7 - suggestArrow.from[0] : suggestArrow.from[0];
+                    const fRow = flipped ? suggestArrow.from[1] : 7 - suggestArrow.from[1];
+                    const tCol = flipped ? 7 - suggestArrow.to[0] : suggestArrow.to[0];
+                    const tRow = flipped ? suggestArrow.to[1] : 7 - suggestArrow.to[1];
+
+                    const x1 = fCol * 100 + 50;
+                    const y1 = fRow * 100 + 50;
+                    const x2 = tCol * 100 + 50;
+                    const y2 = tRow * 100 + 50;
+
+                    return (
+                      <line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#10b981"
+                        strokeWidth="10"
+                        strokeLinecap="round"
+                        opacity="0.8"
+                        markerEnd="url(#arrowhead-suggest)"
+                      />
+                    );
+                  })()}
+                </svg>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Engine Top Multi-PV Lines Panel */}
-        {shouldShowLines && topLines && topLines.length > 0 && (
-          <div className="w-48 hidden sm:flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 shrink-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-              Engine Lines (PV)
-            </span>
-            <div className="flex flex-col gap-1 overflow-y-auto max-h-[380px]">
-              {topLines.map((line, idx) => {
-                const scoreStr =
-                  line.mate !== null
-                    ? `M${line.mate}`
-                    : line.score_cp !== null
-                    ? `${line.score_cp >= 0 ? '+' : ''}${(line.score_cp / 100).toFixed(1)}`
-                    : '0.0';
+        {/* Engine Top Multi-PV Lines Panel Structured Below Board */}
+        {shouldShowLines && (
+          <div className="w-full flex flex-col gap-2 p-3 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-inner">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center gap-1.5">
+                <Brain size={12} className="text-violet-400" />
+                Engine Lines (Multi-PV)
+              </span>
+              {(isComputing || isLoading) && (
+                <span className="text-[9px] font-mono text-violet-400 font-bold px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/30 flex items-center gap-1 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
+                  Calculating lines...
+                </span>
+              )}
+            </div>
 
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => onLineClick && onLineClick(idx)}
-                    className="flex flex-col text-left p-1.5 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800/60 transition-all text-xs"
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {topLines && topLines.length > 0 ? (
+                topLines.map((line, idx) => {
+                  const scoreStr =
+                    line.mate !== null
+                      ? `M${line.mate}`
+                      : line.score_cp !== null
+                      ? `${line.score_cp >= 0 ? '+' : ''}${(line.score_cp / 100).toFixed(1)}`
+                      : '0.0';
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => onLineClick && onLineClick(idx)}
+                      className="flex flex-col text-left p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 hover:border-violet-500/40 transition-all text-xs group active:scale-[0.98]"
+                    >
+                      <div className="flex items-center justify-between text-[11px] font-bold font-mono mb-1">
+                        <span className="text-amber-400 group-hover:text-amber-300">Line {idx + 1}</span>
+                        <span className="text-emerald-400 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">{scoreStr}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-300 font-mono truncate">
+                        {line.san?.join(' ') || line.uci?.join(' ') || '...'}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : isComputing || isLoading ? (
+                // Shimmering Skeleton Rows during computation
+                [1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="p-2.5 rounded-xl bg-slate-950/40 border border-slate-800/50 flex flex-col gap-1.5 animate-pulse"
                   >
-                    <div className="flex items-center justify-between text-[11px] font-bold font-mono mb-0.5">
-                      <span className="text-amber-400">Line {idx + 1}</span>
-                      <span className="text-emerald-400">{scoreStr}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="h-3 w-12 bg-slate-800 rounded" />
+                      <div className="h-3 w-8 bg-slate-800 rounded" />
                     </div>
-                    <span className="text-[10px] text-slate-300 font-mono truncate">
-                      {line.san?.join(' ') || line.uci?.join(' ')}
-                    </span>
-                  </button>
-                );
-              })}
+                    <div className="h-2.5 w-full bg-slate-800/60 rounded" />
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-3 text-center py-2 text-[11px] font-mono text-slate-500">
+                  No engine lines available
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -252,3 +252,31 @@ class TestCoachSettingsPersistence:
         assert data["settings"]["coach_hints_enabled"] is True
         assert data["settings"]["eval_bar_enabled"] is True
         assert data["settings"]["coach_ai_only"] is False
+
+
+# =============================================================================
+# 6. IS_COMPUTING TELEMETRY TESTS
+# =============================================================================
+
+class TestCoachEngineIsComputing:
+    def test_is_computing_idle_returns_false(self):
+        """Idle coach engine should return False for is_computing."""
+        engine = CoachEngine(stockfish_path="")
+        assert engine.is_computing() is False
+        assert engine.is_computing("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") is False
+
+    def test_is_computing_with_pending_queues(self):
+        """Coach engine reports is_computing True when queues or tasks are active."""
+        engine = CoachEngine(stockfish_path="")
+        fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        clean_fen = " ".join(fen.split()[:4])
+
+        engine._pending_analysis_queue.append(clean_fen)
+        assert engine.is_computing() is True
+        assert engine.is_computing(fen) is True
+        assert engine.is_computing("8/8/8/8/8/8/8/8 w - - 0 1") is True
+
+        engine._pending_analysis_queue.clear()
+        engine._current_lines_fen = clean_fen
+        assert engine.is_computing(fen) is True
+        assert engine.is_computing() is True

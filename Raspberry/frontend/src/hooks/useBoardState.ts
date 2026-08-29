@@ -176,6 +176,7 @@ interface AnalysisState {
   active: boolean;
   submode: 'review' | 'blunder_drill' | 'replay_learn' | 'replay_recall' | 'endgame';
   is_loading: boolean;
+  is_computing?: boolean;
   error?: string | null;
   current_ply: number;
   total_plys: number;

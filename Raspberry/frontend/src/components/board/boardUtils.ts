@@ -103,6 +103,32 @@ export function uciToCoords(uci: string): { from: Coord; to: Coord } | null {
   return { from: [f, r], to: [tf, tr] };
 }
 
+/**
+ * Calculates distance-aware piece glide duration in milliseconds.
+ * Formula: Math.min(280, 150 + distance * 26)ms.
+ */
+export function calculateGlideDuration(from: Coord, to: Coord): number {
+  const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  return Math.min(280, Math.round(150 + dist * 26));
+}
+
+/**
+ * Detects castling king move and returns the corresponding rook move coordinates.
+ */
+export function getCastlingRookMove(
+  kFrom: Coord,
+  kTo: Coord,
+  kingGlyph: string,
+): { from: Coord; to: Coord; piece: string } | null {
+  if (!kingGlyph || kingGlyph.toUpperCase() !== 'K') return null;
+  const dFile = kTo[0] - kFrom[0];
+  if (Math.abs(dFile) !== 2) return null;
+  const rFrom: Coord = [dFile > 0 ? 7 : 0, kFrom[1]];
+  const rTo: Coord = [dFile > 0 ? 5 : 3, kTo[1]];
+  const piece = kingGlyph === 'K' ? 'R' : 'r';
+  return { from: rFrom, to: rTo, piece };
+}
+
 export function capturedGhostSquare(
   prevGrid: string[][] | null,
   grid: string[][],

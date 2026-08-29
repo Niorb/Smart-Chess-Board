@@ -269,6 +269,8 @@ class CoachEngine:
         self._max_cache_entries: int = 128
         self._lines_task: asyncio.Task | None = None
         self._pending_lines_fen: str | None = None
+        self._current_analysis_fen: str | None = None
+        self._current_lines_fen: str | None = None
         self._is_running: bool = False
         self._last_unavail_log: float = 0.0
 
@@ -328,6 +330,8 @@ class CoachEngine:
         self._is_running = False
         self._pending_analysis_queue.clear()
         self._pending_lines_fen = None
+        self._current_analysis_fen = None
+        self._current_lines_fen = None
         if self._analysis_task and not self._analysis_task.done():
             self._analysis_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -340,6 +344,49 @@ class CoachEngine:
         self._lines_task = None
         await self._close_engine()
         logger.info("CoachEngine stopped.")
+
+    def is_computing(self, fen: str | chess.Board | None = None) -> bool:
+        """Returns True if background analysis or PV lines computation is active.
+
+        - If `fen` is None: returns True if any background analysis task, lines task,
+          or pending queue is active.
+        - If `fen` is provided: returns True if background computation is active AND
+          the position's evaluation or PV lines are still in flight or not yet cached.
+        """
+        analysis_busy = (
+            (self._analysis_task is not None and not self._analysis_task.done())
+            or bool(self._pending_analysis_queue)
+            or self._current_analysis_fen is not None
+        )
+        lines_busy = (
+            (self._lines_task is not None and not self._lines_task.done())
+            or bool(self._pending_lines_fen)
+            or self._current_lines_fen is not None
+        )
+
+        if not analysis_busy and not lines_busy:
+            return False
+
+        if fen is None:
+            return True
+
+        clean_fen = " ".join((fen.fen() if isinstance(fen, chess.Board) else str(fen)).split()[:4])
+
+        if (
+            clean_fen in self._pending_analysis_queue
+            or self._pending_lines_fen == clean_fen
+            or self._current_analysis_fen == clean_fen
+            or self._current_lines_fen == clean_fen
+        ):
+            return True
+
+        if lines_busy and clean_fen not in self._lines_cache:
+            return True
+
+        if analysis_busy and clean_fen not in self._cache:
+            return True
+
+        return False
 
     def get_cached_evaluation(self, fen: str) -> PositionEvaluation | None:
         """Returns cached position evaluation for the given FEN if present."""
@@ -424,6 +471,7 @@ class CoachEngine:
             self._pending_lines_fen = None
             if target_fen in self._lines_cache:
                 continue
+            self._current_lines_fen = target_fen
             try:
                 # Stage 1: best line only (fast publish ~80ms)
                 quick = await self.compute_top_lines(target_fen, num_lines=1, depth=10, time_limit=0.10)
@@ -440,6 +488,9 @@ class CoachEngine:
                     self._store_lines(target_fen, full)
             except Exception as e:
                 logger.debug(f"PV lines computation failed for {target_fen}: {e}")
+            finally:
+                if self._current_lines_fen == target_fen:
+                    self._current_lines_fen = None
 
     def _store_lines(self, clean_fen: str, lines: list[dict[str, Any]]) -> None:
         if len(self._lines_cache) >= self._max_cache_entries:
@@ -565,6 +616,7 @@ class CoachEngine:
             target_fen = self._pending_analysis_queue.pop(0)
             if target_fen in self._cache:
                 continue
+            self._current_analysis_fen = target_fen
             try:
                 await self.evaluate_position(target_fen)
             except Exception as exc:
@@ -575,6 +627,9 @@ class CoachEngine:
                         logger.warning(f"Position analysis skipped: {exc}")
                 else:
                     logger.error(f"Background position analysis failed: {exc}")
+            finally:
+                if self._current_analysis_fen == target_fen:
+                    self._current_analysis_fen = None
 
     async def evaluate_position(self, fen: str) -> PositionEvaluation:
         """Evaluates a position with caching. Requires a working Stockfish engine."""

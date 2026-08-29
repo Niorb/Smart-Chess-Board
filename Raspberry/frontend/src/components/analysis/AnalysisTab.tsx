@@ -160,10 +160,12 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
 
   const activeEval = analysis?.current_eval || analysis?.evaluations?.[currentPly - 1];
 
+  const isComputing = Boolean(analysis?.is_computing || analysis?.is_loading);
+
   return (
-    <div className="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 max-w-6xl mx-auto">
+    <div className="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 max-w-7xl mx-auto px-2 sm:px-4">
       {/* Left: Interactive Analysis Board Stage */}
-      <div className="w-full max-w-[540px] flex flex-col gap-3 shrink-0">
+      <div className="w-full max-w-[700px] flex flex-col gap-3 shrink-0">
         <WebAnalysisBoard
           fen={currentFen}
           legalMoves={analysis?.legal_moves || []}
@@ -174,6 +176,8 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
           winChance={activeEval?.win_chance}
           scoreCp={activeEval?.score_cp}
           mate={activeEval?.mate}
+          isComputing={isComputing}
+          isLoading={analysis?.is_loading}
           onMovePlayed={handlePlayAnalysisMove}
           topLines={analysis?.top_lines}
           showEngineLines={true}
@@ -238,35 +242,48 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
       </div>
 
       {/* Right: Analysis Inspector & Move History */}
-      <div className="w-full max-w-[480px] flex flex-col gap-4">
+      <div className="w-full max-w-[500px] flex flex-col gap-4">
         {/* Live Evaluation & Depth Overview */}
         <div className="glass-panel rounded-3xl p-5 flex flex-col gap-3 text-left shadow-artisan">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center gap-1.5">
               <Brain size={14} className="text-violet-400" />
-              Stockfish 16 Engine Telemetry
+              Stockfish 17 Engine Telemetry
             </h3>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40">
-              Depth: 20
-            </span>
+            {isComputing ? (
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40 flex items-center gap-1.5 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
+                Depth: 20 • Computing...
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40">
+                Depth: 20
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-1">
             <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col">
               <span className="text-[10px] font-mono uppercase text-slate-400">Position Score</span>
-              <span className="text-base font-extrabold font-mono text-emerald-400 mt-0.5">
+              <span className={`text-base font-extrabold font-mono text-emerald-400 mt-0.5 ${isComputing ? 'animate-pulse' : ''}`}>
                 {activeEval?.mate !== null && activeEval?.mate !== undefined
                   ? `M${Math.abs(activeEval.mate)}`
                   : activeEval?.score_cp !== null && activeEval?.score_cp !== undefined
                   ? `${activeEval.score_cp >= 0 ? '+' : ''}${(activeEval.score_cp / 100).toFixed(2)}`
+                  : isComputing
+                  ? 'Calculating...'
                   : '0.00'}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col">
               <span className="text-[10px] font-mono uppercase text-slate-400">Win Probability</span>
-              <span className="text-base font-extrabold font-mono text-amber-400 mt-0.5">
-                {(activeEval?.win_chance ?? 50).toFixed(1)}% White
+              <span className={`text-base font-extrabold font-mono text-amber-400 mt-0.5 ${isComputing ? 'animate-pulse' : ''}`}>
+                {activeEval?.win_chance !== undefined && activeEval?.win_chance !== null
+                  ? `${activeEval.win_chance.toFixed(1)}% White`
+                  : isComputing
+                  ? 'Analyzing...'
+                  : '50.0% White'}
               </span>
             </div>
           </div>

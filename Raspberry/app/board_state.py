@@ -2473,10 +2473,21 @@ class BoardStateManager:
         # the background so the UI never blocks on Stockfish).
         top_lines = coach_engine.get_cached_lines(self.analysis_active_board.fen())
 
+        is_computing = False
+        if self.game_status == "ANALYSIS":
+            active_fen = self.analysis_active_board.fen()
+            is_computing = (
+                getattr(self, "analysis_is_loading", False)
+                or coach_engine.is_computing(active_fen)
+                or top_lines is None
+                or (bool(self.analysis_branch_moves) and curr_eval is None)
+            )
+
         return {
             "active": self.game_status == "ANALYSIS",
             "submode": self.analysis_submode,
             "is_loading": self.analysis_is_loading,
+            "is_computing": bool(is_computing),
             "error": self.analysis_error,
             "current_ply": self.analysis_current_ply,
             "total_plys": len(self.analysis_game_moves),
@@ -3659,6 +3670,7 @@ class BoardStateManager:
             id(self.active_animation) if self.active_animation is not None else None,
             self.analysis_current_ply if self.game_status == "ANALYSIS" else 0,
             self.analysis_is_loading if self.game_status == "ANALYSIS" else False,
+            coach_engine.is_computing(self.analysis_active_board.fen()) if self.game_status == "ANALYSIS" else False,
             len(self.analysis_branch_moves),
             self.analysis_submode if self.game_status == "ANALYSIS" else "",
             getattr(self, "replay_complete", False) if self.game_status == "ANALYSIS" else False,

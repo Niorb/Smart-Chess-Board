@@ -1056,3 +1056,16 @@ def test_branch_step_back_reengages_engine(monkeypatch):
         assert calls["n"] == 0
 
     asyncio.run(_test())
+
+
+def test_analysis_payload_is_computing_flag():
+    """Verify is_computing flag exists in analysis payload and reflects engine activity."""
+    async def _test():
+        mgr = BoardStateManager()
+        await mgr.start_analysis_mode(moves_uci=["e2e4", "e7e5"])
+        payload = mgr.get_analysis_payload()
+        assert "is_computing" in payload
+        assert isinstance(payload["is_computing"], bool)
+
+    asyncio.run(_test())
+

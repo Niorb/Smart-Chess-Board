@@ -6,6 +6,7 @@ interface EvalBarProps {
   mate?: number | null;
   flipped?: boolean;
   className?: string;
+  isComputing?: boolean;
 }
 
 export const EvalBar: React.FC<EvalBarProps> = ({
@@ -14,6 +15,7 @@ export const EvalBar: React.FC<EvalBarProps> = ({
   mate,
   flipped = false,
   className = '',
+  isComputing = false,
 }) => {
   const wc = Math.max(3, Math.min(97, winChance ?? 50));
 
@@ -26,8 +28,10 @@ export const EvalBar: React.FC<EvalBarProps> = ({
 
   return (
     <div
-      className={`relative w-5 md:w-6 self-stretch rounded-full overflow-hidden bg-slate-900 border border-slate-700/80 shadow-inner flex flex-col items-center justify-between py-1.5 shrink-0 ${className}`}
-      title={`Live Win Chance: ${wc.toFixed(1)}% | Eval: ${evalLabel}`}
+      className={`relative w-5 md:w-6 self-stretch rounded-full overflow-hidden bg-slate-900 border border-slate-700/80 shadow-inner flex flex-col items-center justify-between py-1.5 shrink-0 transition-all duration-300 ${
+        isComputing ? 'ring-1 ring-violet-500/50 shadow-[0_0_12px_rgba(139,92,246,0.3)]' : ''
+      } ${className}`}
+      title={`Live Win Chance: ${wc.toFixed(1)}% | Eval: ${evalLabel}${isComputing ? ' (Stockfish computing...)' : ''}`}
     >
       {/* Fluid White Evaluation Height Fill */}
       <div
@@ -37,15 +41,27 @@ export const EvalBar: React.FC<EvalBarProps> = ({
         style={{ height: `${wc}%` }}
       />
 
-      {/* Center 50% Win-Line Marker */}
+      {/* Center 50% Win-Line Marker with Energy Sweep when Computing */}
       <div
-        className="absolute inset-x-0 h-0.5 bg-amber-400/80 z-[2]"
+        className={`absolute inset-x-0 h-0.5 z-[2] transition-all duration-300 ${
+          isComputing
+            ? 'bg-gradient-to-r from-amber-400 via-violet-300 to-cyan-400 shadow-[0_0_8px_#a855f7] animate-pulse'
+            : 'bg-amber-400/80'
+        }`}
         style={flipped ? { top: `${wc}%` } : { bottom: `${wc}%` }}
       />
 
+      {/* Energy Sweep Gradient Overlay when Computing */}
+      {isComputing && (
+        <div
+          className="absolute inset-0 pointer-events-none z-[3] opacity-40 bg-gradient-to-b from-transparent via-violet-400/30 to-transparent animate-pulse"
+          style={{ animationDuration: '1.2s' }}
+        />
+      )}
+
       {/* Floating Eval Metric Text */}
       <div
-        className="absolute inset-x-0 text-center text-[9px] font-mono font-extrabold z-[3] pointer-events-none select-none"
+        className="absolute inset-x-0 text-center text-[9px] font-mono font-extrabold z-[4] pointer-events-none select-none"
         style={{
           ...(flipped ? { top: `calc(${wc}% + 3px)` } : { bottom: `calc(${wc}% + 3px)` }),
           color: wc > 48 ? '#0f172a' : '#f8fafc',
