@@ -901,6 +901,8 @@ def test_get_recognized_pieces_grid():
 
 def test_board_state_position_gated_expected_empty_squares_playing_lichess():
     """Verify that during PLAYING state with Lichess, expected_empty_squares contains matching empty squares."""
+    import chess
+    from app.lichess_engine import lichess_engine
     bsm = BoardStateManager()
     bsm.game_status = "PLAYING"
     saved_board = lichess_engine.board
@@ -952,6 +954,7 @@ def test_board_state_position_gated_expected_empty_squares_playing_lichess():
 
 def test_board_state_position_gated_expected_empty_squares_local_game():
     """Verify that during local game, expected_empty_squares derives from local_engine.board."""
+    import chess
     bsm = BoardStateManager()
     bsm.start_local_game()
     assert bsm.game_status == "PLAYING"
@@ -980,6 +983,7 @@ def test_board_state_position_gated_expected_empty_squares_local_game():
     # Stop local game
     bsm.stop_local_game()
     assert bsm.game_status == "GAME_OVER"
+
 
 
 
