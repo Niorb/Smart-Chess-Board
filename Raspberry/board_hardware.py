@@ -339,6 +339,7 @@ def set_square_baseline(col: int, row: int, value: int | None = None) -> int:
         if value is not None:
             settings["baselines"][col][row] = int(value)
             baseline_history.pop((col, row), None)
+            save_settings()
         return settings["baselines"][col][row]
     return -1
 
@@ -419,7 +420,7 @@ def _normalize_disabled_squares(raw_disabled) -> set:
     }
 
 
-def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
+def scan_board(h, serial_conn, raw_state, freeze_baseline=False, expected_empty_squares=None):
     """
     Scans the board and returns both the raw matrix and a dictionary of diagnostic info.
     Reads values as a single batch from the serial interface using framed binary packets.
@@ -430,7 +431,8 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
         "status": "OK",
         "last_raw_line": "",
         "timeouts": 0,
-        "errors": 0
+        "errors": 0,
+        "baselines_updated": False,
     }
     if serial_conn is None:
         diag["status"] = "NO_HARDWARE"
@@ -541,6 +543,10 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
                     if (c, r) in disabled:
                         continue
 
+                    if expected_empty_squares is not None and (c, r) not in expected_empty_squares:
+                        baseline_history.pop((c, r), None)
+                        continue
+
                     val = matrix[c][r]
                     detected = (raw_state[c][r] != 0)
 
@@ -557,10 +563,11 @@ def scan_board(h, serial_conn, raw_state, freeze_baseline=False):
                     if stale:
                         del history[:stale]
 
-                    if history and not any(entry[2] for entry in history):
-                        if (now - history[0][0]) >= (baseline_window * 0.8):
-                            avg_val = int(sum(entry[1] for entry in history) / len(history))
+                    if history and not any(entry[2] for entry in history) and (now - history[0][0]) >= (baseline_window * 0.8):
+                        avg_val = int(sum(entry[1] for entry in history) / len(history))
+                        if settings["baselines"][c][r] != avg_val:
                             settings["baselines"][c][r] = avg_val
+                            diag["baselines_updated"] = True
     else:
         diag["errors"] = non_mocked_count
         diag["status"] = "TIMEOUT" if data is None else "PARSE_ERROR"

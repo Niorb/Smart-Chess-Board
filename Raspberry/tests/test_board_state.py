@@ -899,3 +899,87 @@ def test_get_recognized_pieces_grid():
     assert bsm.get_recognized_pieces_grid(full_physical) == STARTING_DIGITAL_GRID
 
 
+def test_board_state_position_gated_expected_empty_squares_playing_lichess():
+    """Verify that during PLAYING state with Lichess, expected_empty_squares contains matching empty squares."""
+    bsm = BoardStateManager()
+    bsm.game_status = "PLAYING"
+    saved_board = lichess_engine.board
+    try:
+        lichess_engine.board = chess.Board()
+        # Physical board is in standard starting setup
+        for c in range(8):
+            for r in (0, 1):
+                bsm.physical_state[c][r] = -1
+            for r in (6, 7):
+                bsm.physical_state[c][r] = 1
+            for r in (2, 3, 4, 5):
+                bsm.physical_state[c][r] = 0
+
+        # In starting position, ranks 3-6 (r in 2, 3, 4, 5) are expected empty and physically empty
+        expected_empty = {
+            (c, r)
+            for c in range(8)
+            for r in range(8)
+            if lichess_engine.board.piece_at(chess.square(c, r)) is None
+            and bsm.physical_state[c][r] == 0
+        }
+        assert len(expected_empty) == 32
+        for c in range(8):
+            for r in (2, 3, 4, 5):
+                assert (c, r) in expected_empty
+            for r in (0, 1, 6, 7):
+                assert (c, r) not in expected_empty
+
+        # After 1. e4 (e2 moves to e4):
+        lichess_engine.board.push_san("e4")
+        bsm.physical_state[4][1] = 0   # e2 physically empty
+        bsm.physical_state[4][3] = -1  # e4 physically occupied
+
+        expected_empty_after_e4 = {
+            (c, r)
+            for c in range(8)
+            for r in range(8)
+            if lichess_engine.board.piece_at(chess.square(c, r)) is None
+            and bsm.physical_state[c][r] == 0
+        }
+        # e2 (4, 1) is now in expected_empty!
+        assert (4, 1) in expected_empty_after_e4
+        # e4 (4, 3) is NOT in expected_empty (it contains white pawn)
+        assert (4, 3) not in expected_empty_after_e4
+    finally:
+        lichess_engine.board = saved_board
+
+
+def test_board_state_position_gated_expected_empty_squares_local_game():
+    """Verify that during local game, expected_empty_squares derives from local_engine.board."""
+    bsm = BoardStateManager()
+    bsm.start_local_game()
+    assert bsm.game_status == "PLAYING"
+    assert bsm.local_engine.is_active is True
+
+    # Starting setup
+    for c in range(8):
+        for r in (0, 1):
+            bsm.physical_state[c][r] = -1
+        for r in (6, 7):
+            bsm.physical_state[c][r] = 1
+        for r in (2, 3, 4, 5):
+            bsm.physical_state[c][r] = 0
+
+    expected_empty = {
+        (c, r)
+        for c in range(8)
+        for r in range(8)
+        if bsm.local_engine.board.piece_at(chess.square(c, r)) is None
+        and bsm.physical_state[c][r] == 0
+    }
+    assert len(expected_empty) == 32
+    assert (4, 1) not in expected_empty  # e2 occupied by pawn
+    assert (4, 3) in expected_empty      # e4 empty
+
+    # Stop local game
+    bsm.stop_local_game()
+    assert bsm.game_status == "GAME_OVER"
+
+
+

@@ -414,6 +414,8 @@ class BoardStateManager:
         self._bg_tasks: set[asyncio.Task] = set()
         # Update-loop bookkeeping
         self._calibration_reset_pending = False
+        self._baselines_dirty = False
+        self._last_baseline_change = 0.0
         self._prev_gesture_status = "IDLE"
         self._last_restoration_sig = None
         self._cached_anchor_key = None
@@ -596,9 +598,15 @@ class BoardStateManager:
             logger.error(f"Failed to trigger animation '{name}': {e}")
             return False
 
-    def _safe_scan(self, raw_state, freeze_baseline=False):
+    def _safe_scan(self, raw_state, freeze_baseline=False, expected_empty_squares=None):
         with self.serial_lock:
-            return scan_board(self.h, self.ser, raw_state, freeze_baseline=freeze_baseline)
+            return scan_board(
+                self.h,
+                self.ser,
+                raw_state,
+                freeze_baseline=freeze_baseline,
+                expected_empty_squares=expected_empty_squares,
+            )
 
     def _safe_calibrate(self):
         with self.serial_lock:
@@ -3729,10 +3737,54 @@ class BoardStateManager:
                             self.move_tracker.lifted_square is not None
                             or self.move_tracker.in_flight_move is not None
                         )
-                        freeze_baseline = is_animating or is_piece_moving
-                        raw_matrix, scan_diag = await asyncio.to_thread(self._safe_scan, raw_state, freeze_baseline)
+                        # Position-gated expected empty squares derivation for rolling baseline calibration
+                        expected_empty_squares = None
+                        if self.game_status == "PLAYING":
+                            active_board = None
+                            if hasattr(self, "local_engine") and self.local_engine.is_active:
+                                active_board = getattr(self.local_engine, "board", None)
+                            else:
+                                active_board = getattr(lichess_engine, "board", None)
+                            if active_board is not None:
+                                expected_empty_squares = {
+                                    (c, r)
+                                    for c in range(BOARD_COLS)
+                                    for r in range(BOARD_ROWS)
+                                    if active_board.piece_at(chess.square(c, r)) is None
+                                    and self.physical_state[c][r] == 0
+                                }
+                        elif self.game_status == "ANALYSIS":
+                            active_board = None
+                            if self.analysis_submode == "endgame":
+                                active_board = getattr(self, "endgame_board", None)
+                            else:
+                                active_board = getattr(self, "analysis_active_board", None)
+                            if active_board is not None and not getattr(self, "replay_complete", False):
+                                expected_empty_squares = {
+                                    (c, r)
+                                    for c in range(BOARD_COLS)
+                                    for r in range(BOARD_ROWS)
+                                    if active_board.piece_at(chess.square(c, r)) is None
+                                    and self.physical_state[c][r] == 0
+                                }
+                        elif self.game_status in ("IDLE", "SETUP", "GAME_OVER"):
+                            if getattr(self, "setup_result", None) and self.setup_result.is_setup_ready:
+                                expected_empty_squares = {
+                                    (c, r)
+                                    for c in range(BOARD_COLS)
+                                    for r in (2, 3, 4, 5)
+                                    if self.physical_state[c][r] == 0
+                                }
+
+                        raw_matrix, scan_diag = await asyncio.to_thread(
+                            self._safe_scan, raw_state, freeze_baseline, expected_empty_squares
+                        )
                         self.raw_analog_values = raw_matrix
                         diag_info = scan_diag
+                        if scan_diag.get("baselines_updated"):
+                            self._baselines_dirty = True
+                            self._last_baseline_change = now_ts
+
                         col_mode = settings.get("col_mode", "auto")
                         manual_col = settings.get("manual_col", 0)
 
@@ -4155,6 +4207,15 @@ class BoardStateManager:
                         # No listeners: keep only the heartbeat marker fresh
                         last_broadcast_mono = now_mono
 
+                    # Debounced asynchronous persistence of updated baselines
+                    if self._baselines_dirty and (time.time() - self._last_baseline_change >= 2.0):
+                        self._baselines_dirty = False
+                        try:
+                            from board_hardware import save_settings
+                            await asyncio.to_thread(save_settings)
+                        except Exception as e:
+                            logger.error(f"Error persisting baseline adjustments: {e}")
+
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -4170,6 +4231,13 @@ class BoardStateManager:
                 await asyncio.sleep(delay_ms / 1000.0)
         except asyncio.CancelledError:
             logger.info("State update loop cancelled.")
+            if self._baselines_dirty:
+                self._baselines_dirty = False
+                try:
+                    from board_hardware import save_settings
+                    save_settings()
+                except Exception:
+                    pass
             if self.ser:
                 self.ser.close()
             if self.h:

@@ -982,6 +982,98 @@ def test_read_adc_packet_with_noisy_preamble():
     assert res == payload
 
 
+def test_scan_board_expected_empty_squares_filters_drift():
+    """Verify that scan_board only allows squares in expected_empty_squares to drift."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["in_loop_calibration"] = True
+    settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    raw_vals = [1540] * 64
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    # Seed baseline_history for e2 (4, 1) and e4 (4, 3)
+    t0 = time.time() - 0.085
+    baseline_history[(4, 1)] = [(t0, 1540, False)]
+    baseline_history[(4, 3)] = [(t0, 1540, False)]
+
+    # Only e2 (4, 1) is expected empty (e4 is expected to have a piece)
+    expected_empty = {(4, 1)}
+
+    _, diag = scan_board(None, mock_ser, raw_state, expected_empty_squares=expected_empty)
+
+    # e2 should have drifted to 1540
+    assert settings["baselines"][4][1] == 1540
+    # e4 was not in expected_empty, so it must NOT drift and its history must be cleared
+    assert settings["baselines"][4][3] == 1500
+    assert (4, 3) not in baseline_history
+    assert diag["baselines_updated"] is True
+
+
+def test_scan_board_expected_empty_with_unexpected_physical_piece_suppresses_drift():
+    """Verify that an unexpected physical piece on an expected empty square suppresses baseline drift."""
+    import struct
+    import time
+    from unittest.mock import MagicMock
+
+    from board_hardware import DEFAULT_COL_MUX_MAP, baseline_history, scan_board, settings
+
+    baseline_history.clear()
+    settings["col_mux_map"] = list(DEFAULT_COL_MUX_MAP)
+    settings["baseline_window_s"] = 0.1
+    settings["threshold_positive"] = 120
+    settings["threshold_negative"] = 120
+    settings["in_loop_calibration"] = True
+    settings["baselines"] = [[1500] * BOARD_ROWS for _ in range(BOARD_COLS)]
+    raw_state = [[0] * BOARD_ROWS for _ in range(BOARD_COLS)]
+
+    # e4 (4, 3) has an unexpected piece reading 1850 (> 1500 + 120)
+    raw_vals = [1500] * 64
+    for mux_ch in range(8):
+        c_phys = DEFAULT_COL_MUX_MAP[mux_ch]
+        for r_phys in range(8):
+            if (7 - r_phys) == 4 and c_phys == 3:
+                raw_vals[mux_ch * 8 + r_phys] = 1850
+
+    mock_ser = MagicMock()
+    mock_ser.read.side_effect = lambda n: b'\xaa\x55' if n == 2 else (struct.pack('<64H', *raw_vals) if n == 128 else b'')
+
+    t0 = time.time() - 0.085
+    baseline_history[(4, 3)] = [(t0, 1850, True)]
+
+    expected_empty = {(4, 3)}
+    _, diag = scan_board(None, mock_ser, raw_state, expected_empty_squares=expected_empty)
+
+    # e4 must remain 1500 (not drift to 1850)
+    assert settings["baselines"][4][3] == 1500
+    assert diag["baselines_updated"] is False
+
+
+def test_set_square_baseline_persists_settings():
+    """Verify set_square_baseline calls save_settings when updating a square."""
+    from unittest.mock import patch
+    from board_hardware import set_square_baseline, settings
+
+    settings["baselines"][2][2] = 1500
+    with patch("board_hardware.save_settings") as mock_save:
+        res = set_square_baseline(2, 2, 1620)
+        assert res == 1620
+        assert settings["baselines"][2][2] == 1620
+        mock_save.assert_called_once()
+
+
+
 
 
 

@@ -65,6 +65,7 @@ Your primary mission is to:
 - **Live Settings Protection**: `board_settings.json` is private to the physical board and must NEVER be overwritten, committed, or pushed to GitHub. Always create automatic `.bak` backups on save.
 - **Pytest Sandboxing**: Global fixtures in `conftest.py` must redirect `BOARD_SETTINGS_PATH` to temporary isolated directories during automated test runs.
 - **Column MUX Mapping**: Always adhere to standard `[0..7]` column mapping (`DEFAULT_COL_MUX_MAP`) to prevent rank/file axis inversion on physical hardware.
+- **Position-Gated Rolling Baseline Calibration & Continuous Persistence**: During gameplay, dynamic rolling baseline calibration for any square `(c, r)` must ONLY execute when both the digital game position (`chess.Board.piece_at(sq) is None`) and physical sensor state (`physical_state[c][r] == 0` and `raw_state[c][r] == 0`) match and are empty. Squares containing pieces in the active digital position or unexpected physical pieces are strictly excluded from rolling average updates and their drift histories are purged to prevent piece magnet absorption. All updated baselines continuously and asynchronously persist to `board_settings.json` via debounced off-loop writes.
 
 ### 8. LED Compositing & Power Budgeting
 - **Current Constraint ($\le 220\text{mA}$)**: Total board LED brightness must adhere to the 220mA electrical limit across both strips.
