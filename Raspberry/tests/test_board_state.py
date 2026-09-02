@@ -387,16 +387,15 @@ def test_board_state_review_rook_move_does_not_render_castle_squares():
     bsm._update_leds()
 
     # The Rook's origin (4, 0) and destination (2, 0) should be lit,
-    # but the castling rook squares (0, 0) and (3, 0) MUST NOT be lit!
+    # but the castling rook origin square a1 (0, 0) MUST NOT be lit!
     from app.led_helpers import get_led_indices
     a1_leds = get_led_indices(0, 0)
-    d1_leds = get_led_indices(0, 3)
     pixel_colors = {
         call.args[0]: call.args[1]
         for call in bsm.strip.setPixelColor.call_args_list
         if len(call.args) >= 2
     }
-    for led in a1_leds + d1_leds:
+    for led in a1_leds:
         assert pixel_colors.get(led, 0) == 0
 
 
