@@ -371,6 +371,34 @@ def test_board_state_player_pending_castling_rook_led_render():
     assert bsm.strip.show.called
 
 
+def test_board_state_review_rook_move_does_not_render_castle_squares():
+    """Verify that in Review mode, a Rook move (e.g. e1c1) does not render the castle animation."""
+    bsm = BoardStateManager()
+    bsm.strip = MagicMock()
+    bsm.game_status = "ANALYSIS"
+    bsm.analysis_submode = "review"
+    bsm.analysis_game_moves = ["e1c1"]
+    bsm.analysis_current_ply = 0
+    # Active board has Rook on e1 (not castling)
+    bsm.analysis_active_board = chess.Board(fen="4k3/8/8/8/8/8/8/1K2R2R w - - 0 1")
+    bsm.analysis_played_analyses = [{"delta_cp": 10, "classification": "best"}]
+
+    bsm._update_leds()
+
+    # The Rook's origin (4, 0) and destination (2, 0) should be lit,
+    # but the castling rook squares (0, 0) and (3, 0) MUST NOT be lit!
+    # In setPixelColor(idx, color): check calls
+    called_indices = [call.args[0] for call in bsm.strip.setPixelColor.call_args_list if len(call.args) > 0]
+    # In 8x8 serpentine or standard mapping, (0, 0) [a1] and (3, 0) [d1] would be lit if castling occurred.
+    # Convert square to led indices:
+    from app.config import COORD_TO_PIXEL
+    a1_leds = COORD_TO_PIXEL.get((0, 0), [])
+    d1_leds = COORD_TO_PIXEL.get((3, 0), [])
+    for led in a1_leds + d1_leds:
+        assert led not in called_indices
+
+
+
 def test_board_state_capture_in_progress_led_render():
     """Verify that _update_leds renders capture aura when opponent piece was lifted first."""
     bsm = BoardStateManager()

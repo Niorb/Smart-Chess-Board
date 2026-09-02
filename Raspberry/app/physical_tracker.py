@@ -334,18 +334,36 @@ class PhysicalMoveTracker:
                     is_capture = False
                     is_castling = False
                     rook_coords = None
-                    if hasattr(engine.board, "move_stack") and len(engine.board.move_stack) > 0:
+                    if (
+                        hasattr(engine.board, "move_stack")
+                        and len(engine.board.move_stack) > 0
+                        and engine.board.peek().uci() == last_move_uci
+                    ):
                         last_move = engine.board.peek()
-                        if last_move.uci() == last_move_uci:
-                            m = engine.board.pop()
-                            is_capture = bool(engine.board.is_capture(m))
-                            is_castling = bool(engine.board.is_castling(m))
-                            engine.board.push(m)
-                            if is_castling:
-                                rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
-                    elif is_castle_uci(last_move_uci):
-                        is_castling = True
-                        rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                        m = engine.board.pop()
+                        is_capture = bool(engine.board.is_capture(m))
+                        is_castling = bool(engine.board.is_castling(m))
+                        engine.board.push(m)
+                        if is_castling:
+                            rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                    else:
+                        try:
+                            m = chess.Move.from_uci(last_move_uci)
+                            if hasattr(engine.board, "legal_moves") and m in engine.board.legal_moves:
+                                is_capture = bool(engine.board.is_capture(m))
+                                is_castling = bool(engine.board.is_castling(m))
+                                if is_castling:
+                                    rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                            elif is_castle_uci(last_move_uci):
+                                sq_from = chess.square(from_c, from_r)
+                                sq_to = chess.square(to_c, to_r)
+                                p_from = engine.board.piece_at(sq_from) if hasattr(engine.board, "piece_at") else None
+                                p_to = engine.board.piece_at(sq_to) if hasattr(engine.board, "piece_at") else None
+                                if (p_from and p_from.piece_type == chess.KING) or (p_to and p_to.piece_type == chess.KING):
+                                    is_castling = True
+                                    rook_coords = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                        except Exception:
+                            pass
 
                     target_initial_val = 0
                     if self.last_physical_state and to_c < len(self.last_physical_state) and to_r < len(self.last_physical_state[to_c]):
@@ -875,18 +893,25 @@ class PhysicalMoveTracker:
                     self.resignation_armed = False
                     self.resignation_color = None
 
-                    # Check for castling move to prompt the corresponding Rook movement
-                    # (geometric check only: a King moving two files horizontally is castling in standard chess)
-                    castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
-                    if castle_rook is not None:
-                        self.pending_castling_rook = {
-                            "from": castle_rook[0],
-                            "to": castle_rook[1],
-                            "start_time": time.time(),
-                        }
-                        logger.info(
-                            f"Player executed King castling move. Prompting Rook movement: {castle_rook[0]} -> {castle_rook[1]}"
-                        )
+                    # Check for castling move to prompt the corresponding Rook movement.
+                    # Verify that the piece moved is a King and that the move is an actual castling move.
+                    piece_moved = board.piece_at(sq_from)
+                    is_castling = (
+                        piece_moved is not None
+                        and piece_moved.piece_type == chess.KING
+                        and board.is_castling(chess.Move(sq_from, sq_to))
+                    )
+                    if is_castling:
+                        castle_rook = get_castle_rook_move(from_c, from_r, t_c, t_r)
+                        if castle_rook is not None:
+                            self.pending_castling_rook = {
+                                "from": castle_rook[0],
+                                "to": castle_rook[1],
+                                "start_time": time.time(),
+                            }
+                            logger.info(
+                                f"Player executed King castling move. Prompting Rook movement: {castle_rook[0]} -> {castle_rook[1]}"
+                            )
 
                     # Check for pawn promotion
                     promo_moves = [

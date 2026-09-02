@@ -407,6 +407,7 @@ class BoardStateManager:
         self.active_animation = None  # LifecycleAnimation | None
         self.custom_trace_path = None  # list[tuple[int, int]] | None
         self.custom_trace_is_capture: bool = False
+        self.custom_trace_is_castling: bool = False
         self.frozen_baselines = None  # Snapshot of baselines preserved during animations
         self.arrival_flash: dict | None = None
         self.guardrail_result: GameGuardrailResult | None = None
@@ -2781,9 +2782,9 @@ class BoardStateManager:
                 for r in range(BOARD_ROWS):
                     set_square_leds(7, r, c_eval_white if r < n_white else c_eval_black)
 
-            def render_trace(from_c, from_r, to_c, to_r, square_color, trace_color_val):
+            def render_trace(from_c, from_r, to_c, to_r, square_color, trace_color_val, is_castling: bool = False):
                 """Renders from/to highlights plus comet trace, handling castling rook paths."""
-                castle_rook = get_castle_rook_move(from_c, from_r, to_c, to_r)
+                castle_rook = get_castle_rook_move(from_c, from_r, to_c, to_r) if is_castling else None
                 if castle_rook:
                     r_from, r_to = castle_rook
                     set_square_leds(from_c, from_r, square_color)
@@ -3245,6 +3246,17 @@ class BoardStateManager:
                                 t_c = ord(curr_move[2]) - ord('a')
                                 t_r = int(curr_move[3]) - 1
 
+                                is_castling_move = False
+                                if getattr(self, "analysis_active_board", None):
+                                    try:
+                                        m_curr = chess.Move.from_uci(curr_move)
+                                        if m_curr in self.analysis_active_board.legal_moves:
+                                            is_castling_move = bool(self.analysis_active_board.is_castling(m_curr))
+                                    except Exception:
+                                        pass
+                                if not is_castling_move and curr_move.upper() in ("O-O", "O-O-O", "0-0", "0-0-0"):
+                                    is_castling_move = True
+
                                 # Rule A: within GOOD tier or classification in ("best", "good")
                                 is_rule_a = (delta_cp <= TIER_GOOD_MAX_LOSS) or (classification in ("best", "good"))
 
@@ -3255,7 +3267,7 @@ class BoardStateManager:
                                         trace_col = c_mint_emerald
                                     else:
                                         trace_col = c_azure
-                                    render_trace(f_c, f_r, t_c, t_r, trace_col, trace_col)
+                                    render_trace(f_c, f_r, t_c, t_r, trace_col, trace_col, is_castling=is_castling_move)
                                     # Clean board: Do NOT suggest or show any alternative moves
                                 else:
                                     # Rule B: delta_cp > 60 or classification in ("inaccuracy", "blunder")
@@ -3267,7 +3279,7 @@ class BoardStateManager:
                                         mistake_col = c_move_blunder
 
                                     # Animate played move trajectory in mistake color
-                                    render_trace(f_c, f_r, t_c, t_r, mistake_col, mistake_col)
+                                    render_trace(f_c, f_r, t_c, t_r, mistake_col, mistake_col, is_castling=is_castling_move)
 
                                     # ALSO suggest the engine's best move:
                                     best_m = played_info.get("best_move")
@@ -3416,7 +3428,22 @@ class BoardStateManager:
                                 g_t_c = ord(curr_move[2]) - ord('a')
                                 g_t_r = int(curr_move[3]) - 1
                                 if all(0 <= v < 8 for v in (g_f_c, g_f_r, g_t_c, g_t_r)):
-                                    castle_rook = get_castle_rook_move(g_f_c, g_f_r, g_t_c, g_t_r)
+                                    is_castling_move = False
+                                    if getattr(self, "analysis_active_board", None):
+                                        try:
+                                            m_curr = (
+                                                self.analysis_active_board.parse_san(curr_move)
+                                                if not (len(curr_move) in (4, 5) and curr_move[:2].isalnum())
+                                                else chess.Move.from_uci(curr_move)
+                                            )
+                                            if m_curr in self.analysis_active_board.legal_moves:
+                                                is_castling_move = bool(self.analysis_active_board.is_castling(m_curr))
+                                        except Exception:
+                                            pass
+                                    if not is_castling_move and curr_move.upper() in ("O-O", "O-O-O", "0-0", "0-0-0"):
+                                        is_castling_move = True
+
+                                    castle_rook = get_castle_rook_move(g_f_c, g_f_r, g_t_c, g_t_r) if is_castling_move else None
                                     if castle_rook:
                                         # Stage 1: show ONLY the king's move; the rook prompt
                                         # appears once the king reaches its castle square.
@@ -3425,7 +3452,7 @@ class BoardStateManager:
                                         king_path = interpolate_move_path(g_f_c, g_f_r, g_t_c, g_t_r)
                                         render_move_trace(king_path, now, frame, trace_color=c_move_trace, blend_arrival=True)
                                     else:
-                                        render_trace(g_f_c, g_f_r, g_t_c, g_t_r, c_move_trace, c_move_trace)
+                                        render_trace(g_f_c, g_f_r, g_t_c, g_t_r, c_move_trace, c_move_trace, is_castling=False)
                     elif self.replay_reveal_uci and len(self.replay_reveal_uci) >= 4:
                         # Recall phase reveal: correct continuation after a mistake (amber trace)
                         rv = self.replay_reveal_uci
@@ -3434,9 +3461,20 @@ class BoardStateManager:
                         r_t_c = ord(rv[2]) - ord('a')
                         r_t_r = int(rv[3]) - 1
                         if all(0 <= v < 8 for v in (r_f_c, r_f_r, r_t_c, r_t_r)):
+                            is_castling_move = False
+                            if getattr(self, "analysis_active_board", None):
+                                try:
+                                    m_rv = chess.Move.from_uci(rv)
+                                    if m_rv in self.analysis_active_board.legal_moves:
+                                        is_castling_move = bool(self.analysis_active_board.is_castling(m_rv))
+                                except Exception:
+                                    pass
+                            if not is_castling_move and rv.upper() in ("O-O", "O-O-O", "0-0", "0-0-0"):
+                                is_castling_move = True
+
                             reveal_pulse = math.sin(now * 4.0) * 0.5 + 0.5
                             reveal_col = scale_color(c_move_inacc, 0.45 + 0.55 * reveal_pulse)
-                            render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col)
+                            render_trace(r_f_c, r_f_r, r_t_c, r_t_r, reveal_col, reveal_col, is_castling=is_castling_move)
 
                 elif self.analysis_submode == "endgame":
                     if self.endgame_phase in ("setup_white", "setup_black"):
@@ -3560,7 +3598,7 @@ class BoardStateManager:
                 target_color = COLOR_INT_OPPONENT_CAPTURE if self.custom_trace_is_capture else COLOR_INT_OPPONENT_TO
                 trace_color = COLOR_INT_CAPTURE_TRACE if self.custom_trace_is_capture else COLOR_INT_MOVE_TRACE
 
-                castle_rook = get_castle_rook_move(t_from_c, t_from_r, t_to_c, t_to_r)
+                castle_rook = get_castle_rook_move(t_from_c, t_from_r, t_to_c, t_to_r) if getattr(self, "custom_trace_is_castling", False) else None
                 if castle_rook:
                     r_from, r_to = castle_rook
                     set_square_leds(t_from_c, t_from_r, COLOR_INT_OPPONENT_FROM)
@@ -3625,6 +3663,7 @@ class BoardStateManager:
         self.active_animation = None
         self.custom_trace_path = None
         self.custom_trace_is_capture = False
+        self.custom_trace_is_castling = False
         if self.strip:
             try:
                 all_leds_off(self.strip)

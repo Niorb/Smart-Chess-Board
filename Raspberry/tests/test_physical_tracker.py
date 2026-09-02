@@ -922,6 +922,61 @@ def test_resolve_promotion_external():
     assert tracker.in_flight_move["uci"] == "e7e8r"
 
 
+def test_rook_move_matching_castle_coordinates_does_not_trigger_castling(mock_engine):
+    """
+    Verify that moving a Rook from e1 to c1 (4,0 -> 2,0) or e1 to g1 (4,0 -> 6,0)
+    does NOT trigger castling detection or set pending_castling_rook.
+    """
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Set up board with King on b1, Rook on e1, empty rank 1 between a1-f1
+    mock_engine.board = chess.Board(fen="4k3/8/8/8/8/8/8/1K2R2R w - - 0 1")
+    mock_engine.game_info["turn"] = "white"
+
+    state = [[0] * 8 for _ in range(8)]
+    for c in range(8):
+        for r in range(8):
+            p = mock_engine.board.piece_at(chess.square(c, r))
+            if p:
+                state[c][r] = -1 if p.color == chess.WHITE else 1
+
+    # Lift Rook on e1 (4, 0)
+    state[4][0] = 0
+    tracker.process_physical_state(state, mock_engine)
+    assert tracker.lifted_square == (4, 0)
+    assert (2, 0) in tracker.legal_targets  # c1 is a legal target for Rook
+
+    # Place Rook on c1 (2, 0) - matches coordinates (4, 0) -> (2, 0)
+    state[2][0] = -1
+    res = tracker.process_physical_state(state, mock_engine)
+
+    assert res == (5, 1, 3, 1, None)  # e1c1 move confirmed
+    # CRITICAL INVARIANT: pending_castling_rook MUST be None because the piece moved was a Rook, NOT a King!
+    assert tracker.pending_castling_rook is None
+
+
+def test_sync_game_opponent_rook_move_not_castling(mock_engine):
+    """Verify sync_game marks is_castling == False when opponent moves a Rook matching castle coordinates."""
+    tracker = PhysicalMoveTracker()
+    mock_engine.my_color = "white"
+
+    # Board with Black King on b8, Black Rook on e8 (4, 7)
+    mock_engine.board = chess.Board(fen="1k2r2r/8/8/8/8/8/8/4K3 b - - 0 1")
+    mock_engine.board.push_san("Re8-c8")  # Rook moves e8c8
+    mock_engine.game_info["last_move"] = "e8c8"
+    mock_engine.game_info["turn"] = "white"
+
+    tracker.sync_game(mock_engine)
+    assert tracker.pending_opponent_move is not None
+    assert tracker.pending_opponent_move["uci"] == "e8c8"
+    assert tracker.pending_opponent_move["is_castling"] is False
+    assert tracker.pending_opponent_move["rook_from"] is None
+    assert tracker.pending_opponent_move["rook_to"] is None
+    assert tracker.pending_opponent_move["phase"] == "standard"
+
+
+
 
 
 

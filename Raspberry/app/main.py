@@ -164,6 +164,7 @@ class TestTraceRequest(BaseModel):
     from_pos: list[int] | None = None
     to_pos: list[int] | None = None
     is_capture: bool | None = False
+    is_castling: bool | None = None
     clear: bool | None = False
 
 
@@ -450,6 +451,7 @@ async def test_trace_route(body: TestTraceRequest):
     if body.clear:
         state_manager.custom_trace_path = None
         state_manager.custom_trace_is_capture = False
+        state_manager.custom_trace_is_castling = False
         return {"status": "success", "message": "Custom trace cleared"}
 
     path = []
@@ -473,7 +475,19 @@ async def test_trace_route(body: TestTraceRequest):
 
     state_manager.custom_trace_path = path
     state_manager.custom_trace_is_capture = bool(body.is_capture)
-    return {"status": "success", "path": path, "is_capture": state_manager.custom_trace_is_capture}
+    from app.path_interpolator import is_castle_uci
+    if body.is_castling is not None:
+        state_manager.custom_trace_is_castling = bool(body.is_castling)
+    elif body.uci:
+        state_manager.custom_trace_is_castling = is_castle_uci(body.uci)
+    else:
+        state_manager.custom_trace_is_castling = False
+    return {
+        "status": "success",
+        "path": path,
+        "is_capture": state_manager.custom_trace_is_capture,
+        "is_castling": state_manager.custom_trace_is_castling,
+    }
 
 
 @app.get("/api/board/digital")
