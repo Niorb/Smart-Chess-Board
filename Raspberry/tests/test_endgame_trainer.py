@@ -1,34 +1,33 @@
 import asyncio
 import os
 import sys
+
 import chess
-import pytest
-from unittest.mock import MagicMock, patch
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.board_state import BoardStateManager
 from app.endgame_db import (
+    CORE_ENDGAME_DRILLS,
     EndgameCategory,
     EndgameDrill,
     EndgameProgressManager,
-    CORE_ENDGAME_DRILLS,
 )
-from app.board_state import BoardStateManager
-from app.gesture_engine import PhysicalGestureEngine, EndgameMenuGesture
+from app.gesture_engine import EndgameMenuGesture, PhysicalGestureEngine
 from app.led_animations import (
     get_piece_type_color,
     render_endgame_setup,
     render_white_setup_complete_wave,
 )
 from app.led_helpers import (
-    COLOR_INT_PIECE_KING,
-    COLOR_INT_PIECE_QUEEN,
-    COLOR_INT_PIECE_ROOK,
+    COLOR_INT_OFF,
     COLOR_INT_PIECE_BISHOP,
+    COLOR_INT_PIECE_KING,
     COLOR_INT_PIECE_KNIGHT,
     COLOR_INT_PIECE_PAWN,
-    COLOR_INT_OFF,
+    COLOR_INT_PIECE_QUEEN,
+    COLOR_INT_PIECE_ROOK,
 )
 
 

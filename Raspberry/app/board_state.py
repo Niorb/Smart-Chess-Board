@@ -40,7 +40,7 @@ except ImportError:
 try:
     import serial
 except ImportError:
-    serial = None
+    serial = None  # type: ignore[assignment]
 
 from board_hardware import (
     BOARD_COLS,
@@ -93,11 +93,6 @@ from app.led_animations import (
     render_white_setup_complete_wave,
     scale_color,
 )
-from app.openings import (
-    OpeningInfo,
-    get_book_moves_for_square,
-    get_opening_info,
-)
 from app.led_helpers import (
     COLOR_INT_AZURE,
     COLOR_INT_CAPTURE_AURA_ATTACKER,
@@ -144,10 +139,10 @@ from app.led_helpers import (
     COLOR_INT_NIGHT_MOVE_GOOD,
     COLOR_INT_NIGHT_MOVE_INACCURACY,
     COLOR_INT_NIGHT_MOVE_TRACE,
-    COLOR_INT_NIGHT_OPPONENT_CAPTURE,
     COLOR_INT_NIGHT_OPPONENT_FROM,
     COLOR_INT_NIGHT_OPPONENT_TO,
     COLOR_INT_NIGHT_PIECE_LIFTED,
+    COLOR_INT_NIGHT_PROMO_ROOT,
     COLOR_INT_NIGHT_RETURN_HOME,
     COLOR_INT_NIGHT_ROYAL_VIOLET,
     COLOR_INT_NIGHT_SETUP_MISPLACED,
@@ -168,12 +163,18 @@ from app.led_helpers import (
     COLOR_INT_START_WHITE_PRIMARY,
     COLOR_INT_TURN_BLACK,
     COLOR_INT_TURN_WHITE,
+    COLOR_INT_VICTORY_GOLD,
     Color,
     all_leds_off,
     get_led_indices,
     init_strip,
 )
 from app.lichess_engine import format_clock_ms, lichess_engine
+from app.openings import (
+    OpeningInfo,
+    get_book_moves_for_square,
+    get_opening_info,
+)
 from app.path_interpolator import get_castle_rook_move, interpolate_move_path
 from app.physical_tracker import PhysicalMoveTracker
 from app.setup_validator import GameGuardrailResult, SetupResult, SetupValidator
@@ -187,7 +188,7 @@ class AnalysisEngineAdapter:
     def __init__(self, board: chess.Board):
         self.board = board
         self.my_color = "white" if board.turn == chess.WHITE else "black"
-        self.game_info = {}
+        self.game_info: dict[str, Any] = {}
 
 
 class LocalGameEngine:
@@ -472,6 +473,9 @@ class BoardStateManager:
         self.last_game_moves: list[str] = []
         self.last_game_id: str | None = None
         self.last_game_metadata: dict[str, Any] = {}
+        self.last_move: tuple[tuple[int, int], tuple[int, int]] | None = None
+        self.analysis_blunder_pending_reply: dict[str, Any] | None = None
+        self.endgame_pending_reply: dict[str, Any] | None = None
 
         # Setup verification, move tracking, physical gestures, and local two-player engine
         self.setup_validator = SetupValidator()
@@ -1360,15 +1364,14 @@ class BoardStateManager:
 
     def apply_blunder_pending_opponent_move(self) -> dict[str, Any]:
         """Applies the active pending opponent reply on the blunder drill board."""
-        if not self.analysis_active_board or not getattr(self, "analysis_blunder_pending_reply", None):
+        reply = self.analysis_blunder_pending_reply
+        if not self.analysis_active_board or reply is None:
             return {"error": "No pending opponent reply to apply"}
 
-        reply = self.analysis_blunder_pending_reply
         uci = reply.get("uci", "")
         try:
             move = chess.Move.from_uci(uci)
             if move in self.analysis_active_board.legal_moves:
-                san = self.analysis_active_board.san(move)
                 f_c = chess.square_file(move.from_square)
                 f_r = chess.square_rank(move.from_square)
                 t_c = chess.square_file(move.to_square)
@@ -1595,7 +1598,7 @@ class BoardStateManager:
             if 0 <= ply < len(self.analysis_game_moves)
             else None
         )
-        is_match = bool(expected) and self._replay_move_matches(expected, uci)
+        is_match = expected is not None and self._replay_move_matches(expected, uci)
 
         # ---- Learn phase -------------------------------------------------
         if self.analysis_submode == "replay_learn":
@@ -1859,7 +1862,7 @@ class BoardStateManager:
         missing_black: list[tuple[int, int]] = []
         misplaced: list[tuple[int, int]] = []
 
-        for (c, r), (ptype, is_white) in target_pieces.items():
+        for (c, r), (_ptype, is_white) in target_pieces.items():
             val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
             if is_white:
                 if val == 0:
@@ -1897,10 +1900,11 @@ class BoardStateManager:
             try:
                 uci = chess.Move.from_uci(uci).uci()
             except Exception:
-                try:
-                    uci = self.endgame_board.parse_san(raw_text).uci()
-                except Exception:
-                    pass
+                if self.endgame_board is not None:
+                    try:
+                        uci = self.endgame_board.parse_san(raw_text).uci()
+                    except Exception:
+                        pass
 
         if not self.endgame_board or self.endgame_phase != "playing":
             return {"error": "Endgame drill not in playing phase"}
@@ -2063,10 +2067,10 @@ class BoardStateManager:
 
     def apply_endgame_pending_opponent_move(self) -> dict[str, Any]:
         """Applies the active pending opponent reply on the endgame board."""
-        if not self.endgame_board or not getattr(self, "endgame_pending_reply", None):
+        reply = self.endgame_pending_reply
+        if not self.endgame_board or reply is None:
             return {"error": "No pending opponent reply to apply"}
 
-        reply = self.endgame_pending_reply
         uci = reply.get("uci", "")
         try:
             move = chess.Move.from_uci(uci)
@@ -2119,9 +2123,7 @@ class BoardStateManager:
             opp_q = len(self.endgame_board.pieces(chess.QUEEN, opp_col))
             opp_r = len(self.endgame_board.pieces(chess.ROOK, opp_col))
             opp_minors = len(self.endgame_board.pieces(chess.BISHOP, opp_col)) + len(self.endgame_board.pieces(chess.KNIGHT, opp_col))
-            if my_q >= 1 and opp_q == 0 and opp_r == 0 and opp_minors == 0:
-                return True
-            return False
+            return bool(my_q >= 1 and opp_q == 0 and opp_r == 0 and opp_minors == 0)
         elif goal == "draw":
             return (
                 self.endgame_board.is_stalemate()
@@ -2360,7 +2362,7 @@ class BoardStateManager:
 
     def _get_anchor_board(self) -> chess.Board:
         """Reconstructs (with caching) the board position at the analysis divergence anchor ply."""
-        target_ply = min(self.analysis_anchor_ply, len(self.analysis_game_moves))
+        target_ply = min(self.analysis_anchor_ply if self.analysis_anchor_ply is not None else 0, len(self.analysis_game_moves))
         key = (target_ply, tuple(self.analysis_game_moves))
         if self._cached_anchor_key == key and self._cached_anchor_board is not None:
             return self._cached_anchor_board.copy()
@@ -2560,7 +2562,7 @@ class BoardStateManager:
             game_payload = self.local_engine.get_game_payload()
             my_color = self.local_engine.my_color
             turn = "white" if engine_board.turn == chess.WHITE else "black"
-            clocks_raw = {
+            clocks_raw: dict[str, Any] = {
                 "white": None,
                 "black": None,
                 "updated_at": None,
@@ -2722,13 +2724,13 @@ class BoardStateManager:
             c_legal_capture = COLOR_INT_NIGHT_LEGAL_CAPTURE if night_mode else COLOR_INT_LEGAL_CAPTURE
             c_opp_from = COLOR_INT_NIGHT_OPPONENT_FROM if night_mode else COLOR_INT_OPPONENT_FROM
             c_opp_to_quiet = COLOR_INT_NIGHT_OPPONENT_TO if night_mode else COLOR_INT_OPPONENT_TO
-            c_opp_to_capture = COLOR_INT_NIGHT_OPPONENT_CAPTURE if night_mode else COLOR_INT_OPPONENT_CAPTURE
             c_move_trace = COLOR_INT_NIGHT_MOVE_TRACE if night_mode else COLOR_INT_MOVE_TRACE
             c_capture_trace = COLOR_INT_NIGHT_CAPTURE_TRACE if night_mode else COLOR_INT_CAPTURE_TRACE
             c_check = COLOR_INT_NIGHT_CHECK if night_mode else COLOR_INT_CHECK
             c_turn_white = COLOR_INT_NIGHT_TURN_WHITE if night_mode else COLOR_INT_TURN_WHITE
             c_turn_black = COLOR_INT_NIGHT_TURN_BLACK if night_mode else COLOR_INT_TURN_BLACK
             c_illegal = COLOR_INT_NIGHT_ILLEGAL if night_mode else COLOR_INT_ILLEGAL
+            c_invalid_placement = c_illegal
             c_eval_white = COLOR_INT_NIGHT_EVAL_WHITE if night_mode else COLOR_INT_EVAL_WHITE
             c_eval_black = COLOR_INT_NIGHT_EVAL_BLACK if night_mode else COLOR_INT_EVAL_BLACK
             c_clock_ok = COLOR_INT_NIGHT_CLOCK_OK if night_mode else COLOR_INT_CLOCK_OK
@@ -3093,12 +3095,11 @@ class BoardStateManager:
 
                     # Persistent player color reminder: active until player plays their first move
                     # (For White: move_count == 0; For Black: move_count <= 1 until Black plays move 1 at ply 2)
-                    first_move_pending = False
-                    if my_chess_color is not None:
-                        if my_chess_color == chess.WHITE and move_count == 0:
-                            first_move_pending = True
-                        elif my_chess_color == chess.BLACK and move_count <= 1:
-                            first_move_pending = True
+                    first_move_pending = (
+                        my_chess_color == chess.WHITE and move_count == 0
+                    ) or (
+                        my_chess_color == chess.BLACK and move_count <= 1
+                    )
 
                     if first_move_pending and my_chess_color is not None:
                         # Illuminate persistent player color reminder on player's royal thrones
@@ -3750,7 +3751,7 @@ class BoardStateManager:
                                     (c, r)
                                     for c in range(BOARD_COLS)
                                     for r in range(BOARD_ROWS)
-                                    if active_board.piece_at(chess.square(c, r)) is None
+                                    if not (active_board.occupied & (1 << (r * 8 + c)))
                                     and self.physical_state[c][r] == 0
                                 }
                         elif self.game_status == "ANALYSIS":
@@ -3764,7 +3765,7 @@ class BoardStateManager:
                                     (c, r)
                                     for c in range(BOARD_COLS)
                                     for r in range(BOARD_ROWS)
-                                    if active_board.piece_at(chess.square(c, r)) is None
+                                    if not (active_board.occupied & (1 << (r * 8 + c)))
                                     and self.physical_state[c][r] == 0
                                 }
                         elif self.game_status in ("IDLE", "SETUP", "GAME_OVER"):
@@ -3776,6 +3777,7 @@ class BoardStateManager:
                                     if self.physical_state[c][r] == 0
                                 }
 
+                        freeze_baseline = is_animating or is_piece_moving
                         raw_matrix, scan_diag = await asyncio.to_thread(
                             self._safe_scan, raw_state, freeze_baseline, expected_empty_squares
                         )

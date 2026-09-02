@@ -8,13 +8,9 @@ and serialization integrity.
 """
 
 import chess
-import pytest
-
 from app.openings import (
-    BookMoveCandidate,
-    OpeningInfo,
-    get_opening_info,
     get_book_moves_for_square,
+    get_opening_info,
     lookup_opening_by_moves,
 )
 

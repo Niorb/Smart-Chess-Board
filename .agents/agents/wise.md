@@ -78,6 +78,12 @@ Your primary mission is to:
 - **Render-Phase State Transition for Prior Props**: When tracking previous grid/FEN states for piece capture ghosts or slide animations, update prior state during render transition rather than calling `setState` synchronously within `useEffect` to eliminate cascading render cycles.
 - **Digital Twin Real-Time Heatmaps**: The Magnetic Aura lens overlays real-time Hall sensor ADC flux differentials ($|\Delta \text{ADC}|$) and piece-lift acoustic ripples onto switchable artisan wood/stone textures without interrupting 60fps board interactions.
 
+### 10. High-Frequency 100 Hz Loop, Bitboard Optimization & Async Task Discipline
+- **100 Hz Loop Bitboard Occupancy Evaluation**: In the 100 Hz hardware loop (`board_state.py`) and setup guardrails (`setup_validator.py`), avoid high-frequency object-allocating calls like `chess.Board.piece_at(chess.square(c, r)) is None` across 64 squares 100 times per second. Instead, inspect square occupancy directly via bitwise operations against the precomputed 64-bit integer `board.occupied` (`not (board.occupied & (1 << (r * 8 + c)))`). This eliminates over 6,400 Python object instantiations and method dispatches per second on the Raspberry Pi CPU.
+- **Hardware Loop Baseline Freeze Invariant**: In `run_hardware_loop()`, `freeze_baseline = is_animating or is_piece_moving` must be evaluated and passed to `self._safe_scan()` on every cycle. Freezing rolling baseline updates during LED animations and active piece movements prevents Hall sensor transient magnetic shifts and power rail ripple from contaminating ADC baselines.
+- **Async Task Scheduling & Coroutine Cleanup**: When dispatching background tasks in utility routines or catching `RuntimeError: No running event loop` in `gesture_engine.py`, always call `if hasattr(coro, "close"): coro.close()`. This explicitly frees the generator frame, avoids coroutine leaks, and eliminates `RuntimeWarning: coroutine was never awaited` during teardown or headless CLI runs.
+- **Clock Interpolation None-Guards**: In `lichess_engine.get_interpolated_clocks()`, always guard the side-to-move clock value (`stm_val = result[stm]; if stm_val is not None: ...`) against `None` before calculating elapsed time differences, preventing `TypeError` crashes during clock synchronization hiccups or game start handshakes.
+
 ---
 
 ## Consultation & Collaboration Guidelines

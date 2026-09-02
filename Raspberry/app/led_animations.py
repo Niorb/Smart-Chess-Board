@@ -24,18 +24,15 @@ try:
         ANIM_RECALL_START_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
-        ANIM_UNCHARTED_NOVELTY_DURATION_S,
-        ANIM_WHITE_SETUP_COMPLETE_DURATION_S,
         MOVE_TRACE_PERIOD_S,
     )
     from app.led_helpers import (
+        COLOR_INT_AZURE,
         COLOR_INT_BOARD_READY_AMBIENT,
         COLOR_INT_BOARD_READY_PRIMARY,
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
-        COLOR_INT_AZURE,
-        COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_EQUILIBRIUM,
         COLOR_INT_DRAW_PEARL,
         COLOR_INT_DRAW_SAPPHIRE,
@@ -50,13 +47,11 @@ try:
         COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
-        COLOR_INT_MOVE_CONFIRM,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
-        COLOR_INT_NIGHT_DRAW_BLUE,
         COLOR_INT_NIGHT_DRAW_EQUILIBRIUM,
         COLOR_INT_NIGHT_DRAW_PEARL,
         COLOR_INT_NIGHT_DRAW_SAPPHIRE,
@@ -67,6 +62,8 @@ try:
         COLOR_INT_NIGHT_ECLIPSE_GARNET,
         COLOR_INT_NIGHT_ECLIPSE_GOLD,
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
+        COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED,
+        COLOR_INT_NIGHT_MINT_EMERALD,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
         COLOR_INT_NIGHT_PIECE_BISHOP,
@@ -75,7 +72,6 @@ try:
         COLOR_INT_NIGHT_PIECE_PAWN,
         COLOR_INT_NIGHT_PIECE_QUEEN,
         COLOR_INT_NIGHT_PIECE_ROOK,
-        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
         COLOR_INT_NIGHT_PROMO_QUEEN,
@@ -83,25 +79,23 @@ try:
         COLOR_INT_NIGHT_PROMO_ROOT,
         COLOR_INT_NIGHT_RESIGN_HALO,
         COLOR_INT_NIGHT_RESIGN_PRIMARY,
+        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_SEEKING_BODY,
         COLOR_INT_NIGHT_SEEKING_HEAD,
         COLOR_INT_NIGHT_SEEKING_TAIL,
+        COLOR_INT_NIGHT_SETUP_MISPLACED,
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
-        COLOR_INT_NIGHT_SETUP_MISPLACED,
-        COLOR_INT_NIGHT_SETUP_MISSING,
+        COLOR_INT_NIGHT_TURN_WHITE,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_OFF,
+        COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PIECE_BISHOP,
         COLOR_INT_PIECE_KING,
         COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_PAWN,
         COLOR_INT_PIECE_QUEEN,
         COLOR_INT_PIECE_ROOK,
-        COLOR_INT_ROYAL_VIOLET,
-        COLOR_INT_SETUP_MISPLACED,
-        COLOR_INT_SETUP_MISSING,
-        COLOR_INT_OFF,
-        COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PROMO_BISHOP,
         COLOR_INT_PROMO_KNIGHT,
         COLOR_INT_PROMO_QUEEN,
@@ -109,9 +103,11 @@ try:
         COLOR_INT_PROMO_ROOT,
         COLOR_INT_RESIGN_HALO,
         COLOR_INT_RESIGN_PRIMARY,
+        COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
+        COLOR_INT_SETUP_MISPLACED,
         COLOR_INT_START_BLACK_PRIMARY,
         COLOR_INT_START_BLACK_SECONDARY,
         COLOR_INT_START_WHITE_PRIMARY,
@@ -133,18 +129,15 @@ except ImportError:
         ANIM_RECALL_START_DURATION_S,
         ANIM_SEEKING_DURATION_S,
         ANIM_SEEKING_PERIOD_S,
-        ANIM_UNCHARTED_NOVELTY_DURATION_S,
-        ANIM_WHITE_SETUP_COMPLETE_DURATION_S,
         MOVE_TRACE_PERIOD_S,
     )
     from .led_helpers import (
+        COLOR_INT_AZURE,
         COLOR_INT_BOARD_READY_AMBIENT,
         COLOR_INT_BOARD_READY_PRIMARY,
         COLOR_INT_BOARD_READY_SECONDARY,
         COLOR_INT_CAPTURE_AURA_ATTACKER,
         COLOR_INT_CAPTURE_AURA_TARGET,
-        COLOR_INT_AZURE,
-        COLOR_INT_DRAW_BLUE,
         COLOR_INT_DRAW_EQUILIBRIUM,
         COLOR_INT_DRAW_PEARL,
         COLOR_INT_DRAW_SAPPHIRE,
@@ -159,13 +152,11 @@ except ImportError:
         COLOR_INT_ECLIPSE_RUBY,
         COLOR_INT_GUARDRAIL_MISSING,
         COLOR_INT_GUARDRAIL_UNEXPECTED,
-        COLOR_INT_MOVE_CONFIRM,
         COLOR_INT_MOVE_TRACE,
         COLOR_INT_NIGHT_AZURE,
         COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
         COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
         COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
-        COLOR_INT_NIGHT_DRAW_BLUE,
         COLOR_INT_NIGHT_DRAW_EQUILIBRIUM,
         COLOR_INT_NIGHT_DRAW_PEARL,
         COLOR_INT_NIGHT_DRAW_SAPPHIRE,
@@ -176,6 +167,8 @@ except ImportError:
         COLOR_INT_NIGHT_ECLIPSE_GARNET,
         COLOR_INT_NIGHT_ECLIPSE_GOLD,
         COLOR_INT_NIGHT_ECLIPSE_RUBY,
+        COLOR_INT_NIGHT_GUARDRAIL_UNEXPECTED,
+        COLOR_INT_NIGHT_MINT_EMERALD,
         COLOR_INT_NIGHT_MODE,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
         COLOR_INT_NIGHT_PIECE_BISHOP,
@@ -184,7 +177,6 @@ except ImportError:
         COLOR_INT_NIGHT_PIECE_PAWN,
         COLOR_INT_NIGHT_PIECE_QUEEN,
         COLOR_INT_NIGHT_PIECE_ROOK,
-        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_PROMO_KNIGHT,
         COLOR_INT_NIGHT_PROMO_QUEEN,
@@ -192,25 +184,23 @@ except ImportError:
         COLOR_INT_NIGHT_PROMO_ROOT,
         COLOR_INT_NIGHT_RESIGN_HALO,
         COLOR_INT_NIGHT_RESIGN_PRIMARY,
+        COLOR_INT_NIGHT_ROYAL_VIOLET,
         COLOR_INT_NIGHT_SEEKING_BODY,
         COLOR_INT_NIGHT_SEEKING_HEAD,
         COLOR_INT_NIGHT_SEEKING_TAIL,
+        COLOR_INT_NIGHT_SETUP_MISPLACED,
         COLOR_INT_NIGHT_START_BLACK_PRIMARY,
         COLOR_INT_NIGHT_START_BLACK_SECONDARY,
+        COLOR_INT_NIGHT_TURN_WHITE,
         COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_OFF,
+        COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PIECE_BISHOP,
         COLOR_INT_PIECE_KING,
         COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_PAWN,
         COLOR_INT_PIECE_QUEEN,
         COLOR_INT_PIECE_ROOK,
-        COLOR_INT_ROYAL_VIOLET,
-        COLOR_INT_SETUP_MISPLACED,
-        COLOR_INT_SETUP_MISSING,
-        COLOR_INT_NIGHT_SETUP_MISPLACED,
-        COLOR_INT_NIGHT_SETUP_MISSING,
-        COLOR_INT_OFF,
-        COLOR_INT_OPPONENT_DISCONNECTED,
         COLOR_INT_PROMO_BISHOP,
         COLOR_INT_PROMO_KNIGHT,
         COLOR_INT_PROMO_QUEEN,
@@ -218,62 +208,16 @@ except ImportError:
         COLOR_INT_PROMO_ROOT,
         COLOR_INT_RESIGN_HALO,
         COLOR_INT_RESIGN_PRIMARY,
+        COLOR_INT_ROYAL_VIOLET,
         COLOR_INT_SEEKING_BODY,
         COLOR_INT_SEEKING_HEAD,
         COLOR_INT_SEEKING_TAIL,
+        COLOR_INT_SETUP_MISPLACED,
         COLOR_INT_START_BLACK_PRIMARY,
         COLOR_INT_START_BLACK_SECONDARY,
         COLOR_INT_START_WHITE_PRIMARY,
         COLOR_INT_START_WHITE_SECONDARY,
         COLOR_INT_VICTORY_GOLD,
-        COLOR_INT_VICTORY_GREEN,
-        get_led_indices,
-    )
-except ImportError:
-    from .config import (
-        ANIM_ANALYSIS_COMPUTING_DURATION_S,
-        ANIM_BOARD_READY_DURATION_S,
-        ANIM_CASTLE_PERIOD_S,
-        ANIM_GAME_DRAWN_DURATION_S,
-        ANIM_GAME_LOST_DURATION_S,
-        ANIM_GAME_START_DURATION_S,
-        ANIM_GAME_WON_DURATION_S,
-        ANIM_SEEKING_DURATION_S,
-        ANIM_SEEKING_PERIOD_S,
-        MOVE_TRACE_PERIOD_S,
-        )
-    from .led_helpers import (
-        COLOR_INT_BOARD_READY_AMBIENT,
-        COLOR_INT_BOARD_READY_PRIMARY,
-        COLOR_INT_BOARD_READY_SECONDARY,
-        COLOR_INT_CAPTURE_AURA_ATTACKER,
-        COLOR_INT_CAPTURE_AURA_TARGET,
-            COLOR_INT_DRAW_BLUE,
-        COLOR_INT_DRAW_WHITE,
-        COLOR_INT_GUARDRAIL_MISSING,
-        COLOR_INT_GUARDRAIL_UNEXPECTED,
-        COLOR_INT_MOVE_TRACE,
-        COLOR_INT_NIGHT_AZURE,
-        COLOR_INT_NIGHT_BOARD_READY_AMBIENT,
-        COLOR_INT_NIGHT_BOARD_READY_PRIMARY,
-        COLOR_INT_NIGHT_BOARD_READY_SECONDARY,
-        COLOR_INT_NIGHT_DRAW_BLUE,
-        COLOR_INT_NIGHT_MODE,
-        COLOR_INT_NIGHT_SEEKING_BODY,
-        COLOR_INT_NIGHT_SEEKING_HEAD,
-        COLOR_INT_NIGHT_SEEKING_TAIL,
-        COLOR_INT_NIGHT_START_BLACK_PRIMARY,
-        COLOR_INT_NIGHT_START_BLACK_SECONDARY,
-        COLOR_INT_OFF,
-        COLOR_INT_OPPONENT_DISCONNECTED,
-            COLOR_INT_SEEKING_BODY,
-        COLOR_INT_SEEKING_HEAD,
-        COLOR_INT_SEEKING_TAIL,
-        COLOR_INT_START_BLACK_PRIMARY,
-        COLOR_INT_START_BLACK_SECONDARY,
-        COLOR_INT_START_WHITE_PRIMARY,
-        COLOR_INT_START_WHITE_SECONDARY,
-                COLOR_INT_VICTORY_GOLD,
         COLOR_INT_VICTORY_GREEN,
         get_led_indices,
     )
@@ -841,7 +785,7 @@ def render_game_drawn(
     # PHASE 2: The Equatorial Vortex (0.38 -> 0.72)
     # =========================================================================
     elif progress < 0.72:
-        p2 = (progress - 0.38) / 0.34  # 0.0 -> 1.0
+        _p2 = (progress - 0.38) / 0.34  # 0.0 -> 1.0
         breathing = 0.82 + 0.18 * math.sin(now * 7.0)
 
         for c in range(8):
@@ -1128,8 +1072,8 @@ def render_recall_complete(progress: float, frame: list[int], params: dict[str, 
     Peak active squares <= ~22 (~170mA day, ~75mA night) - within power budget.
     """
     night = bool(params.get("night_mode", False))
-    gold = COLOR_INT_VICTORY_GOLD
-    green = COLOR_INT_VICTORY_GREEN
+    gold = COLOR_INT_NIGHT_PROMO_ROOT if night else COLOR_INT_VICTORY_GOLD
+    green = COLOR_INT_NIGHT_MINT_EMERALD if night else COLOR_INT_VICTORY_GREEN
 
     def set_sq(c: int, r: int, color_val: int) -> None:
         for idx in get_led_indices(r, c):
@@ -1488,13 +1432,6 @@ def render_promotion_scepter(
         power_scale = 1.0
 
     # 1. Root Promotion Square Halo with Countdown Progress
-    root_sq = (
-        promo_state.get("root_square")
-        or promo_state.get("to_square")
-        or promo_state.get("to_sq")
-    )
-    if root_sq is None:
-        to_c = promo_state.get("to_col")
     col_root = COLOR_INT_NIGHT_PROMO_ROOT if is_night else COLOR_INT_PROMO_ROOT
     power_scale = 0.40 if is_night else 0.48
 
@@ -1506,7 +1443,13 @@ def render_promotion_scepter(
     }
 
     # 1. Root Square Halo & Progress Indicator
-    root_sq = promo_state.get("root_square") or promo_state.get("to") or promo_state.get("dest")
+    root_sq = (
+        promo_state.get("root_square")
+        or promo_state.get("to")
+        or promo_state.get("dest")
+        or promo_state.get("to_square")
+        or promo_state.get("to_sq")
+    )
     if root_sq and isinstance(root_sq, (tuple, list)) and len(root_sq) == 2:
         root_c, root_r = int(root_sq[0]), int(root_sq[1])
         if 0 <= root_c < 8 and 0 <= root_r < 8:
@@ -1652,36 +1595,33 @@ def render_resignation_aura(
 # ENDGAME TRAINER SETUP & LIFECYCLE RENDERERS
 # =============================================================================
 
+_NIGHT_PIECE_COLORS = {
+    6: COLOR_INT_NIGHT_PIECE_KING,
+    5: COLOR_INT_NIGHT_PIECE_QUEEN,
+    4: COLOR_INT_NIGHT_PIECE_ROOK,
+    3: COLOR_INT_NIGHT_PIECE_BISHOP,
+    2: COLOR_INT_NIGHT_PIECE_KNIGHT,
+    1: COLOR_INT_NIGHT_PIECE_PAWN,
+}
+_DAY_PIECE_COLORS = {
+    6: COLOR_INT_PIECE_KING,
+    5: COLOR_INT_PIECE_QUEEN,
+    4: COLOR_INT_PIECE_ROOK,
+    3: COLOR_INT_PIECE_BISHOP,
+    2: COLOR_INT_PIECE_KNIGHT,
+    1: COLOR_INT_PIECE_PAWN,
+}
+
+
 def get_piece_type_color(piece_type: int, is_night: bool = False, night_mode: bool | None = None) -> int:
     """Returns the harmonized WS2812B LED Color for a given chess piece type."""
     if night_mode is not None:
         is_night = night_mode
-    if is_night:
-        if piece_type == 6:  # KING
-            return COLOR_INT_NIGHT_PIECE_KING
-        elif piece_type == 5:  # QUEEN
-            return COLOR_INT_NIGHT_PIECE_QUEEN
-        elif piece_type == 4:  # ROOK
-            return COLOR_INT_NIGHT_PIECE_ROOK
-        elif piece_type == 3:  # BISHOP
-            return COLOR_INT_NIGHT_PIECE_BISHOP
-        elif piece_type == 2:  # KNIGHT
-            return COLOR_INT_NIGHT_PIECE_KNIGHT
-        else:  # PAWN (1)
-            return COLOR_INT_NIGHT_PIECE_PAWN
-    else:
-        if piece_type == 6:  # KING
-            return COLOR_INT_PIECE_KING
-        elif piece_type == 5:  # QUEEN
-            return COLOR_INT_PIECE_QUEEN
-        elif piece_type == 4:  # ROOK
-            return COLOR_INT_PIECE_ROOK
-        elif piece_type == 3:  # BISHOP
-            return COLOR_INT_PIECE_BISHOP
-        elif piece_type == 2:  # KNIGHT
-            return COLOR_INT_PIECE_KNIGHT
-        else:  # PAWN (1)
-            return COLOR_INT_PIECE_PAWN
+    return (
+        _NIGHT_PIECE_COLORS.get(piece_type, COLOR_INT_NIGHT_PIECE_PAWN)
+        if is_night
+        else _DAY_PIECE_COLORS.get(piece_type, COLOR_INT_PIECE_PAWN)
+    )
 
 
 def render_endgame_setup(

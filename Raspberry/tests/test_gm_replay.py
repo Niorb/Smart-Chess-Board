@@ -253,6 +253,7 @@ def test_memory_replay_gesture_flow_and_disambiguation():
 def test_recall_completion_enters_setup_validation_led_state():
     """Verify that after replay completion and celebration animation, the board displays setup validation LEDs."""
     from unittest.mock import MagicMock
+
     from app.led_helpers import COLOR_INT_SETUP_MISPLACED, COLOR_INT_SETUP_MISSING
 
     async def _test():

@@ -27,7 +27,6 @@ from app.coach_engine import (
     save_cached_analysis,
 )
 from app.gm_games import get_all_gm_games, get_gm_game
-from fastapi.testclient import TestClient
 
 
 def log_header(title: str):
@@ -250,8 +249,8 @@ def test_gm_replay_lifecycle():
 # -----------------------------------------------------------------------------
 def test_api_and_websocket():
     log_header("7. FastAPI REST Endpoints & Live Server Verification")
-    import urllib.request
     import json
+    import urllib.request
 
     # Health check
     with urllib.request.urlopen("http://localhost:8000/api/board/health") as response:

@@ -8,8 +8,6 @@ serpentine LED index routing for the physical 8x8 chessboard, and animation rout
 
 import logging
 
-logger = logging.getLogger("smart-chess-app.led")
-
 try:
     from app.config import (
         COLOR_AZURE,
@@ -95,7 +93,13 @@ try:
         COLOR_NIGHT_OPPONENT_CAPTURE,
         COLOR_NIGHT_OPPONENT_FROM,
         COLOR_NIGHT_OPPONENT_TO,
+        COLOR_NIGHT_PIECE_BISHOP,
+        COLOR_NIGHT_PIECE_KING,
+        COLOR_NIGHT_PIECE_KNIGHT,
         COLOR_NIGHT_PIECE_LIFTED,
+        COLOR_NIGHT_PIECE_PAWN,
+        COLOR_NIGHT_PIECE_QUEEN,
+        COLOR_NIGHT_PIECE_ROOK,
         COLOR_NIGHT_PROMO_BISHOP,
         COLOR_NIGHT_PROMO_KNIGHT,
         COLOR_NIGHT_PROMO_QUEEN,
@@ -127,12 +131,6 @@ try:
         COLOR_PIECE_PAWN,
         COLOR_PIECE_QUEEN,
         COLOR_PIECE_ROOK,
-        COLOR_NIGHT_PIECE_BISHOP,
-        COLOR_NIGHT_PIECE_KING,
-        COLOR_NIGHT_PIECE_KNIGHT,
-        COLOR_NIGHT_PIECE_PAWN,
-        COLOR_NIGHT_PIECE_QUEEN,
-        COLOR_NIGHT_PIECE_ROOK,
         COLOR_PROMO_BISHOP,
         COLOR_PROMO_KNIGHT,
         COLOR_PROMO_QUEEN,
@@ -243,7 +241,13 @@ except ImportError:
         COLOR_NIGHT_OPPONENT_CAPTURE,
         COLOR_NIGHT_OPPONENT_FROM,
         COLOR_NIGHT_OPPONENT_TO,
+        COLOR_NIGHT_PIECE_BISHOP,
+        COLOR_NIGHT_PIECE_KING,
+        COLOR_NIGHT_PIECE_KNIGHT,
         COLOR_NIGHT_PIECE_LIFTED,
+        COLOR_NIGHT_PIECE_PAWN,
+        COLOR_NIGHT_PIECE_QUEEN,
+        COLOR_NIGHT_PIECE_ROOK,
         COLOR_NIGHT_PROMO_BISHOP,
         COLOR_NIGHT_PROMO_KNIGHT,
         COLOR_NIGHT_PROMO_QUEEN,
@@ -275,12 +279,6 @@ except ImportError:
         COLOR_PIECE_PAWN,
         COLOR_PIECE_QUEEN,
         COLOR_PIECE_ROOK,
-        COLOR_NIGHT_PIECE_BISHOP,
-        COLOR_NIGHT_PIECE_KING,
-        COLOR_NIGHT_PIECE_KNIGHT,
-        COLOR_NIGHT_PIECE_PAWN,
-        COLOR_NIGHT_PIECE_QUEEN,
-        COLOR_NIGHT_PIECE_ROOK,
         COLOR_PROMO_BISHOP,
         COLOR_PROMO_KNIGHT,
         COLOR_PROMO_QUEEN,
@@ -306,6 +304,8 @@ except ImportError:
         LEDS_PER_STRIP,
         NUM_LEDS,
     )
+
+logger = logging.getLogger("smart-chess-app.led")
 
 # Try to import LED hardware library — degrades gracefully on non-Pi environments
 try:

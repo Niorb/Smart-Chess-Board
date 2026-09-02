@@ -72,7 +72,7 @@ interface ActiveGlide {
   duration: number;
 }
 
-export const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
+const WebAnalysisBoard: React.FC<WebAnalysisBoardProps> = ({
   fen,
   grid: gridProp,
   legalMoves: legalMovesProp,

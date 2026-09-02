@@ -25,8 +25,6 @@ try:
         COLOR_INT_DAY_INDICATOR,
         COLOR_INT_MINT_EMERALD,
         COLOR_INT_NIGHT_INDICATOR,
-        COLOR_INT_PIECE_BISHOP,
-        COLOR_INT_PIECE_KING,
         COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_LIFTED,
         COLOR_INT_PIECE_PAWN,
@@ -46,8 +44,6 @@ except ImportError:
         COLOR_INT_DAY_INDICATOR,
         COLOR_INT_MINT_EMERALD,
         COLOR_INT_NIGHT_INDICATOR,
-        COLOR_INT_PIECE_BISHOP,
-        COLOR_INT_PIECE_KING,
         COLOR_INT_PIECE_KNIGHT,
         COLOR_INT_PIECE_LIFTED,
         COLOR_INT_PIECE_PAWN,
@@ -73,6 +69,8 @@ def _schedule_task(coro) -> asyncio.Task | None:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         logger.warning("No running event loop; cannot dispatch gesture action.")
+        if hasattr(coro, "close"):
+            coro.close()
         return None
     task = loop.create_task(coro)
     _pending_tasks.add(task)

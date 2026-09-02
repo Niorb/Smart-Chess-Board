@@ -30,7 +30,7 @@ interface AnalysisTabProps {
   boardState: BoardState;
 }
 
-export const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
+const AnalysisTab: React.FC<AnalysisTabProps> = ({ boardState }) => {
   const { setActiveView } = useArtisanTheme();
   const analysis = boardState.analysis;
   const [recentGames, setRecentGames] = useState<LichessRecentGame[]>([]);

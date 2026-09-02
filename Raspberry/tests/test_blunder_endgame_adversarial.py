@@ -17,30 +17,20 @@ Covers:
 import asyncio
 import os
 import sys
-import time
+from unittest.mock import MagicMock
+
 import chess
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure parent directory is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.board_state import BoardStateManager, AnalysisEngineAdapter
-from app.coach_engine import CoachEngine, BlunderChallenge, coach_engine
+from app.board_state import BoardStateManager
 from app.endgame_db import (
     EndgameCategory,
     EndgameDrill,
     EndgameProgressManager,
-    CORE_ENDGAME_DRILLS,
-)
-from app.led_helpers import (
-    COLOR_INT_OPPONENT_FROM,
-    COLOR_INT_OPPONENT_TO,
-    COLOR_INT_MOVE_CONFIRM,
-    COLOR_INT_OFF,
 )
 from app.setup_validator import SetupResult
-
 
 # =============================================================================
 # 1. TACTICAL PUZZLES (BLUNDER BLITZ) ADVERSARIAL TESTS

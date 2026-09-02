@@ -28,12 +28,12 @@ from app.led_animations import (
     render_board_ready,
     render_castle_trace,
     render_clock_bar,
-    render_return_home_guide,
     render_game_drawn,
     render_game_lost,
     render_game_started,
     render_game_won,
     render_move_trace,
+    render_return_home_guide,
     render_seeking,
     scale_color,
     unpack_rgb,
@@ -749,7 +749,7 @@ def test_clock_color_palettes_day_and_night_defined_and_distinct():
         (COLOR_INT_CLOCK_OK, COLOR_INT_CLOCK_WARN, COLOR_INT_CLOCK_CRIT),
         (COLOR_INT_NIGHT_CLOCK_OK, COLOR_INT_NIGHT_CLOCK_WARN, COLOR_INT_NIGHT_CLOCK_CRIT),
     ]
-    for day, night in zip(*palettes):
+    for day, night in zip(*palettes, strict=True):
         assert day != night
     for ok_c, warn_c, crit_c in palettes:
         assert len({ok_c, warn_c, crit_c}) == 3
@@ -832,18 +832,18 @@ def _calculate_frame_current_ma(frame: list[int]) -> float:
 
 def test_promotion_scepter_palette_distinctness():
     from app.led_helpers import (
-        COLOR_INT_PROMO_ROOT,
-        COLOR_INT_PROMO_QUEEN,
-        COLOR_INT_PROMO_KNIGHT,
-        COLOR_INT_PROMO_ROOK,
-        COLOR_INT_PROMO_BISHOP,
-        COLOR_INT_NOVELTY_FLARE,
-        COLOR_INT_NIGHT_PROMO_ROOT,
-        COLOR_INT_NIGHT_PROMO_QUEEN,
-        COLOR_INT_NIGHT_PROMO_KNIGHT,
-        COLOR_INT_NIGHT_PROMO_ROOK,
-        COLOR_INT_NIGHT_PROMO_BISHOP,
         COLOR_INT_NIGHT_NOVELTY_FLARE,
+        COLOR_INT_NIGHT_PROMO_BISHOP,
+        COLOR_INT_NIGHT_PROMO_KNIGHT,
+        COLOR_INT_NIGHT_PROMO_QUEEN,
+        COLOR_INT_NIGHT_PROMO_ROOK,
+        COLOR_INT_NIGHT_PROMO_ROOT,
+        COLOR_INT_NOVELTY_FLARE,
+        COLOR_INT_PROMO_BISHOP,
+        COLOR_INT_PROMO_KNIGHT,
+        COLOR_INT_PROMO_QUEEN,
+        COLOR_INT_PROMO_ROOK,
+        COLOR_INT_PROMO_ROOT,
     )
     day_colors = [
         COLOR_INT_PROMO_ROOT,

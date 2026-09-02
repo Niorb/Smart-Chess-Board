@@ -372,21 +372,14 @@ class CoachEngine:
 
         clean_fen = " ".join((fen.fen() if isinstance(fen, chess.Board) else str(fen)).split()[:4])
 
-        if (
+        return bool(
             clean_fen in self._pending_analysis_queue
             or self._pending_lines_fen == clean_fen
             or self._current_analysis_fen == clean_fen
             or self._current_lines_fen == clean_fen
-        ):
-            return True
-
-        if lines_busy and clean_fen not in self._lines_cache:
-            return True
-
-        if analysis_busy and clean_fen not in self._cache:
-            return True
-
-        return False
+            or (lines_busy and clean_fen not in self._lines_cache)
+            or (analysis_busy and clean_fen not in self._cache)
+        )
 
     def get_cached_evaluation(self, fen: str) -> PositionEvaluation | None:
         """Returns cached position evaluation for the given FEN if present."""
@@ -658,6 +651,8 @@ class CoachEngine:
                 if self._engine_lock is None:
                     self._engine_lock = asyncio.Lock()
                 async with self._engine_lock:
+                    if self._engine is None:
+                        raise CoachEngineUnavailable("Stockfish engine not initialized.")
                     return await self._engine.analyse(board, limit, multipv=multipv)
             except asyncio.CancelledError:
                 raise

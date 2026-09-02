@@ -9,8 +9,6 @@ Black=+1 / North on Ranks 7-8, Empty=0 on Ranks 3-6) and computes missing or mis
 from dataclasses import dataclass, field
 from typing import Any
 
-import chess
-
 from app.config import BOARD_COLS, BOARD_ROWS
 
 
@@ -208,18 +206,20 @@ class SetupValidator:
             if getattr(tracker, "pending_capture_target", None):
                 pending_cap = tracker.pending_capture_target
                 cand_attackers = getattr(tracker, "capture_candidate_attackers", [])
-                exempt_squares.add(pending_cap)
+                if pending_cap is not None:
+                    exempt_squares.add(pending_cap)
+                for atk in cand_attackers:
+                    exempt_squares.add(atk)
 
         for c in range(self.cols):
             for r in range(self.rows):
                 if (c, r) in exempt_squares:
                     continue
 
-                sq = chess.square(c, r)
-                piece = board.piece_at(sq)
                 val = physical_state[c][r] if c < len(physical_state) and r < len(physical_state[c]) else 0
+                is_occupied = bool(board.occupied & (1 << (r * 8 + c)))
 
-                if piece is not None:
+                if is_occupied:
                     # Expected occupied: if physically empty, it is missing
                     if val == 0:
                         missing_pieces.append((c, r))

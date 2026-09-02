@@ -10,27 +10,9 @@ Unit tests for "The King's Bow" physical over-the-board resignation gesture:
 """
 
 import time
-from unittest.mock import MagicMock
 
 import chess
-import pytest
-
-from app.config import (
-    BOARD_COLS,
-    BOARD_ROWS,
-    COLOR_RESIGN_HALO,
-    COLOR_RESIGN_PRIMARY,
-    RESIGNATION_ABANDON_DURATION_S,
-    RESIGNATION_HOLD_DURATION_S,
-)
 from app.led_animations import render_resignation_aura
-from app.led_helpers import (
-    COLOR_INT_NIGHT_RESIGN_HALO,
-    COLOR_INT_NIGHT_RESIGN_PRIMARY,
-    COLOR_INT_RESIGN_HALO,
-    COLOR_INT_RESIGN_PRIMARY,
-    get_led_indices,
-)
 from app.physical_tracker import PhysicalMoveTracker
 
 

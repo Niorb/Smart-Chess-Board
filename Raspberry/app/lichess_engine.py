@@ -1150,7 +1150,9 @@ class LichessEngine:
         board = getattr(self, "board", None)
         if board is not None:
             stm = "white" if board.turn == chess.WHITE else "black"
-            result[stm] = max(0, int(result[stm] - elapsed * 1000))
+            stm_val = result[stm]
+            if stm_val is not None:
+                result[stm] = max(0, int(stm_val - elapsed * 1000))
         return result
 
     def get_board(self) -> list[list[str]]:

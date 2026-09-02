@@ -6,15 +6,13 @@ Contains the curated 12-drill core curriculum (Pawn, Rook, Minor Piece, Queen en
 and manages user progress, star ratings, mistakes, and custom user drills.
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
 import json
 import logging
 import os
 import time
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
-
-import chess
 
 logger = logging.getLogger("smart-chess-app.endgame")
 
@@ -275,7 +273,7 @@ class EndgameProgressManager:
             return
 
         try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
+            with open(self.file_path, encoding="utf-8") as f:
                 self._data = json.load(f)
         except Exception as e:
             logger.warning("Failed to load endgame progress from %s: %s", self.file_path, e)

@@ -633,7 +633,6 @@ def test_board_state_clock_bars_render_and_suppress_eval_bar():
     (COLOR_INT_CLOCK_OK) and the perimeter eval bar is fully suppressed.
     """
     import chess
-    from app.lichess_engine import lichess_engine
     from app.led_helpers import (
         COLOR_INT_CLOCK_OK,
         COLOR_INT_EVAL_BLACK,
@@ -645,6 +644,7 @@ def test_board_state_clock_bars_render_and_suppress_eval_bar():
         COLOR_INT_NIGHT_EVAL_WHITE,
         get_led_indices,
     )
+    from app.lichess_engine import lichess_engine
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -697,14 +697,14 @@ def test_board_state_eval_bar_fallback_when_clock_bar_disabled():
     With clock_bar_enabled=False and otherwise-valid clock state, the legacy
     eval-bar path still renders on file h and no clock colors appear.
     """
-    from board_hardware import settings
-    from app.lichess_engine import lichess_engine
     from app.led_helpers import (
         COLOR_INT_CLOCK_OK,
         COLOR_INT_EVAL_BLACK,
         COLOR_INT_EVAL_WHITE,
         get_led_indices,
     )
+    from app.lichess_engine import lichess_engine
+    from board_hardware import settings
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -747,9 +747,9 @@ def test_board_state_clock_interpolation_side_to_move_drains():
     while black's static a-file bar stays at half (4 ranks).
     """
     import chess
-    from board_hardware import settings
-    from app.lichess_engine import lichess_engine
     from app.led_helpers import COLOR_INT_CLOCK_OK, get_led_indices
+    from app.lichess_engine import lichess_engine
+    from board_hardware import settings
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -804,8 +804,13 @@ def test_broadcast_payload_contains_clocks_raw():
 
 def test_opening_hints_enabled_toggle():
     """Verifies that opening_hints_enabled setting toggles Cartographer's Path LED styling."""
+    from app.led_helpers import (
+        COLOR_INT_AZURE,
+        COLOR_INT_LEGAL_TARGET,
+        COLOR_INT_MINT_EMERALD,
+        get_led_indices,
+    )
     from board_hardware import settings
-    from app.led_helpers import COLOR_INT_MINT_EMERALD, COLOR_INT_AZURE, COLOR_INT_LEGAL_TARGET, get_led_indices
 
     bsm = BoardStateManager()
     bsm.strip = MagicMock()
@@ -871,7 +876,7 @@ def test_first_move_color_persistence_anchor():
 
 def test_get_recognized_pieces_grid():
     """Verify that get_recognized_pieces_grid maps physical sensor polarity to recognized starting pieces."""
-    from app.board_state import STARTING_DIGITAL_GRID, EMPTY_DIGITAL_GRID
+    from app.board_state import EMPTY_DIGITAL_GRID, STARTING_DIGITAL_GRID
     bsm = BoardStateManager()
 
     # 1. Empty physical board -> all empty dots

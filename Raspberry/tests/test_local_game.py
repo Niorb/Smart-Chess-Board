@@ -5,13 +5,12 @@ Unit and integration tests for the Cyber-Physical Local Game Engine,
 Setup Readiness Arming Gate, and Auto-Starting Local Match on First White Move.
 """
 
-import pytest
 import chess
-from fastapi.testclient import TestClient
-
-from app.board_state import BoardStateManager, LocalGameEngine, AnalysisEngineAdapter
+import pytest
+from app.board_state import AnalysisEngineAdapter, BoardStateManager, LocalGameEngine
 from app.config import BOARD_COLS, BOARD_ROWS
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture

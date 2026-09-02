@@ -791,7 +791,6 @@ def test_navigate_analysis_back_pops_branch_one_move_at_a_time():
         mgr.handle_analysis_move("g8f6", source="web")
         mgr.handle_analysis_move("g2g3", source="web")
         assert mgr.analysis_branch_moves == ["g8f6", "g2g3"]
-        fen_branched = mgr.analysis_active_board.fen()
 
         # Back #1: pops only the last branch move (g2g3)
         res = mgr.navigate_analysis("back")
@@ -1029,7 +1028,6 @@ def test_branch_step_back_reengages_engine(monkeypatch):
         import app.board_state as board_state_module
 
         calls = {"n": 0}
-        real_req = board_state_module.coach_engine.request_analysis
         monkeypatch.setattr(
             board_state_module.coach_engine,
             "request_analysis",

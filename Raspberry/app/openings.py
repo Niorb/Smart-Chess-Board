@@ -468,7 +468,7 @@ def get_opening_info(
         max_w = max(current_node.weights.values(), default=0)
         temp_board = board.copy()
 
-        for mv_uci, child_node in current_node.children.items():
+        for mv_uci in current_node.children:
             try:
                 move_obj = chess.Move.from_uci(mv_uci)
                 if move_obj not in temp_board.legal_moves:

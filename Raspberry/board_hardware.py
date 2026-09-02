@@ -51,7 +51,7 @@ except ImportError:
     CMD_SET_SETTLE = 0x02
     RESP_ADC_DATA = 0x81
 
-    def calc_crc8(data, initial=0x00):
+    def calc_crc8(data: bytes, initial: int = 0x00) -> int:
         crc = initial
         for b in data:
             crc ^= b
@@ -62,7 +62,7 @@ except ImportError:
                     crc = (crc << 1) & 0xFF
         return crc
 
-    def build_packet(cmd_id, payload=b''):
+    def build_packet(cmd_id: int, payload: bytes = b'') -> bytes:
         length = len(payload)
         len_bytes = bytes([length & 0xFF, (length >> 8) & 0xFF])
         cmd_bytes = bytes([cmd_id & 0xFF])

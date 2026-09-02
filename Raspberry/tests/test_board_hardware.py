@@ -1063,6 +1063,7 @@ def test_scan_board_expected_empty_with_unexpected_physical_piece_suppresses_dri
 def test_set_square_baseline_persists_settings():
     """Verify set_square_baseline calls save_settings when updating a square."""
     from unittest.mock import patch
+
     from board_hardware import set_square_baseline, settings
 
     settings["baselines"][2][2] = 1500
