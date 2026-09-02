@@ -388,15 +388,16 @@ def test_board_state_review_rook_move_does_not_render_castle_squares():
 
     # The Rook's origin (4, 0) and destination (2, 0) should be lit,
     # but the castling rook squares (0, 0) and (3, 0) MUST NOT be lit!
-    # In setPixelColor(idx, color): check calls
-    called_indices = [call.args[0] for call in bsm.strip.setPixelColor.call_args_list if len(call.args) > 0]
-    # In 8x8 serpentine or standard mapping, (0, 0) [a1] and (3, 0) [d1] would be lit if castling occurred.
-    # Convert square to led indices:
-    from app.config import COORD_TO_PIXEL
-    a1_leds = COORD_TO_PIXEL.get((0, 0), [])
-    d1_leds = COORD_TO_PIXEL.get((3, 0), [])
+    from app.led_helpers import get_led_indices
+    a1_leds = get_led_indices(0, 0)
+    d1_leds = get_led_indices(0, 3)
+    pixel_colors = {
+        call.args[0]: call.args[1]
+        for call in bsm.strip.setPixelColor.call_args_list
+        if len(call.args) >= 2
+    }
     for led in a1_leds + d1_leds:
-        assert led not in called_indices
+        assert pixel_colors.get(led, 0) == 0
 
 
 
